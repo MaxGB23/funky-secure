@@ -1,0 +1,11 @@
+node_modules/
+
+# funky-secure:begin (managed block — do not edit by hand)
+.env
+.env.*
+!.env.example
+!.env.test.example
+*.pem
+*.key
+.npmrc
+# funky-secure:end

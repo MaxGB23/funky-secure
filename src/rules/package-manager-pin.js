@@ -5,6 +5,13 @@
  * and never touches the filesystem, the machine or the clock.
  */
 
+import {
+  PACKAGE_JSON_RELATIVE,
+  findingsOf,
+  planTarget,
+  writePackageManagerPin,
+} from '../lib/writers.js';
+
 const DOC = 'docs/rules/package-manager-pin.md';
 const PATH = 'package.json';
 
@@ -13,6 +20,12 @@ function declaredPin(ctx) {
   if (json === null || typeof json !== 'object' || Array.isArray(json)) return null;
   const value = json.packageManager;
   return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function readablePackageJson(ctx) {
+  const file = ctx.repo?.files?.packageJson ?? null;
+  if (file === null) return false;
+  return file.json !== null && typeof file.json === 'object' && !Array.isArray(file.json);
 }
 
 export default {
@@ -117,6 +130,43 @@ export default {
         evidence,
         remediation: { kind: 'none' },
       },
+    ];
+  },
+
+  /**
+   * RFC 8.2 fix `auto` (W3): declare the missing pin, or report the conflicting one as a conflict
+   * and leave it alone. The finding comes from the same report the run renders, so the plan cannot
+   * describe a different repository than the scan.
+   *
+   * @param {object} ctx resolved context
+   * @param {{ report?: object }} [options]
+   * @returns {Array<object>} plan items
+   */
+  plan(ctx, { report } = {}) {
+    if (!ctx.repo || !ctx.machine) return [];
+    const version = ctx.machine.version ?? null;
+    if (version === null) return [];
+
+    const declared = declaredPin(ctx);
+    const failed =
+      report === undefined
+        ? readablePackageJson(ctx) && declared !== `pnpm@${version}`
+        : findingsOf(report, this.id).some(
+            (finding) =>
+              finding.status === 'fail' &&
+              (finding.code === 'pin-missing' || finding.code === 'pin-conflict'),
+          );
+    if (!failed) return [];
+
+    return [
+      planTarget(ctx, {
+        relative: PACKAGE_JSON_RELATIVE,
+        operation: 'set packageManager',
+        result: writePackageManagerPin({
+          packageJsonText: ctx.repo.files?.packageJson?.text ?? null,
+          version,
+        }),
+      }),
     ];
   },
 };

@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { IGNORE_CANDIDATES } from '../../src/lib/targets.js';
 import rule from '../../src/rules/sensitive-ignored.js';
@@ -146,10 +149,95 @@ test('an unreadable tracked set is a skip, never an assumed empty set', () => {
   );
 });
 
+function scratch(t) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-sensitive-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function reportFor(status, code) {
+  return { findings: [{ rule: 'sensitive-ignored', status, code }] };
+}
+
+function withRoot(context, dir) {
+  context.root = dir;
+  context.repo.root = dir;
+  return context;
+}
+
+test('plan() writes the ignore block only when the rule fails', (t) => {
+  const dir = scratch(t);
+  const failing = withRoot(ctx({ ignored: [] }), dir);
+
+  const items = rule.plan(failing, { report: reportFor('fail', 'not-ignored') });
+
+  assert.equal(items.length, 1);
+  const [item] = items;
+  assert.equal(item.target, '.gitignore');
+  assert.equal(item.operation, 'managed block');
+  assert.equal(item.state, 'would-write');
+  assert.ok(item.path.startsWith(dir));
+  for (const entry of ['.env', '.env.*', '!.env.example', '!.env.test.example', '*.pem', '*.key', '.npmrc']) {
+    assert.ok(item.content.split('\n').includes(entry), `missing ${entry}`);
+  }
+
+  const passing = withRoot(ctx(), dir);
+  assert.deepEqual(rule.plan(passing, { report: reportFor('pass') }), []);
+});
+
+test('plan() omits .npmrc when the repository tracks a tokenless root .npmrc', (t) => {
+  const dir = scratch(t);
+  const context = withRoot(
+    ctx({
+      ignored: [],
+      tracked: ['.npmrc'],
+      npmrc: { path: join(dir, '.npmrc'), text: 'registry=https://registry.npmjs.org/\n' },
+    }),
+    dir,
+  );
+
+  const [item] = rule.plan(context, { report: reportFor('fail', 'not-ignored') });
+
+  assert.ok(!item.content.split('\n').includes('.npmrc'));
+  assert.match(item.reason, /\.npmrc is omitted/);
+});
+
 test('without a resolved repository the rule skips', () => {
   const [finding] = rule.detect({ ...ctx(), repo: null });
 
   assert.equal(finding.status, 'skip');
   assert.equal(finding.code, 'no-repo');
   assert.equal(finding.probeUnavailable, true);
+});
+
+test('a tracked root .npmrc without a token is not required to be ignored', () => {
+  const ignored = ['.env', '.env.local', '.env.production', 'secrets.pem', 'server.key'];
+  const base = ctx({ ignored, tracked: ['.npmrc'], npmrc: { path: '/repo/.npmrc', text: 'registry=https://registry.npmjs.org/\n' } });
+
+  const withoutFact = rule.detect(base);
+  assert.equal(
+    withoutFact.some((finding) => finding.code === 'not-ignored'),
+    true,
+    'the ignore requirement stands until the collector resolves the exception',
+  );
+
+  base.repo.npmrc = { tracked: true, hasToken: false, tokenlessTracked: true };
+  const withFact = rule.detect(base);
+
+  assert.deepEqual(withFact.filter((finding) => finding.status === 'fail'), []);
+});
+
+test('a tracked .npmrc with a token is reported even when it is not ignored', () => {
+  const context = ctx({
+    ignored: [...IGNORE_CANDIDATES],
+    tracked: ['.npmrc'],
+    npmrc: { path: '/repo/.npmrc', text: '//registry.npmjs.org/:_authToken=secret\n' },
+  });
+  context.repo.npmrc = { tracked: true, hasToken: true, tokenlessTracked: false };
+
+  const findings = rule.detect(context);
+  const token = findings.find((finding) => finding.code === 'npmrc-token');
+
+  assert.ok(token);
+  assert.equal(JSON.stringify(findings).includes('secret'), false, 'the value never reaches the report');
 });

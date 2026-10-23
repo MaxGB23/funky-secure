@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+
+# funky-secure:begin (managed block — do not edit by hand)
+minimumReleaseAgeStrict: true
+minimumReleaseAge: 4320
+# funky-secure:end

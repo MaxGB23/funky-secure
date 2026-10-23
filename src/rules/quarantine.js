@@ -14,21 +14,16 @@
  */
 
 import { quarantineFloor } from '../lib/policy.js';
+import {
+  WORKSPACE_RELATIVE,
+  findingsOf,
+  planTarget,
+  quarantineStrictness,
+  writeQuarantineGate,
+} from '../lib/writers.js';
 
 const DOC = 'docs/rules/quarantine.md';
 const AUTO = { kind: 'auto', command: 'funky-secure init --apply' };
-
-/**
- * The manager's own strictness rule (E1 §2.5): reported when present, else true only when
- * `minimumReleaseAge` was explicitly configured.
- * @param {object} config
- * @param {boolean} inherited
- * @returns {boolean}
- */
-function effectiveStrict(config, inherited) {
-  if (typeof config.minimumReleaseAgeStrict === 'boolean') return config.minimumReleaseAgeStrict;
-  return !inherited;
-}
 
 export default {
   id: 'quarantine',
@@ -93,7 +88,7 @@ export default {
       ? // The built-in default is a function of the major, not of the preset (RFC 9.4, E1).
         quarantineFloor({ preset: 'baseline', major })
       : config.minimumReleaseAge;
-    const strict = effectiveStrict(config, inherited);
+    const strict = quarantineStrictness(ctx);
     const floor =
       policy?.quarantineMinutes ??
       quarantineFloor({ preset: policy?.preset ?? 'baseline', major });
@@ -138,6 +133,39 @@ export default {
         message: `quarantine is a ${effective}-minute strict gate (policy floor ${floor})`,
         evidence,
       },
+    ];
+  },
+
+  /**
+   * RFC 8.2 fix `auto` (W1a, W1b): one managed block carrying the gate and, under the strict preset,
+   * the 4320 floor. The trigger is the rule's own failing finding, read from the report of this run
+   * (recomputed from the machine fact when no report is passed).
+   *
+   * @param {object} ctx resolved context
+   * @param {{ policy?: { preset?: string }, report?: object }} [options]
+   * @returns {Array<object>} plan items
+   */
+  plan(ctx, { policy = {}, report } = {}) {
+    if (!ctx.repo) return [];
+
+    const gate =
+      report === undefined
+        ? quarantineStrictness(ctx) === false
+        : findingsOf(report, this.id).some(
+            (finding) => finding.status === 'fail' && finding.code === 'quarantine-not-strict',
+          );
+    const strictFloor = policy.preset === 'strict';
+    if (!gate && !strictFloor) return [];
+
+    return [
+      planTarget(ctx, {
+        relative: WORKSPACE_RELATIVE,
+        operation: 'managed block',
+        result: writeQuarantineGate({
+          workspaceYaml: ctx.repo.files?.workspaceYaml?.text ?? null,
+          preset: strictFloor ? 'strict' : 'baseline',
+        }),
+      }),
     ];
   },
 };

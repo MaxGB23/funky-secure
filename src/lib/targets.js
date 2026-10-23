@@ -214,6 +214,14 @@ export async function repoFacts({ collector, cwd, root = null }) {
 
   const ignored = inGit ? await ignoredPaths(collector, PROBED_IGNORE_PATHS) : null;
 
+  // A root `.npmrc` that is tracked and carries no token is the one legitimate exception to the
+  // ignore requirement (RFC 8.2 R7): the rule must not demand that it be ignored, and the write that
+  // fixes ignore coverage must not add it. The fact is resolved here, once, for both readers.
+  const npmrcText = npmrc?.text ?? null;
+  const npmrcTracked = tracked === null ? null : tracked.includes('.npmrc');
+  const npmrcTokenlessTracked =
+    npmrcTracked === true && typeof npmrcText === 'string' && !/(^|[^A-Za-z0-9])_authToken=/m.test(npmrcText);
+
   const importers = [];
   const importerTargets = [];
   if (packageJson !== null) {
@@ -281,6 +289,11 @@ export async function repoFacts({ collector, cwd, root = null }) {
     tracked: tracked === null ? null : new Set(tracked),
     ignoreCandidates: IGNORE_CANDIDATES,
     ignored,
+    npmrc: {
+      tracked: npmrcTracked,
+      hasToken: typeof npmrcText === 'string' && /(^|[^A-Za-z0-9])_authToken=/m.test(npmrcText),
+      tokenlessTracked: npmrcTokenlessTracked,
+    },
     importers,
     workflows: workflowFiles,
     botFiles,

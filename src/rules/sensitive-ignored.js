@@ -9,6 +9,14 @@
  * fact, `<redacted>` is the value (RFC 12.3).
  */
 
+import {
+  GITIGNORE_RELATIVE,
+  findingsOf,
+  planTarget,
+  trackedNpmrcFacts,
+  writeGitignoreBlock,
+} from '../lib/writers.js';
+
 const DOC = 'docs/rules/sensitive-ignored.md';
 const AUTO = { kind: 'auto', command: 'funky-secure init --apply' };
 const SENSITIVE_TRACKED = /\.(?:pem|key)$/i;
@@ -66,7 +74,12 @@ export default {
 
     const findings = [];
     const candidates = Array.isArray(ignoreCandidates) ? ignoreCandidates : [];
-    const missing = candidates.filter((path) => !ignored.has(path));
+    // A tracked root `.npmrc` without a token is the one legitimate exception (RFC 8.2 R7): the
+    // repository deliberately commits it, so demanding that it be ignored would report a defect that
+    // the fix cannot clear. The tokenless case is exempt; a token in the file is reported below.
+    const tokenlessNpmrc = ctx.repo?.npmrc?.tokenlessTracked === true;
+    const required = candidates.filter((path) => !(tokenlessNpmrc && path === '.npmrc'));
+    const missing = required.filter((path) => !ignored.has(path));
 
     if (missing.length > 0) {
       findings.push({
@@ -128,5 +141,30 @@ export default {
     }
 
     return findings;
+  },
+
+  /**
+   * RFC 8.2 fix `auto` (W2): the managed `.gitignore` block. Planned only when this rule reported a
+   * failure in the same run; tracked sensitive files and the token finding stay manual.
+   *
+   * @param {object} ctx resolved context
+   * @param {{ report?: object }} [options]
+   * @returns {Array<object>} plan items
+   */
+  plan(ctx, { report } = {}) {
+    if (!ctx.repo) return [];
+    const failed = findingsOf(report, this.id).some((finding) => finding.status === 'fail');
+    if (!failed) return [];
+
+    return [
+      planTarget(ctx, {
+        relative: GITIGNORE_RELATIVE,
+        operation: 'managed block',
+        result: writeGitignoreBlock({
+          gitignore: ctx.repo.files?.gitignore?.text ?? null,
+          trackedNpmrc: trackedNpmrcFacts(ctx),
+        }),
+      }),
+    ];
   },
 };

@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { resolvePolicy } from '../../src/lib/policy.js';
 import rule from '../../src/rules/quarantine.js';
@@ -144,6 +147,92 @@ test('no pnpm configuration is a skip, not a guessed pass', () => {
   assert.equal(finding.code, 'no-pnpm-config');
   assert.equal(finding.probeUnavailable, true);
   assert.ok(finding.message.startsWith('skipped: '));
+});
+
+function scratch(t) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-quarantine-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function reportFor(status, code) {
+  return { findings: [{ rule: 'quarantine', status, code }] };
+}
+
+function withRepo(context, root, workspaceYaml = null) {
+  context.repo = {
+    root,
+    inGit: true,
+    branch: 'main',
+    files: {
+      packageJson: null,
+      workspaceYaml: workspaceYaml === null ? null : { path: join(root, 'pnpm-workspace.yaml'), text: workspaceYaml },
+      lockfile: null,
+      npmrc: null,
+      gitignore: null,
+    },
+    present: [],
+    tracked: new Set(),
+    ignoreCandidates: [],
+    ignored: new Set(),
+    importers: [],
+    workflows: [],
+    botFiles: [],
+    editorFiles: [],
+    skippedGlobs: [],
+  };
+  return context;
+}
+
+test('plan() writes the gate when the quarantine is non-strict', (t) => {
+  const dir = scratch(t);
+  const context = withRepo(ctx({ registry: 'https://registry.npmjs.org/' }), dir);
+
+  const items = rule.plan(context, {
+    policy: { preset: 'baseline' },
+    report: reportFor('fail', 'quarantine-not-strict'),
+  });
+
+  assert.equal(items.length, 1);
+  const [item] = items;
+  assert.equal(item.target, 'pnpm-workspace.yaml');
+  assert.equal(item.operation, 'managed block');
+  assert.equal(item.state, 'would-write');
+  assert.ok(item.path.startsWith(dir));
+  assert.ok(item.content.includes('minimumReleaseAgeStrict: true'));
+  assert.ok(!item.content.includes('minimumReleaseAge:'));
+  assert.match(item.reason, /minimumReleaseAgeStrict/);
+});
+
+test('plan() adds the strict floor under --preset strict and plans nothing when the gate passes', (t) => {
+  const dir = scratch(t);
+  const passing = withRepo(ctx({ minimumReleaseAge: 4320, minimumReleaseAgeStrict: true }), dir);
+
+  assert.deepEqual(
+    rule.plan(passing, { policy: { preset: 'baseline' }, report: reportFor('pass') }),
+    [],
+  );
+
+  const [item] = rule.plan(passing, {
+    policy: { preset: 'strict' },
+    report: reportFor('pass'),
+  });
+  assert.ok(item.content.includes('minimumReleaseAgeStrict: true'));
+  assert.ok(item.content.includes('minimumReleaseAge: 4320'));
+});
+
+test('plan() refuses to duplicate a key declared outside the managed block', (t) => {
+  const dir = scratch(t);
+  const context = withRepo(ctx({}), dir, 'minimumReleaseAgeStrict: false\n');
+
+  const [item] = rule.plan(context, {
+    policy: { preset: 'baseline' },
+    report: reportFor('fail', 'quarantine-not-strict'),
+  });
+
+  assert.equal(item.state, 'conflict');
+  assert.match(item.reason, /minimumReleaseAgeStrict/);
+  assert.equal(item.content, null);
 });
 
 test('a minimumReleaseAge that is not a number is a skip, not a coerced zero', () => {

@@ -172,3 +172,26 @@ test('lists workflows and bot configs as ci targets', async (t) => {
   assert.deepEqual(facts.botFiles, ['.github/dependabot.yml']);
   assert.ok(targets.some((target) => target.kind === 'ci'));
 });
+
+test('resolves whether a root .npmrc is tracked without a token', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, '.npmrc', 'registry=https://registry.npmjs.org/\n');
+
+  const tokenless = await repoFacts({
+    collector: collectorOver({ tracked: ['.npmrc'] }),
+    cwd: dir,
+    root: dir,
+  });
+
+  assert.deepEqual(tokenless.facts.npmrc, { tracked: true, hasToken: false, tokenlessTracked: true });
+
+  write(dir, '.npmrc', '//registry.npmjs.org/:_authToken=secret\n');
+  const withToken = await repoFacts({
+    collector: collectorOver({ tracked: ['.npmrc'] }),
+    cwd: dir,
+    root: dir,
+  });
+
+  assert.deepEqual(withToken.facts.npmrc, { tracked: true, hasToken: true, tokenlessTracked: false });
+});

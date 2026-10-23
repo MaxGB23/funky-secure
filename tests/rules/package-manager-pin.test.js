@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import rule from '../../src/rules/package-manager-pin.js';
 
@@ -167,6 +170,68 @@ test('no root package.json is a skip', () => {
   assert.equal(finding.code, 'no-package-json');
   assert.match(finding.message, /^skipped: /);
   assert.equal(finding.probeUnavailable, undefined);
+});
+
+function scratch(t) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-pin-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function reportFor(code) {
+  return {
+    findings: [
+      {
+        rule: 'package-manager-pin',
+        status: code === null ? 'pass' : 'fail',
+        code: code ?? undefined,
+      },
+    ],
+  };
+}
+
+test('plan() writes the missing pin and leaves a passing pin alone', (t) => {
+  const dir = scratch(t);
+
+  const failing = context({ packageJson: packageJson() });
+  failing.repo.root = dir;
+  const items = rule.plan(failing, { report: reportFor('pin-missing') });
+
+  assert.equal(items.length, 1);
+  const [item] = items;
+  assert.equal(item.target, 'package.json');
+  assert.equal(item.operation, 'set packageManager');
+  assert.equal(item.state, 'would-write');
+  assert.ok(item.path.startsWith(dir));
+  assert.equal(JSON.parse(item.content).packageManager, 'pnpm@12.3.4');
+  assert.equal(item.digest.length, 64);
+  assert.match(item.reason, /pnpm@12\.3\.4/);
+
+  const passing = context();
+  passing.repo.root = dir;
+  assert.deepEqual(rule.plan(passing, { report: reportFor(null) }), []);
+});
+
+test('plan() reports a conflicting pin as a conflict item and writes nothing', (t) => {
+  const dir = scratch(t);
+  const ctx = context({ packageManager: 'npm@10' });
+  ctx.repo.root = dir;
+
+  const items = rule.plan(ctx, { report: reportFor('pin-conflict') });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].state, 'conflict');
+  assert.match(items[0].reason, /npm@10/);
+  assert.equal(items[0].content, null);
+  assert.equal(items[0].digest, null);
+});
+
+test('plan() does nothing when no pnpm answered', (t) => {
+  const dir = scratch(t);
+  const ctx = context({ version: null });
+  ctx.repo.root = dir;
+
+  assert.deepEqual(rule.plan(ctx, { report: reportFor('no-pnpm') }), []);
 });
 
 test('a malformed package.json is a skip, not a pass', () => {

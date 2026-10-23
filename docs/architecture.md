@@ -82,6 +82,7 @@ not.
 | `src/lib/targets.js` | target resolution and the context a rule receives (RFC 7.1) |
 | `src/lib/tool.js` | the package identity every document carries |
 | `src/lib/workflows.js` | structural `jobs -> steps` workflow reader for R8 and R9 (RFC 8.2) |
+| `src/lib/writers.js` | the five `init` writes: quarantine block, gitignore block, pin, strict preset (RFC 11.2) |
 | `src/rules/index.js` | the catalog: catalog order is report order |
 
 One module per rule lives next to the catalog; a rule is pure and exports `id`, `title`, `scope`,

@@ -59,6 +59,10 @@ is a local credential the rule reports but cannot remove for you.
 
 - The rule answers for the six declared candidate paths. Any other sensitive name depends on the
   ignore file the repository already wrote; the rule does not guess a name it was not given.
+- A root `.npmrc` that is **tracked and carries no token** is the one documented exception: the
+  repository commits it deliberately, so the rule does not demand that it be ignored, and the write
+  that fixes ignore coverage does not add it. The exception is resolved by the collector, once, so the
+  rule and the write cannot disagree about it. A tracked `.npmrc` **with** a token is reported.
 - Ignore coverage is not a history claim. A file that is unignored today may be committed tomorrow,
   and a file removed from the index still exists in earlier commits.
 - The token check reads the root `.npmrc` only, and reports presence rather than content. A token in
