@@ -1,8 +1,8 @@
 # funky-secure v0.1 — supply-chain auditor and initializer
 
-Specification: `rfcs/funky-secure-rfc.md`, revision 2 (v1.1). The RFC is normative; this document
+Specification: `rfcs/funky-secure-rfc.md`, revision 3 (v1.2). The RFC is normative; this document
 tracks execution and records only decisions and evidence taken during implementation.
-Branch: `main` until the first product commit, then `feat/v0.1`.
+Branch: `feat/v0.1`.
 
 ## Specs
 
@@ -61,6 +61,7 @@ per commit; nothing here is split into parallel writers because each unit shares
 | T8 | E8: does pnpm read `minimum-release-age` from a project `.npmrc` | S8 | worker | — |
 | T9 | Evidence file `odd/evidence/e1-e8.md` + this document committed | S8 | inline | — |
 | T10 | F0: skeleton, `src/cli.js` with four commands and every flag, report/render/policy/paths, `tests/cli.test.js`, active `tests/drift.test.js`, empty-catalog help, CI workflow | S1, S3, S6 | inline | — |
+| T24 | F1-pre: `src/lib/{probes,git,targets,lockfile,workflows,managed-block}.js` and the rule context contract | S2, S8, S9 | inline | — |
 | T11 | F1a: `lockfile-committed` (rule, tests, fixture, doc page, golden) | S2 | inline | — |
 | T12 | F1b: `package-manager-pin` | S2 | inline | — |
 | T13 | F1c: `foreign-lockfile` | S2 | inline | — |
@@ -131,3 +132,12 @@ meets the preset floor (`baseline` = the manager's built-in default, `strict` = 
 (`minimumReleaseAge: 4320`) in the same managed block. Recorded as D-16 in the RFC decision log.
 Same turn, owner's sequencing decision, verbatim: "el rfc primero, sin implementar" — so F0 (T10) stays
 pending until the owner says otherwise.
+
+L10 — 2026-10-23, owner's instruction for the implementation phase, verbatim: "ahora que ya tenemos un
+rfc entero y odd. Quiero que empecemos, arrancaremos todo sin parar, solo paras si tienes que
+preguntar algo importante que requiera decision". Executed as one continuous authorized
+implementation on `feat/v0.1`, work-unit commits, no per-step approval. Plan change recorded here
+because it alters the Route column: F0 and the shared library layer stay inline (they define the
+contract everything else consumes), while the nine rules are split across three `gentle-ai-worker`
+batches with disjoint surfaces (`src/rules/<id>.js`, `tests/rules/<id>.test.js`, `docs/rules/<id>.md`
+per rule) and the catalog registration, goldens and full-suite runs stay with the parent.
