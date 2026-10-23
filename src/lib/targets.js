@@ -8,9 +8,23 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { currentBranch, trackedFiles } from './git.js';
+import { currentBranch, ignoredPaths, trackedFiles } from './git.js';
 
 export const TARGET_KINDS = ['machine', 'repo-root', 'importer', 'ci', 'editor'];
+
+/**
+ * The candidate paths whose ignore behavior must be resolved before any rule runs (RFC 8.2 R7).
+ * Declared here, once, so the collector runs a single bounded `git check-ignore` per scan and a rule
+ * only reads a resolved fact.
+ */
+export const IGNORE_CANDIDATES = [
+  '.env',
+  '.env.local',
+  '.env.production',
+  'secrets.pem',
+  'server.key',
+  '.npmrc',
+];
 
 export const FOREIGN_LOCKFILES = ['package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 export const BOT_CONFIGS = ['.github/dependabot.yml', '.github/renovate.json'];
@@ -190,6 +204,8 @@ export async function repoFacts({ collector, cwd, root = null }) {
     if (await exists(join(at, name))) present.push(name);
   }
 
+  const ignored = inGit ? await ignoredPaths(collector, IGNORE_CANDIDATES) : null;
+
   const importers = [];
   const importerTargets = [];
   if (packageJson !== null) {
@@ -255,6 +271,8 @@ export async function repoFacts({ collector, cwd, root = null }) {
     },
     present,
     tracked: tracked === null ? null : new Set(tracked),
+    ignoreCandidates: IGNORE_CANDIDATES,
+    ignored,
     importers,
     workflows: workflowFiles,
     botFiles,

@@ -69,6 +69,9 @@ not.
 | `src/lib/engine.js` | runs the active catalog over the context and normalizes findings |
 | `src/lib/errors.js` | `ConfigError` and `UsageError`, the exit-2 vocabulary |
 | `src/lib/git.js` | read-only git helpers; every helper returns `null` when git cannot answer |
+| `src/lib/lockfile.js` | bounded `pnpm-lock.yaml` reader for `exact-versions` (RFC 8.2 R5) |
+| `src/lib/managed-block.js` | marker-based block read/replace for `init --apply` (RFC 11.2) |
+| `src/lib/paths.js` | write-target validation: containment, basename, symlink escape (RFC 11.5) |
 | `src/lib/plan.js` | plan items, both plan renderings, and the only write function |
 | `src/lib/policy.js` | presets, overrides, precedence, quarantine floor (RFC 9) |
 | `src/lib/probes.js` | the closed probe list, process spawning, the per-run collector |
@@ -78,6 +81,7 @@ not.
 | `src/lib/scan.js` | the one collection: targets, policy, context, report |
 | `src/lib/targets.js` | target resolution and the context a rule receives (RFC 7.1) |
 | `src/lib/tool.js` | the package identity every document carries |
+| `src/lib/workflows.js` | structural `jobs -> steps` workflow reader for R8 and R9 (RFC 8.2) |
 | `src/rules/index.js` | the catalog: catalog order is report order |
 
 One module per rule lives next to the catalog; a rule is pure and exports `id`, `title`, `scope`,

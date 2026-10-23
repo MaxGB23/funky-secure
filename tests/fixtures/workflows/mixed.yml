@@ -1,0 +1,58 @@
+name: mixed
+
+on:
+  push:
+    branches: [main]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: read
+    steps:
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: 12.3.4
+          run_install: false
+      -
+        name: cache
+        uses: "actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a" # v4.2.1
+      - run: |
+          echo "uses: heredoc/decoy@deadbeef"
+          echo "- not-a-step"
+          cat > /tmp/notes <<'EOF'
+          uses: another/decoy@v1
+          name: also-not-a-step
+          EOF
+      - run: >-
+          echo folded
+          && true
+      - with:
+          uses: not-an-action/ref@v9
+        name: with-uses-key
+        run: echo with
+      - name: release
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            console.log("uses: decoy@v1")
+            return true
+      - { name: flow, uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 }
+      - uses: docker://alpine:3.20
+      - uses: docker://ghcr.io/owner/image@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      - uses: ./.github/actions/local
+  lint:
+    name: lint
+    if: ${{ github.actor == 'renovate[bot]' && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: lint
+        run: pnpm lint

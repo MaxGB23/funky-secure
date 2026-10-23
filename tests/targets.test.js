@@ -18,7 +18,7 @@ function write(dir, path, content) {
   writeFileSync(full, content);
 }
 
-function collectorOver({ version = '12.3.4', config = {}, tracked = [] } = {}) {
+function collectorOver({ version = '12.3.4', config = {}, tracked = [], ignored = [] } = {}) {
   return {
     async read(path) {
       try {
@@ -27,7 +27,12 @@ function collectorOver({ version = '12.3.4', config = {}, tracked = [] } = {}) {
         return { ok: false };
       }
     },
-    async git() {
+    async git(args) {
+      if (args[0] === 'check-ignore') {
+        return ignored.length === 0
+          ? { ok: true, code: 1, stdout: '' }
+          : { ok: true, code: 0, stdout: ignored.map((path) => `${path}\0`).join('') };
+      }
       return { ok: true, code: 0, stdout: tracked.map((path) => `${path}\0`).join('') };
     },
     async pnpmVersion() {
@@ -138,6 +143,20 @@ test('works outside git, checking only what exists', async (t) => {
   assert.equal(facts.root, dir);
   assert.deepEqual(facts.present.sort(), ['package.json']);
   assert.deepEqual(targets.map((target) => target.kind), ['repo-root', 'importer']);
+});
+
+test('resolves the ignore behavior of the declared candidates once, for R7 to read', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+
+  const { facts } = await repoFacts({
+    collector: collectorOver({ ignored: ['.env', '.npmrc'] }),
+    cwd: dir,
+    root: dir,
+  });
+
+  assert.equal(facts.ignoreCandidates.length, 6);
+  assert.deepEqual([...facts.ignored].sort(), ['.env', '.npmrc']);
 });
 
 test('lists workflows and bot configs as ci targets', async (t) => {
