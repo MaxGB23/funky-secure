@@ -46,7 +46,7 @@ scoped form and no objection was raised).
 
 ## Tasks
 
-Route: E → delegated to one `gentle-ai-worker` (evidence collection); F0-F3 → inline, one work unit
+Route: E → delegated to one `gentle-ai-worker` (evidence collection); F0-F3 → worker A, one work unit
 per commit; nothing here is split into parallel writers because each unit shares the catalog.
 
 | ID | Task | Spec | Route | Commit |
@@ -59,18 +59,18 @@ per commit; nothing here is split into parallel writers because each unit shares
 | T6 | E6: workflow shapes a minimal reader must handle | S8 | worker | — |
 | T7 | E7: win32 spawn without `shell: true` | S8 | worker | — |
 | T8 | E8: does pnpm read `minimum-release-age` from a project `.npmrc` | S8 | worker | — |
-| T9 | Evidence file `odd/evidence/e1-e8.md` + this document committed | S8 | inline | — |
-| T10 | F0: skeleton, `src/cli.js` with four commands and every flag, report/render/policy/paths, `tests/cli.test.js`, active `tests/drift.test.js`, empty-catalog help, CI workflow | S1, S3, S6 | inline | — |
-| T24 | F1-pre: `src/lib/{probes,git,targets,lockfile,workflows,managed-block}.js` and the rule context contract | S2, S8, S9 | inline | — |
-| T11 | F1a: `lockfile-committed` (rule, tests, fixture, doc page, golden) | S2 | inline | — |
-| T12 | F1b: `package-manager-pin` | S2 | inline | — |
-| T13 | F1c: `foreign-lockfile` | S2 | inline | — |
-| T14 | F1d: `quarantine` — measures the gate (strictness) with a preset floor, codes `quarantine-not-strict` / `quarantine-below-policy` (after E1/E2/E8, OD-1) | S2, S8 | inline | — |
-| T15 | F1e: `env-not-tracked` (after E3/E4) | S2, S8 | inline | — |
-| T16 | F1f: `sensitive-ignored` (after E3) | S2, S8 | inline | — |
-| T17 | F1g: `exact-versions` + bounded lockfile reader (after E2) | S2, S8 | inline | — |
-| T18 | F1h: `actions-pinned-sha` (after E6) | S2, S8 | inline | — |
-| T19 | F1i: `no-bot-auto-merge` (after E6) | S2, S8 | inline | — |
+| T9 | Evidence file `odd/evidence/e1-e8.md` + this document committed | S8 | worker A | — |
+| T10 | F0: skeleton, `src/cli.js` with four commands and every flag, report/render/policy/paths, `tests/cli.test.js`, active `tests/drift.test.js`, empty-catalog help, CI workflow | S1, S3, S6 | inline | aeb21b1, 7ff63da, efebbf7, 4dcbefb |
+| T24 | F1-pre: `src/lib/{probes,git,targets,lockfile,workflows,managed-block}.js` and the rule context contract | S2, S8, S9 | inline | 2ce866a |
+| T11 | F1a: `lockfile-committed` (rule, tests, doc page) | S2 | worker A | 5ef01bf |
+| T12 | F1b: `package-manager-pin` | S2 | worker A | 5ef01bf |
+| T13 | F1c: `foreign-lockfile` | S2 | worker A | 5ef01bf |
+| T14 | F1d: `quarantine` — measures the gate (strictness) with a preset floor, codes `quarantine-not-strict` / `quarantine-below-policy` (after E1/E2/E8, OD-1) | S2, S8 | worker B | 5ef01bf |
+| T15 | F1e: `env-not-tracked` (after E3/E4) | S2, S8 | worker C | 5ef01bf |
+| T16 | F1f: `sensitive-ignored` (after E3) | S2, S8 | worker B | 5ef01bf |
+| T17 | F1g: `exact-versions` + bounded lockfile reader (after E2) | S2, S8 | worker B | 5ef01bf |
+| T18 | F1h: `actions-pinned-sha` (after E6) | S2, S8 | worker C | 5ef01bf |
+| T19 | F1i: `no-bot-auto-merge` (after E6) | S2, S8 | worker C | 5ef01bf |
 | T20 | F2: `init` plan, W1-W4, idempotency, dirty-tree refusal | S4 | inline | — |
 | T21 | F3: `migrate` plan and refusals | S5 | inline | — |
 | T22 | F4: `docs/{concept,cli,architecture,decisions}.md`, self-scan job, README, `0.1.0` packable | S6, S7 | inline | — |
@@ -147,3 +147,34 @@ Commits on `feat/v0.1` so far: `aeb21b1` contracts (report, policy, config, rend
 workflow and the repository's own quarantine posture. F0c (CLI, commands, drift gate, first three doc
 pages) and the shared readers (`lockfile`, `workflows`, `managed-block`, `paths`) are in flight on two
 disjoint worker surfaces.
+
+L11 — 2026-10-23, F1 closed: nine rules, one catalog in RFC 8.2 order, 213 tests green and the
+repository passes its own scan (`--scope repo --fail-on warn`, exit 0, one justified skip). Committed
+as `5ef01bf` after three worker batches (A: R1-R3, B: R4/R5/R7, C: R6/R8/R9). Integration gaps found
+while reviewing, all fixed before the commit:
+
+- **`lockfile-ignored` could never fire.** The ignore probe only evaluated R7's six candidates, so the
+  lockfile never appeared in the verdict. Adding it to `IGNORE_CANDIDATES` would have been worse: R7
+  iterates that list and fails when a candidate is *not* ignored, so it would have demanded an ignored
+  lockfile. Split into `IGNORE_CANDIDATES` (what R7 requires ignored) and `PROBED_IGNORE_PATHS` (those
+  six plus `pnpm-lock.yaml`, one probe, per-path verdict).
+- **`--scope repo` left the pin rule permanently skipped.** RFC 7.2 calls `--scope repo` the supported
+  CI gate, but the context set `machine: null` in that scope and R1 needs the answering version. Now
+  the version is resolved without the machine configuration (`machineFacts(collector, { withConfig:
+  false })`), no machine target is listed, and `ctx.machine.configOutOfScope` tells `quarantine` that
+  the absent configuration is excluded by contract rather than an unavailable probe — so
+  `--scope repo --strict-probes` no longer exits 2 over a probe it never ran.
+- **Passing findings were rendered as failures.** The human renderer grouped by target but did not
+  filter by status, so a healthy repository printed `✖ package-manager-pin  … the pnpm that answered`.
+  Pass findings now only feed the rolled-up `passing` line (RFC 10.3), empty target headings are
+  omitted, and the continuation indent matches Appendix D.1.
+- **`quarantine` reported under the machine section.** RFC 7.1 and Appendix D.1 put it on `repo-root`
+  with `path: pnpm-workspace.yaml`; the rule declared `scope: ['machine']`. Corrected to
+  `scope: ['repo']`, `targets: ['repo-root']`.
+
+Decisions taken by the workers and accepted, each recorded in its rule page: R6 filters the complete
+tracked list instead of adding a pathspec probe (the `:(glob)` trap only applies to a pathspec, and
+the template exclusion list is what prevents the over-match); R9 rides its configuration signal on a
+pass because `info` is a severity, not a status, and v0.1 has no per-finding severity override; R5
+treats `workspace:*`/`workspace:1.2.3`/`link:` as exact and `workspace:^`/`file:`/partial versions as
+floating.
