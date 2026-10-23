@@ -1,0 +1,12 @@
+node_modules/
+.tmp/
+*.log
+
+# secrets — required by funky-secure own sensitive-ignored rule (R7)
+.env
+.env.*
+!.env.example
+!.env.test.example
+*.pem
+*.key
+.npmrc
