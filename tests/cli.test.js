@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { FLAGS, parseArgs, renderHelp, run } from '../src/cli.js';
+import { catalog } from '../src/rules/index.js';
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'funky-secure-cli-'));
@@ -55,13 +56,16 @@ function capture() {
 }
 
 function io(cwd, options = {}) {
-  return {
+  const { catalog: rules, ...collectorOptions } = options;
+  const streams = {
     cwd,
     env: {},
     stdout: capture(),
     stderr: capture(),
-    collector: fakeCollector(options),
+    collector: fakeCollector(collectorOptions),
   };
+  if (rules !== undefined) streams.catalog = rules;
+  return streams;
 }
 
 test('parseArgs applies the documented defaults to scan', () => {
@@ -152,7 +156,7 @@ test('no command prints help and exits 0', async () => {
   assert.match(streams.stdout.text, /usage:/);
 });
 
-test('renderHelp names the product, every command, every flag and the empty catalog', () => {
+test('renderHelp names the product, every command, every flag and every catalog rule', () => {
   const help = renderHelp();
 
   assert.match(help, /funky-secure 0\.1\.0/);
@@ -162,12 +166,19 @@ test('renderHelp names the product, every command, every flag and the empty cata
   for (const flag of FLAGS) {
     assert.ok(help.includes(flag.name), `missing ${flag.name}`);
   }
-  assert.ok(help.includes('(none registered yet)'));
+  for (const rule of catalog) {
+    assert.ok(help.includes(rule.id), `missing rule ${rule.id}`);
+    assert.ok(help.includes(`${rule.severity.baseline}/${rule.severity.strict}`));
+  }
+  assert.ok(
+    renderHelp({ catalog: [] }).includes('(none registered yet)'),
+    'an empty catalog is a valid help text',
+  );
 });
 
-test('scan --format json on an empty directory prints a passing empty report', async (t) => {
+test('scan --format json on an empty directory with an empty catalog prints a passing empty report', async (t) => {
   const dir = scratch(t);
-  const streams = io(dir);
+  const streams = io(dir, { catalog: [] });
   const code = await run(['scan', '--format', 'json'], streams);
 
   assert.equal(code, 0);
@@ -176,9 +187,25 @@ test('scan --format json on an empty directory prints a passing empty report', a
   assert.equal(report.summary.verdict, 'pass');
 });
 
-test('scan human output shows the verdict', async (t) => {
+test('scan --format json in an empty directory reports the real catalog and fails on it', async (t) => {
   const dir = scratch(t);
   const streams = io(dir);
+  const code = await run(['scan', '--format', 'json'], streams);
+
+  assert.equal(code, 1, 'a missing lockfile is a policy violation');
+  const report = JSON.parse(streams.stdout.text);
+  const codes = report.findings.map((finding) => `${finding.rule}:${finding.code}`);
+  assert.ok(
+    codes.includes('lockfile-committed:lockfile-missing'),
+    `expected the missing lockfile in ${codes.join(', ')}`,
+  );
+  assert.equal(report.findings.length + report.summary.pass, 9, 'every rule reports exactly once');
+  assert.equal(report.summary.verdict, 'fail');
+});
+
+test('scan human output shows the verdict', async (t) => {
+  const dir = scratch(t);
+  const streams = io(dir, { catalog: [] });
   const code = await run(['scan'], streams);
 
   assert.equal(code, 0);

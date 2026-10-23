@@ -42,7 +42,10 @@ export async function collectScan({
   const probes = collector ?? createCollector({ cwd, env });
 
   const root = effectiveScope === 'machine' ? null : await repoRoot(probes);
-  const machine = effectiveScope === 'repo' ? null : await machineFacts(probes);
+  const machine =
+    effectiveScope === 'repo'
+      ? await machineFacts(probes, { withConfig: false })
+      : await machineFacts(probes);
   const repo = effectiveScope === 'machine' ? null : await repoFacts({ collector: probes, cwd, root });
 
   const loaded =
@@ -71,7 +74,12 @@ export async function collectScan({
   };
 
   const findings = evaluate({ ctx, policy, catalog, strictProbes });
-  const targets = [...(machine?.targets ?? []), ...(repo?.targets ?? [])];
+  // Under `--scope repo` the answering version is a fact the pin rule needs, but the machine is not
+  // part of the reported scope: no machine target is listed and no machine finding is emitted.
+  const targets = [
+    ...(effectiveScope === 'repo' ? [] : machine?.targets ?? []),
+    ...(repo?.targets ?? []),
+  ];
 
   const report = buildReport({
     scope: effectiveScope,

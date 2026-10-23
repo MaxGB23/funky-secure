@@ -85,20 +85,23 @@ function renderBlock(block, color) {
 }
 
 function rollupPassing(passing, skipped) {
-  const names = passing.map((finding) => finding.rule).join(', ');
   const head = `passing  ${passing.length} rule${passing.length === 1 ? '' : 's'} (`;
+  // Appendix D.1 aligns the continuation under the parenthesis, at the width of `passing  `.
+  const indent = ' '.repeat('passing  '.length);
   const lines = [];
   let current = head;
 
-  for (const word of names.split(' ')) {
-    if (current.length + word.length > WRAP && current !== head) {
-      lines.push(current);
-      current = ' '.repeat(head.length) + word;
+  passing.forEach((finding, index) => {
+    const piece = (index === 0 ? '' : ', ') + finding.rule;
+    if (current.length + piece.length > WRAP && current !== head) {
+      lines.push(`${current},`);
+      current = indent + finding.rule;
     } else {
-      current += word;
+      current += piece;
     }
-  }
-  lines.push(current + ')');
+  });
+
+  lines.push(`${current})`);
   lines[lines.length - 1] += `   ·   ${skipped} skipped`;
   return lines;
 }
@@ -115,6 +118,9 @@ function plural(count, singular, pluralForm) {
 export function renderHuman(report, { color = false } = {}) {
   const targets = report.targets ?? [];
   const findings = report.findings ?? [];
+  // A passing finding is rolled up into one line (RFC 10.3); it is never printed as a finding, so a
+  // repository that is fine cannot look like a repository that is not.
+  const visible = findings.filter((finding) => finding.status !== 'pass');
 
   const lines = [
     `${report.tool.name} scan  ·  preset ${report.policy.preset}  ·  scope ${report.scope}`,
@@ -123,18 +129,19 @@ export function renderHuman(report, { color = false } = {}) {
 
   for (const kind of TARGET_ORDER) {
     const kindTargets = targets.filter((target) => target.kind === kind);
-    const kindFindings = findings.filter((finding) => finding.target === kind);
+    const kindFindings = visible.filter((finding) => finding.target === kind);
     if (kindTargets.length === 0 && kindFindings.length === 0) continue;
 
     const block = blockFor(kind, kindTargets, kindFindings);
     const blocks = Array.isArray(block) ? block : block === null ? [] : [block];
     for (const item of blocks) {
+      if (item.findings.length === 0 && item.facts.length === 0) continue;
       lines.push(...renderBlock(item, color));
       lines.push('');
     }
   }
 
-  if (findings.length === 0) {
+  if (visible.length === 0) {
     lines.push('nothing to report', '');
   }
 

@@ -26,6 +26,13 @@ export const IGNORE_CANDIDATES = [
   '.npmrc',
 ];
 
+/**
+ * The lockfile is probed for its ignore state too, but it is the one path that must NOT be ignored:
+ * keeping it out of `IGNORE_CANDIDATES` is what stops R7 from demanding that the lockfile be ignored
+ * while letting R2 report a repository that hides its own lockfile (RFC 8.2 R2).
+ */
+export const PROBED_IGNORE_PATHS = [...IGNORE_CANDIDATES, 'pnpm-lock.yaml'];
+
 export const FOREIGN_LOCKFILES = ['package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 export const BOT_CONFIGS = ['.github/dependabot.yml', '.github/renovate.json'];
 export const EDITOR_FILES = ['.vscode/tasks.json', '.claude/settings.json'];
@@ -134,11 +141,11 @@ export function workspacePackageEntries(text) {
  * version ambiguity between `--version` and the reported `userAgent` is reported, never resolved by
  * picking one.
  */
-export async function machineFacts(collector) {
-  const [version, configuration] = await Promise.all([
-    collector.pnpmVersion(),
-    collector.pnpmConfig(),
-  ]);
+export async function machineFacts(collector, { withConfig = true } = {}) {
+  const version = await collector.pnpmVersion();
+  // `--scope repo` is the supported CI gate (RFC 7.2): the answering version is still needed by
+  // `package-manager-pin`, while the machine's store, registry and age policy stay out of contract.
+  const configuration = withConfig ? await collector.pnpmConfig() : { ok: false, reason: 'out-of-scope' };
 
   const config = configuration.ok ? configuration.config : null;
   const userAgent = typeof config?.userAgent === 'string' ? config.userAgent : null;
@@ -152,6 +159,7 @@ export async function machineFacts(collector) {
     executable: version.ok ? version.executable : null,
     installations: version.ok ? version.installations : [],
     config,
+    configOutOfScope: !withConfig,
     storePath: typeof config?.storeDir === 'string' ? config.storeDir : null,
     userAgent,
     reportedVersion: reported,
@@ -204,7 +212,7 @@ export async function repoFacts({ collector, cwd, root = null }) {
     if (await exists(join(at, name))) present.push(name);
   }
 
-  const ignored = inGit ? await ignoredPaths(collector, IGNORE_CANDIDATES) : null;
+  const ignored = inGit ? await ignoredPaths(collector, PROBED_IGNORE_PATHS) : null;
 
   const importers = [];
   const importerTargets = [];

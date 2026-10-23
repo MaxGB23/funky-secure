@@ -1,0 +1,323 @@
+/**
+ * R5 — `exact-versions` (RFC 8.2).
+ *
+ * Two questions in one rule: is a dependency specifier exact, and does `pnpm-lock.yaml` record the
+ * same specifier? The first is answered from `package.json`, the second from the bounded lockfile
+ * reader (`src/lib/lockfile.js`) — never from a guessed resolution, because the tool resolves no
+ * version and talks to no registry (RFC 4.9).
+ *
+ * Decisions the RFC leaves open, resolved here and documented in `docs/rules/exact-versions.md`:
+ * - `workspace:*` is a pinned internal link (exact); `workspace:^` and `workspace:~` are ranges.
+ * - `link:` is a live local link, the same internal class; `file:` pins a path that moves with the
+ *   working tree, so it counts as floating along with git/tarball/URL specifiers.
+ * - `1` and `1.2` are ranges in npm semantics, so they are floating.
+ * - A specifier whose shape this rule does not recognize is not reported; a guessed finding is worse
+ *   than a missed one, and the doc page says so.
+ */
+
+import { parseLockfile } from '../lib/lockfile.js';
+
+const DOC = 'docs/rules/exact-versions.md';
+const DEPENDENCY_TYPES = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+];
+
+const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+const EXACT_LITERAL = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const PARTIAL_LITERAL = /^\d+(?:\.\d+)*$/;
+const TAG_LITERAL = /^[a-z][a-z0-9._-]*$/i;
+
+/** @param {string} text */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A wildcard version token such as `x`, `1.x` or `1.2.X`.
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isWildcard(value) {
+  const segments = value.split('.');
+  return (
+    segments.some((segment) => /^[xX]$/.test(segment)) &&
+    segments.every((segment) => /^[xX]$/.test(segment) || /^\d+$/.test(segment))
+  );
+}
+
+/**
+ * @param {unknown} specifier
+ * @returns {boolean}
+ */
+function isFloating(specifier) {
+  if (typeof specifier !== 'string') return false;
+  const value = specifier.trim();
+  if (value === '') return false;
+
+  const scheme = value.match(SCHEME)?.[1]?.toLowerCase() ?? null;
+  if (scheme !== null) {
+    if (scheme === 'npm') {
+      const rest = value.slice('npm:'.length);
+      const at = rest.lastIndexOf('@');
+      if (at <= 0) return true;
+      return isFloating(rest.slice(at + 1));
+    }
+    // workspace:* is a pinned internal link, workspace:^ and workspace:~ are ranges, and
+    // workspace:<literal version> is a pin like any other literal version.
+    if (scheme === 'workspace') {
+      const rest = value.slice('workspace:'.length);
+      if (rest === '*') return false;
+      return isFloating(rest);
+    }
+    // link: is a live local link (the workspace:*-like internal case); git+, github:, http(s):,
+    // git:, ssh: and file: pin no registry version at all.
+    return scheme !== 'link';
+  }
+
+  if (value === 'latest') return true;
+  if (/^[\^~<>]/.test(value)) return true;
+  if (value.startsWith('*')) return true;
+  if (isWildcard(value)) return true;
+  if (/\s|\|\|/.test(value)) return true;
+  if (EXACT_LITERAL.test(value)) return false;
+  if (/^v\d/.test(value) && EXACT_LITERAL.test(value.slice(1))) return false;
+  if (PARTIAL_LITERAL.test(value)) return true;
+  if (TAG_LITERAL.test(value)) return true;
+  return false;
+}
+
+/**
+ * Counts the braces of one JSON line, ignoring braces inside strings.
+ * @param {string} line
+ * @returns {number}
+ */
+function braceDelta(line) {
+  let delta = 0;
+  let quote = false;
+  let escaped = false;
+  for (const character of line) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      if (quote) escaped = true;
+      continue;
+    }
+    if (character === '"') {
+      quote = !quote;
+      continue;
+    }
+    if (quote) continue;
+    if (character === '{') delta += 1;
+    else if (character === '}') delta -= 1;
+  }
+  return delta;
+}
+
+/**
+ * The 1-based line of one dependency key inside its section of the parsed file text. Returns null
+ * rather than a guessed line when the key cannot be attributed.
+ * @param {string} text
+ * @param {string} section
+ * @param {string} name
+ * @returns {number | null}
+ */
+function dependencyLine(text, section, name) {
+  if (typeof text !== 'string') return null;
+  const lines = text.split(/\r\n|\n|\r/);
+  const sectionStart = new RegExp(`^\\s*"${escapeRegExp(section)}"\\s*:\\s*\\{`);
+  const key = new RegExp(`^\\s*"${escapeRegExp(name)}"\\s*:`);
+
+  let start = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    if (sectionStart.test(lines[index])) {
+      start = index;
+      break;
+    }
+  }
+  if (start === -1) return null;
+
+  let depth = 0;
+  for (let index = start; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (index === start && depth === 0) {
+      // A one-line or minified object: the key is on the section line itself.
+      if (braceDelta(line) <= 0) return key.test(line) ? index + 1 : null;
+    } else if (depth === 1) {
+      if (key.test(line)) return index + 1;
+      if (/^\s*\}/.test(line)) return null;
+    }
+    depth += braceDelta(line);
+    if (index > start && depth <= 0) return null;
+  }
+  return null;
+}
+
+/** @param {{ dir: string }} importer */
+function importerPath(importer) {
+  return importer.dir === '.' ? 'package.json' : `${importer.dir}/package.json`;
+}
+
+/**
+ * @param {object} importer
+ * @returns {Array<{ type: string, dependency: string, specifier: unknown }>}
+ */
+function collectSpecifiers(importer) {
+  const entries = [];
+  const json = importer.json;
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) return entries;
+
+  for (const type of DEPENDENCY_TYPES) {
+    const map = json[type];
+    if (map === null || typeof map !== 'object' || Array.isArray(map)) continue;
+    for (const [dependency, specifier] of Object.entries(map)) {
+      entries.push({ type, dependency, specifier });
+    }
+  }
+  return entries;
+}
+
+/**
+ * The specifier the lockfile records for a dependency of one importer: the `specifiers` map first,
+ * then the dependency blocks. `null` means the dependency is not recorded at all.
+ * @param {object | undefined} lock
+ * @param {string} name
+ * @returns {string | null}
+ */
+function lockfileSpecifier(lock, name) {
+  if (!lock) return null;
+  const direct = lock.specifiers?.[name];
+  if (typeof direct === 'string') return direct;
+  for (const type of DEPENDENCY_TYPES) {
+    const record = lock[type]?.[name];
+    if (record && typeof record.specifier === 'string') return record.specifier;
+  }
+  return null;
+}
+
+export default {
+  id: 'exact-versions',
+  title: 'Dependency specifiers are exact',
+  scope: ['repo'],
+  targets: ['importer'],
+  friction: 2,
+  severity: { baseline: 'warn', strict: 'error' },
+  question: 'Are dependency specifiers exact, and does the lockfile agree?',
+  detection:
+    'Walk dependencies, devDependencies, optionalDependencies and peerDependencies of every importer. A specifier is floating when it starts with ^ ~ > < *, equals latest, contains an x/X version token, is a partial version, or is a git/tarball/URL specifier; exact means a literal version, npm:<pkg>@<version> or workspace:*. Each floating specifier is one finding with its file:line. Every specifier is then compared with the lockfile importer record; a disagreement or a missing record is one lockfile-desync finding. An unsupported lockfile shape yields a skip, never a guessed comparison.',
+  evidence:
+    '{ specifier, dependency, type } for a floating range, { specifier, resolved } for a desync (resolved is null when the lockfile has no record).',
+  remediation:
+    'Manual: pnpm add --save-exact <name>@<specifier> re-resolves and pins the offender; a desync is refreshed with pnpm install --lockfile-only. No auto fix in v0.1, because rewriting a range without re-resolving is how a lockfile desync is created.',
+  limits:
+    'The rule resolves nothing: the command names the current specifier and pnpm writes the exact version. A specifier shape this rule does not recognize is not reported. An unsupported lockfile shape (lockfileVersion other than 9.0, catalogs, overrides, patchedDependencies) skips the comparison rather than guessing it. peerDependencies are compared like any other section, so a lockfile that does not record them reports a desync.',
+  docs: DOC,
+
+  /**
+   * @param {object} ctx resolved context
+   * @returns {Array<object>} findings
+   */
+  detect(ctx) {
+    if (!ctx.repo) {
+      return [
+        {
+          status: 'skip',
+          code: 'no-repo',
+          scope: 'repo',
+          target: 'importer',
+          message: 'skipped: no repository was resolved',
+          probeUnavailable: true,
+        },
+      ];
+    }
+
+    const findings = [];
+    const comparisons = [];
+    const importers = Array.isArray(ctx.repo.importers) ? ctx.repo.importers : [];
+
+    for (const importer of importers) {
+      if (importer.json === null || typeof importer.json !== 'object') continue;
+      const path = importerPath(importer);
+
+      for (const entry of collectSpecifiers(importer)) {
+        if (typeof entry.specifier !== 'string') continue;
+        const line = dependencyLine(importer.text, entry.type, entry.dependency);
+        comparisons.push({ importer, path, line, entry });
+
+        if (isFloating(entry.specifier)) {
+          findings.push({
+            status: 'fail',
+            code: 'floating-range',
+            path,
+            line: line ?? undefined,
+            message: `${entry.dependency}@${entry.specifier} is a floating range`,
+            evidence: {
+              specifier: entry.specifier,
+              dependency: entry.dependency,
+              type: entry.type,
+            },
+            remediation: {
+              kind: 'manual',
+              command: `pnpm add --save-exact ${entry.dependency}@${entry.specifier}`,
+            },
+          });
+        }
+      }
+    }
+
+    const lockfileText = ctx.repo.files?.lockfile?.text;
+    let skip = null;
+
+    if (typeof lockfileText !== 'string') {
+      skip = {
+        status: 'skip',
+        code: 'no-lockfile',
+        message: 'skipped: no pnpm-lock.yaml to compare specifiers against',
+      };
+    } else {
+      const parsed = parseLockfile(lockfileText);
+
+      if (!parsed.supported) {
+        skip = {
+          status: 'skip',
+          code: 'unsupported-lockfile-shape',
+          message: `skipped: ${parsed.detail}`,
+          evidence: { reason: parsed.reason },
+        };
+      } else {
+        for (const { importer, path, line, entry } of comparisons) {
+          const lock = parsed.importers[importer.dir];
+          const recorded = lockfileSpecifier(lock, entry.dependency);
+          if (recorded !== null && recorded === entry.specifier.trim()) continue;
+
+          findings.push({
+            status: 'fail',
+            code: 'lockfile-desync',
+            path,
+            line: line ?? undefined,
+            message:
+              recorded === null
+                ? `${entry.dependency}@${entry.specifier} is not recorded in pnpm-lock.yaml`
+                : `${entry.dependency} is ${entry.specifier} in package.json but ${recorded} in pnpm-lock.yaml`,
+            evidence: { specifier: entry.specifier, resolved: recorded },
+            remediation: { kind: 'manual', command: 'pnpm install --lockfile-only' },
+          });
+        }
+      }
+    }
+
+    if (skip !== null) findings.push(skip);
+    else if (findings.length === 0) {
+      findings.push({
+        status: 'pass',
+        message: 'every dependency specifier is exact and agrees with pnpm-lock.yaml',
+      });
+    }
+
+    return findings;
+  },
+};
