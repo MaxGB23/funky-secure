@@ -19,10 +19,12 @@ S3 — `scan` is read-only, deterministic (same repository state → byte-identi
 the report contract of RFC 10: `Finding` with `code`, only `fail`/`skip`/`error` serialized,
 `summary` counting each verdict once, exit `0`/`1`/`2` (RFC 10.1-10.5, 4.9).
 
-S4 — `init` prints a plan by default and, with `--apply`, performs exactly W1-W4: managed block in
-`pnpm-workspace.yaml`, managed block in `.gitignore`, `packageManager` in `package.json`, and
-`funky-secure.config.json` only for `--preset strict`. It refuses a dirty target file, is idempotent
-by marker, and never writes the manager-owned keys (RFC 11.2, 4.3).
+S4 — `init` prints a plan by default and, with `--apply`, performs exactly W1a, W1b, W2, W3 and W4:
+the quarantine gate flip (`minimumReleaseAgeStrict: true`), the `strict`-only floor
+(`minimumReleaseAge: 4320`) in the same managed block of `pnpm-workspace.yaml`, the managed block in
+`.gitignore`, `packageManager` in `package.json`, and `funky-secure.config.json` only for
+`--preset strict`. It refuses a dirty target file, is idempotent by marker, and never writes the
+manager-owned keys (RFC 11.2, 4.3, OD-1).
 
 S5 — `migrate` prints the five-step plan and `--apply` performs step 4 only, with its three refusals
 (no `pnpm-lock.yaml`, dirty tree, default branch) (RFC 11.3, 11.5).
@@ -62,7 +64,7 @@ per commit; nothing here is split into parallel writers because each unit shares
 | T11 | F1a: `lockfile-committed` (rule, tests, fixture, doc page, golden) | S2 | inline | — |
 | T12 | F1b: `package-manager-pin` | S2 | inline | — |
 | T13 | F1c: `foreign-lockfile` | S2 | inline | — |
-| T14 | F1d: `quarantine` (after E1/E2/E8) | S2, S8 | inline | — |
+| T14 | F1d: `quarantine` — measures the gate (strictness) with a preset floor, codes `quarantine-not-strict` / `quarantine-below-policy` (after E1/E2/E8, OD-1) | S2, S8 | inline | — |
 | T15 | F1e: `env-not-tracked` (after E3/E4) | S2, S8 | inline | — |
 | T16 | F1f: `sensitive-ignored` (after E3) | S2, S8 | inline | — |
 | T17 | F1g: `exact-versions` + bounded lockfile reader (after E2) | S2, S8 | inline | — |
@@ -120,7 +122,12 @@ native `@pnpm/exe/pnpm.exe` spawns fine but is not on `PATH`; `%ComSpec%` needs
 `windowsVerbatimArguments` and doubled quotes. E8 `.npmrc` is ignored for this key at every level,
 while `pnpm config set … --location=project` writes `pnpm-workspace.yaml`.
 
-L8 — 2026-10-23, OD-1 raised to the owner: after E1, R4's declared `error`/`error` severity and the
-4320 policy value rest on a justification the measurement refuted (the value is not inherited from
-the machine by default; the built-in default is 1440 and non-strict). The RFC carries the item as
-OD-1 in section 19; nothing else in `0.1.0` depends on it, so T10 can start either way.
+L9 — 2026-10-23, OD-1 resolved by the owner, verbatim from the chosen option: "La regla mide el gate,
+no el número (mi recomendación)". Landing in the RFC: R4 becomes friction 2 with `warn` in `baseline`
+and `error` in `strict`; it passes only when the effective strictness is on AND the effective value
+meets the preset floor (`baseline` = the manager's built-in default, `strict` = 4320, overridable by
+`quarantineMinutes`); failure carries `quarantine-not-strict` or `quarantine-below-policy`; `init
+--apply` writes W1a (`minimumReleaseAgeStrict: true`) and, under `--preset strict`, W1b
+(`minimumReleaseAge: 4320`) in the same managed block. Recorded as D-16 in the RFC decision log.
+Same turn, owner's sequencing decision, verbatim: "el rfc primero, sin implementar" — so F0 (T10) stays
+pending until the owner says otherwise.

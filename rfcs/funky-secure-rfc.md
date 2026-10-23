@@ -1,6 +1,13 @@
 # RFC: funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 2 (v1.1). Decisions taken; implementation not started.**
+> **STATUS: PROPOSED — revision 3 (v1.2). Decisions taken; implementation not started.**
+>
+> **Revision 3** records the measured behaviour of the eight blocking validations E1–E8 (Appendix E,
+> raw record in `odd/evidence/e1-e8.md`) and corrects what the measurement refuted: 1.3 fact 1, 4.1,
+> R4, R5, R6, R7, R8, 11.2 and 12.1. It raised one open decision, OD-1 (section 19), which the owner
+> has since decided: R4 measures whether the quarantine is an actual gate rather than a number, with a
+> preset-dependent floor and `warn`/`error` severity (8.2 R4, 9.1, 9.4, 11.2, D-16). No rule, module
+> or requirement is added by it.
 >
 > **Revision 2** closes the findings of the pre-implementation review. The closed probe list gains the
 > git reads that `init` and `migrate` need; the lockfile and workflow readers get an explicit bounded
@@ -59,6 +66,7 @@
 - [Appendix B — Evidence of current defects](#appendix-b--evidence-of-current-defects)
 - [Appendix C — Observed environment evidence](#appendix-c--observed-environment-evidence)
 - [Appendix D — Output examples](#appendix-d--output-examples)
+- [Appendix E — Empirical validation results (E1-E8)](#appendix-e--empirical-validation-results-e1-e8)
 
 ---
 
@@ -107,9 +115,15 @@ state mutation. Its own repository does not satisfy its own standard.
 
 Four facts invalidate the assumptions of the old design:
 
-1. **pnpm now ships the age quarantine by default.** On pnpm 11+ `minimumReleaseAge` has a non-zero
-   default, so "nothing protects you" is no longer the baseline; the question becomes "is the value
-   high enough for our policy". The old design seeded 4320 minutes as if the default were zero.
+1. **pnpm now ships the age quarantine by default, and the default is not what it looks like.** The
+   built-in `minimumReleaseAge` is **1440 minutes (24 h)** since pnpm 11, and it is **not visible** in
+   `pnpm config list --json` when unset. It is also **non-strict**: pnpm admits a package by appending
+   a `minimumReleaseAgeExclude` entry to `pnpm-workspace.yaml` and exits `0`, also under `CI=true`. An
+   explicitly configured `minimumReleaseAge` flips `minimumReleaseAgeStrict` to `true` and turns the
+   same setups into `ERR_PNPM_NO_MATURE_MATCHING_VERSION` at resolution and
+   `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` at lockfile verification (E1, Appendix E). The old design
+   seeded 4320 minutes as if the default were zero, and a repository that seeds nothing is neither
+   unprotected nor at policy: it inherits 1440, non-strict.
 2. **pnpm now ships an explicit build-approval flow.** `approve-builds` / `onlyBuiltDependencies` /
    `allowBuilds` are the manager's own answer to lifecycle scripts. A CLI that seeds its own
    `allowBuilds: []` and `ignoreScripts: true` competes with that flow instead of using it.
@@ -288,6 +302,12 @@ Concretely: `minimumReleaseAge` is read from the **effective** configuration tha
 reports, not from a YAML file we parse; `frozen-lockfile` is understood to be the default in CI, so a
 workflow that simply runs `pnpm install` is not a finding.
 
+A built-in default that the manager does not report is never read as zero and never as "disabled".
+Absence in the effective listing means **inherited**: the documented default of the pinned major is
+the reference, and the report says so instead of reporting the absence (E1, Appendix E). This is the
+same principle as the sentence above — the manager's value is the value — applied to the case where
+the manager keeps its own default out of the listing it prints.
+
 ### 4.2 Friction has a price, and the price sets the starting severity
 
 Every rule is classified by what it costs a legitimate repository:
@@ -432,7 +452,7 @@ Forge has the same property: `funky-forge` does not mean "estimator", it names t
 - Every artifact this product *touches* keeps its upstream name (`pnpm-workspace.yaml`,
   `pnpm-lock.yaml`, `.gitignore`). The product never introduces its own directory, dotfile or state
   file in v0.1. The only files it may create, and only through the plan of section 11.2, are
-  `pnpm-workspace.yaml` (W1, when the file is absent) and `funky-secure.config.json` (W4, only with
+  `pnpm-workspace.yaml` (W1a/W1b, when the file is absent) and `funky-secure.config.json` (W4, only with
   `--preset strict --apply`).
 
 ---
@@ -551,31 +571,43 @@ deviation is recorded here and in section 9.1.
   11.3). Two lockfiles present raises the message to `error` level wording while keeping its
   severity, because coexistence is the state that produces "works locally, breaks in CI".
 
-#### R4 — `quarantine` · friction 1 · sev `error`/`error` · fix `manual`
+#### R4 — `quarantine` · friction 2 · sev `warn`/`error` · fix `auto`
 
-- **Question:** is the effective release-age quarantine at least the policy value?
-- **Detection:** read `minimumReleaseAge` from the **effective** configuration reported by
-  `pnpm config list --json` (this merges global, workspace and environment, which is exactly the
-  number pnpm will apply). Compare against `policy.quarantineMinutes` (default `4320`). Report that
-  effective value and, as a reference, the manager's own default, so the reader knows what the
-  repository inherited for free. The report does **not** claim where the value came from: the
-  effective listing merges its sources and cannot attribute them (E2), and a guessed origin is
-  exactly the kind of stale assertion this RFC exists to remove.
-- **Evidence:** effective value, policy value, `minimumReleaseAgeExclude` entries if present.
-- **Severity:** `error` in both presets, although the friction class is 1. The justification is that
-  the cost of satisfying the rule is usually zero for a repository owner — the value is inherited
-  from the machine — while a floor that is lower than policy is the highest-value defect this
-  auditor can report. The deviation from 4.2 is deliberate and recorded in section 9.1.
-- **Remediation:** `init --apply` writes the managed block W1 of section 11.2, which is the only
-  project-scoped path the tool can perform. The machine path
-  (`pnpm config set minimum-release-age 4320 --location=global`) is printed as a recommendation and
-  never executed (4.5). `pnpm config set minimum-release-age 4320 --location=project` is offered as a
-  manual alternative **only if** E8 proves that pnpm reads the value from a project `.npmrc`
-  (1.3, fact 3); otherwise the managed block is the single remediation and E8's outcome is recorded
-  in this rule's documentation.
-- **Why it is not friction 0:** a hotfix on a fresh CVE must wait 72 hours or be explicitly excluded.
-  That cost is real and it is the point of the quarantine; the rule states the number instead of
-  hiding it.
+- **Question:** is the release-age quarantine an **actual gate** — a decision a human has to make —
+  rather than an automatic approval list that admits whatever it is pointed at?
+- **Detection:** read `minimumReleaseAge`, `minimumReleaseAgeStrict` and `minimumReleaseAgeExclude`
+  from the **effective** configuration reported by `pnpm config list --json` (this merges global,
+  workspace and environment, which is exactly what pnpm will apply). The **effective value** is the
+  reported `minimumReleaseAge` when present, else the built-in default of the pinned major — 1440
+  minutes on the pnpm 11/12 line, 0 before 11 — reported explicitly as **inherited** (E2, E1). The
+  **effective strictness** is the reported `minimumReleaseAgeStrict` when present, else the manager's
+  own rule: `true` only when `minimumReleaseAge` was explicitly configured. The rule answers `pass`
+  only when the strictness is effective **and** the effective value is at least the preset's floor
+  (`policy.quarantineMinutes`, 9.4). Two distinct failure codes:
+  `quarantine-not-strict` — auto-approval mode: pnpm admits the package and writes an exclusion into
+  `pnpm-workspace.yaml`, even under CI — and `quarantine-below-policy` — a gate, but shorter than the
+  preset floor. Both facts are reported together with the `minimumReleaseAgeExclude` count and values,
+  because in non-strict mode pnpm itself is growing that list (E1). The report does **not** claim
+  where the value came from: the effective listing merges its sources and cannot attribute them (E2),
+  and a guessed origin is exactly the kind of stale assertion this RFC exists to remove.
+- **Evidence:** effective value, inherited or configured, effective strictness, preset floor,
+  `minimumReleaseAgeExclude` entries (count and values).
+- **Severity:** `warn` in `baseline`, `error` in `strict`. Declared deviation from 4.2: friction 2
+  would be `warn` in both presets, and `strict` promotes it because that is the author's own bar;
+  `baseline` only warns on the inherited non-strict default, which keeps the rule adoptable anywhere
+  (4.2, K1). The deviation is recorded in section 9.1.
+- **Remediation:** `init --apply` writes the managed block W1a of section 11.2 —
+  `minimumReleaseAgeStrict: true` — plus `minimumReleaseAge: 4320` as W1b under `--preset strict`.
+  Manual equivalents: `pnpm config set minimum-release-age-strict true --location=project` and
+  `pnpm config set minimum-release-age 4320 --location=project`; in pnpm 12 both write
+  `pnpm-workspace.yaml`, because project config **is** that file (E8), while `--location=global`
+  writes the pnpm global `config.yaml`. An `.npmrc` is never involved — a hand-written
+  `minimum-release-age` in a project or user `.npmrc` is silently ignored, which is how a repository
+  can look hardened and stay unprotected, the defect section 2 describes. The hotfix escape hatch is
+  `minimumReleaseAgeExclude`, the list pnpm itself already writes in non-strict mode.
+- **Why it is not friction 0:** once the gate exists, an immature dependency is a failed install —
+  `ERR_PNPM_NO_MATURE_MATCHING_VERSION` at resolution, or `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`
+  when the lockfile check runs (E1). That cost is real and it is the point of the quarantine.
 
 #### R5 — `exact-versions` · friction 2 · sev `warn`/`error` · fix `manual`
 
@@ -598,17 +630,20 @@ deviation is recorded here and in section 9.1.
   repository can also split it: `"exact-versions": { "dependencies": "error", "devDependencies": "warn" }`
   is **not** supported in v0.1; it is a v2 extension.
 - **Remediation:** `pnpm add --save-exact <pkg>@<version>` per package, which works whatever the
-  configuration surfaces are, or — when E8's evidence covers it as well —
-  `pnpm config set save-exact true --location=project` plus a re-add of the affected packages
-  (manual). No auto fix in v0.1: rewriting a `package.json` range without re-resolving is how you
-  desync a lockfile.
+  configuration surfaces are, or `pnpm config set save-exact true --location=project`, which writes
+  `saveExact: true` into `pnpm-workspace.yaml` — project config in pnpm 12 — and not into a project
+  `.npmrc`, which pnpm ignores for this class of setting (E8) — plus a re-add of the affected
+  packages (manual). No auto fix in v0.1: rewriting a `package.json` range without re-resolving is
+  how you desync a lockfile.
 - **Evidence:** `file:line` of each specifier, the range, the resolved version.
 
 #### R6 — `env-not-tracked` · friction 0 · sev `error`/`error` · fix `none`
 
 - **Question:** is any environment file committed?
 - **Detection:** `git ls-files -z -- ':(glob)**/.env*'`; exclude template names (`.env.example`,
-  `.env.sample`, `.env.template`, `.env.dist`, `.env.test.example`). Outside git, `skip`.
+  `.env.sample`, `.env.template`, `.env.dist`, `.env.test.example`). The `:(glob)` magic is required:
+  without it a root `.env` is not matched at all (E4). The pattern also matches `.env.example`, so the
+  template exclusion list is mandatory, not a convenience. Outside git, `skip`.
 - **Evidence:** each tracked path. **No content is read**, and no value is printed (N5).
 - **Remediation:** `git rm --cached <path>` (manual) plus a rotation note in the message: removing a
   file from the index does not remove it from history, so the credentials must be rotated. That
@@ -622,9 +657,12 @@ deviation is recorded here and in section 9.1.
 - **Detection:** behavioral, not textual. Feed candidate paths to
   `git check-ignore --no-index --stdin -z` and require a match for: `.env`, `.env.local`,
   `.env.production`, `secrets.pem`, `server.key`, `.npmrc`. Textual presence in `.gitignore` is not
-  enough, because a later negation (`!.env`) or a nested ignore file changes the truth. Additionally
-  report tracked instances of `*.pem`, `*.key` and a root `.npmrc` containing a literal
-  `_authToken=` (presence only, value redacted).
+  enough, because a later negation (`!.env`) or a nested ignore file changes the truth. The probe is
+  invoked **without `-v`**: with `-v` a negated path returns exit `0` and prints the negation
+  pattern, which inverts the verdict (E3). The verdict is the **per-path presence** of that path in
+  the output; the exit code (`0`/`1`) is an aggregate over the batch and is never read as one path's
+  answer. Additionally report tracked instances of `*.pem`, `*.key` and a root `.npmrc` containing a
+  literal `_authToken=` (presence only, value redacted).
 - **Remediation:** `init --apply` appends a managed block (section 11.2) with the missing entries.
   Manual alternative: the exact lines to add are printed.
 - **Scope note:** the rule does not demand that `.npmrc` be ignored when the project legitimately
@@ -634,10 +672,17 @@ deviation is recorded here and in section 9.1.
 #### R8 — `actions-pinned-sha` · friction 1 · sev `error`/`error` · fix `manual`
 
 - **Question:** can a CI workflow change under you without a commit?
-- **Detection:** for each `.github/workflows/*.yaml{,.yml}` line matching `uses:`, parse the
-  reference. Accept `owner/repo@<40 hex>`. Flag `@v1`/`@main`/`@<7 hex>`. Accept local `./path`
-  actions. Treat `docker://image:tag` as a finding and `docker://image@sha256:...` as a pass. A
-  trailing `# vX.Y.Z` comment is preserved as evidence but never trusted.
+- **Detection:** stated against the structural workflow reader of section 14 (`src/lib/workflows.js`),
+  never against a line scan for `uses:`. A `- uses:`-anchored line scan finds none of the real steps,
+  and a loose `uses:` scan takes false positives from block scalars, folded `>-` values and `with:`
+  map keys while missing flow-style step maps (E6). The reader maps `jobs:` → job → `steps:` → step
+  and must handle: single-line and multi-line step maps (`- name: x`, and `-` alone followed by an
+  indented map), flow-style maps (`- { name: …, uses: … }`), quoted `uses:` values, trailing
+  `# vX.Y.Z` comments (preserved as evidence, never trusted), `with:` maps, block scalars (`run: |`,
+  `run: >-`) whose bodies are not steps, `docker://image:tag` versus `docker://image@sha256:...`, and
+  local `./path` actions. Accept `owner/repo@<40 hex>`. Flag `@v1`/`@main`/`@<7 hex>`. Treat
+  `docker://image:tag` as a finding and `docker://image@sha256:...` as a pass. A file the reader cannot
+  parse yields `skip: unparseable-workflow` for that file.
 - **Remediation:** manual, with the exact shape printed:
   `uses: owner/repo@<sha> # vX.Y.Z`, and a pointer to the rule doc explaining how to resolve the SHA
   (`gh api repos/owner/repo/git/refs/tags/vX.Y.Z`) — the tool does not resolve it, because that is a
@@ -712,14 +757,14 @@ ambiguously:
 | Preset | Intent | Effect |
 |---|---|---|
 | `baseline` (default) | Adoptable anywhere without a fight | Friction-0 rules are `error`; friction 1–2 are `warn` |
-| `strict` | The author's own repositories | Friction 0–1 rules are `error`; `exact-versions` is `error` (friction 2, explicitly promoted) |
+| `strict` | The author's own repositories | Friction 0–1 rules are `error`; friction 2 stays `warn` unless the policy promotes it (`exact-versions`, `quarantine`) |
 
 Declared deviations from that table, all visible in the rule headings of section 8.2:
 
 - **`foreign-lockfile` (R3)** stays `warn` in both presets: G4 says recommend pnpm, not require it.
-- **`quarantine` (R4)** stays `error` in both presets: the repository owner rarely pays the cost,
-  because the value is inherited from the machine, and a floor below policy is the defect that
-  matters most.
+- **`quarantine` (R4)** is promoted to `error` in `strict` and stays `warn` in `baseline`, and its
+  floor follows the preset: the manager's built-in default in `baseline`, `4320` in `strict` (8.2 R4,
+  9.4).
 - **`actions-pinned-sha` (R8)** is `error` in both presets: pinning a reference is a one-line edit with
   no behavioral cost, so the friction class of the *finding* is not the friction of the *fix*.
 
@@ -763,11 +808,14 @@ comments) so there is no parser to depend on and no code execution path.
 
 ### 9.4 Quarantine policy and its source
 
-`quarantineMinutes` defaults to `4320` (72 hours), above pnpm's own default, which the report prints
-as inherited. The value is policy, not law: a repository with a documented hotfix process may lower
-it or list exemptions, and the report shows the effective number so the lowering is visible in review.
-`minimumReleaseAgeExclude` entries are reported in the evidence (count and values), so an exemption
-is never invisible.
+The floor R4 compares against is preset-dependent: `baseline` uses the manager's documented built-in
+default for the pinned major (1440 minutes on the pnpm 11/12 line, 0 before 11), and `strict` uses
+`4320` (72 hours). `quarantineMinutes` in the repository config overrides the preset floor for both
+presets — the value is policy, not law: a repository with a documented hotfix process may lower it or
+list exemptions, and the report shows the effective number so the lowering is visible in review.
+`minimumReleaseAgeExclude` entries are reported in the evidence (count and values), so an exemption is
+never invisible. In non-strict mode pnpm itself grows that list, which is why the strictness fact
+matters more than the number.
 
 ---
 
@@ -812,9 +860,9 @@ finding and no count.
   "schemaVersion": 1,
   "tool": { "name": "funky-secure", "version": "0.1.0" },
   "scope": "all",
-  "policy": { "preset": "baseline", "quarantineMinutes": 4320, "failOn": "error" },
+  "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "targets": [
-    { "kind": "machine", "detail": "pnpm 11.5.0" },
+    { "kind": "machine", "detail": "pnpm 12.3.4" },
     { "kind": "repo-root", "path": "." },
     { "kind": "importer", "path": "." }
   ],
@@ -894,7 +942,8 @@ With `--apply` it performs exactly these writes, and no others:
 
 | # | Target | Condition | Operation |
 |---|---|---|---|
-| W1 | `pnpm-workspace.yaml` | effective `minimumReleaseAge` < `policy.quarantineMinutes`, compared as reported and without claiming a source (12.2) | managed block with the policy value |
+| W1a | `pnpm-workspace.yaml` | effective `minimumReleaseAgeStrict` is false: the quarantine auto-approves instead of gating (8.2 R4, E1) | managed block with `minimumReleaseAgeStrict: true` |
+| W1b | `pnpm-workspace.yaml` | `--preset strict` passed | the same managed block also carries `minimumReleaseAge: 4320` |
 | W2 | `.gitignore` | `sensitive-ignored` fails | managed block with the missing entries required by R7: `.env`, `.env.*`, `!.env.example`, `!.env.test.example`, `*.pem`, `*.key`, plus `.npmrc` only when the repository does not track a root `.npmrc` without a token |
 | W3 | `package.json` | `package-manager-pin` fails **without** conflict | set `packageManager` |
 | W4 | `funky-secure.config.json` | `--preset strict` passed | persist `{ "preset": "strict" }` so CI agrees |
@@ -909,16 +958,30 @@ machine.
 without them cannot be checked (11.5, point 5); absolute paths remain forbidden in the `scan` report
 body only (10.1). `state` is `would-write`, `would-skip` (already at policy) or `conflict`.
 
-A repository that gains a `pnpm-workspace.yaml` through W1 becomes a pnpm workspace root. That is a
+A repository that gains a `pnpm-workspace.yaml` through W1a becomes a pnpm workspace root. That is a
 real semantic change, and the plan item's `reason` states it next to the value being written.
+
+The two writes are separate on purpose. **W1a is the gate flip:** writing
+`minimumReleaseAgeStrict: true` turns the quarantine from non-strict auto-exclusion into a decision a
+human has to make, so setups that install today can fail with `ERR_PNPM_NO_MATURE_MATCHING_VERSION` at
+resolution or `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` at lockfile verification, and a green CI can
+turn red at the next install (E1). **W1b only raises the floor once a gate exists:**
+`minimumReleaseAge: 4320` is written because `--preset strict` says so, not because the gate needs it.
+Both land in the same managed block, so the block stays one unit of edit and one unit of review. The
+plan item's `reason` states which of the two applies, and a hotfix goes through
+`minimumReleaseAgeExclude` — the file pnpm itself already writes in non-strict mode.
 
 Managed block format (line-based, no YAML parser):
 
 ```yaml
 # funky-secure:begin (managed block — do not edit by hand)
+minimumReleaseAgeStrict: true
 minimumReleaseAge: 4320
 # funky-secure:end
 ```
+
+The second key is written only when `--preset strict` was passed (W1b); the first is written whenever
+the effective strictness is false (W1a).
 
 Rules for the block:
 
@@ -928,7 +991,7 @@ Rules for the block:
   the markers are ever replaced when present.
 - Refuses to write (`conflict` finding, no write) when the file already declares the same top-level
   key outside the block. Two sources for one setting is the defect this product exists to report.
-- When the file does not exist, `init` creates it **only** for W1; it does not synthesize a
+- When the file does not exist, `init` creates it **only** for W1a/W1b; it does not synthesize a
   `packages:` key (the old implementation's silent behavior was correct here and is kept).
 
 Safety rules for `--apply`:
@@ -1015,18 +1078,23 @@ No command runs an install, a build, a lifecycle script, a network request, a gi
 | `where pnpm` (win32) / `which pnpm` (POSIX) | installations visible in `PATH` |
 | `git rev-parse --show-toplevel` | repository root |
 | `git ls-files -z` | tracked files |
-| `git check-ignore --no-index --stdin -z` | behavioral ignore evaluation |
+| `git check-ignore --no-index --stdin -z` | behavioral ignore evaluation, never with `-v` (E3) |
 | `git ls-files --error-unmatch` | tracked-or-not for one path |
 | `git status --porcelain -z -- <paths>` | dirty-tree refusal for `init --apply` and `migrate --apply` |
 | `git rev-parse --abbrev-ref HEAD` | current branch for `migrate --apply` |
 | `git symbolic-ref --short refs/remotes/origin/HEAD` | default branch for `migrate --apply` (may fail: no remote) |
-| bounded file reads | `package.json`, `pnpm-workspace.yaml` (existence), `pnpm-lock.yaml` (specifier scan), `.gitignore`, workflows, `~/.npmrc` |
+| bounded file reads | `package.json`, `pnpm-workspace.yaml` (existence), `pnpm-lock.yaml` (specifier scan), `.gitignore`, workflows, `~/.npmrc` (registry/auth evidence and the R7 token check only — it cannot answer the quarantine question, E8), and the resolved `pnpm` shim on win32 (to discover the real executable, E7) |
 
-Every probe is spawned with an argument array and **`shell: false`**. On win32, a resolved `.cmd`
-shim cannot be spawned without a shell, so the tool either prefers the `.exe` when one exists or
-spawns `%ComSpec% /d /s /c` with an explicitly quoted, fully resolved path. This replaces the old
-`shell: true` path (`runner.js`), which produced Node's `DEP0190` warning on every run and put a
-concatenated command line between the tool and the argument list.
+Every probe is spawned with an argument array and **`shell: false`**. On win32 the mechanics are the
+measured ones (E7): a `.cmd` shim spawned with `shell: false` fails with `EINVAL`; the real executable
+sits behind the shim at `%LOCALAPPDATA%\pnpm\global\v11\<hash>\node_modules\@pnpm\exe\pnpm.exe` and is
+**not** on `PATH`, so it is reached by reading the resolved shim, never by searching; and the
+`%ComSpec% /d /s /c` form works only with `windowsVerbatimArguments: true`, plus a doubled-quoted
+argument (`""<path>" <args>"`) when the path contains a space. `shell: true` is never the fallback:
+a path with a space breaks it and Node emits `DEP0190`. This replaces the old `shell: true` path
+(`runner.js`), which produced `DEP0190` on every run and put a concatenated command line between the
+tool and the argument list. When no executable can be resolved, the machine fact returns `skip`, never
+a guess.
 
 Probes are cached per run. A probe is never retried with different arguments, and the tool never
 falls back to a second command to answer the same question: if the declared probe fails, the fact is
@@ -1205,18 +1273,21 @@ releasable, which is the mechanism that prevents the situation described in 2.8.
 ### 15.5 Empirical validations required before implementation
 
 Blocking. Each one has the exact command and the observation that must be recorded in the phase
-notes.
+notes. All eight are resolved; Appendix E is the summary and `odd/evidence/e1-e8.md` the raw record.
 
-| # | Question | How to answer | If the assumption fails |
-|---|---|---|---|
-| E1 | What is pnpm's real default `minimumReleaseAge` on the pinned version? | `pnpm config list --json` on a clean config, plus the docs of the pinned major | Report the observed default instead of a documented one; never hardcode it |
-| E2 | Does `pnpm config list --json` expose workspace-scoped keys, and can their origin be inferred? | run inside a repo with and without the key in `pnpm-workspace.yaml` | Drop the "origin" field; keep the effective value only |
-| E3 | Does `git check-ignore --no-index --stdin -z` honor negations and nested ignore files? | fixture with `.env` then `!.env` | Fall back to textual analysis plus an explicit warning in the finding |
-| E4 | Does `git ls-files -z -- ':(glob)**/.env*'` match in subdirectories on win32? | run on a nested fixture | Use a full `git ls-files -z` plus basename filter |
-| E5 | Is `frozen-lockfile` really the CI default? | workflow with `CI=true` and a modified lockfile | Promote `ci-no-safety-overrides` into v0.1 and revisit 8.3 |
-| E6 | How do multi-line `uses:`, block scalars and `with:` maps appear in the target workflows? | parse this repository's own `.github/workflows/ci.yml` once F0 creates it, plus two copied samples under `tests/fixtures/workflows/` | Narrow the reader to the shapes it can prove and return `skip: unparseable-workflow` for the rest (R9) |
-| E7 | Can a `.cmd` shim be spawned on win32 without `shell: true`? | spawn `%ComSpec% /d /s /c` with explicit quoting | Keep `shell: true` for shims only, documented, with a fixed argv |
-| E8 | Does pnpm read `minimum-release-age` from a project `.npmrc` (`pnpm config set … --location=project`), or only from `pnpm-workspace.yaml` and the global config (1.3, fact 3)? | fixture with the key in `.npmrc` only: `pnpm config list --json`, then a real install of a fresh package | R4's manual alternative disappears and the managed block (W1) becomes the single remediation |
+| # | Question | How to answer | If the assumption fails | Outcome |
+|---|---|---|---|---|
+| E1 | What is pnpm's real default `minimumReleaseAge` on the pinned version? | `pnpm config list --json` on a clean config, plus the docs of the pinned major | Report the observed default instead of a documented one; never hardcode it | resolved — Appendix E, E1 |
+| E2 | Does `pnpm config list --json` expose workspace-scoped keys, and can their origin be inferred? | run inside a repo with and without the key in `pnpm-workspace.yaml` | Drop the "origin" field; keep the effective value only | resolved — Appendix E, E2 |
+| E3 | Does `git check-ignore --no-index --stdin -z` honor negations and nested ignore files? | fixture with `.env` then `!.env` | Fall back to textual analysis plus an explicit warning in the finding | resolved — Appendix E, E3 |
+| E4 | Does `git ls-files -z -- ':(glob)**/.env*'` match in subdirectories on win32? | run on a nested fixture | Use a full `git ls-files -z` plus basename filter | resolved — Appendix E, E4 |
+| E5 | Is `frozen-lockfile` really the CI default? | workflow with `CI=true` and a modified lockfile | Promote `ci-no-safety-overrides` into v0.1 and revisit 8.3 | resolved — Appendix E, E5 |
+| E6 | How do multi-line `uses:`, block scalars and `with:` maps appear in the target workflows? | parse this repository's own `.github/workflows/ci.yml` once F0 creates it, plus two copied samples under `tests/fixtures/workflows/` | Narrow the reader to the shapes it can prove and return `skip: unparseable-workflow` for the rest (R9) | resolved as an analysis — Appendix E, E6; its shape list is R8 (8.2) and the reader is proven in F1 |
+| E7 | Can a `.cmd` shim be spawned on win32 without `shell: true`? | spawn `%ComSpec% /d /s /c` with explicit quoting | Keep `shell: true` for shims only, documented, with a fixed argv | resolved — Appendix E, E7 |
+| E8 | Does pnpm read `minimum-release-age` from a project `.npmrc` (`pnpm config set … --location=project`), or only from `pnpm-workspace.yaml` and the global config (1.3, fact 3)? | fixture with the key in `.npmrc` only: `pnpm config list --json`, then a real install of a fresh package | R4's manual alternative disappears and the managed block (W1a/W1b) becomes the single remediation | resolved — Appendix E, E8 |
+
+E6 was resolved as an analysis rather than as a live verdict on an implementation: it measured what a
+line scan gets wrong, and the reader that answers for it is proven by its own fixtures in F1.
 
 Every one of these runs inside a fixture under `.tmp/`, inside this repository. A run against another
 repository is a manual check with the owner's explicit authorization, never part of the suite
@@ -1257,7 +1328,7 @@ Nine tasks, in dependency order: `lockfile-committed` → `package-manager-pin` 
 
 ### F2 — `init`
 
-Plan generation, writes W1–W3, W4 for the strict preset, managed-block idempotency, dirty-tree
+Plan generation, writes W1a, W1b, W2–W3, W4 for the strict preset, managed-block idempotency, dirty-tree
 refusal, and the "nothing to apply" path.
 
 **Acceptance:** a fixture already at policy is a no-op; a fixture below policy gets exactly one block
@@ -1350,8 +1421,10 @@ Resolved in this revision:
     R3 `foreign-lockfile`, R4 `quarantine`, R8 `actions-pinned-sha` (8.2, 9.1).
 12. **Write-target validation is specified now**, before any `apply` exists (11.5).
 
-Left open on purpose, to be answered by evidence during implementation rather than guessed now:
-E1–E8 (15.5) and the split-severity form of `exact-versions` (a v2 extension, 8.2 R5).
+Left open on purpose, to be answered by evidence during implementation rather than guessed now: the
+split-severity form of `exact-versions` (a v2 extension, 8.2 R5). E1–E8 were answered before revision
+3 and are recorded in Appendix E, so they are no longer open (15.5); OD-1 was answered by the owner
+and is resolved below.
 
 Added or corrected in revision 2:
 
@@ -1363,13 +1436,52 @@ Added or corrected in revision 2:
     instead of guessing, and both name their supported shape.
 15. **`quarantine` reports the effective value and no origin** (8.2 R4). The inheritance guard that
     W1 used to carry is gone: it was unobservable (E2) and contradicted the write table (11.2).
-16. **R4's remediation is the managed block W1**, with `pnpm config set … --location=project` offered
-    only if E8 proves pnpm still reads it (15.5).
+16. **R4's remediation is the managed block W1a/W1b**, with `pnpm config set … --location=project`
+    offered only if E8 proves pnpm still reads it (15.5). (Resolved by item 21.)
 17. **The report contract is closed:** `code` exists in `Finding`; only `fail`/`skip`/`error` are
     serialized; `summary` counts each verdict once; the verdict with `--fail-on none` is defined; and
     `off` runs nothing (9.2, 10.1, 10.2, 10.5).
 18. **`init` and `migrate` have a JSON plan document** with absolute paths and digests, and `init`
     does not accept `--fail-on` (11.2, 10.5).
+
+Added or corrected in revision 3:
+
+19. **`quarantine` reads a built-in default as inherited, never as zero** (1.3 fact 1, 4.1, 8.2 R4):
+    pnpm does not report the 1440-minute default in `pnpm config list --json`, so absence is labelled
+    inherited and the documented default of the pinned major is the reference (E1, E2).
+20. **R4 reports `minimumReleaseAgeStrict` and the `minimumReleaseAgeExclude` entries** next to the
+    value, because non-strict means pnpm admits a package by writing an exclusion into the repository
+    (8.2 R4, E1).
+21. **R4's E8-conditional guard is resolved:** `--location=project` writes `pnpm-workspace.yaml`,
+    `--location=global` writes the pnpm global `config.yaml`, and an `.npmrc` is never involved
+    (8.2 R4, 8.2 R5, 12.1, E8).
+22. **R6 and R7 pin the measured git behaviour:** the `:(glob)` magic is required, `.env.example`
+    matches and the template exclusion list is mandatory, and `git check-ignore` is read without
+    `-v`, per path (8.2 R6, 8.2 R7, E3, E4).
+23. **R8 is stated against the structural workflow reader** with the shape list that reader must
+    handle, so no `uses:` line scan remains in the rule (8.2 R8, E6).
+24. **W1a states that it changes the behaviour class**, and the failures that can follow
+    (`ERR_PNPM_NO_MATURE_MATCHING_VERSION`, `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`) are named, with
+    `minimumReleaseAgeExclude` as the hotfix path; W1b only raises the floor (11.2, E1).
+25. **12.1's probe mechanics are corrected:** the bounded `~/.npmrc` read is registry/auth and token
+    evidence only, the win32 spawn rules are the measured ones, reading the resolved shim is a
+    declared probe, and an unresolvable executable yields `skip` (12.1, E7, E8).
+26. **Appendix E records the measurement**, and Appendix C.2 corrects where the `ignoreScripts`
+    reading comes from (Appendix E, C.2, E1–E8).
+
+**OD-1 (resolved)** — after E1, R4's declared severity and the policy default of 4320 rested on a
+justification the measurement refuted: the value is NOT inherited from the machine by default (the
+built-in default is 1440, non-strict). The owner decided: "La regla mide el gate, no el número". The
+outcome, one line per fact:
+
+- **What R4 measures:** whether the release-age quarantine is an actual gate — effective strictness —
+  not whether one number is at least `4320` (8.2 R4).
+- **Preset floors:** `baseline` uses the manager's documented built-in default for the pinned major;
+  `strict` uses `4320`; `quarantineMinutes` overrides either (9.1, 9.4).
+- **Severities:** `warn` in `baseline`, `error` in `strict` (8.2 R4, 9.1).
+- **Writes:** `init --apply` writes the gate flip as W1a and the strict floor as W1b (11.2).
+
+Nothing else in 0.1.0 depends on this.
 
 ---
 
@@ -1385,8 +1497,8 @@ Added or corrected in revision 2:
    absolute paths outside the machine scope (10.1, 10.2).
 5. Exit codes `0`, `1` and `2` mean pass, violation and tool failure respectively, each covered by a
    test (10.4).
-6. `init` without `--apply` writes nothing; with `--apply` it performs only W1–W4; a second run
-   performs zero writes (11.2).
+6. `init` without `--apply` writes nothing; with `--apply` it performs only W1a, W1b and W2–W4; a
+   second run performs zero writes (11.2).
 7. `init --apply` refuses a dirty tree with exit `2` and names the file (11.2).
 8. `migrate --apply` refuses without a pnpm lockfile and removes only the foreign lockfile (11.3).
 9. The drift gate is green, and deleting a rule's documentation makes it red (13.2).
@@ -1424,6 +1536,7 @@ which the decision was taken.
 | D-13 | Receipt-driven development enabled for this workspace | "prender rdd en este workspace" | session control |
 | D-14 | Help is always current; complete architecture docs are a deliverable | "en funky-forge tenemos una politica de el comando help se actualiza siempre, no refleja estado no actualizado, tambien tenemos docs de la arquitectura completa." | 13, 14 |
 | D-15 | This session ends with the RFC; implementation happens in another session | "Esta sesion terminará con la redaccion de un mega rfc, tal cual se hizo en funky-forge, para tener todo recabado y aprobarlo e implementar en otra sesio" (as typed; truncated in the source message) | whole document |
+| D-16 | R4 measures the gate, not the number: preset-dependent floor, `warn` in `baseline` and `error` in `strict` | "La regla mide el gate, no el número" | 8.2 R4, 9.1, 9.4, 11.2 |
 
 ---
 
@@ -1488,6 +1601,18 @@ What it demonstrates:
    version in `userAgent` (12.3.4) disagree. A single-version claim would be wrong on this setup.
 3. **Store paths are readable facts** and belong in the machine report as evidence (11.5, point 6).
 
+### C.2 `ignore-scripts` and the pnpm global config (revision 3)
+
+E8 measured a second key in the same shape: `ignore-scripts=true` written in a project `.npmrc` is also
+not reported by `pnpm config list --json` (`ignoreScripts` absent), so pnpm 12 ignores it for its
+reported configuration exactly as it ignores `minimum-release-age` there. That part is not tested
+behaviourally — no lifecycle script was run — but it is enough to correct the reading of the block
+above: `ignoreScripts: true` comes from the pnpm global `config.yaml`
+(`%LOCALAPPDATA%\pnpm\config\config.yaml`), not from an `.npmrc`. The same holds for the
+`minimumReleaseAge: 4320` in the block above: it is a **global setting**, not pnpm's default, and the
+built-in default is 1440, non-strict (E1). This is one more reason the machine
+section reports what the probe actually returns instead of what a file is assumed to mean (12.1).
+
 Repository evidence showing that the policies behind R8 and R9 are real practices rather than
 aspirations:
 
@@ -1520,8 +1645,10 @@ machine
   pnpm 12.3.4 (M:/.pnpm-global/bin/pnpm.CMD)  ·  store M:/.pnpm-store
 
 repo-root
-  ✖ quarantine          pnpm-workspace.yaml  minimumReleaseAge is 1440; policy requires 4320
-                        → funky-secure init --apply   (writes the managed block, 11.2)
+  ✖ lockfile-committed  pnpm-lock.yaml  pnpm-lock.yaml is ignored by .gitignore
+                        → git add pnpm-lock.yaml
+  ⚠ quarantine          pnpm-workspace.yaml  quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (inherited 1440)
+                        → funky-secure init --apply   (writes minimumReleaseAgeStrict: true)
 
 importer  packages/api/package.json
   ⚠ exact-versions      packages/api/package.json:14  yaml@^2.9.0 is a floating range
@@ -1531,10 +1658,10 @@ ci
   ⚠ actions-pinned-sha  .github/workflows/ci.yml:31  pnpm/action-setup@v6 is not a commit SHA
                         → uses: pnpm/action-setup@<sha> # v6.0.9
 
-passing  6 rules (package-manager-pin, lockfile-committed, foreign-lockfile, env-not-tracked,
-         sensitive-ignored, no-bot-auto-merge)   ·   0 skipped
+passing  5 rules (package-manager-pin, foreign-lockfile, env-not-tracked, sensitive-ignored,
+         no-bot-auto-merge)   ·   0 skipped
 
-summary  1 error · 2 warnings · 0 info · 6 passing · 0 skipped
+summary  1 error · 3 warnings · 0 info · 5 passing · 0 skipped
 verdict  FAIL (threshold: error)
 ```
 
@@ -1545,23 +1672,24 @@ verdict  FAIL (threshold: error)
   "schemaVersion": 1,
   "tool": { "name": "funky-secure", "version": "0.1.0" },
   "scope": "all",
-  "policy": { "preset": "baseline", "quarantineMinutes": 4320, "failOn": "error" },
+  "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "targets": [
-    { "kind": "machine", "detail": "pnpm 11.5.0" },
+    { "kind": "machine", "detail": "pnpm 12.3.4" },
     { "kind": "repo-root", "path": "." },
     { "kind": "importer", "path": "packages/api" }
   ],
-  "summary": { "error": 1, "warn": 2, "info": 0, "pass": 6, "skip": 0, "verdict": "fail" },
+  "summary": { "error": 1, "warn": 3, "info": 0, "pass": 5, "skip": 0, "verdict": "fail" },
   "findings": [
     {
       "rule": "quarantine",
       "status": "fail",
-      "severity": "error",
+      "severity": "warn",
+      "code": "quarantine-not-strict",
       "scope": "repo",
       "target": "repo-root",
       "path": "pnpm-workspace.yaml",
-      "message": "minimumReleaseAge is 1440; policy requires 4320",
-      "evidence": { "effective": 1440, "policy": 4320, "exclusions": [] },
+      "message": "quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (inherited 1440)",
+      "evidence": { "effective": 1440, "inherited": true, "strict": false, "policy": 1440, "exclusions": [] },
       "remediation": {
         "kind": "auto",
         "command": "funky-secure init --apply"
@@ -1578,9 +1706,12 @@ verdict  FAIL (threshold: error)
 funky-secure init  ·  preset baseline  ·  plan only (nothing has been written)
 
 would write
-  pnpm-workspace.yaml   create + managed block   minimumReleaseAge: 4320   (effective 1440 < policy 4320;
-                                                 the file did not exist, so this repository becomes a
-                                                 workspace root without a packages: key)
+  pnpm-workspace.yaml   create + managed block   minimumReleaseAgeStrict: true   (effective strictness is
+                                                 false: the inherited 1440 is applied in auto-approval
+                                                 mode; the file did not exist, so this repository becomes
+                                                 a workspace root without a packages: key; under
+                                                 --preset strict the same block also carries
+                                                 minimumReleaseAge: 4320)
   .gitignore            append managed block   .env, .env.*, !.env.example, !.env.test.example, *.pem, *.key
   package.json          set packageManager    pnpm@12.3.4
 
@@ -1631,6 +1762,25 @@ does not      pin versions for you, re-resolve the lockfile, or judge whether a 
 
 docs          docs/rules/exact-versions.md
 ```
+
+---
+
+## Appendix E — Empirical validation results (E1-E8)
+
+The eight blocking validations of 15.5 were run before revision 3 on Windows/Git Bash with
+`node v24.16.0` and `pnpm 12.3.4`, each in a fresh fixture with a pinned clean `HOME`. Raw commands
+and full output: `odd/evidence/e1-e8.md`.
+
+| ID | Measured outcome | Consequence for this RFC |
+|---|---|---|
+| **E1** | Built-in `minimumReleaseAge` is **1440 min (24 h)** since pnpm 11 and is **absent** from `pnpm config list --json` while active. It is **non-strict**: pnpm appends `minimumReleaseAgeExclude` to `pnpm-workspace.yaml` and exits `0`, also under `CI=true`. An explicit value flips `minimumReleaseAgeStrict` to `true`, giving `ERR_PNPM_NO_MATURE_MATCHING_VERSION` at resolution and `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` at lockfile verification. | 1.3 fact 1, 4.1 and R4: absence means inherited, never zero; because the default itself is non-strict, R4 measures the gate rather than the number (OD-1, D-16), and W1a performs the gate flip (F1, F2). |
+| **E2** | Keys are camelCase with real JSON types (`minimumReleaseAge` number, `minimumReleaseAgeExclude` string[], `minimumReleaseAgeStrict` boolean); workspace keys appear and win over global; there is no origin field; the built-in default is absent when unset. | R4 reports the value with its inherited/configured label, plus strict and the exclusions, and still claims no source (F1). |
+| **E3** | `git check-ignore --no-index --stdin -z` honors negations and nested ignore files. With `-v`, a negated path returns exit `0` and prints the negation pattern. | R7 keeps the probe, forbids `-v`, and reads the verdict per path, not from the batch exit code (F6). |
+| **E4** | `git ls-files -z -- ':(glob)**/.env*'` matches root and nested files on win32, and also `.env.example`; without `:(glob)` the root file is not matched. | R6 keeps the command; the magic is required and the template exclusion list is mandatory (F6). |
+| **E5** | `CI=true` alone makes `pnpm install` frozen: `ERR_PNPM_OUTDATED_LOCKFILE`, exit `1`, on a stale lockfile. | 4.1 and 8.3 unchanged; `ci-no-safety-overrides` stays deferred (F7). |
+| **E6** | A `- uses:`-anchored line scan finds none of the real steps; a loose scan takes false positives from block scalars, folded `>-` values and `with:` keys, and misses flow-style step maps. | R8 is stated against the structural reader of 14 with an explicit shape list; the reader is proven in F1 (F4). |
+| **E7** | `.cmd` with `shell: false` fails with `EINVAL`; `@pnpm\exe\pnpm.exe` works but is not on `PATH`; `%ComSpec% /d /s /c` works only with `windowsVerbatimArguments: true` and doubled quotes for spaced paths; `shell: true` breaks on spaced paths and emits `DEP0190`. | 12.1 rewritten: reading the resolved shim is a declared bounded probe, and an unresolvable executable yields `skip` (F5). |
+| **E8** | `minimum-release-age` in a project or user `.npmrc` is silently ignored; `pnpm config set … --location=project` writes `pnpm-workspace.yaml` and `--location=global` writes the pnpm global `config.yaml`. | R4's E8-conditional guard is resolved and `.npmrc` leaves the quarantine path; R5's `saveExact` names the same file (F3). |
 
 ---
 
