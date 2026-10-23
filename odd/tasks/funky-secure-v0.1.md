@@ -141,3 +141,9 @@ because it alters the Route column: F0 and the shared library layer stay inline 
 contract everything else consumes), while the nine rules are split across three `gentle-ai-worker`
 batches with disjoint surfaces (`src/rules/<id>.js`, `tests/rules/<id>.test.js`, `docs/rules/<id>.md`
 per rule) and the catalog registration, goldens and full-suite runs stay with the parent.
+
+Commits on `feat/v0.1` so far: `aeb21b1` contracts (report, policy, config, renderers, 31 tests),
+`7ff63da` probes and git helpers (20 tests), `efebbf7` targets, engine, plan layer, `bin/`, CI
+workflow and the repository's own quarantine posture. F0c (CLI, commands, drift gate, first three doc
+pages) and the shared readers (`lockfile`, `workflows`, `managed-block`, `paths`) are in flight on two
+disjoint worker surfaces.
