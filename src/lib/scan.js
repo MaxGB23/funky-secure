@@ -42,10 +42,10 @@ export async function collectScan({
   const probes = collector ?? createCollector({ cwd, env });
 
   const root = effectiveScope === 'machine' ? null : await repoRoot(probes);
-  const machine =
-    effectiveScope === 'repo'
-      ? await machineFacts(probes, { withConfig: false })
-      : await machineFacts(probes);
+  // RFC 7.2: `--scope repo` inside CI is the supported gate configuration because a runner's
+  // machine configuration is not the developer's. Machine facts stay out of the contract entirely,
+  // so no rule can turn a runner-only fact into a repo verdict.
+  const machine = effectiveScope === 'repo' ? null : await machineFacts(probes);
   const repo = effectiveScope === 'machine' ? null : await repoFacts({ collector: probes, cwd, root });
 
   const loaded =

@@ -56,6 +56,11 @@ A shape outside that subset — another `lockfileVersion`, `catalogs`, `override
 and adds one `skip: unsupported-lockfile-shape` for the comparison. With no lockfile at all it
 reports the same floating findings plus one `skip: no-lockfile`.
 
+A specifier can carry a secret: a private tarball URL such as `https://user:token@host/pkg.tgz`
+is echoed as `https://***@host/pkg.tgz`, so a scan never prints a credential. When no importer
+`package.json` could be parsed the rule reports one `skip: unreadable-package-json` instead of a
+pass, because a clean claim about specifiers it never read would be a false negative.
+
 No floating specifier and no desync is a pass.
 
 ## Evidence

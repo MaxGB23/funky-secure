@@ -26,9 +26,24 @@ const DEPENDENCY_TYPES = [
 ];
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+const URL_USERINFO = /^([a-z][a-z0-9+.-]*:\/\/)([^/@\s]+)@/i;
 const EXACT_LITERAL = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const PARTIAL_LITERAL = /^\d+(?:\.\d+)*$/;
 const TAG_LITERAL = /^[a-z][a-z0-9._-]*$/i;
+
+/**
+ * A specifier is echoed in messages, evidence and remediation, and a URL specifier can carry
+ * credentials in its userinfo (`https://user:token@host/repo.tgz`). Every user but a bare `git` is
+ * replaced, so a scan never prints a secret; the shape stays legible (RFC 4.9: never a guessed value).
+ * @param {unknown} specifier
+ * @returns {unknown}
+ */
+function redactedSpecifier(specifier) {
+  if (typeof specifier !== 'string') return specifier;
+  return specifier.replace(URL_USERINFO, (match, scheme, userinfo) =>
+    userinfo.toLowerCase() === 'git' ? match : `${scheme}***@`,
+  );
+}
 
 /** @param {string} text */
 function escapeRegExp(text) {
@@ -238,9 +253,11 @@ export default {
     const findings = [];
     const comparisons = [];
     const importers = Array.isArray(ctx.repo.importers) ? ctx.repo.importers : [];
+    let inspected = 0;
 
     for (const importer of importers) {
       if (importer.json === null || typeof importer.json !== 'object') continue;
+      inspected += 1;
       const path = importerPath(importer);
 
       for (const entry of collectSpecifiers(importer)) {
@@ -249,20 +266,21 @@ export default {
         comparisons.push({ importer, path, line, entry });
 
         if (isFloating(entry.specifier)) {
+          const shown = redactedSpecifier(entry.specifier);
           findings.push({
             status: 'fail',
             code: 'floating-range',
             path,
             line: line ?? undefined,
-            message: `${entry.dependency}@${entry.specifier} is a floating range`,
+            message: `${entry.dependency}@${shown} is a floating range`,
             evidence: {
-              specifier: entry.specifier,
+              specifier: shown,
               dependency: entry.dependency,
               type: entry.type,
             },
             remediation: {
               kind: 'manual',
-              command: `pnpm add --save-exact ${entry.dependency}@${entry.specifier}`,
+              command: `pnpm add --save-exact ${entry.dependency}@${shown}`,
             },
           });
         }
@@ -294,6 +312,8 @@ export default {
           const recorded = lockfileSpecifier(lock, entry.dependency);
           if (recorded !== null && recorded === entry.specifier.trim()) continue;
 
+          const shown = redactedSpecifier(entry.specifier);
+          const shownResolved = redactedSpecifier(recorded);
           findings.push({
             status: 'fail',
             code: 'lockfile-desync',
@@ -301,9 +321,9 @@ export default {
             line: line ?? undefined,
             message:
               recorded === null
-                ? `${entry.dependency}@${entry.specifier} is not recorded in pnpm-lock.yaml`
-                : `${entry.dependency} is ${entry.specifier} in package.json but ${recorded} in pnpm-lock.yaml`,
-            evidence: { specifier: entry.specifier, resolved: recorded },
+                ? `${entry.dependency}@${shown} is not recorded in pnpm-lock.yaml`
+                : `${entry.dependency} is ${shown} in package.json but ${shownResolved} in pnpm-lock.yaml`,
+            evidence: { specifier: shown, resolved: shownResolved },
             remediation: { kind: 'manual', command: 'pnpm install --lockfile-only' },
           });
         }
@@ -311,7 +331,18 @@ export default {
     }
 
     if (skip !== null) findings.push(skip);
-    else if (findings.length === 0) {
+    else if (inspected === 0) {
+      // Nothing was read, so nothing was compared: "every specifier is exact" would be a claim this
+      // rule never checked (RFC 7.3: a missing fact is a skip, never a pass).
+      findings.push({
+        status: 'skip',
+        code: 'unreadable-package-json',
+        message: `skipped: no importer package.json could be parsed, so no specifier was compared against pnpm-lock.yaml`,
+        evidence: { importers: importers.length },
+        remediation: { kind: 'none' },
+        probeUnavailable: true,
+      });
+    } else if (findings.length === 0) {
       findings.push({
         status: 'pass',
         message: 'every dependency specifier is exact and agrees with pnpm-lock.yaml',

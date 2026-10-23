@@ -226,7 +226,11 @@ export default {
       }
     }
 
-    if (botFiles.length > 0) {
+    const workflowUnreadable = findings.some(
+      (finding) => finding.status === 'skip' && finding.code === 'unparseable-workflow',
+    );
+
+    if (botFiles.length > 0 && !workflowUnreadable) {
       findings.push({
         status: 'pass',
         code: 'bot-config-present',

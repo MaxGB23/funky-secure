@@ -329,7 +329,7 @@ importers:
   assert.equal(findings.filter((finding) => finding.code === 'lockfile-desync').length, 5);
 });
 
-test('an importer whose package.json did not parse contributes no findings', () => {
+test('an importer whose package.json did not parse is a skip, never a silent pass', () => {
   const broken = {
     path: '/repo/package.json',
     text: '{"dependencies": {"left-pad": "^1.3.0",}}',
@@ -342,8 +342,9 @@ test('an importer whose package.json did not parse contributes no findings', () 
   );
 
   assert.deepEqual(
-    findings.map((finding) => finding.status),
-    ['pass'],
+    findings.map((finding) => `${finding.status}:${finding.code}`),
+    ['skip:unreadable-package-json'],
+    'nothing was compared, so nothing may be claimed',
   );
 });
 
@@ -353,4 +354,38 @@ test('without a resolved repository the rule skips', () => {
   assert.equal(finding.status, 'skip');
   assert.equal(finding.code, 'no-repo');
   assert.equal(finding.probeUnavailable, true);
+});
+
+test('redacts credentials a URL specifier carries in its userinfo', () => {
+  const text = `{
+  "name": "demo",
+  "dependencies": {
+    "private-tarball": "https://user:ghp_secret@example.com/repo.tgz"
+  }
+}`;
+  const [finding] = rule
+    .detect(ctx({ importers: [importer('.', text)] }))
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.ok(finding, 'a URL specifier is a floating range');
+  assert.equal(finding.evidence.specifier, 'https://***@example.com/repo.tgz');
+  assert.match(finding.message, /https:\/\/\*\*\*@example\.com\/repo\.tgz/);
+  assert.match(finding.remediation.command, /https:\/\/\*\*\*@example\.com\/repo\.tgz/);
+  assert.ok(!JSON.stringify(finding).includes('ghp_secret'), 'no credential reaches the report');
+});
+
+test('skips instead of passing when no package.json could be parsed', () => {
+  const findings = rule.detect(
+    ctx({
+      importers: [
+        { path: '/repo/package.json', text: '{ broken', json: null, error: null, dir: '.' },
+      ],
+      lockfile: { path: '/repo/pnpm-lock.yaml', text: ROOT_FLOATING_LOCKFILE },
+    }),
+  );
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'skip');
+  assert.equal(findings[0].code, 'unreadable-package-json');
+  assert.equal(findings[0].probeUnavailable, true);
 });

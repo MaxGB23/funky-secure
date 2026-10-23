@@ -224,3 +224,29 @@ test('skips when no repository facts were collected', () => {
   assert.equal(findings[0].status, 'skip');
   assert.equal(findings[0].code, 'no-repo');
 });
+
+test('never passes the merge path when a workflow could not be parsed', () => {
+  const findings = rule.detect(
+    context({
+      botFiles: ['.github/dependabot.yml'],
+      workflows: [
+        workflow('.github/workflows/broken.yml', [
+          'name: broken',
+          'on: pull_request',
+          'jobs:',
+          '  build:',
+          '    <<: *defaults',
+          '    runs-on: ubuntu-latest',
+          '    steps:',
+          '      - run: gh pr merge --auto',
+        ]),
+      ],
+    }),
+  );
+
+  assert.deepEqual(
+    findings.map((finding) => `${finding.status}:${finding.code}`),
+    ['skip:unparseable-workflow'],
+    'the bot config must not stand in for a merge path this rule never read',
+  );
+});

@@ -294,3 +294,17 @@ test('migrate --apply removes the foreign lockfile on a clean feature branch', a
   assert.equal(existsSync(join(dir, 'pnpm-lock.yaml')), true, 'the pnpm lockfile survives');
   assert.ok(streams.stdout.text.includes('step 4 complete'));
 });
+
+test('scan --scope repo keeps every machine fact out of the contract', async (t) => {
+  const dir = scratch(t);
+  const streams = io(dir);
+  const code = await run(['scan', '--scope', 'repo', '--format', 'json'], streams);
+
+  const report = JSON.parse(streams.stdout.text);
+  const pin = report.findings.find((finding) => finding.rule === 'package-manager-pin');
+
+  assert.equal(code, 1, 'the missing lockfile still fails the repo gate');
+  assert.equal(pin.status, 'skip');
+  assert.equal(pin.code, 'no-pnpm');
+  assert.match(pin.message, /machine is out of scope/);
+});
