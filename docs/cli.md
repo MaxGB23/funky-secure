@@ -62,9 +62,11 @@ Prints the five steps of RFC 11.3 in order:
 5. **CI follow-up** — workflow lines that mention npm or yarn, quoted as `file:line` suggestions.
 
 `migrate` refuses outside a git repository, because step 4 needs a tree and a branch. `--apply`
-performs step 4 only. It still refuses today: the removal itself lands with F3, and a missing
-`pnpm-lock.yaml` is a permanent refusal (never delete the only lockfile). There is no `--format` for
-`migrate`; its output is always the human plan.
+performs step 4 only, and refuses — naming the reason — when `pnpm-lock.yaml` is absent (never delete
+the only lockfile), when the tree is dirty for the files it would remove (unless `--allow-dirty`),
+when the branch is the default one, when `HEAD` is detached, or when git cannot report the tree. A
+repository with no foreign lockfile prints `nothing to remove` and exits `0`. There is no `--format`
+for `migrate`; its output is always the human plan.
 
 ### `explain`
 

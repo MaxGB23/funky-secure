@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -280,7 +280,7 @@ test('migrate --apply refuses when the pnpm lockfile is absent', async (t) => {
   assert.ok(streams.stderr.text.includes('pnpm-lock.yaml'));
 });
 
-test('migrate --apply with a pnpm lockfile still refuses until F3', async (t) => {
+test('migrate --apply removes the foreign lockfile on a clean feature branch', async (t) => {
   const dir = scratch(t);
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'fixture' }));
   writeFileSync(join(dir, 'package-lock.json'), '{}');
@@ -289,6 +289,8 @@ test('migrate --apply with a pnpm lockfile still refuses until F3', async (t) =>
   const streams = io(dir, { root: dir });
   const code = await run(['migrate', '--apply'], streams);
 
-  assert.equal(code, 2);
-  assert.ok(streams.stderr.text.includes('F3'));
+  assert.equal(code, 0);
+  assert.equal(existsSync(join(dir, 'package-lock.json')), false, 'the foreign lockfile is gone');
+  assert.equal(existsSync(join(dir, 'pnpm-lock.yaml')), true, 'the pnpm lockfile survives');
+  assert.ok(streams.stdout.text.includes('step 4 complete'));
 });

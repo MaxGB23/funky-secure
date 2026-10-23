@@ -1,11 +1,17 @@
 /**
  * `migrate` (RFC 11.3): the five-step plan for leaving npm or yarn behind.
  *
- * The tool never runs steps 1-3 or 5. `--apply` performs step 4 only, and only after
- * `pnpm-lock.yaml` exists; the removal itself lands with F3, so the apply path refuses today.
+ * The tool never runs steps 1-3 or 5. `--apply` performs step 4 only: it removes the foreign
+ * lockfile(s) after re-checking every precondition (RFC 11.5 point 4), and refuses with a named
+ * reason instead of doing nothing quietly.
  */
 
+import { lstat, rm } from 'node:fs/promises';
+import { join, relative } from 'node:path';
+
 import { ConfigError } from '../lib/errors.js';
+import { defaultBranch, statusPorcelain } from '../lib/git.js';
+import { validateWriteTarget } from '../lib/paths.js';
 import { collectScan } from '../lib/scan.js';
 import { FOREIGN_LOCKFILES } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
@@ -27,6 +33,20 @@ const REPORT_ONLY_KEYS = Object.freeze([
 ]);
 
 const SECRET_LINE = /(?:^|[\s"'=])(?:[A-Za-z0-9_]*?(?:TOKEN|SECRET|PASSWORD|_AUTH)[A-Za-z0-9_]*)\s*[:=]/i;
+
+/**
+ * The branch names the RFC 11.3 fallback treats as a default branch when no remote HEAD can be read.
+ * Matching one of them is a refusal, and the refusal says that the check is a fallback.
+ */
+const FALLBACK_DEFAULT_BRANCHES = Object.freeze(['main', 'master']);
+
+/** Why a catalog path may not be removed here (RFC 11.5 points 2-4), in the user's words. */
+const TARGET_REFUSALS = Object.freeze({
+  'not-relative': 'the path is not a repository-relative path',
+  'basename-mismatch': 'the resolved file name does not match the lockfile catalog entry',
+  unresolvable: 'the file or its directory cannot be resolved',
+  'outside-root': 'the file resolves outside the repository root',
+});
 
 function npmrcLines(text) {
   if (typeof text !== 'string') return [];
@@ -63,13 +83,116 @@ function workflowSuggestions(workflows) {
 }
 
 /**
+ * Step 4 (RFC 11.3): remove the foreign lockfile(s), or refuse with the reason.
+ *
+ * Every precondition is checked here, again, immediately before the removal (RFC 11.5 point 4), and a
+ * refusal always writes nothing. The paths come from `ctx.repo.present` filtered by the fixed lockfile
+ * catalog, never from an argument or from a repository string.
+ *
+ * @param {object} options
+ * @param {string} options.root resolved worktree root
+ * @param {string} options.cwd
+ * @param {string[]} options.foreign foreign lockfiles present at the root
+ * @param {boolean} options.hasPnpmLock
+ * @param {string | null} options.branch the current branch, as `repoFacts` resolved it
+ * @param {boolean} options.allowDirty
+ * @param {object} options.collector
+ * @param {object} options.stdout
+ * @returns {Promise<number>} exit code
+ */
+async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirty, collector, stdout }) {
+  if (foreign.length === 0) {
+    // Nothing is at risk, so this is not a refusal: it is the honest answer for an already-migrated
+    // repository. It is printed, so it is never a silent no-op.
+    stdout.write('nothing to remove: no foreign lockfile is present\n');
+    return 0;
+  }
+
+  const names = foreign.join(', ');
+
+  if (!hasPnpmLock) {
+    throw new ConfigError(
+      `refusing to remove ${names}: pnpm-lock.yaml is absent (never delete the only lockfile)`,
+    );
+  }
+
+  if (!allowDirty) {
+    const paths = foreign.map((name) => relative(cwd, join(root, name)));
+    const dirty = await statusPorcelain(collector, paths);
+    if (dirty === null) {
+      throw new ConfigError(
+        `refusing to remove ${names}: git could not report the working tree status (git status --porcelain -z failed)`,
+      );
+    }
+    const touched = [...new Set(dirty.map((entry) => entry.slice(3)))];
+    if (touched.length > 0) {
+      throw new ConfigError(
+        `refusing to remove ${names}: uncommitted changes for ${touched.join(', ')} (git status --porcelain -z); commit them, or pass --allow-dirty`,
+      );
+    }
+  }
+
+  if (branch === null) {
+    throw new ConfigError(
+      `refusing to remove ${names}: git could not resolve the current branch (git rev-parse --abbrev-ref HEAD failed)`,
+    );
+  }
+  if (branch === 'HEAD') {
+    throw new ConfigError(
+      `refusing to remove ${names}: HEAD is detached; step 4 needs a branch, so check one out first`,
+    );
+  }
+
+  const base = await defaultBranch(collector);
+  if (base === null) {
+    if (FALLBACK_DEFAULT_BRANCHES.includes(branch)) {
+      throw new ConfigError(
+        `refusing to remove ${names}: the current branch ${branch} matches the main/master check, which is a fallback here because refs/remotes/origin/HEAD could not be read (the repository has no remote); switch to a feature branch first`,
+      );
+    }
+  } else if (branch === base) {
+    throw new ConfigError(
+      `refusing to remove ${names}: the current branch ${branch} is the default branch, read from refs/remotes/origin/HEAD; switch to a feature branch first`,
+    );
+  }
+
+  const removed = [];
+  for (const name of foreign) {
+    const path = join(root, name);
+    const target = validateWriteTarget({ root, relative: name, expectedBasename: name });
+    if (!target.ok) {
+      throw new ConfigError(
+        `refusing to remove ${path}: ${TARGET_REFUSALS[target.reason] ?? target.reason}`,
+      );
+    }
+    let info;
+    try {
+      info = await lstat(path);
+    } catch {
+      throw new ConfigError(`refusing to remove ${path}: it disappeared before the removal`);
+    }
+    if (!info.isFile()) {
+      throw new ConfigError(
+        `refusing to remove ${path}: it is not a regular file (step 4 removes files only)`,
+      );
+    }
+    stdout.write(`remove  ${path}\n`);
+    await rm(path);
+    removed.push(name);
+  }
+
+  stdout.write(`step 4 complete: removed ${removed.join(', ')}\n`);
+  return 0;
+}
+
+/**
  * @param {object} options
  * @param {string} options.cwd
  * @param {object} options.env
  * @param {object} options.stdout
  * @param {string} [options.from]
  * @param {boolean} [options.apply]
- * @param {boolean} [options.allowDirty] reserved for the F3 removal
+ * @param {boolean} [options.allowDirty] allow step 4 over uncommitted lockfile changes
  * @param {Array<object>} [options.catalog]
  * @param {object} [options.collector]
  * @returns {Promise<number>} exit code
@@ -80,11 +203,11 @@ export async function run({
   stdout,
   from = 'auto',
   apply = false,
-  allowDirty = false, // reserved for the F3 removal
+  allowDirty = false,
   catalog = defaultCatalog,
   collector,
 }) {
-  const { ctx } = await collectScan({
+  const { ctx, probes } = await collectScan({
     cwd,
     env,
     scope: 'repo',
@@ -162,11 +285,14 @@ export async function run({
 
   if (!apply) return 0;
 
-  if (!hasPnpmLock) {
-    throw new ConfigError(
-      `refusing to remove ${foreign.length === 0 ? 'a foreign lockfile' : foreign.join(', ')}: pnpm-lock.yaml is absent (never delete the only lockfile)`,
-    );
-  }
-
-  throw new ConfigError('refused: removing the foreign lockfile lands with F3');
+  return applyRemoval({
+    root: ctx.repo.root,
+    cwd,
+    foreign,
+    hasPnpmLock,
+    branch: ctx.repo.branch ?? null,
+    allowDirty,
+    collector: probes,
+    stdout,
+  });
 }
