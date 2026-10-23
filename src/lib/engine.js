@@ -25,7 +25,7 @@ export function evaluate({ ctx, policy, catalog = [], strictProbes = false }) {
 
     let produced;
     try {
-      produced = rule.detect(ctx);
+      produced = rule.detect(ctx, { policy, severity });
     } catch (error) {
       produced = [
         {
@@ -58,7 +58,7 @@ export function evaluate({ ctx, policy, catalog = [], strictProbes = false }) {
         message: finding.message ?? '',
         evidence: finding.evidence,
         remediation: finding.remediation ?? { kind: 'none' },
-        doc: finding.doc ?? `funky-secure explain ${rule.id}`,
+        doc: `funky-secure explain ${rule.id}`,
         code: finding.code,
       };
 
