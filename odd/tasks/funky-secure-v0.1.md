@@ -71,10 +71,10 @@ per commit; nothing here is split into parallel writers because each unit shares
 | T17 | F1g: `exact-versions` + bounded lockfile reader (after E2) | S2, S8 | worker B | 5ef01bf |
 | T18 | F1h: `actions-pinned-sha` (after E6) | S2, S8 | worker C | 5ef01bf |
 | T19 | F1i: `no-bot-auto-merge` (after E6) | S2, S8 | worker C | 5ef01bf |
-| T20 | F2: `init` plan, W1-W4, idempotency, dirty-tree refusal | S4 | inline | — |
-| T21 | F3: `migrate` plan and refusals | S5 | inline | — |
-| T22 | F4: `docs/{concept,cli,architecture,decisions}.md`, self-scan job, README, `0.1.0` packable | S6, S7 | inline | — |
-| T23 | F5: v2 backlog intake only, not part of `0.1.0` | S2 | — | — |
+| T20 | F2: `init` plan, W1a/W1b/W2/W3/W4, idempotency, dirty-tree refusal | S4 | worker | 5808f87 |
+| T21 | F3: `migrate` plan and refusals | S5 | worker | ef5df15 |
+| T22 | F4: `docs/{concept,cli,architecture,decisions}.md`, goldens, self-scan test, README, `0.1.0` packable | S6, S7 | worker | 401f3e4 |
+| T23 | F5: v2 backlog intake only, not part of `0.1.0` | S2 | — | dropped (RFC 8.3 is the intake) |
 
 ## Log
 
@@ -178,3 +178,42 @@ the template exclusion list is what prevents the over-match); R9 rides its confi
 pass because `info` is a severity, not a status, and v0.1 has no per-finding severity override; R5
 treats `workspace:*`/`workspace:1.2.3`/`link:` as exact and `workspace:^`/`file:`/partial versions as
 floating.
+
+L12 — 2026-10-23, v0.1 closed. Twenty commits on `feat/v0.1`, 262 tests green, the repository passes
+its own scan in the `strict` preset, and `npm pack --dry-run` ships 50 files (78 kB) with no
+dependency of any kind. What each spec got:
+
+- S1: one repository, one package, one binary, `0.1.0`, MIT, Node `>= 20.11`, zero runtime and zero
+  development dependencies, no build step, no `dist/`.
+- S2: exactly nine rules, catalog order = RFC 8.2 order, declared severities unchanged, the three
+  declared deviations honoured (`foreign-lockfile` warn/warn, `quarantine` warn/error,
+  `actions-pinned-sha` error/error).
+- S3: `scan` is read-only and deterministic; the report carries `code`, serializes only
+  fail/skip/error, counts each verdict once, and exits `0`/`1`/`2` with `2` reserved for "could not
+  answer". The golden gate pins ordering, messages and evidence shape.
+- S4: `init` plans by default and applies exactly W1a, W1b, W2, W3 and W4 through the single write
+  path; idempotent by marker, digest printed before the write, dirty target refused, duplicate
+  top-level key refused, manager-owned keys never written.
+- S5: `migrate` prints the five steps and `--apply` performs step 4 only, with every refusal named:
+  missing `pnpm-lock.yaml`, dirty tree for those paths, default branch (fallback declared as a
+  fallback), detached HEAD, or git that cannot answer.
+- S6: help, `explain` and the rule pages render from the catalog and `tests/drift.test.js` fails when
+  they disagree; `docs/architecture.md` names only modules that exist.
+- S7: the CI workflow runs the suite, the drift gate and `scan --scope repo --fail-on warn`, and
+  `tests/self.test.js` fails if this repository stops passing its own scan.
+- S8: E1-E8 blocked every rule that depended on them; the corrections they forced landed in the RFC
+  as revision 3 and in the code as behaviour (gate vs number, `:(glob)`, no `-v`, structural reader).
+- S9: test-first for the nine rules, the pure libraries and the command contracts; collectors and
+  probes verified by injection plus E1-E8 instead.
+
+What is deliberately left for after 0.1.0, each already recorded where it belongs: the native review
+of the core candidate (owner consent pending), the `ci-no-safety-overrides` and other v2 rules (RFC
+8.3), `apply` for arbitrary findings (RFC 11.5 is the contract it must obey), and the three scratch
+directories the workers left outside the worktree under the OS temp root.
+
+Also closed during F4 by the parent: the golden fixtures now declare their own machine
+(`machine.json`), so R1 and R4 appear in a golden without this computer leaking into it — `clean` is
+nine passes with no finding, `dirty` shows five findings across five rules, `pinned-conflict` shows
+the conflict. And two fixture `.gitignore` files briefly lost their managed-block markers while the
+`tracked.txt` files were added; both were restored from git before the commit, so the `at-policy`
+fixture is still at policy by its own bytes.
