@@ -81,7 +81,7 @@ export async function run({
   const text =
     format === 'json'
       ? renderPlanJson({ tool: TOOL, command: 'init', policy, plan })
-      : renderPlanHuman({ command: 'init', preset: policy.preset, plan });
+      : renderPlanHuman({ command: 'init', preset: policy.preset, plan, apply });
   stdout.write(text);
 
   if (!apply) return 0;

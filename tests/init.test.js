@@ -462,3 +462,14 @@ test('with --format json the plan document is the only stdout and the ledger goe
   assert.ok(document.plan.some((item) => item.state === 'would-write'));
   assert.ok(applied.stderr.text.includes('write  '), 'the write ledger never pollutes the JSON document');
 });
+
+test('the header never claims nothing was written when --apply performs writes', async (t) => {
+  const dir = scratch(t, 'below-policy');
+  const applied = runner(dir, { tracked: ['package.json', 'pnpm-lock.yaml'] });
+
+  assert.equal(await applied.run(['init', '--apply']), 0);
+
+  assert.match(applied.stdout.text, /applying the plan below/);
+  assert.equal(applied.stdout.text.includes('nothing has been written'), false);
+  assert.ok(writeCount(applied.stdout.text) > 0);
+});

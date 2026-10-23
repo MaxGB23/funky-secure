@@ -75,8 +75,9 @@ export function renderPlanJson({ tool, command, policy, plan, refused = [], time
 /**
  * @param {{ command: string, preset: string, plan: Array<object>, refused?: Array<object> }} options
  */
-export function renderPlanHuman({ command, preset, plan, refused = [] }) {
-  const lines = [`funky-secure ${command}  ·  preset ${preset}  ·  plan only (nothing has been written)`, ''];
+export function renderPlanHuman({ command, preset, plan, refused = [], apply = false }) {
+  const mode = apply ? 'applying the plan below' : 'plan only (nothing has been written)';
+  const lines = [`funky-secure ${command}  ·  preset ${preset}  ·  ${mode}`, ''];
 
   if (plan.length === 0) {
     lines.push('nothing to apply', '');
