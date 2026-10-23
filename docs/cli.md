@@ -42,10 +42,33 @@ funky-secure init [--preset baseline|strict] [--format human|json] [--apply] [--
 
 Default is a plan: it runs the same scan, derives the writes that would fix the fixable findings,
 prints them and exits `0`. A plan is an offer, not a verdict, so `init` uses the `--fail-on none`
-semantics internally and does not accept that flag. With `--apply` it performs exactly the writes of
-RFC 11.2, prints each write with its absolute path and digest before writing it, and refuses a
-target with uncommitted changes unless `--allow-dirty` is passed. An empty plan prints
-`nothing to apply` and writes nothing.
+semantics internally and does not accept that flag. An empty plan prints `nothing to apply` and writes
+nothing.
+
+With `--apply` it performs exactly these writes, in this order (RFC 11.2). Every write is printed to
+the ledger with its absolute path, its operation and the SHA-256 of the exact bytes before it
+happens.
+
+| Write | Target | Content |
+|---|---|---|
+| W1a | `pnpm-workspace.yaml` | `minimumReleaseAgeStrict: true` in the managed block: the gate flip (D-16) |
+| W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 4320` in the same block; `--preset strict` only |
+| W2 | `.gitignore` | the managed block with the six candidate paths of `sensitive-ignored` |
+| W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing |
+| W4 | `funky-secure.config.json` | `{ "preset": "strict" }` so CI agrees with the run; `--preset strict` only |
+
+It refuses — exit `2`, naming the file or the reason, and writing nothing:
+
+- a target with uncommitted changes, unless `--allow-dirty` is passed;
+- a working tree `git status --porcelain -z` cannot report, because the check above cannot be made;
+- a plan item whose content changed between planning and writing, or that carries no content.
+
+It never overwrites a value it did not write. A value that exists and differs is a `conflict`: it is
+printed in the plan, left untouched, and is not a write. That covers a conflicting `packageManager`,
+a `minimumReleaseAge` or `minimumReleaseAgeStrict` declared outside the managed block, an
+unparseable or differently-configured `funky-secure.config.json`, and a config file discovered
+somewhere other than the repository root. A `conflict` alone does not make the command fail; it makes
+the plan a refusal you can read. A second `--apply` over the same state performs zero writes.
 
 ### `migrate`
 
@@ -167,6 +190,11 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 `state` is `would-write`, `would-skip` (already at policy) or `conflict`. Plan paths are absolute and
 carry a digest, because a write plan without them cannot be checked; the scan report body never
 contains an absolute path (RFC 10.1, 11.5).
+
+With `--format json`, stdout carries this document and nothing else. The ledger of a following
+`--apply` — the `write  <path>  <operation>  <digest>` lines — goes to stderr, because a second
+document on stdout would make the plan unparseable (F4, I-10). With `--format human` the ledger stays
+on stdout, where the plan was printed.
 
 ### Rule list
 

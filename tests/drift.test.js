@@ -4,8 +4,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { FLAGS, renderHelp } from '../src/cli.js';
+import { COMMANDS, FLAGS, renderHelp } from '../src/cli.js';
 import { catalog } from '../src/rules/index.js';
+import { FIXTURES, goldenPath, renderGolden } from '../scripts/gen-golden.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const RULES_DIR = join(ROOT, 'docs', 'rules');
@@ -61,5 +62,65 @@ test('docs/architecture.md mentions only src paths that exist', () => {
   assert.ok(mentioned.length > 0, 'architecture.md lists no src modules');
   for (const path of mentioned) {
     assert.ok(existsSync(join(ROOT, path)), `architecture.md mentions missing ${path}`);
+  }
+});
+
+/// The README is a rendering of the catalog too (RFC 13.4, F4): the drift gate keeps it honest.
+
+const README = readFileSync(join(ROOT, 'README.md'), 'utf8');
+
+function readmeTableRows() {
+  return README.split(/\r?\n/).filter((line) => line.startsWith('|'));
+}
+
+test('the README rule table carries every catalog rule id with its exact severities', () => {
+  const rows = readmeTableRows();
+
+  for (const rule of catalog) {
+    const severity = `${rule.severity?.baseline ?? 'warn'} / ${rule.severity?.strict ?? 'warn'}`;
+    const row = rows.find((line) => line.includes(`\`${rule.id}\``));
+    assert.ok(row, `README has no table row for ${rule.id}`);
+    assert.ok(row.includes(severity), `README row for ${rule.id} does not state "${severity}": ${row}`);
+  }
+});
+
+test('the README names every command', () => {
+  for (const command of COMMANDS) {
+    assert.ok(README.includes(command.name), `README lacks the ${command.name} command`);
+  }
+});
+
+test('docs/decisions.md exists and records every decision the RFC number', () => {
+  const path = join(ROOT, 'docs', 'decisions.md');
+  assert.ok(existsSync(path), 'docs/decisions.md is missing');
+
+  const text = readFileSync(path, 'utf8');
+  assert.ok(text.includes('rfcs/funky-secure-rfc.md'), 'decisions.md does not point at the RFC');
+
+  // Appendix A defines D-1 through D-16. The bound is asserted rather than inferred so that a
+  // silently truncated log fails here instead of passing on the numbers it happens to mention.
+  for (let number = 1; number <= 16; number += 1) {
+    assert.match(text, new RegExp(`\\bD-${number}(?!\\d)`), `decisions.md does not mention D-${number}`);
+  }
+});
+
+/// The golden gate (RFC 15.2). The fixtures, the deterministic collector and the renderer are the
+/// generator's, imported above, so this test cannot drift from `scripts/gen-golden.js`.
+
+test('every golden report matches the deterministic collector regenerates', async () => {
+  for (const fixture of FIXTURES) {
+    const path = goldenPath(fixture.name);
+    assert.ok(
+      existsSync(path),
+      `tests/golden/${fixture.name}.json is missing; run \`node scripts/gen-golden.js\``,
+    );
+
+    const expected = readFileSync(path, 'utf8');
+    const actual = await renderGolden(fixture);
+    assert.equal(
+      actual,
+      expected,
+      `the golden for fixture "${fixture.name}" no longer matches; run \`node scripts/gen-golden.js\` and review the diff`,
+    );
   }
 });

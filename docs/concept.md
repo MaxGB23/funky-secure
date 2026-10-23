@@ -16,6 +16,30 @@ a plan you read first, and never pretends a policy it cannot verify.
 - **Not a writer, except when asked.** Nothing is written outside `init --apply`, and `init --apply`
   writes only the closed, printed target list — never the manager-owned settings the RFC excludes.
 
+## What it writes, and when
+
+`scan` writes nothing at all. Two commands can write, and both print the exact change before it
+happens. `init --apply` performs five writes, each of them a fix for a finding the same run reported:
+
+| Write | File | Change |
+|---|---|---|
+| W1a | `pnpm-workspace.yaml` | `minimumReleaseAgeStrict: true` — turns the quarantine into a gate |
+| W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 4320` — the strict-preset floor, same managed block |
+| W2 | `.gitignore` | the managed block covering the sensitive paths |
+| W3 | `package.json` | `packageManager: pnpm@<version>` — only when the pin is missing |
+| W4 | `funky-secure.config.json` | the strict preset, so CI agrees with the run |
+
+`migrate --apply` performs one removal: the foreign lockfile, step 4 of its plan. It refuses to
+do so without a `pnpm-lock.yaml` (never delete the only lockfile), on the default branch, with a
+detached `HEAD`, with uncommitted changes in the files it would remove, or when git cannot report the
+tree. `init --apply` refuses a target file with uncommitted changes the same way. Every refusal exits
+`2` and names the reason; a value that exists and differs is reported as a `conflict` and left alone,
+never overwritten. A second `--apply` over the same state writes nothing.
+
+What stays manual is deliberate: removing a file from the git index, rotating a credential, resolving
+a SHA for an action tag, and re-resolving a dependency range all need a decision or the network, so
+the tool prints the command and stops.
+
 ## Two scopes
 
 A scan resolves targets in two scopes:
@@ -37,5 +61,6 @@ exits `2` when the tool could not answer — bad usage, malformed config, unread
 unavailable required probe under `--strict-probes`, or a refused write — and never for a violation.
 
 The full command and flag reference is in [`cli.md`](cli.md); the layers and invariants are in
-[`architecture.md`](architecture.md); the normative specification is
+[`architecture.md`](architecture.md); the decisions a reviewer wants are in
+[`decisions.md`](decisions.md); the normative specification is
 [`../rfcs/funky-secure-rfc.md`](../rfcs/funky-secure-rfc.md).

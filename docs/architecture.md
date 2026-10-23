@@ -49,9 +49,11 @@ report, which is why the plan and the report cannot describe different repositor
   disagree; a passing finding is serialized away only because the report already counted it.
 - **The machine is read-only, permanently.** No probe writes an environment variable, a global
   config or a store.
-- **There is one write path.** Only `init --apply` writes, only through `applyPlan`, only to the
-  closed target catalog, and only after printing the absolute path and digest of the exact bytes.
-  `migrate --apply` performs a removal in a later phase and shares the same refusal rules.
+- **There are two write paths, and both are plans.** `init --apply` writes only through
+  `applyPlan`, `migrate --apply` removes only through its step-4 function, and each writes only to
+  the closed target catalog, after printing the absolute path and digest of the exact bytes, and
+  after the same three refusals: uncommitted target, unreadable tree, unusable branch. Nothing else
+  in the product writes a byte.
 
 ## Module map
 
@@ -84,9 +86,32 @@ not.
 | `src/lib/workflows.js` | structural `jobs -> steps` workflow reader for R8 and R9 (RFC 8.2) |
 | `src/lib/writers.js` | the five `init` writes: quarantine block, gitignore block, pin, strict preset (RFC 11.2) |
 | `src/rules/index.js` | the catalog: catalog order is report order |
+| `scripts/gen-golden.js` | regenerates `tests/golden/*.json` with a deterministic collector (RFC 15.2) |
 
 One module per rule lives next to the catalog; a rule is pure and exports `id`, `title`, `scope`,
-`targets`, `friction`, `severity`, `docs` and `detect(ctx)`.
+`targets`, `friction`, `severity`, `docs` and `detect(ctx)` — plus `plan(ctx)`, when the rule can fix
+what it reported.
+
+## Testing gates
+
+Four gates run on every push (RFC 15, `node --test`):
+
+- **Rule tests** — one test per rule for its question, its false-positive boundary and its `skip`
+  path, against a plain context object; no test mocks `node:fs`.
+- **The drift gate** (`tests/drift.test.js`, RFC 13.2) — a catalog rule without a
+  `docs/rules/<id>.md` page, a page declaring an id the catalog lacks, a flag missing from `--help`
+  or `docs/cli.md`, an architecture module that does not exist, a README table that disagrees with
+  the catalog's severities, or a missing decision number all fail here.
+- **The golden gate** (`scripts/gen-golden.js` plus the same drift file, RFC 15.2) — for each declared
+  fixture repository, one committed JSON report under `tests/golden/`. The test regenerates each
+  report in memory with the same deterministic collector the script uses (fixture files, `main` as the
+  branch, `tracked.txt` as the index, the fixture's own `.gitignore`, no pnpm version, no clock, no
+  network) and compares it byte for byte. A difference fails and says to run
+  `node scripts/gen-golden.js`. Goldens are reviewed as diffs and never hand-edited.
+- **The self-scan** (`tests/self.test.js`, RFC 15.4) — the real CLI over this repository with the real
+  collector must exit `0` at `--fail-on warn`, print no `✖`, and its JSON report must have
+  `summary.verdict === 'pass'` with every finding a `skip` that declares its reason. A rule that
+  cannot pass on this repository is not releasable.
 
 ## Where a change belongs
 
