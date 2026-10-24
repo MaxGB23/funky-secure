@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "funky-secure",
+    "version": "0.1.0"
+  },
+  "scope": "all",
+  "policy": {
+    "preset": "baseline",
+    "quarantineMinutes": 1440,
+    "failOn": "error"
+  },
+  "targets": [
+    {
+      "kind": "machine",
+      "detail": "pnpm 12.3.4 (pnpm)"
+    },
+    {
+      "kind": "repo-root",
+      "path": "."
+    },
+    {
+      "kind": "importer",
+      "path": "."
+    }
+  ],
+  "summary": {
+    "error": 0,
+    "warn": 0,
+    "info": 0,
+    "pass": 9,
+    "skip": 0,
+    "verdict": "pass"
+  },
+  "findings": []
+}

@@ -1,8 +1,8 @@
 # funky-secure v0.1 — supply-chain auditor and initializer
 
-Specification: `rfcs/funky-secure-rfc.md`, revision 2 (v1.1). The RFC is normative; this document
+Specification: `rfcs/funky-secure-rfc.md`, revision 3 (v1.2). The RFC is normative; this document
 tracks execution and records only decisions and evidence taken during implementation.
-Branch: `main` until the first product commit, then `feat/v0.1`.
+Branch: `feat/v0.1`.
 
 ## Specs
 
@@ -46,7 +46,7 @@ scoped form and no objection was raised).
 
 ## Tasks
 
-Route: E → delegated to one `gentle-ai-worker` (evidence collection); F0-F3 → inline, one work unit
+Route: E → delegated to one `gentle-ai-worker` (evidence collection); F0-F3 → worker A, one work unit
 per commit; nothing here is split into parallel writers because each unit shares the catalog.
 
 | ID | Task | Spec | Route | Commit |
@@ -59,21 +59,22 @@ per commit; nothing here is split into parallel writers because each unit shares
 | T6 | E6: workflow shapes a minimal reader must handle | S8 | worker | — |
 | T7 | E7: win32 spawn without `shell: true` | S8 | worker | — |
 | T8 | E8: does pnpm read `minimum-release-age` from a project `.npmrc` | S8 | worker | — |
-| T9 | Evidence file `odd/evidence/e1-e8.md` + this document committed | S8 | inline | — |
-| T10 | F0: skeleton, `src/cli.js` with four commands and every flag, report/render/policy/paths, `tests/cli.test.js`, active `tests/drift.test.js`, empty-catalog help, CI workflow | S1, S3, S6 | inline | — |
-| T11 | F1a: `lockfile-committed` (rule, tests, fixture, doc page, golden) | S2 | inline | — |
-| T12 | F1b: `package-manager-pin` | S2 | inline | — |
-| T13 | F1c: `foreign-lockfile` | S2 | inline | — |
-| T14 | F1d: `quarantine` — measures the gate (strictness) with a preset floor, codes `quarantine-not-strict` / `quarantine-below-policy` (after E1/E2/E8, OD-1) | S2, S8 | inline | — |
-| T15 | F1e: `env-not-tracked` (after E3/E4) | S2, S8 | inline | — |
-| T16 | F1f: `sensitive-ignored` (after E3) | S2, S8 | inline | — |
-| T17 | F1g: `exact-versions` + bounded lockfile reader (after E2) | S2, S8 | inline | — |
-| T18 | F1h: `actions-pinned-sha` (after E6) | S2, S8 | inline | — |
-| T19 | F1i: `no-bot-auto-merge` (after E6) | S2, S8 | inline | — |
-| T20 | F2: `init` plan, W1-W4, idempotency, dirty-tree refusal | S4 | inline | — |
-| T21 | F3: `migrate` plan and refusals | S5 | inline | — |
-| T22 | F4: `docs/{concept,cli,architecture,decisions}.md`, self-scan job, README, `0.1.0` packable | S6, S7 | inline | — |
-| T23 | F5: v2 backlog intake only, not part of `0.1.0` | S2 | — | — |
+| T9 | Evidence file `odd/evidence/e1-e8.md` + this document committed | S8 | worker A | — |
+| T10 | F0: skeleton, `src/cli.js` with four commands and every flag, report/render/policy/paths, `tests/cli.test.js`, active `tests/drift.test.js`, empty-catalog help, CI workflow | S1, S3, S6 | inline | aeb21b1, 7ff63da, efebbf7, 4dcbefb |
+| T24 | F1-pre: `src/lib/{probes,git,targets,lockfile,workflows,managed-block}.js` and the rule context contract | S2, S8, S9 | inline | 2ce866a |
+| T11 | F1a: `lockfile-committed` (rule, tests, doc page) | S2 | worker A | 5ef01bf |
+| T12 | F1b: `package-manager-pin` | S2 | worker A | 5ef01bf |
+| T13 | F1c: `foreign-lockfile` | S2 | worker A | 5ef01bf |
+| T14 | F1d: `quarantine` — measures the gate (strictness) with a preset floor, codes `quarantine-not-strict` / `quarantine-below-policy` (after E1/E2/E8, OD-1) | S2, S8 | worker B | 5ef01bf |
+| T15 | F1e: `env-not-tracked` (after E3/E4) | S2, S8 | worker C | 5ef01bf |
+| T16 | F1f: `sensitive-ignored` (after E3) | S2, S8 | worker B | 5ef01bf |
+| T17 | F1g: `exact-versions` + bounded lockfile reader (after E2) | S2, S8 | worker B | 5ef01bf |
+| T18 | F1h: `actions-pinned-sha` (after E6) | S2, S8 | worker C | 5ef01bf |
+| T19 | F1i: `no-bot-auto-merge` (after E6) | S2, S8 | worker C | 5ef01bf |
+| T20 | F2: `init` plan, W1a/W1b/W2/W3/W4, idempotency, dirty-tree refusal | S4 | worker | 5808f87 |
+| T21 | F3: `migrate` plan and refusals | S5 | worker | ef5df15 |
+| T22 | F4: `docs/{concept,cli,architecture,decisions}.md`, goldens, self-scan test, README, `0.1.0` packable | S6, S7 | worker | 401f3e4 |
+| T23 | F5: v2 backlog intake only, not part of `0.1.0` | S2 | — | dropped (RFC 8.3 is the intake) |
 
 ## Log
 
@@ -131,3 +132,166 @@ meets the preset floor (`baseline` = the manager's built-in default, `strict` = 
 (`minimumReleaseAge: 4320`) in the same managed block. Recorded as D-16 in the RFC decision log.
 Same turn, owner's sequencing decision, verbatim: "el rfc primero, sin implementar" — so F0 (T10) stays
 pending until the owner says otherwise.
+
+L10 — 2026-10-23, owner's instruction for the implementation phase, verbatim: "ahora que ya tenemos un
+rfc entero y odd. Quiero que empecemos, arrancaremos todo sin parar, solo paras si tienes que
+preguntar algo importante que requiera decision". Executed as one continuous authorized
+implementation on `feat/v0.1`, work-unit commits, no per-step approval. Plan change recorded here
+because it alters the Route column: F0 and the shared library layer stay inline (they define the
+contract everything else consumes), while the nine rules are split across three `gentle-ai-worker`
+batches with disjoint surfaces (`src/rules/<id>.js`, `tests/rules/<id>.test.js`, `docs/rules/<id>.md`
+per rule) and the catalog registration, goldens and full-suite runs stay with the parent.
+
+Commits on `feat/v0.1` so far: `aeb21b1` contracts (report, policy, config, renderers, 31 tests),
+`7ff63da` probes and git helpers (20 tests), `efebbf7` targets, engine, plan layer, `bin/`, CI
+workflow and the repository's own quarantine posture. F0c (CLI, commands, drift gate, first three doc
+pages) and the shared readers (`lockfile`, `workflows`, `managed-block`, `paths`) are in flight on two
+disjoint worker surfaces.
+
+L11 — 2026-10-23, F1 closed: nine rules, one catalog in RFC 8.2 order, 213 tests green and the
+repository passes its own scan (`--scope repo --fail-on warn`, exit 0, one justified skip). Committed
+as `5ef01bf` after three worker batches (A: R1-R3, B: R4/R5/R7, C: R6/R8/R9). Integration gaps found
+while reviewing, all fixed before the commit:
+
+- **`lockfile-ignored` could never fire.** The ignore probe only evaluated R7's six candidates, so the
+  lockfile never appeared in the verdict. Adding it to `IGNORE_CANDIDATES` would have been worse: R7
+  iterates that list and fails when a candidate is *not* ignored, so it would have demanded an ignored
+  lockfile. Split into `IGNORE_CANDIDATES` (what R7 requires ignored) and `PROBED_IGNORE_PATHS` (those
+  six plus `pnpm-lock.yaml`, one probe, per-path verdict).
+- **`--scope repo` left the pin rule permanently skipped.** RFC 7.2 calls `--scope repo` the supported
+  CI gate, but the context set `machine: null` in that scope and R1 needs the answering version. Now
+  the version is resolved without the machine configuration (`machineFacts(collector, { withConfig:
+  false })`), no machine target is listed, and `ctx.machine.configOutOfScope` tells `quarantine` that
+  the absent configuration is excluded by contract rather than an unavailable probe — so
+  `--scope repo --strict-probes` no longer exits 2 over a probe it never ran.
+- **Passing findings were rendered as failures.** The human renderer grouped by target but did not
+  filter by status, so a healthy repository printed `✖ package-manager-pin  … the pnpm that answered`.
+  Pass findings now only feed the rolled-up `passing` line (RFC 10.3), empty target headings are
+  omitted, and the continuation indent matches Appendix D.1.
+- **`quarantine` reported under the machine section.** RFC 7.1 and Appendix D.1 put it on `repo-root`
+  with `path: pnpm-workspace.yaml`; the rule declared `scope: ['machine']`. Corrected to
+  `scope: ['repo']`, `targets: ['repo-root']`.
+
+Decisions taken by the workers and accepted, each recorded in its rule page: R6 filters the complete
+tracked list instead of adding a pathspec probe (the `:(glob)` trap only applies to a pathspec, and
+the template exclusion list is what prevents the over-match); R9 rides its configuration signal on a
+pass because `info` is a severity, not a status, and v0.1 has no per-finding severity override; R5
+treats `workspace:*`/`workspace:1.2.3`/`link:` as exact and `workspace:^`/`file:`/partial versions as
+floating.
+
+L12 — 2026-10-23, v0.1 closed. Twenty commits on `feat/v0.1`, 262 tests green, the repository passes
+its own scan in the `strict` preset, and `npm pack --dry-run` ships 50 files (78 kB) with no
+dependency of any kind. What each spec got:
+
+- S1: one repository, one package, one binary, `0.1.0`, MIT, Node `>= 20.11`, zero runtime and zero
+  development dependencies, no build step, no `dist/`.
+- S2: exactly nine rules, catalog order = RFC 8.2 order, declared severities unchanged, the three
+  declared deviations honoured (`foreign-lockfile` warn/warn, `quarantine` warn/error,
+  `actions-pinned-sha` error/error).
+- S3: `scan` is read-only and deterministic; the report carries `code`, serializes only
+  fail/skip/error, counts each verdict once, and exits `0`/`1`/`2` with `2` reserved for "could not
+  answer". The golden gate pins ordering, messages and evidence shape.
+- S4: `init` plans by default and applies exactly W1a, W1b, W2, W3 and W4 through the single write
+  path; idempotent by marker, digest printed before the write, dirty target refused, duplicate
+  top-level key refused, manager-owned keys never written.
+- S5: `migrate` prints the five steps and `--apply` performs step 4 only, with every refusal named:
+  missing `pnpm-lock.yaml`, dirty tree for those paths, default branch (fallback declared as a
+  fallback), detached HEAD, or git that cannot answer.
+- S6: help, `explain` and the rule pages render from the catalog and `tests/drift.test.js` fails when
+  they disagree; `docs/architecture.md` names only modules that exist.
+- S7: the CI workflow runs the suite, the drift gate and `scan --scope repo --fail-on warn`, and
+  `tests/self.test.js` fails if this repository stops passing its own scan.
+- S8: E1-E8 blocked every rule that depended on them; the corrections they forced landed in the RFC
+  as revision 3 and in the code as behaviour (gate vs number, `:(glob)`, no `-v`, structural reader).
+- S9: test-first for the nine rules, the pure libraries and the command contracts; collectors and
+  probes verified by injection plus E1-E8 instead.
+
+What is deliberately left for after 0.1.0, each already recorded where it belongs: the native review
+of the core candidate (owner consent pending), the `ci-no-safety-overrides` and other v2 rules (RFC
+8.3), `apply` for arbitrary findings (RFC 11.5 is the contract it must obey), and the three scratch
+directories the workers left outside the worktree under the OS temp root.
+
+Also closed during F4 by the parent: the golden fixtures now declare their own machine
+(`machine.json`), so R1 and R4 appear in a golden without this computer leaking into it — `clean` is
+nine passes with no finding, `dirty` shows five findings across five rules, `pinned-conflict` shows
+the conflict. And two fixture `.gitignore` files briefly lost their managed-block markers while the
+`tracked.txt` files were added; both were restored from git before the commit, so the `at-policy`
+fixture is still at policy by its own bytes.
+
+L13 — 2026-10-23, native review round 1 (RDD is on, so this is the outside view the tier earned).
+The owner chose sliced review over one 13,290-line candidate. The first slice —
+`1e08692..5ef01bf`, the nine rules — started lineage `review-4bc74970922f85fd` with four lenses
+(risk, resilience, readability, reliability) and 3,851 changed lines. The four reviewers were
+admitted, the refuter corroborated four severe, candidate-caused findings, and the provider allowed
+one bounded correction of 200 diff lines:
+
+- R1-001 (BLOCKER, risk): `exact-versions` echoed the raw specifier in the message, the evidence and
+  the remediation, so a URL specifier carrying `user:token` leaked the credential to stdout/JSON.
+  Fixed with `redactedSpecifier`: anything but a bare `git` user prints as `scheme://***@host/...`.
+- R3-001 (CRITICAL, reliability): when no importer `package.json` parsed, the rule fell through to a
+  pass claiming every specifier was exact and agreed with the lockfile. Fixed: nothing inspected is
+  now `skip: unreadable-package-json`, never a pass (S3's invariant).
+- R4-001 / R3-002 (CRITICAL, two lenses on one defect): the F1 integration fix had made
+  `--scope repo` call `machineFacts` for the pnpm version, so the CI gate consumed a runner fact and
+  the pin rule lost the out-of-scope skip its own page documents. Fixed by honouring RFC 7.2
+  literally: `--scope repo` keeps `machine` null. Consequence accepted and measured: the self-scan is
+  now 7 passing + 2 skipped (pin and quarantine), verdict PASS, and the CI gate no longer compares
+  the pin against the runner's pnpm — the pin is a `--scope all` fact by contract.
+- R4-002 (CRITICAL, resilience): `no-bot-auto-merge` appended a `bot-config-present` pass even with
+  an unparseable workflow in the set, so CI could be green with an unread merge path. Fixed: the bot
+  config no longer stands in for a workflow the rule never read.
+
+Correction measured at 145 diff lines (under the 200 budget), `08afc0c` on `review/slice1`,
+cherry-picked to `feat/v0.1` as `f93bc79`. 266 tests green, drift and self-scan green. Four new
+tests (credential redaction, all-unparseable importers, bot config with a broken workflow, repo-scope
+machine isolation) and one existing expectation corrected: the old test asserted the very false pass
+R3-001 named.
+
+The bounded correction was registered natively (145 lines, `correction_required`), and the chain now
+stops at the `provider_targeted_validator` slot: every `gentle_review` call for this lineage returns
+`applicability: unrelated` and an empty workspace projection, while `gentle-ai review status` resolves
+the same lineage and the same correction. The façade stopped binding exactly when the store revision
+advanced past the one it cached at START, so the validator — which needs a model run through the Pi
+host relay — cannot be launched from here. Slots 2 (`5ef01bf..5808f87`) and 3 (`5808f87..HEAD`) have
+not started; they would meet the same wall after their first state change.
+
+Decision handed to the owner, not taken here: repair the façade binding and validate this lineage,
+or record the review as unavailable for this candidate and deliver under ordinary policy. Nothing in
+this round changed behaviour the RFC did not already require.
+
+L14 — 2026-10-24, native review round 2 to closure, in three approved slices. The owner replaced the
+single abandoned lineage with sliced review, and every slice reached `approved` and had its authority
+burned:
+
+- **Slice 1, the nine rules** — lineage `review-slice1a-r1r4`, base `1e08692`, 3,964 lines, four
+  lenses, tier medium. Reviewers corroborated three severe findings; one bounded correction of 48
+  lines (`539b487`) closed them: a URL specifier now redacts query values as well as userinfo
+  (`?token=***`), and `quarantine` treats a repo-scope scan, which carries no machine at all, as
+  `machine-out-of-scope` instead of `probe-no-pnpm-config` with `probeUnavailable`, so
+  `--strict-probes` can no longer fail the supported CI gate. The targeted validator approved it.
+  Advisory, non-blocking and left for later work: `targets.js:141-145` glob description,
+  `foreign-lockfile.js:8` duplicating `FOREIGN_LOCKFILES`, `env-not-tracked.js:67-68`,
+  `exact-versions.js:257`, `targets.js:142-145`, `lockfile-committed.js:98-106`.
+  Because the nine-rules commit was a single 3,851-line unit, the branch `review/s1` carries the same
+  bytes split into `a47bf00` (R1-R4) and `8b22f42` (R5-R9) so the candidate could be reproduced; the
+  reviewed tree is byte-identical to `5ef01bf` plus `08afc0c` on the reviewed paths.
+- **Slice 2, `init` and `migrate`** — lineage `review-slice2-init`, base `5ef01bf`, 2,222 lines, four
+  lenses, tier medium. Five severe findings, one bounded correction of 125 lines (`9d9e9e8`, cherry-
+  picked to `ea09bf1`): the tokenless `.npmrc` fact recognises `_authToken = <secret>` (spaces), the
+  ignore writer omits `.npmrc` only on the collector's `tokenlessTracked` fact, an existing but
+  unreadable `.gitignore`/`pnpm-workspace.yaml` is a conflict instead of a fresh write, and
+  `migrate --apply` validates every foreign lockfile before deleting any. Validator approved.
+  Advisory: `writers.js:300-303` non-string pin, `writers.js:168-170`, `init.js:65`, `writers.js:41`,
+  `migrate.js:160-181`.
+- **Slice 3, CLI, docs, goldens and self-scan** — lineage `review-slice3-cli`, base `5808f87`,
+  1,518 lines, four lenses, tier high (the process boundary in `scripts/gen-golden.js`). The refuter
+  refuted the only CRITICAL (the `--scope repo` machine question, already answered by the slice-1
+  correction) and the review closed approved at that event with no correction. Advisory:
+  `README.md:54-57`, `docs/decisions.md:36`, `writers.js:216`, `scripts/gen-golden.js:31`,
+  `exact-versions.js:334-344`.
+
+Nine severe, candidate-caused findings across two corrections of 173 measured diff lines: none of
+them survived review, and none of them changed a decision the RFC had not already made. Every
+advisory finding above is a v0.2 candidate, never a reason to re-review these candidates (the native
+policy says so explicitly). 271 tests green on `feat/v0.1`, drift, self-scan and the golden byte gate
+green, `0.1.0` packable at 50 files.

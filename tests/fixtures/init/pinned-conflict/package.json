@@ -1,0 +1,5 @@
+{
+  "name": "fixture-pinned-conflict",
+  "private": true,
+  "packageManager": "npm@10.9.0"
+}

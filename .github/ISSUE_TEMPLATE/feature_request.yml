@@ -1,0 +1,80 @@
+name: Feature request
+description: A question about a repository that funky-secure cannot answer today.
+title: "feat: "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This tool answers questions with nine stateless rules over resolved facts. A tenth rule is a
+        contract change, so a feature request is really a proposal: the facts, the verdict, and what
+        happens when a fact is missing. Read `CONTRIBUTING.md` first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem, not the solution
+      description: What supply-chain question about a pnpm repository cannot be answered today, and what goes wrong because of it.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: What it touches
+      options:
+        - An existing rule
+        - A new rule (RFC 8.3 intake)
+        - scan output or exit codes
+        - init or migrate writes
+        - explain, help or the docs
+        - CI or the release process
+    validations:
+      required: true
+
+  - type: textarea
+    id: facts
+    attributes:
+      label: The facts it needs
+      description: Which resolved facts (`ctx.repo`, `ctx.machine`, a collector probe) and where they come from. Name the probe if a new one is required.
+    validations:
+      required: true
+
+  - type: textarea
+    id: missing
+    attributes:
+      label: What happens when the fact is missing
+      description: The `skip` code, its message, and whether it counts as an unavailable required probe under `--strict-probes`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: severity
+    attributes:
+      label: Severity, friction and the fix
+      description: Severity in `baseline` and `strict`, the friction number, and the single command that fixes the finding, or why it cannot be fixed automatically.
+    validations:
+      required: true
+
+  - type: input
+    id: rfc
+    attributes:
+      label: RFC section
+      description: The section that must change before any code does, or "new section" with the heading you propose.
+      placeholder: "RFC 8.2 R10"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Proposal checklist
+      options:
+        - label: This describes a problem and the evidence for it, not only a preferred implementation.
+          required: true
+        - label: I named the facts and where they come from.
+          required: true
+        - label: I said what happens when the fact is missing, so the rule can never produce a false pass.
+          required: true
+        - label: I accepted that the RFC changes in its own pull request before the code.
+          required: true

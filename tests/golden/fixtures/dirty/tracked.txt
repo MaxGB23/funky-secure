@@ -1,0 +1,4 @@
+.env
+.github/workflows/deploy.yml
+package.json
+pnpm-lock.yaml

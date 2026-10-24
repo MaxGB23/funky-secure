@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "funky-secure",
+    "version": "0.1.0"
+  },
+  "scope": "all",
+  "policy": {
+    "preset": "baseline",
+    "quarantineMinutes": 1440,
+    "failOn": "error"
+  },
+  "targets": [
+    {
+      "kind": "machine",
+      "detail": "pnpm 12.3.4 (pnpm)"
+    },
+    {
+      "kind": "repo-root",
+      "path": "."
+    },
+    {
+      "kind": "importer",
+      "path": "."
+    },
+    {
+      "kind": "ci",
+      "path": ".github/workflows"
+    }
+  ],
+  "summary": {
+    "error": 3,
+    "warn": 2,
+    "info": 0,
+    "pass": 4,
+    "skip": 0,
+    "verdict": "fail"
+  },
+  "findings": [
+    {
+      "rule": "quarantine",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "repo-root",
+      "message": "quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (inherited 1440)",
+      "evidence": {
+        "effective": 1440,
+        "inherited": true,
+        "strict": false,
+        "policy": 1440,
+        "exclusions": []
+      },
+      "remediation": {
+        "kind": "auto",
+        "command": "funky-secure init --apply"
+      },
+      "doc": "funky-secure explain quarantine",
+      "code": "quarantine-not-strict"
+    },
+    {
+      "rule": "env-not-tracked",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "repo-root",
+      "path": ".env",
+      "message": ".env is tracked by git; removing it from the index (git rm --cached .env) does not remove it from history, so the credentials it contains must be rotated",
+      "evidence": {
+        "path": ".env"
+      },
+      "remediation": {
+        "kind": "none"
+      },
+      "doc": "funky-secure explain env-not-tracked",
+      "code": "env-tracked"
+    },
+    {
+      "rule": "sensitive-ignored",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "repo-root",
+      "path": ".gitignore",
+      "message": ".env, .env.local, .env.production, secrets.pem, server.key, .npmrc are not ignored by git",
+      "evidence": {
+        "path": ".gitignore",
+        "missing": [
+          ".env",
+          ".env.local",
+          ".env.production",
+          "secrets.pem",
+          "server.key",
+          ".npmrc"
+        ]
+      },
+      "remediation": {
+        "kind": "auto",
+        "command": "funky-secure init --apply"
+      },
+      "doc": "funky-secure explain sensitive-ignored",
+      "code": "not-ignored"
+    },
+    {
+      "rule": "exact-versions",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "importer",
+      "path": "package.json",
+      "line": 6,
+      "message": "left-pad@^1.3.0 is a floating range",
+      "evidence": {
+        "specifier": "^1.3.0",
+        "dependency": "left-pad",
+        "type": "dependencies"
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "pnpm add --save-exact left-pad@^1.3.0"
+      },
+      "doc": "funky-secure explain exact-versions",
+      "code": "floating-range"
+    },
+    {
+      "rule": "actions-pinned-sha",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/deploy.yml",
+      "line": 11,
+      "message": "actions/checkout@v4 is a tag; pin the 40-character commit SHA so the workflow cannot change under you",
+      "evidence": {
+        "uses": "actions/checkout@v4",
+        "form": "tag"
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "uses: owner/repo@<sha> # vX.Y.Z"
+      },
+      "doc": "funky-secure explain actions-pinned-sha",
+      "code": "unpinned-action"
+    }
+  ]
+}

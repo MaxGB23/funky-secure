@@ -1,0 +1,8 @@
+{
+  "name": "fixture-clean",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "devDependencies": {
+    "eslint": "9.15.0"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "funky-secure",
+    "version": "0.1.0"
+  },
+  "scope": "all",
+  "policy": {
+    "preset": "baseline",
+    "quarantineMinutes": 1440,
+    "failOn": "error"
+  },
+  "targets": [
+    {
+      "kind": "machine",
+      "detail": "pnpm 12.3.4 (pnpm)"
+    },
+    {
+      "kind": "repo-root",
+      "path": "."
+    },
+    {
+      "kind": "importer",
+      "path": "."
+    }
+  ],
+  "summary": {
+    "error": 1,
+    "warn": 0,
+    "info": 0,
+    "pass": 8,
+    "skip": 0,
+    "verdict": "fail"
+  },
+  "findings": [
+    {
+      "rule": "package-manager-pin",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "repo-root",
+      "path": "package.json",
+      "message": "package.json declares npm@10.9.0, but the pnpm answering is pnpm@12.3.4",
+      "evidence": {
+        "declared": "npm@10.9.0",
+        "observed": "12.3.4",
+        "executable": "pnpm"
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "corepack use pnpm@12.3.4"
+      },
+      "doc": "funky-secure explain package-manager-pin",
+      "code": "pin-conflict"
+    }
+  ]
+}
