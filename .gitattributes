@@ -1,0 +1,4 @@
+# Every text file is checked out with LF on every platform. The golden gate compares bytes, so a
+# CRLF checkout would fail it for a reason that has nothing to do with the change under review, and
+# the failure message would send a contributor to regenerate the goldens with the wrong line endings.
+* text=auto eol=lf
