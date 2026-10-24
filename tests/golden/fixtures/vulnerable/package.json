@@ -1,0 +1,8 @@
+{
+  "name": "fixture-vulnerable",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "dependencies": {
+    "left-pad": "1.3.0"
+  }
+}

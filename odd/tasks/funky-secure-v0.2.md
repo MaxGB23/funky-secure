@@ -47,14 +47,15 @@ rights.
 
 | ID | Task | Spec | Route | Commit |
 |---|---|---|---|---|
-| T1 | RFC v1.3: the delivery section, 8.3 admitted into 0.2 with F5 order, and `hook-drift` resolved or excluded | S1, S2, S3 | inline | — |
-| T2 | `odd/review/README.md`: how a candidate is reproduced and split for review | S5 | inline | — |
-| T3 | Delivery pipeline: trusted publishing, provenance, tag-driven release, `prepublishOnly` gate, packed-file check | S1 | inline, after T1 | — |
-| T4 | `ci-no-safety-overrides` rule, tests and page | S2 | inline, after T1 | — |
-| T5 | `pull-request-target` rule, tests and page | S2 | inline, after T1 | — |
-| T6 | `workflow-permissions` rule, tests and page | S2 | inline, after T1 | — |
-| T7 | `hook-drift` design, only if T1 admits it into 0.2 | S3 | — | — |
+| T1 | RFC v1.3: the delivery section, 8.3 admitted into 0.2 with F5 order, and `hook-drift` resolved or excluded | S1, S2, S3 | inline | `9f912db`, PR #4 → `00d8bcb` |
+| T2 | `odd/review/README.md`: how a candidate is reproduced and split for review | S5 | inline | `cf1b6c1`, PR #6 → `0b1496e` |
+| T3 | Delivery pipeline: trusted publishing, provenance, tag-driven release, `prepublishOnly` gate, packed-file check | S1 | inline, after T1 | `228a832`, PR #8 → `a9a3ac5` |
+| T4 | `ci-no-safety-overrides` rule, tests and page | S2 | worker, after T1 | `da98a66`, PR #10 → `a3f132a` |
+| T5 | `pull-request-target` rule, tests and page | S2 | worker, after T1 | `21d6f09`, PR #12 → `71835ff` |
+| T6 | `workflow-permissions` rule, tests and page | S2 | worker, after T1 | `a1aacca`, PR #14 → `773c877` |
+| T7 | `hook-drift` design, only if T1 admits it into 0.2 | S3 | — | dropped: RFC v1.3 keeps it out of 0.2 (8.3, 4.4) |
 | T8 | Branch protection on `main` with the two required checks | S6 | blocked: owner's confirmation | — |
+| T9 | Close 0.2: `vulnerable` fixture so the golden gate exercises the new fail paths, version `0.2.0`, this document | S1, S2 | inline | this commit |
 
 ## Log
 
@@ -76,3 +77,43 @@ confirmed `private: false`. npm provenance requires a public source repository, 
 L5 — 2026-10-24, recommendation recorded for the review branch: do not push `review/s1` (S5). The two
 commits are a reconstruction of content already on `main`; the durable record is the lineage in
 `odd/tasks/funky-secure-v0.1.md` L13-L14.
+
+L6 — 2026-10-24, T1 executed: RFC v1.3 in PR #4 (`9f912db`, merged `00d8bcb`), CI green on both
+jobs. Section 17 is the delivery contract, 8.3 admits three rules and keeps `hook-drift` out, 16 F5
+is rewritten as G1-G4, 19 gains K11-K13, 20 gains decisions 27-31, 21.1 states the `0.2.0`
+acceptance, and sections 17-20 are renumbered 18-21 with their three in-text references updated.
+
+L7 — 2026-10-24, T2 executed: `odd/review/README.md` in PR #6 (`cf1b6c1`, merged `0b1496e`). The
+candidate is one commit with its four facts (lineage, base, lines, verdict), the split rules for an
+oversized unit, the four things never done, and the boundary of what a review decides. S5 is closed
+without pushing `review/s1`.
+
+L8 — 2026-10-24, T3 executed: the release pipeline in PR #8 (`228a832`, merged `a9a3ac5`). Two defects
+in the new gate were found and fixed before the PR: the guard returned `0` when `npm pack` failed, and
+on Windows a `.cmd` shim cannot be spawned without `shell: true` (E7), which made every local run fail.
+Recorded as I-11 and I-12. The workflow's shape is asserted by eight tests, and `prepublishOnly` was
+run end to end from the suite through the self-scan to the guard.
+
+L9 — 2026-10-24, T4-T6 executed: the three rules in PRs #10, #12 and #14. Each was written test-first
+with the RED state observed, then delegated to `gentle-ai-worker` with narrow edit surfaces. Five
+parent-side corrections were needed and are part of the record: the catalog-size literal in
+`tests/cli.test.js` now derives from `catalog.length`; two defects in the T5 contract test (unescaped
+`${{ … }}` inside template literals, and a line-10 assertion for a step on line 9) were fixed by the
+parent; a job-level `write-all` now reports the line of that job's `permissions:` key rather than the
+job key; and `workflow-permissions-missing` stopped reporting a workflow whose only declarations are
+per job, which was a false positive because that job's own block governs it. T5 shared the trigger
+parser with R9 (`declaresTrigger`), verified by R9's own suite plus an eleven-spelling differential;
+T6 extended the reader with `permissions:`, verified by the ten pre-existing reader tests against both
+versions.
+
+L10 — 2026-10-24, T9 closes the feature: `0.2.0` in `package.json`, the `vulnerable` golden fixture so
+the three new rules exercise their `fail` paths through the renderer, 312 tests green, drift gate
+11/11, self-scan PASS on this repository. Twelve rules. Not done: the tag and the publish (the
+owner's decision), branch protection (T8, waiting on him), and the first-publish bootstrap (L11).
+
+L11 — 2026-10-24, open decision found while closing: npm Trusted Publishing binds to a package that
+already exists on the registry, so the first publication cannot go through OIDC — `release.yml` would
+find nothing to publish to. The first version needs either a one-time granular token, revoked right
+after, or a documented first-release path in RFC 17.2. Not decided: it belongs to the owner's
+anti-supply-chain process, and inventing the exception without him would be the wrong kind of
+thoroughness.
