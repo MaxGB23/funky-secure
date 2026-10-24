@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 import { checkPolicy, payloadFromEnv, run } from '../scripts/check-pr-policy.js';
@@ -61,4 +63,27 @@ test('payloadFromEnv trims labels and ignores the empty string', () => {
     labels: ['type:docs', 'status:approved'],
     headRef: '',
   });
+});
+
+test('running the script as a command enforces the policy instead of passing silently', () => {
+  const script = join(import.meta.dirname, '..', 'scripts', 'check-pr-policy.js');
+
+  const good = spawnSync(process.execPath, [script], {
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH,
+      PR_BODY: 'Closes #1',
+      PR_LABELS: 'type:feature',
+      PR_HEAD_REF: 'feat/v0.1',
+    },
+  });
+  assert.equal(good.status, 0, good.stderr);
+  assert.match(good.stdout, /^pr-policy: issue link, one type label and a conventional branch name$/m);
+
+  const bad = spawnSync(process.execPath, [script], {
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH, PR_BODY: '', PR_LABELS: '', PR_HEAD_REF: 'main' },
+  });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /^pr-policy: the body does not link an issue/);
 });

@@ -1,5 +1,6 @@
-/**
- * The pull request policy this repository documents in `CONTRIBUTING.md`, enforced instead of hoped
+import { pathToFileURL } from 'node:url';
+
+/** The pull request policy this repository documents in `CONTRIBUTING.md`, enforced instead of hoped
  * for. Three facts decide it, all of them visible in the pull request payload: the body links an
  * issue, exactly one `type:*` label is applied, and the head branch follows `type/description`.
  *
@@ -71,6 +72,6 @@ export function run(env = {}, stdout = process.stdout, stderr = process.stderr) 
   return 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]?.replaceAll('\\', '/')}`) {
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = run(process.env);
 }

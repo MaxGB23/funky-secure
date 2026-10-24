@@ -8,7 +8,7 @@
 
 import { spawn as nodeSpawn } from 'node:child_process';
 import { readFile as nodeReadFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { win32 } from 'node:path';
 
 /** The closed list. Adding a probe is a reviewed change, not an incidental import. */
 export const PROBES = Object.freeze([
@@ -81,7 +81,9 @@ export function runProcess(
 }
 
 function expandWindowsShim(text, shimPath, env) {
-  const dp0 = `${dirname(shimPath)}\\`;
+  // A win32 shim path is parsed with win32 rules wherever this runs: `dirname` from the host would
+  // treat the backslashes of `C:\…\pnpm.cmd` as ordinary characters and expand `%~dp0` to garbage.
+  const dp0 = `${win32.dirname(shimPath)}\\`;
   return text
     // `%~dp0` already carries the trailing separator in cmd semantics.
     .replace(/%~dp0\\?/gi, dp0)

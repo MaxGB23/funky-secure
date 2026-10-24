@@ -3,7 +3,10 @@ name: ci
 on:
   push:
     branches: [main]
+  # `labeled` and `edited` matter: the policy reads the labels and the body, and both can change
+  # after the pull request exists.
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
 
 permissions:
   contents: read
