@@ -49,13 +49,14 @@ repository, copied verbatim:
 funky-secure scan  ·  preset strict  ·  scope repo
 
 repo-root
-  – quarantine  skipped: the quarantine is read from the machine configuration, which --scope repo excludes by contract
+  – package-manager-pin  package.json  skipped: the machine is out of scope, so no pnpm answered the pin
+  – quarantine           skipped: pnpm config list --json was unavailable
 
-passing  11 rules (package-manager-pin, lockfile-committed, foreign-lockfile, env-not-tracked,
-         sensitive-ignored, exact-versions, actions-pinned-sha, no-bot-auto-merge,
-         ci-no-safety-overrides, pull-request-target, workflow-permissions)   ·   1 skipped
+passing  10 rules (lockfile-committed, foreign-lockfile, env-not-tracked, sensitive-ignored,
+         exact-versions, actions-pinned-sha, no-bot-auto-merge, ci-no-safety-overrides,
+         pull-request-target, workflow-permissions)   ·   2 skipped
 
-summary  0 errors · 0 warnings · 0 info · 11 passing · 1 skipped
+summary  0 errors · 0 warnings · 0 info · 10 passing · 2 skipped
 verdict  PASS (threshold: warn)
 ```
 
