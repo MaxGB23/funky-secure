@@ -30,7 +30,7 @@
   ],
   "summary": {
     "error": 3,
-    "warn": 2,
+    "warn": 3,
     "info": 0,
     "pass": 6,
     "skip": 0,
@@ -141,6 +141,28 @@
       },
       "doc": "funky-secure explain actions-pinned-sha",
       "code": "unpinned-action"
+    },
+    {
+      "rule": "workflow-permissions",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/deploy.yml",
+      "line": 1,
+      "message": "the workflow declares no permissions:, so every job inherits the scopes the repository setting allows",
+      "evidence": {
+        "level": "workflow",
+        "jobs": [
+          "deploy"
+        ]
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "add \"permissions:\" with \"contents: read\" at the top level, and widen it only in the job that needs it"
+      },
+      "doc": "funky-secure explain workflow-permissions",
+      "code": "workflow-permissions-missing"
     }
   ]
 }

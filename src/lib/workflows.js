@@ -17,6 +17,13 @@
  * The reader models jobs and steps, never the trigger: `declaresTrigger` reads the one place YAML
  * defines it — a top-level `on:` key — so no rule scans the file for a trigger token (RFC 8.3, 16
  * F5 G3). R9 and `pull-request-target` share it, instead of growing a second trigger parser.
+ *
+ * It also models `permissions:`, at the workflow level and in each job, so `workflow-permissions`
+ * reads a declaration the reader attributed instead of scanning the file for the key (RFC 8.3, 16
+ * F5 G4). A declaration carries its form (`write-all`, `read-all`, `none` for `{}`, or `map` with
+ * its entries) and the 1-based line it was declared on. A `permissions:` value the reader cannot
+ * attribute — an unknown scalar, a block scalar, a null body, a level written as a block scalar — is
+ * refused naming the line, never guessed.
  */
 
 class UnparseableWorkflow extends Error {}
@@ -207,6 +214,7 @@ function parseFlowMap(text, line) {
 
 /** @typedef {{ no: number, raw: string }} RawLine */
 /** @typedef {{ key: string, value: string, line: number, indent: number, start: number, bodyStart: number, bodyEnd: number }} WorkflowEntry */
+/** @typedef {{ form: 'map' | 'write-all' | 'read-all' | 'none', line: number, entries?: Record<string, string> }} Permissions */
 
 class Reader {
   /** @param {string} text */
@@ -340,10 +348,12 @@ class Reader {
     return entries;
   }
 
-  /** @returns {Array<object>} */
+  /** @returns {{ jobs: Array<object>, permissions: Permissions | null }} */
   parse() {
     /** @type {Array<object>} */
     const jobs = [];
+    /** @type {Permissions | null} */
+    let permissions = null;
     let sawDocumentStart = false;
     let sawKey = false;
     let i = 0;
@@ -368,13 +378,26 @@ class Reader {
       if (!kv) fail(`expected "key: value" at line ${line}`);
       sawKey = true;
       const end = this.entryEnd(i, 0);
+      const rawKv = splitKeyValue(text);
+      const entry = {
+        key: kv.key,
+        value: kv.value,
+        rawValue: rawKv ? rawKv.value : kv.value,
+        line,
+        indent: 0,
+        start: i,
+        bodyStart: i + 1,
+        bodyEnd: end,
+      };
       if (kv.key === 'jobs') {
         if (kv.value !== '') fail(`"jobs" at line ${line} is not a block map`);
         for (const job of this.parseJobs(i + 1, end)) jobs.push(job);
+      } else if (kv.key === 'permissions') {
+        permissions = this.parsePermissions(entry);
       }
       i = end;
     }
-    return jobs;
+    return { jobs, permissions };
   }
 
   /**
@@ -388,7 +411,7 @@ class Reader {
 
   /** @param {WorkflowEntry} entry */
   parseJob(entry) {
-    const job = { id: entry.key, name: null, condition: null, permissions: null, steps: [] };
+    const job = { id: entry.key, line: entry.line, name: null, condition: null, permissions: null, steps: [] };
     if (entry.value === '{}') return job;
     if (entry.value !== '') {
       if (entry.value.startsWith('{')) {
@@ -399,7 +422,7 @@ class Reader {
     for (const key of this.mapEntries(entry.bodyStart, entry.bodyEnd, `job "${entry.key}"`)) {
       if (key.key === 'name') job.name = this.scalarValue(key, 'name');
       else if (key.key === 'if') job.condition = this.scalarValue(key, 'if');
-      else if (key.key === 'permissions') job.permissions = this.mapOrScalar(key, 'permissions');
+      else if (key.key === 'permissions') job.permissions = this.parsePermissions(key);
       else if (key.key === 'steps') job.steps = this.parseSteps(key, entry.key);
     }
     return job;
@@ -417,15 +440,41 @@ class Reader {
   }
 
   /**
+   * One `permissions:` declaration, workflow-level or job-level. `write-all` and `read-all` are the
+   * two scalars GitHub defines, `{}` is the empty declaration (`none`), and a flow or block map keeps
+   * its entries. Anything else is refused naming the line, because attributing it would be a guess.
    * @param {WorkflowEntry} entry
-   * @param {string} key
-   * @returns {Record<string, string> | string}
+   * @returns {Permissions}
    */
-  mapOrScalar(entry, key) {
-    if (entry.value === '{}') return {};
-    if (entry.value.startsWith('{')) return parseFlowMap(entry.value, entry.line);
-    if (entry.value !== '') return unquote(entry.value);
-    return this.mapValue(entry, key);
+  parsePermissions(entry) {
+    const line = entry.line;
+    if (entry.value === '{}') return { form: 'none', line };
+    if (entry.value.startsWith('{')) {
+      const entries = parseFlowMap(entry.value, line);
+      return Object.keys(entries).length === 0
+        ? { form: 'none', line }
+        : { form: 'map', line, entries };
+    }
+    if (entry.value !== '') {
+      const scalar = unquote(entry.value);
+      if (scalar === 'write-all') return { form: 'write-all', line };
+      if (scalar === 'read-all') return { form: 'read-all', line };
+      fail(`"permissions" at line ${line} is neither a map nor write-all/read-all, which the reader does not attribute`);
+    }
+
+    /** @type {Record<string, string>} */
+    const entries = {};
+    for (const child of this.mapEntries(entry.bodyStart, entry.bodyEnd, `"permissions" at line ${line}`)) {
+      if (BLOCK_SCALAR.test(child.value)) {
+        fail(`permission "${child.key}" at line ${child.line} is a block scalar, which the reader does not attribute`);
+      }
+      if (child.value === '') fail(`permission "${child.key}" at line ${child.line} has no level`);
+      entries[child.key] = unquote(child.value);
+    }
+    if (Object.keys(entries).length === 0) {
+      fail(`"permissions" at line ${line} declares neither a value nor a key`);
+    }
+    return { form: 'map', line, entries };
   }
 
   /**
@@ -604,11 +653,12 @@ class Reader {
 
 /**
  * @param {string} text
- * @returns {{ ok: true, jobs: Array<object> } | { ok: false, reason: 'unparseable-workflow', detail: string }}
+ * @returns {{ ok: true, jobs: Array<object>, permissions: Permissions | null } | { ok: false, reason: 'unparseable-workflow', detail: string }}
  */
 export function parseWorkflow(text) {
   try {
-    return { ok: true, jobs: new Reader(text).parse() };
+    const parsed = new Reader(text).parse();
+    return { ok: true, jobs: parsed.jobs, permissions: parsed.permissions };
   } catch (error) {
     if (error instanceof UnparseableWorkflow) {
       return { ok: false, reason: 'unparseable-workflow', detail: error.message };

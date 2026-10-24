@@ -15,6 +15,7 @@ import packageManagerPin from './package-manager-pin.js';
 import pullRequestTarget from './pull-request-target.js';
 import quarantine from './quarantine.js';
 import sensitiveIgnored from './sensitive-ignored.js';
+import workflowPermissions from './workflow-permissions.js';
 
 /** @type {Array<object>} */
 export const catalog = [
@@ -29,6 +30,7 @@ export const catalog = [
   noBotAutoMerge,
   ciNoSafetyOverrides,
   pullRequestTarget,
+  workflowPermissions,
 ];
 
 /** @param {string} id */
