@@ -29,7 +29,7 @@
     "warn": 1,
     "info": 0,
     "pass": 6,
-    "skip": 0,
+    "skip": 1,
     "verdict": "fail"
   },
   "findings": [
@@ -99,6 +99,19 @@
       },
       "doc": "funky-secure explain sensitive-ignored",
       "code": "not-ignored"
+    },
+    {
+      "rule": "ci-no-safety-overrides",
+      "status": "skip",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "ci",
+      "message": "skipped: there is no workflow and no root .npmrc, so no CI install fact exists",
+      "remediation": {
+        "kind": "none"
+      },
+      "doc": "funky-secure explain ci-no-safety-overrides",
+      "code": "no-ci"
     }
   ]
 }

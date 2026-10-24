@@ -5,6 +5,7 @@
  */
 
 import actionsPinnedSha from './actions-pinned-sha.js';
+import ciNoSafetyOverrides from './ci-no-safety-overrides.js';
 import envNotTracked from './env-not-tracked.js';
 import exactVersions from './exact-versions.js';
 import foreignLockfile from './foreign-lockfile.js';
@@ -25,6 +26,7 @@ export const catalog = [
   sensitiveIgnored,
   actionsPinnedSha,
   noBotAutoMerge,
+  ciNoSafetyOverrides,
 ];
 
 /** @param {string} id */
