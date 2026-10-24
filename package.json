@@ -21,7 +21,8 @@
   "scripts": {
     "test": "node --test",
     "golden": "node scripts/gen-golden.js",
-    "self": "node bin/funky-secure.js scan --scope repo --fail-on warn"
+    "self": "node bin/funky-secure.js scan --scope repo --fail-on warn",
+    "prepublishOnly": "node --test && node bin/funky-secure.js scan --scope repo --fail-on warn && node scripts/release-guard.js"
   },
   "keywords": [
     "supply-chain",
