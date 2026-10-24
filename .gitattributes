@@ -2,3 +2,15 @@
 # CRLF checkout would fail it for a reason that has nothing to do with the change under review, and
 # the failure message would send a contributor to regenerate the goldens with the wrong line endings.
 * text=auto eol=lf
+
+# Nothing here ships a binary today; the day one does, it must not be normalised.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary

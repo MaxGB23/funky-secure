@@ -1,6 +1,6 @@
 {
   "name": "funky-secure",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Supply-chain auditor and initializer for pnpm repositories: stateless rules, a read-only scan, and a write plan you review before anything is applied.",
   "license": "MIT",
   "author": "MaxGB23",
@@ -16,7 +16,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22"
   },
   "scripts": {
     "test": "node --test",

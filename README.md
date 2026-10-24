@@ -5,7 +5,7 @@ unreviewed. It answers that question with twelve stateless rules, prints the evi
 and offers the writes that fix what is fixable as a plan you review before anything is applied. It
 never installs, never resolves a version, never touches the network and never keeps state.
 
-Zero runtime dependencies. Zero development dependencies. Node `>= 20.11`, ESM.
+Zero runtime dependencies. Zero development dependencies. Node `>= 22`, ESM.
 
 ## Install
 
