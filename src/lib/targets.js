@@ -220,7 +220,9 @@ export async function repoFacts({ collector, cwd, root = null }) {
   const npmrcText = npmrc?.text ?? null;
   const npmrcTracked = tracked === null ? null : tracked.includes('.npmrc');
   const npmrcTokenlessTracked =
-    npmrcTracked === true && typeof npmrcText === 'string' && !/(^|[^A-Za-z0-9])_authToken=/m.test(npmrcText);
+    npmrcTracked === true &&
+    typeof npmrcText === 'string' &&
+    !/(^|[^A-Za-z0-9])_authToken\s*=/m.test(npmrcText);
 
   const importers = [];
   const importerTargets = [];
@@ -291,7 +293,7 @@ export async function repoFacts({ collector, cwd, root = null }) {
     ignored,
     npmrc: {
       tracked: npmrcTracked,
-      hasToken: typeof npmrcText === 'string' && /(^|[^A-Za-z0-9])_authToken=/m.test(npmrcText),
+      hasToken: typeof npmrcText === 'string' && /(^|[^A-Za-z0-9])_authToken\s*=/m.test(npmrcText),
       tokenlessTracked: npmrcTokenlessTracked,
     },
     importers,

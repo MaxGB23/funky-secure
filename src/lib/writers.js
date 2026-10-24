@@ -38,7 +38,7 @@ export const GITIGNORE_ENTRIES = Object.freeze([
 ]);
 
 const QUARANTINE_GATE_LINE = 'minimumReleaseAgeStrict: true';
-const AUTH_TOKEN = /_authToken=/;
+const AUTH_TOKEN = /_authToken\s*=/;
 
 /**
  * The findings the engine reported for one rule. Plan functions read the report instead of calling
@@ -78,17 +78,23 @@ export function trackedNpmrcFacts(ctx) {
   // same value, so they cannot disagree about whether the tracked .npmrc is legitimate.
   const resolved = ctx?.repo?.npmrc;
   if (resolved && resolved.tracked === true) {
-    return { tracked: true, hasToken: resolved.hasToken === true };
+    return {
+      tracked: true,
+      hasToken: resolved.hasToken === true,
+      tokenlessTracked: resolved.tokenlessTracked === true,
+    };
   }
   if (resolved && resolved.tracked === false) {
-    return { tracked: false, hasToken: resolved.hasToken === true };
+    return { tracked: false, hasToken: resolved.hasToken === true, tokenlessTracked: false };
   }
   const tracked = ctx?.repo?.tracked ?? null;
   if (tracked === null) return null;
   const text = ctx?.repo?.files?.npmrc?.text ?? null;
+  const hasToken = typeof text === 'string' && AUTH_TOKEN.test(text);
   return {
     tracked: tracked.has('.npmrc'),
-    hasToken: typeof text === 'string' && AUTH_TOKEN.test(text),
+    hasToken,
+    tokenlessTracked: tracked.has('.npmrc') && typeof text === 'string' && !hasToken,
   };
 }
 
@@ -137,7 +143,15 @@ export function planTarget(ctx, { relative, operation, result }) {
  * @param {{ workspaceYaml?: string | null, preset?: string }} [options]
  * @returns {{ ok: true, operation: string, content: string, reason: string, state: string } | { ok: false, state: 'conflict', reason: string, key: string | null }}
  */
-export function writeQuarantineGate({ workspaceYaml = null, preset = 'baseline' } = {}) {
+export function writeQuarantineGate({ workspaceYaml = null, exists = false, preset = 'baseline' } = {}) {
+  if (exists && typeof workspaceYaml !== 'string') {
+    return {
+      ok: false,
+      state: 'conflict',
+      reason: `${WORKSPACE_RELATIVE} exists but could not be read, so it is never rewritten`,
+      key: null,
+    };
+  }
   const existing = typeof workspaceYaml === 'string' ? workspaceYaml : null;
   const strictFloor = preset === 'strict';
   const body = [QUARANTINE_GATE_LINE];
@@ -199,10 +213,19 @@ export function writeQuarantineGate({ workspaceYaml = null, preset = 'baseline' 
  * @param {{ gitignore?: string | null, trackedNpmrc?: { tracked: boolean, hasToken: boolean } | null }} [options]
  * @returns {{ ok: true, operation: string, content: string, reason: string, state: string } | { ok: false, state: 'conflict', reason: string, key: null }}
  */
-export function writeGitignoreBlock({ gitignore = null, trackedNpmrc = null } = {}) {
+export function writeGitignoreBlock({ gitignore = null, exists = false, trackedNpmrc = null } = {}) {
+  if (exists && typeof gitignore !== 'string') {
+    return {
+      ok: false,
+      state: 'conflict',
+      reason: `${GITIGNORE_RELATIVE} exists but could not be read, so it is never rewritten`,
+      key: null,
+    };
+  }
   const existing = typeof gitignore === 'string' ? gitignore : null;
-  const omitNpmrc =
-    trackedNpmrc !== null && trackedNpmrc.tracked === true && trackedNpmrc.hasToken !== true;
+  // Only the fact the collector resolved on purpose removes the entry: a tracked .npmrc whose text
+  // was not read is not evidence that it is tokenless (RFC 8.2 R7).
+  const omitNpmrc = trackedNpmrc !== null && trackedNpmrc.tokenlessTracked === true;
   const entries = omitNpmrc ? [...GITIGNORE_ENTRIES] : [...GITIGNORE_ENTRIES, '.npmrc'];
 
   const upserted = upsertBlock(existing ?? '', entries.join('\n'));
@@ -497,6 +520,7 @@ export function planFor(
         operation: 'managed block',
         result: writeQuarantineGate({
           workspaceYaml: ctx.repo.files?.workspaceYaml?.text ?? null,
+          exists: (ctx.repo.present ?? []).includes(WORKSPACE_RELATIVE),
           preset,
         }),
       }),
@@ -514,6 +538,7 @@ export function planFor(
         operation: 'managed block',
         result: writeGitignoreBlock({
           gitignore: ctx.repo.files?.gitignore?.text ?? null,
+          exists: (ctx.repo.present ?? []).includes(GITIGNORE_RELATIVE),
           trackedNpmrc: trackedNpmrcFacts(ctx),
         }),
       }),

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -431,4 +431,24 @@ test('a plan-only run does not ask git for the status or the default branch', as
   assert.match(result.stdout, /from npm {2}· {2}plan only/);
   assert.equal(result.collector.calls.some((args) => args[0] === 'status'), false);
   assert.equal(result.collector.calls.some((args) => args[0] === 'symbolic-ref'), false);
+});
+
+test('step 4 refuses before it deletes anything, so no lockfile is ever half-removed', async (t) => {
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'pnpm-lock.yaml': 'lockfileVersion: 9.0\n',
+    'package-lock.json': '{"lockfileVersion": 3}\n',
+  });
+  // A directory where a lockfile is expected: the lstat check refuses it, and the sibling that was
+  // approved first must still be on disk afterwards.
+  mkdirSync(join(dir, 'yarn.lock'), { recursive: true });
+
+  const stdout = capture();
+  const stderr = capture();
+  const collector = fakeCollector({ root: dir, defaultRef: 'origin/main' });
+  const code = await run(['migrate', '--apply'], { cwd: dir, env: {}, stdout, stderr, collector });
+
+  assert.equal(code, 2);
+  assert.match(stderr.text, /yarn\.lock/);
+  assert.ok(existsSync(join(dir, 'package-lock.json')), 'the first target was not deleted');
 });

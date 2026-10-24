@@ -157,6 +157,10 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
   }
 
   const removed = [];
+  const approved = [];
+
+  // Validation runs over the whole set before the first deletion: a refusal on the third lockfile
+  // must not leave the first two gone, because step 4 has no rollback (RFC 11.4).
   for (const name of foreign) {
     const path = join(root, name);
     const target = validateWriteTarget({ root, relative: name, expectedBasename: name });
@@ -176,6 +180,10 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
         `refusing to remove ${path}: it is not a regular file (step 4 removes files only)`,
       );
     }
+    approved.push({ name, path });
+  }
+
+  for (const { name, path } of approved) {
     stdout.write(`remove  ${path}\n`);
     await rm(path);
     removed.push(name);
