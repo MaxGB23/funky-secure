@@ -120,8 +120,9 @@ node scripts/gen-golden.js                    # regenerate the golden reports, d
 node bin/funky-secure.js explain --list        # the catalog, in report order
 ```
 
-CI runs the suite, the drift gate and the self-scan on every pull request. A red check is a real
-failure, not a flake; if a check is flaky, fix the check.
+CI runs the suite, the drift gate and the self-scan on every pull request, on Ubuntu and on Windows,
+and at the declared `engines.node` floor as well as at Node 22. A red check is a real failure, not a
+flake; if a check is flaky, fix the check.
 
 ## Commits and language
 
