@@ -217,3 +217,44 @@ nine passes with no finding, `dirty` shows five findings across five rules, `pin
 the conflict. And two fixture `.gitignore` files briefly lost their managed-block markers while the
 `tracked.txt` files were added; both were restored from git before the commit, so the `at-policy`
 fixture is still at policy by its own bytes.
+
+L13 — 2026-10-23, native review round 1 (RDD is on, so this is the outside view the tier earned).
+The owner chose sliced review over one 13,290-line candidate. The first slice —
+`1e08692..5ef01bf`, the nine rules — started lineage `review-4bc74970922f85fd` with four lenses
+(risk, resilience, readability, reliability) and 3,851 changed lines. The four reviewers were
+admitted, the refuter corroborated four severe, candidate-caused findings, and the provider allowed
+one bounded correction of 200 diff lines:
+
+- R1-001 (BLOCKER, risk): `exact-versions` echoed the raw specifier in the message, the evidence and
+  the remediation, so a URL specifier carrying `user:token` leaked the credential to stdout/JSON.
+  Fixed with `redactedSpecifier`: anything but a bare `git` user prints as `scheme://***@host/...`.
+- R3-001 (CRITICAL, reliability): when no importer `package.json` parsed, the rule fell through to a
+  pass claiming every specifier was exact and agreed with the lockfile. Fixed: nothing inspected is
+  now `skip: unreadable-package-json`, never a pass (S3's invariant).
+- R4-001 / R3-002 (CRITICAL, two lenses on one defect): the F1 integration fix had made
+  `--scope repo` call `machineFacts` for the pnpm version, so the CI gate consumed a runner fact and
+  the pin rule lost the out-of-scope skip its own page documents. Fixed by honouring RFC 7.2
+  literally: `--scope repo` keeps `machine` null. Consequence accepted and measured: the self-scan is
+  now 7 passing + 2 skipped (pin and quarantine), verdict PASS, and the CI gate no longer compares
+  the pin against the runner's pnpm — the pin is a `--scope all` fact by contract.
+- R4-002 (CRITICAL, resilience): `no-bot-auto-merge` appended a `bot-config-present` pass even with
+  an unparseable workflow in the set, so CI could be green with an unread merge path. Fixed: the bot
+  config no longer stands in for a workflow the rule never read.
+
+Correction measured at 145 diff lines (under the 200 budget), `08afc0c` on `review/slice1`,
+cherry-picked to `feat/v0.1` as `f93bc79`. 266 tests green, drift and self-scan green. Four new
+tests (credential redaction, all-unparseable importers, bot config with a broken workflow, repo-scope
+machine isolation) and one existing expectation corrected: the old test asserted the very false pass
+R3-001 named.
+
+The bounded correction was registered natively (145 lines, `correction_required`), and the chain now
+stops at the `provider_targeted_validator` slot: every `gentle_review` call for this lineage returns
+`applicability: unrelated` and an empty workspace projection, while `gentle-ai review status` resolves
+the same lineage and the same correction. The façade stopped binding exactly when the store revision
+advanced past the one it cached at START, so the validator — which needs a model run through the Pi
+host relay — cannot be launched from here. Slots 2 (`5ef01bf..5808f87`) and 3 (`5808f87..HEAD`) have
+not started; they would meet the same wall after their first state change.
+
+Decision handed to the owner, not taken here: repair the façade binding and validate this lineage,
+or record the review as unavailable for this candidate and deliver under ordinary policy. Nothing in
+this round changed behaviour the RFC did not already require.
