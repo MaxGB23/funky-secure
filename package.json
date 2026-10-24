@@ -1,7 +1,7 @@
 {
   "name": "funky-secure",
   "version": "0.1.0",
-  "description": "Supply-chain auditor and initializer for pnpm repositories: nine stateless rules, a read-only scan, and a write plan you can review before anything is applied.",
+  "description": "Supply-chain auditor and initializer for pnpm repositories: stateless rules, a read-only scan, and a write plan you review before anything is applied.",
   "license": "MIT",
   "author": "MaxGB23",
   "type": "module",

@@ -90,6 +90,26 @@ test('the README names every command', () => {
   }
 });
 
+/// The prose count is a rendering of the catalog too, and package.json already drifted from it once.
+
+test('the README states the catalog size it actually has', () => {
+  const WORDS = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+    eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15,
+  };
+  const stated = README.match(/([A-Za-z]+|\d+)\s+stateless rules/);
+  assert.ok(stated, 'the README no longer states how many stateless rules the catalog has');
+
+  const count = /^\d+$/.test(stated[1]) ? Number(stated[1]) : WORDS[stated[1].toLowerCase()];
+  assert.ok(count !== undefined, `the README count "${stated[1]}" is not a number this gate understands`);
+  assert.equal(count, catalog.length, `the README says ${stated[1]} and the catalog has ${catalog.length}`);
+});
+
+test('the package description carries no rule count that can drift', () => {
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  assert.doesNotMatch(manifest.description, /\bnine\b|\bten\b|\beleven\b|\btwelve\b|\d+ (stateless )?rules/i);
+});
+
 test('docs/decisions.md exists and records every decision the RFC number', () => {
   const path = join(ROOT, 'docs', 'decisions.md');
   assert.ok(existsSync(path), 'docs/decisions.md is missing');

@@ -8,7 +8,7 @@
  * the structural reader, so a step belongs to the job that runs it.
  */
 
-import { parseWorkflow } from '../lib/workflows.js';
+import { declaresTrigger, parseWorkflow } from '../lib/workflows.js';
 
 const BOT_ACTOR = /dependabot\[bot\]|renovate\[bot\]/i;
 
@@ -29,47 +29,6 @@ const MERGE_RULE = 'an update is merged by a person after reading the diff and r
  */
 function skip(code, reason) {
   return { status: 'skip', code, message: `skipped: ${reason}`, probeUnavailable: true };
-}
-
-/**
- * Cuts a trailing `# comment` that starts a word, so a quoted `#` survives.
- * @param {string} text
- * @returns {string}
- */
-function stripComment(text) {
-  const index = text.search(/\s#/);
-  return index === -1 ? text : text.slice(0, index);
-}
-
-/**
- * Whether the workflow's top-level `on:` declaration names `pull_request_target`. The structural
- * reader models jobs and steps, not triggers, so the trigger is read from the one place YAML
- * defines it — a top-level key — and never from a scan for the token anywhere in the file.
- * @param {string} text
- * @returns {boolean}
- */
-function declaresPullRequestTarget(text) {
-  const lines = text.split(/\r\n|\n|\r/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = stripComment(lines[i]);
-    if (line.trim() === '' || /^\s/.test(line)) continue;
-    const match = /^(?:on|'on'|"on")\s*:(.*)$/.exec(line.trimEnd());
-    if (match === null) continue;
-
-    const value = stripComment(match[1]).trim();
-    if (value !== '') {
-      if (value.includes('pull_request_target')) return true;
-      continue;
-    }
-
-    for (let j = i + 1; j < lines.length; j += 1) {
-      const body = stripComment(lines[j]);
-      if (body.trim() === '') continue;
-      if (!/^\s/.test(body)) break;
-      if (body.includes('pull_request_target')) return true;
-    }
-  }
-  return false;
 }
 
 /** @param {object} job a job from the structural reader */
@@ -180,7 +139,7 @@ export default {
         continue;
       }
 
-      const trigger = declaresPullRequestTarget(file.text);
+      const trigger = declaresTrigger(file.text, 'pull_request_target');
 
       for (const job of parsed.jobs) {
         if (mentionsBot(job)) {
