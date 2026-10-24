@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { FLAGS, parseArgs, renderHelp, run } from '../src/cli.js';
 import { catalog } from '../src/rules/index.js';
+
+const VERSION = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')).version;
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'funky-secure-cli-'));
@@ -159,7 +161,10 @@ test('no command prints help and exits 0', async () => {
 test('renderHelp names the product, every command, every flag and every catalog rule', () => {
   const help = renderHelp();
 
-  assert.match(help, /funky-secure 0\.1\.0/);
+  assert.ok(
+    help.includes(`funky-secure ${VERSION}`),
+    `the help must name the package version ${VERSION}`,
+  );
   for (const command of ['scan', 'init', 'migrate', 'explain']) {
     assert.ok(help.includes(command));
   }

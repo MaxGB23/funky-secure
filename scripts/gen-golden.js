@@ -28,8 +28,9 @@ const INIT_FIXTURES = join(ROOT, 'tests', 'fixtures', 'init');
 const GOLDEN_FIXTURES = join(GOLDEN_DIR, 'fixtures');
 
 /**
- * The declared fixture list: three pre-existing `init` repositories (never modified) plus two
- * created for the golden gate. A fixture's golden is `tests/golden/<name>.json`.
+ * The declared fixture list: three pre-existing `init` repositories (never modified) plus three
+ * created for the golden gate, one of which exists to exercise the `fail` paths of the 0.2 rules.
+ * A fixture's golden is `tests/golden/<name>.json`.
  */
 export const FIXTURES = Object.freeze([
   { name: 'at-policy', dir: join(INIT_FIXTURES, 'at-policy') },
@@ -37,6 +38,7 @@ export const FIXTURES = Object.freeze([
   { name: 'pinned-conflict', dir: join(INIT_FIXTURES, 'pinned-conflict') },
   { name: 'dirty', dir: join(GOLDEN_FIXTURES, 'dirty') },
   { name: 'clean', dir: join(GOLDEN_FIXTURES, 'clean') },
+  { name: 'vulnerable', dir: join(GOLDEN_FIXTURES, 'vulnerable') },
 ]);
 
 /** @param {string} name @returns {string} absolute path of that fixture's golden report */

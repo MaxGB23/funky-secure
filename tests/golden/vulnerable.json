@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "funky-secure",
+    "version": "0.2.0"
+  },
+  "scope": "all",
+  "policy": {
+    "preset": "baseline",
+    "quarantineMinutes": 1440,
+    "failOn": "error"
+  },
+  "targets": [
+    {
+      "kind": "machine",
+      "detail": "pnpm 12.3.4 (pnpm)"
+    },
+    {
+      "kind": "repo-root",
+      "path": "."
+    },
+    {
+      "kind": "importer",
+      "path": "."
+    },
+    {
+      "kind": "ci",
+      "path": ".github/workflows"
+    }
+  ],
+  "summary": {
+    "error": 3,
+    "warn": 4,
+    "info": 0,
+    "pass": 6,
+    "skip": 0,
+    "verdict": "fail"
+  },
+  "findings": [
+    {
+      "rule": "quarantine",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "repo-root",
+      "message": "quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (inherited 1440)",
+      "evidence": {
+        "effective": 1440,
+        "inherited": true,
+        "strict": false,
+        "policy": 1440,
+        "exclusions": []
+      },
+      "remediation": {
+        "kind": "auto",
+        "command": "funky-secure init --apply"
+      },
+      "doc": "funky-secure explain quarantine",
+      "code": "quarantine-not-strict"
+    },
+    {
+      "rule": "sensitive-ignored",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "repo-root",
+      "path": ".gitignore",
+      "message": ".env, .env.local, .env.production, secrets.pem, server.key, .npmrc are not ignored by git",
+      "evidence": {
+        "path": ".gitignore",
+        "missing": [
+          ".env",
+          ".env.local",
+          ".env.production",
+          "secrets.pem",
+          "server.key",
+          ".npmrc"
+        ]
+      },
+      "remediation": {
+        "kind": "auto",
+        "command": "funky-secure init --apply"
+      },
+      "doc": "funky-secure explain sensitive-ignored",
+      "code": "not-ignored"
+    },
+    {
+      "rule": "no-bot-auto-merge",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/pr-target.yml",
+      "line": 11,
+      "message": "job \"label\" runs on pull_request_target and checks out the pull request head; repository secrets are exposed to untrusted code",
+      "evidence": {
+        "job": "label",
+        "line": 11
+      },
+      "remediation": {
+        "kind": "none"
+      },
+      "doc": "funky-secure explain no-bot-auto-merge",
+      "code": "pr-target-head-checkout"
+    },
+    {
+      "rule": "ci-no-safety-overrides",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/ci.yml",
+      "line": 12,
+      "message": "job \"build\" runs --no-frozen-lockfile; the frozen lockfile is what makes the install reproducible from the commit",
+      "evidence": {
+        "job": "build",
+        "step": 1,
+        "flag": "--no-frozen-lockfile",
+        "command": "pnpm install --no-frozen-lockfile"
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "run: pnpm install --frozen-lockfile"
+      },
+      "doc": "funky-secure explain ci-no-safety-overrides",
+      "code": "ci-frozen-lockfile-disabled"
+    },
+    {
+      "rule": "pull-request-target",
+      "status": "fail",
+      "severity": "error",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/pr-target.yml",
+      "line": 11,
+      "message": "job \"label\" checks out the pull request head under pull_request_target; the workflow runs in the base repository's context, so fork code runs with its secrets",
+      "evidence": {
+        "job": "label",
+        "step": 0,
+        "kind": "uses",
+        "expression": "${{ github.event.pull_request.head.sha }}"
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "remove the pull_request_target trigger, or the step that checks out the pull request head"
+      },
+      "doc": "funky-secure explain pull-request-target",
+      "code": "pull-request-target-checkout"
+    },
+    {
+      "rule": "workflow-permissions",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/ci.yml",
+      "line": 1,
+      "message": "the workflow declares no permissions:, so every job inherits the scopes the repository setting allows",
+      "evidence": {
+        "level": "workflow",
+        "jobs": [
+          "build"
+        ]
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "add \"permissions:\" with \"contents: read\" at the top level, and widen it only in the job that needs it"
+      },
+      "doc": "funky-secure explain workflow-permissions",
+      "code": "workflow-permissions-missing"
+    },
+    {
+      "rule": "workflow-permissions",
+      "status": "fail",
+      "severity": "warn",
+      "scope": "repo",
+      "target": "ci",
+      "path": ".github/workflows/pr-target.yml",
+      "line": 1,
+      "message": "the workflow declares no permissions:, so every job inherits the scopes the repository setting allows",
+      "evidence": {
+        "level": "workflow",
+        "jobs": [
+          "label"
+        ]
+      },
+      "remediation": {
+        "kind": "manual",
+        "command": "add \"permissions:\" with \"contents: read\" at the top level, and widen it only in the job that needs it"
+      },
+      "doc": "funky-secure explain workflow-permissions",
+      "code": "workflow-permissions-missing"
+    }
+  ]
+}
