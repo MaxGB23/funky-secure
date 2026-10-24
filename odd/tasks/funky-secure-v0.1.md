@@ -258,3 +258,40 @@ not started; they would meet the same wall after their first state change.
 Decision handed to the owner, not taken here: repair the façade binding and validate this lineage,
 or record the review as unavailable for this candidate and deliver under ordinary policy. Nothing in
 this round changed behaviour the RFC did not already require.
+
+L14 — 2026-10-24, native review round 2 to closure, in three approved slices. The owner replaced the
+single abandoned lineage with sliced review, and every slice reached `approved` and had its authority
+burned:
+
+- **Slice 1, the nine rules** — lineage `review-slice1a-r1r4`, base `1e08692`, 3,964 lines, four
+  lenses, tier medium. Reviewers corroborated three severe findings; one bounded correction of 48
+  lines (`539b487`) closed them: a URL specifier now redacts query values as well as userinfo
+  (`?token=***`), and `quarantine` treats a repo-scope scan, which carries no machine at all, as
+  `machine-out-of-scope` instead of `probe-no-pnpm-config` with `probeUnavailable`, so
+  `--strict-probes` can no longer fail the supported CI gate. The targeted validator approved it.
+  Advisory, non-blocking and left for later work: `targets.js:141-145` glob description,
+  `foreign-lockfile.js:8` duplicating `FOREIGN_LOCKFILES`, `env-not-tracked.js:67-68`,
+  `exact-versions.js:257`, `targets.js:142-145`, `lockfile-committed.js:98-106`.
+  Because the nine-rules commit was a single 3,851-line unit, the branch `review/s1` carries the same
+  bytes split into `a47bf00` (R1-R4) and `8b22f42` (R5-R9) so the candidate could be reproduced; the
+  reviewed tree is byte-identical to `5ef01bf` plus `08afc0c` on the reviewed paths.
+- **Slice 2, `init` and `migrate`** — lineage `review-slice2-init`, base `5ef01bf`, 2,222 lines, four
+  lenses, tier medium. Five severe findings, one bounded correction of 125 lines (`9d9e9e8`, cherry-
+  picked to `ea09bf1`): the tokenless `.npmrc` fact recognises `_authToken = <secret>` (spaces), the
+  ignore writer omits `.npmrc` only on the collector's `tokenlessTracked` fact, an existing but
+  unreadable `.gitignore`/`pnpm-workspace.yaml` is a conflict instead of a fresh write, and
+  `migrate --apply` validates every foreign lockfile before deleting any. Validator approved.
+  Advisory: `writers.js:300-303` non-string pin, `writers.js:168-170`, `init.js:65`, `writers.js:41`,
+  `migrate.js:160-181`.
+- **Slice 3, CLI, docs, goldens and self-scan** — lineage `review-slice3-cli`, base `5808f87`,
+  1,518 lines, four lenses, tier high (the process boundary in `scripts/gen-golden.js`). The refuter
+  refuted the only CRITICAL (the `--scope repo` machine question, already answered by the slice-1
+  correction) and the review closed approved at that event with no correction. Advisory:
+  `README.md:54-57`, `docs/decisions.md:36`, `writers.js:216`, `scripts/gen-golden.js:31`,
+  `exact-versions.js:334-344`.
+
+Nine severe, candidate-caused findings across two corrections of 173 measured diff lines: none of
+them survived review, and none of them changed a decision the RFC had not already made. Every
+advisory finding above is a v0.2 candidate, never a reason to re-review these candidates (the native
+policy says so explicitly). 271 tests green on `feat/v0.1`, drift, self-scan and the golden byte gate
+green, `0.1.0` packable at 50 files.
