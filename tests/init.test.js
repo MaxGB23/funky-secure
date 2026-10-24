@@ -41,7 +41,9 @@ function snapshot(dir) {
   const files = new Map();
   for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
-    const path = join(entry.parentPath, entry.name);
+    // `Dirent.parentPath` arrived in Node 20.12; `engines` declares 20.11, and the floor leg of CI runs
+    // it, so the older name is the fallback rather than a reason to raise the declared floor.
+    const path = join(entry.parentPath ?? entry.path, entry.name);
     files.set(path.slice(dir.length + 1).replaceAll('\\', '/'), readFileSync(path, 'utf8'));
   }
   return files;
