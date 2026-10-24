@@ -199,7 +199,11 @@ test('scan --format json in an empty directory reports the real catalog and fail
     codes.includes('lockfile-committed:lockfile-missing'),
     `expected the missing lockfile in ${codes.join(', ')}`,
   );
-  assert.equal(report.findings.length + report.summary.pass, 9, 'every rule reports exactly once');
+  assert.equal(
+    report.findings.length + report.summary.pass,
+    catalog.length,
+    'every rule reports exactly once',
+  );
   assert.equal(report.summary.verdict, 'fail');
 });
 
