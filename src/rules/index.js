@@ -12,6 +12,7 @@ import foreignLockfile from './foreign-lockfile.js';
 import lockfileCommitted from './lockfile-committed.js';
 import noBotAutoMerge from './no-bot-auto-merge.js';
 import packageManagerPin from './package-manager-pin.js';
+import pullRequestTarget from './pull-request-target.js';
 import quarantine from './quarantine.js';
 import sensitiveIgnored from './sensitive-ignored.js';
 
@@ -27,6 +28,7 @@ export const catalog = [
   actionsPinnedSha,
   noBotAutoMerge,
   ciNoSafetyOverrides,
+  pullRequestTarget,
 ];
 
 /** @param {string} id */

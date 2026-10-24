@@ -29,7 +29,7 @@
     "warn": 1,
     "info": 0,
     "pass": 6,
-    "skip": 1,
+    "skip": 2,
     "verdict": "fail"
   },
   "findings": [
@@ -111,6 +111,19 @@
         "kind": "none"
       },
       "doc": "funky-secure explain ci-no-safety-overrides",
+      "code": "no-ci"
+    },
+    {
+      "rule": "pull-request-target",
+      "status": "skip",
+      "severity": "error",
+      "scope": "repo",
+      "target": "ci",
+      "message": "skipped: there is no .github/workflows directory, so no workflow can declare a trigger",
+      "remediation": {
+        "kind": "none"
+      },
+      "doc": "funky-secure explain pull-request-target",
       "code": "no-ci"
     }
   ]

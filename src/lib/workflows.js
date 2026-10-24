@@ -13,6 +13,10 @@
  * Shapes it refuses, each naming the line: anchors/aliases/merge keys, tabs, multi-document streams,
  * sequences or flow maps where a job map is expected, and a `uses:` value written as a block scalar
  * (the reference cannot be attributed from a joined scalar without guessing).
+ *
+ * The reader models jobs and steps, never the trigger: `declaresTrigger` reads the one place YAML
+ * defines it — a top-level `on:` key — so no rule scans the file for a trigger token (RFC 8.3, 16
+ * F5 G3). R9 and `pull-request-target` share it, instead of growing a second trigger parser.
  */
 
 class UnparseableWorkflow extends Error {}
@@ -615,4 +619,72 @@ export function parseWorkflow(text) {
       detail: `unreadable workflow: ${error && error.message}`,
     };
   }
+}
+
+/** A character that continues a name, so a token boundary is never inside a trigger name. */
+const NAME_CHARACTER = /[A-Za-z0-9_.-]/;
+
+/**
+ * Whether `value` carries `name` as a standalone token: a bare scalar, a flow-sequence item or a
+ * flow-map key. `pull_request` is not a token of `pull_request_target`.
+ * @param {string} value
+ * @param {string} name
+ * @returns {boolean}
+ */
+function hasToken(value, name) {
+  let index = value.indexOf(name);
+  while (index !== -1) {
+    const before = index === 0 ? '' : value[index - 1];
+    const after = value[index + name.length] ?? '';
+    if (!NAME_CHARACTER.test(before) && !NAME_CHARACTER.test(after)) return true;
+    index = value.indexOf(name, index + 1);
+  }
+  return false;
+}
+
+/**
+ * Whether the workflow's top-level `on:` key declares `name` as a trigger event, read the way YAML
+ * defines it: a top-level key whose value is an inline scalar, a flow sequence, a flow map, or an
+ * indented block of keys. Comments are stripped first, so a commented-out trigger is not a
+ * declaration, and a trigger named in a `run:` body, a job `if:` or a job `name:` is not one either:
+ * only the `on:` value is read (RFC 8.3, 16 F5 G3).
+ * @param {string} text
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function declaresTrigger(text, name) {
+  if (typeof text !== 'string' || typeof name !== 'string' || name === '') return false;
+  const lines = text.split(/\r\n|\n|\r/);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = stripComment(lines[i]);
+    if (line.trim() === '') continue;
+    if (/^[ \t]/.test(line)) continue;
+    const entry = splitKeyValue(line.trim());
+    if (entry === null || entry.key !== 'on') continue;
+
+    if (entry.value !== '') return hasToken(entry.value, name);
+
+    let bodyIndent = null;
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const body = stripComment(lines[j]);
+      if (body.trim() === '') continue;
+      const indent = /^[ \t]*/.exec(body)[0].length;
+      if (indent === 0) break;
+      if (bodyIndent === null) bodyIndent = indent;
+      if (indent !== bodyIndent) continue;
+
+      const item = body.trim();
+      if (item === '-' || item.startsWith('- ')) {
+        if (hasToken(item.slice(1).trim(), name)) return true;
+        continue;
+      }
+      const trigger = splitKeyValue(item);
+      if (trigger !== null && trigger.key === name) return true;
+    }
+
+    return false;
+  }
+
+  return false;
 }
