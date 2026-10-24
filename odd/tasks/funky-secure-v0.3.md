@@ -39,8 +39,8 @@ name; the same order applies to `funky-forge`.
 
 | ID | Task | Spec | Route | Commit |
 |---|---|---|---|---|
-| T1 | RFC v1.4: the floor, the matrix and the CI pinning policy as normative | S1, S2, S3, S4, S5, S6 | inline | — |
-| T2 | Implementation: `engines`, matrix, labels, SHAs, `check-latest`, dropped install step, `.gitattributes`, `0.3.0` | S1-S6 | inline | — |
+| T1 | RFC v1.4: the floor, the matrix and the CI pinning policy as normative | S1, S2, S3, S4, S5, S6 | inline | `ddc1cf6`, PR #20 → `4bb7e99` |
+| T2 | Implementation: `engines`, matrix, labels, SHAs, `check-latest`, dropped install step, `.gitattributes`, `0.3.0` | S1-S6 | inline | this commit |
 | T3 | Branch protection on `main` with the final five check names | S7 | blocked: owner's go-ahead | — |
 | T4 | `funky-forge`: stabilise its check names, then protection and contribution templates | S7 | blocked: separate repository, needs the owner's authorization | — |
 

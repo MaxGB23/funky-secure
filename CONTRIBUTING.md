@@ -14,7 +14,7 @@ listed in [`docs/decisions.md`](docs/decisions.md); do not reopen one with code.
 These are not style preferences. A pull request that breaks one is not merged, however good it is.
 
 1. **Zero dependencies.** No `dependencies`, no `devDependencies`, no build step, no bundler, no
-   TypeScript. The package runs on Node `>= 20.11` with ESM and nothing else. Adding one dependency
+   TypeScript. The package runs on Node `>= 22` with ESM and nothing else. Adding one dependency
    is an RFC change, not a dependency update.
 2. **The tool never reaches the network and never installs.** No registry client, no resolution, no
    lifecycle script, no telemetry.
@@ -121,7 +121,7 @@ node bin/funky-secure.js explain --list        # the catalog, in report order
 ```
 
 CI runs the suite, the drift gate and the self-scan on every pull request, on Ubuntu and on Windows,
-and at the declared `engines.node` floor as well as at Node 22. A red check is a real failure, not a
+and at the declared `engines.node` floor as well as at the Active LTS. A red check is a real failure, not a
 flake; if a check is flaky, fix the check.
 
 ## Commits and language
