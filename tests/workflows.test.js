@@ -19,9 +19,10 @@ test('parses the real steps of a mixed workflow and ignores block-scalar and wit
   assert.deepEqual(result.jobs.map((job) => job.id), ['build', 'lint']);
 
   const build = result.jobs[0];
+  assert.equal(build.line, 12);
   assert.equal(build.name, 'build');
   assert.equal(build.condition, "github.actor == 'dependabot[bot]'");
-  assert.deepEqual(build.permissions, { contents: 'read' });
+  assert.deepEqual(build.permissions, { form: 'map', line: 16, entries: { contents: 'read' } });
   assert.deepEqual(
     build.steps.map((step) => [step.line, step.uses]),
     [
@@ -49,6 +50,7 @@ test('parses the real steps of a mixed workflow and ignores block-scalar and wit
 
   const lint = result.jobs[1];
   assert.equal(lint.condition, "${{ github.actor == 'renovate[bot]' && github.event_name == 'pull_request' }}");
+  assert.equal(lint.permissions, null);
   assert.equal(lint.steps.length, 1);
   assert.equal(lint.steps[0].run, 'pnpm lint');
 });
@@ -177,4 +179,65 @@ test('reads a trailing comment after a key instead of treating it as the value',
     'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2',
   );
   assert.deepEqual(result.jobs[0].steps[0].with, { 'fetch-depth': '0' });
+});
+
+/// `permissions:` is modeled at the workflow level and in each job (RFC 8.3, 16 F5 G4).
+
+test('carries a block-map permissions declaration with its entries and its line', () => {
+  const result = parseWorkflow(fixture('workflows/self.yml'));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.permissions, { form: 'map', line: 8, entries: { contents: 'read' } });
+  assert.equal(result.jobs[0].permissions, null);
+});
+
+test('reads a scalar and a flow-map permissions declaration, workflow-level and in a job', () => {
+  const scalar = parseWorkflow(
+    ['permissions: read-all', 'jobs:', '  build:', '    permissions: write-all', '    steps:', '      - run: npm test', ''].join('\n'),
+  );
+  assert.equal(scalar.ok, true);
+  assert.deepEqual(scalar.permissions, { form: 'read-all', line: 1 });
+  assert.deepEqual(scalar.jobs[0].permissions, { form: 'write-all', line: 4 });
+
+  const flow = parseWorkflow(
+    ['permissions: { contents: read, pull-requests: write }', 'jobs:', '  build:', '    steps:', '      - run: npm test', ''].join('\n'),
+  );
+  assert.equal(flow.ok, true);
+  assert.deepEqual(flow.permissions, {
+    form: 'map',
+    line: 1,
+    entries: { contents: 'read', 'pull-requests': 'write' },
+  });
+});
+
+test('reads an empty permissions declaration as none and an absent one as null', () => {
+  const empty = parseWorkflow(
+    ['permissions: {}', 'jobs:', '  build:', '    permissions: {}', '    steps:', '      - run: npm test', ''].join('\n'),
+  );
+  assert.equal(empty.ok, true);
+  assert.deepEqual(empty.permissions, { form: 'none', line: 1 });
+  assert.deepEqual(empty.jobs[0].permissions, { form: 'none', line: 4 });
+
+  const absent = parseWorkflow(['jobs:', '  build:', '    steps:', '      - run: npm test', ''].join('\n'));
+  assert.equal(absent.ok, true);
+  assert.equal(absent.permissions, null);
+  assert.equal(absent.jobs[0].permissions, null);
+});
+
+test('refuses a permissions declaration it cannot attribute and names the line', () => {
+  const cases = [
+    ['permissions: contents: read', /line 1/],
+    ['permissions: |', /line 1/],
+    ['permissions:', /line 1/],
+    ['permissions:', '  contents: |', '    read', /line 2/],
+  ].map((parts) => {
+    const detail = parts.pop();
+    const lines = [...parts, 'jobs:', '  build:', '    steps:', '      - run: npm test', ''];
+    return { detail, result: parseWorkflow(lines.join('\n')) };
+  });
+
+  for (const { detail, result } of cases) {
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'unparseable-workflow');
+    assert.match(result.detail, detail);
+  }
 });

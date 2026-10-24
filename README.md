@@ -1,7 +1,7 @@
 # funky-secure
 
 `funky-secure` audits a pnpm repository and reports whether a supply-chain change can reach it
-unreviewed. It answers that question with eleven stateless rules, prints the evidence each one read,
+unreviewed. It answers that question with twelve stateless rules, prints the evidence each one read,
 and offers the writes that fix what is fixable as a plan you review before anything is applied. It
 never installs, never resolves a version, never touches the network and never keeps state.
 
@@ -51,11 +51,11 @@ funky-secure scan  ·  preset strict  ·  scope repo
 repo-root
   – quarantine  skipped: the quarantine is read from the machine configuration, which --scope repo excludes by contract
 
-passing  10 rules (package-manager-pin, lockfile-committed, foreign-lockfile, env-not-tracked,
+passing  11 rules (package-manager-pin, lockfile-committed, foreign-lockfile, env-not-tracked,
          sensitive-ignored, exact-versions, actions-pinned-sha, no-bot-auto-merge,
-         ci-no-safety-overrides, pull-request-target)   ·   1 skipped
+         ci-no-safety-overrides, pull-request-target, workflow-permissions)   ·   1 skipped
 
-summary  0 errors · 0 warnings · 0 info · 10 passing · 1 skipped
+summary  0 errors · 0 warnings · 0 info · 11 passing · 1 skipped
 verdict  PASS (threshold: warn)
 ```
 
@@ -69,7 +69,7 @@ verdict  PASS (threshold: warn)
 
 A CI job that only separates zero from non-zero still behaves correctly.
 
-## The eleven rules
+## The twelve rules
 
 | Rule | `baseline / strict` | Question |
 |---|---|---|
@@ -84,6 +84,7 @@ A CI job that only separates zero from non-zero still behaves correctly.
 | `no-bot-auto-merge` | error / error | can a dependency update reach the default branch unread? |
 | `ci-no-safety-overrides` | warn / error | does CI disable the frozen lockfile or re-enable lifecycle scripts? |
 | `pull-request-target` | error / error | does a workflow combine `pull_request_target` with a checkout of the pull request head? |
+| `workflow-permissions` | warn / error | does each workflow declare least-privilege `permissions:`? |
 
 Every rule has one page under `docs/rules/`, and the table above, `--help` and `explain` are
 renderings of the same catalog in `src/rules/index.js`. A drift test fails when they disagree.
