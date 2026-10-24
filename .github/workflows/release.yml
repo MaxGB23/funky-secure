@@ -1,0 +1,36 @@
+name: release
+
+# Publication is reachable only from a version tag (RFC 17.3). Never add `pull_request` or a branch
+# to this trigger: a pull request that can reach the publish job is the defect this workflow exists
+# to prevent. `tests/release-workflow.test.js` asserts that shape.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 12.3.4
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: the tag must name the package version
+        run: node scripts/release-guard.js --tag "$GITHUB_REF_NAME"
+      # `npm publish` runs `prepublishOnly` first: the suite, the drift gate, the self-scan and the
+      # packed-file check. There is no flag that skips it and no long-lived token to publish with.
+      - name: publish with provenance over trusted publishing
+        run: npm publish --provenance --access public

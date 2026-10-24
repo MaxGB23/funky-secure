@@ -87,6 +87,8 @@ not.
 | `src/lib/writers.js` | the five `init` writes: quarantine block, gitignore block, pin, strict preset (RFC 11.2) |
 | `src/rules/index.js` | the catalog: catalog order is report order |
 | `scripts/gen-golden.js` | regenerates `tests/golden/*.json` with a deterministic collector (RFC 15.2) |
+| `scripts/check-pr-policy.js` | the issue link, single `type:*` label and branch-name gate (RFC 17 aside, `CONTRIBUTING.md`) |
+| `scripts/release-guard.js` | the tag/version check and the packed-file check of RFC 17.3-17.4 |
 
 One module per rule lives next to the catalog; a rule is pure and exports `id`, `title`, `scope`,
 `targets`, `friction`, `severity`, `docs` and `detect(ctx)` — plus `plan(ctx)`, when the rule can fix
