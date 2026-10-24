@@ -1,10 +1,21 @@
 # RFC: funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 3 (v1.2). Decisions taken; implementation not started.**
+> **STATUS: PROPOSED — revision 4 (v1.3). v0.1 implemented and merged; v0.2 specified.**
+>
+> **Revision 4** turns the product on itself. It adds section 17, the delivery and release contract —
+> trusted publishing over OIDC with provenance, no long-lived token anywhere, tag-driven immutable
+> releases, and a `prepublishOnly` gate that runs the suite, the drift gate, the self-scan and a
+> packed-file check — because the package that audits a supply chain is part of one. It admits the
+> first three deferred rules into the 0.2 catalog and reverses the order F5 of revision 3 proposed,
+> on the stated reason that they reuse the v0.1 workflow reader (8.3, 16 F5). It records that
+> `hook-drift` stays out of 0.2 until a decision admits a committed baseline (8.3, 4.4), and it
+> records that publicity is a delivery requirement rather than a marketing choice, because provenance
+> requires a public source repository (17.2). Sections 17-20 are renumbered 18-21. No rule changes
+> severity and no v0.1 behavior changes.
 >
 > **Revision 3** records the measured behaviour of the eight blocking validations E1–E8 (Appendix E,
 > raw record in `odd/evidence/e1-e8.md`) and corrects what the measurement refuted: 1.3 fact 1, 4.1,
-> R4, R5, R6, R7, R8, 11.2 and 12.1. It raised one open decision, OD-1 (section 19), which the owner
+> R4, R5, R6, R7, R8, 11.2 and 12.1. It raised one open decision, OD-1 (section 20), which the owner
 > has since decided: R4 measures whether the quarantine is an actual gate rather than a number, with a
 > preset-dependent floor and `warn`/`error` severity (8.2 R4, 9.1, 9.4, 11.2, D-16). No rule, module
 > or requirement is added by it.
@@ -30,7 +41,7 @@
 >
 > **Scope:** the dependency and CI supply-chain product known as `funky-secure`. It does not
 > change `funky-ai`, its `funky-cli` commands, its rules (`secops.md`), or its memory provider.
-> The legacy `funky secure` command in `funky-cli` is left untouched and unreferenced (section 17).
+> The legacy `funky secure` command in `funky-cli` is left untouched and unreferenced (section 18).
 >
 > **Language:** the product, CLI output, rule ids, file names, tests and documentation are English.
 > Verbatim user decisions quoted in Appendix A keep their original language.
@@ -58,10 +69,11 @@
 14. [Repository and package layout](#14-repository-and-package-layout)
 15. [Testing and validation plan](#15-testing-and-validation-plan)
 16. [Implementation plan](#16-implementation-plan)
-17. [Relationship with funky-ai](#17-relationship-with-funky-ai)
-18. [Risks](#18-risks)
-19. [Resolved design questions](#19-resolved-design-questions)
-20. [Acceptance criteria](#20-acceptance-criteria)
+17. [Delivery and release](#17-delivery-and-release)
+18. [Relationship with funky-ai](#18-relationship-with-funky-ai)
+19. [Risks](#19-risks)
+20. [Resolved design questions](#20-resolved-design-questions)
+21. [Acceptance criteria](#21-acceptance-criteria)
 - [Appendix A — Decision log](#appendix-a--decision-log)
 - [Appendix B — Evidence of current defects](#appendix-b--evidence-of-current-defects)
 - [Appendix C — Observed environment evidence](#appendix-c--observed-environment-evidence)
@@ -713,9 +725,10 @@ deviation is recorded here and in section 9.1.
   which a compromised upstream reaches `main` with no human in it. This is the encoded form of the
   author's position that "you can never know whether it is safe without auditing" (Appendix A).
 
-### 8.3 Deferred catalog (v2, nine rules)
+### 8.3 Deferred catalog (nine rules, three of them in 0.2)
 
-Not in v0.1, in this order of expected value:
+Not in v0.1. The table keeps the order of expected value; revision 4 changes which of them ship
+first, for the reason given under it:
 
 | id | Question | Why deferred |
 |---|---|---|
@@ -728,6 +741,25 @@ Not in v0.1, in this order of expected value:
 | `trust-policy` | is `trustPolicy: no-downgrade` set? | a free key, but it is a seed, and seeds are what caused 2.2 |
 | `block-exotic-subdeps` | are transitive git/tarball dependencies blocked? | same reasoning as `trust-policy` |
 | `quarantine-exclusions` | are `minimumReleaseAgeExclude` entries justified and tracked? | needs a decision on where an exemption is recorded |
+
+**0.2 scope (revision 4).** Three of the nine ship first, and not the three F5 of revision 3 named.
+The v0.1 workflow reader built for R8/R9 already answers what any workflow rule needs, so the
+cheapest real value is the rules that reuse it:
+
+1. `ci-no-safety-overrides` — E5 already measured the behavior it inspects.
+2. `pull-request-target` — today folded into R9's evidence; it gets its own message and its own
+   severity, and it names the combination a fork-based compromise needs.
+3. `workflow-permissions` — the shared reader plus a per-job permission map.
+
+`editor-hooks`, `lifecycle-scripts`, `trust-policy`, `block-exotic-subdeps` and
+`quarantine-exclusions` keep their place in this table and stay out of 0.2: each needs a reader or a
+decision that does not exist yet.
+
+**`hook-drift` is out of 0.2, deliberately.** It is the only rule whose blocker is design: a drift
+baseline has to survive a fresh clone, which means committed state, and no decision admits committed
+state (4.4). Shipping it half-useful — a baseline that exists only on the machine that created it —
+would reproduce exactly the defect section 2.6 documents in the old design. It returns when a
+decision admits a committed, reviewable baseline, and not before.
 
 ### 8.4 Why exactly nine
 
@@ -747,6 +779,12 @@ ambiguously:
   in CI and a rule that fires on `pnpm install` would violate 4.1.
 - `hook-drift` moved to v2, because it is the only rule that needs state, and v0.1 is stateless by
   design (4.4).
+
+**And in 0.2 the count still binds.** Nine was a v0.1 budget; 0.2 raises it to twelve, and the budget
+that matters is per release, not per catalog: twelve rules must still fit one screen of output on a
+real repository, one page of documentation, one test file each and one release note. The three that
+ship first were chosen by that test — each reuses a reader that already exists, so none of them adds
+a new way for the tool to be wrong in public.
 
 ---
 
@@ -1187,6 +1225,7 @@ the author's forge convention treats it as part of the product (D-14).
 ```
 funky-secure/
 ├── .github/workflows/ci.yml       # suite, drift gate and self-scan (13.2, 15.4)
+├── .github/workflows/release.yml  # tag-driven publication with provenance (17.2-17.5)
 ├── bin/funky-secure.js            # shebang, imports src/cli.js, sets process.exitCode
 ├── src/
 │   ├── cli.js                     # argv parsing (no framework), command dispatch
@@ -1270,6 +1309,11 @@ node bin/funky-secure.js scan --scope repo --fail-on warn
 and a test asserts the self-scan is clean. A rule that cannot pass on this repository is not
 releasable, which is the mechanism that prevents the situation described in 2.8.
 
+The release path is gated by the same suite, and the gate itself has a test (17.7): the workflow that
+publishes triggers on a tag only, is never reachable from `pull_request`, and names no long-lived
+token. A release path that could publish without passing the suite would make every other check
+advisory.
+
 ### 15.5 Empirical validations required before implementation
 
 Blocking. Each one has the exact command and the observation that must be recorded in the phase
@@ -1351,14 +1395,114 @@ CI; `README` with install, first scan, and the explicit statement of what the pr
 **Acceptance:** drift gate green, self-scan clean at `--fail-on warn`, `0.1.0` packable
 (`npm pack --dry-run` lists only `bin`, `src`, `docs`, `README`, `LICENSE`).
 
-### F5 — v2 backlog intake
+### F5 — v0.2: the release contract and three rules
 
-The nine deferred rules of section 8.3, ordered by expected value, starting with `editor-hooks`
-(stateless) and `ci-no-safety-overrides` (needs E5). Not part of `0.1.0`.
+Four work units, in this order, each a reviewable slice with its tests and its documentation. G1 is
+not optional and not deferrable: it is the answer to "can this package be published at all".
+
+**G1 — Delivery contract.** `.github/workflows/release.yml` on `push: tags: ['v*']` with
+`id-token: write` in that job alone, trusted publishing, `--provenance`, the tag/version check, and a
+`prepublishOnly` script that runs the suite, the drift gate, the self-scan and the packed-file check,
+plus the test that asserts the workflow's shape (15.4, 17.7).
+
+**Acceptance:** a `vX.Y.Z` tag whose name matches `version` publishes with provenance; a mismatched
+tag exits `2` and publishes nothing; the test fails if the workflow ever gains a `pull_request`
+trigger, a token name, or an `id-token` grant outside the release job.
+
+**G2 — `ci-no-safety-overrides`.** Detect a workflow or a `.npmrc` that disables the frozen lockfile
+in CI (`--no-frozen-lockfile`, `frozen-lockfile=false`) or re-enables lifecycle scripts
+(`ignore-scripts=false`, `enable-pre-post-scripts`). E5 measured the default it must not flag.
+
+**G3 — `pull-request-target`.** Detect `pull_request_target` combined with a checkout of the pull
+request head outside the automerge path that R9 already recognizes, and say which of the two it
+found.
+
+**G4 — `workflow-permissions`.** Detect a workflow that declares no `permissions:` or grants
+`write-all`, with the per-job map the reader already builds.
+
+**Acceptance per rule (G2-G4):** the v0.1 rule contract — one test for the rule's question, one for
+the boundary it must not flag, one for its `skip` path, `docs/rules/<id>.md`, and the drift gate
+green at twelve rules.
+
+Not in 0.2: the rest of section 8.3, and `hook-drift` by decision (8.3).
 
 ---
 
-## 17. Relationship with funky-ai
+## 17. Delivery and release
+
+Added in revision 4; normative from `0.2.0` on. Section 4.5 says the product never mutates the
+machine it inspects. This section is the other half of that posture: the product must not become the
+weak link in the chain it asks others to fix. Every property below is one a hardened repository
+would demand of a dependency, applied to itself.
+
+### 17.1 The publication path is a supply-chain surface
+
+Three things can go wrong between a green suite and a tarball on a registry: the credential that
+publishes is stolen, the tag that identifies the release moves, and the artifact that ships is not
+what was tested. Each has a structural answer, and none of them is a policy document.
+
+### 17.2 Trusted publishing over OIDC, and no long-lived token
+
+- Publication runs through npm Trusted Publishing: the release job presents a GitHub OIDC identity
+  and receives a short-lived credential for that run.
+- `id-token: write` is granted to the release job and to nothing else. No other workflow declares it.
+- No `NPM_TOKEN`, `NODE_AUTH_TOKEN` or npm credential of any kind exists in the repository, its
+  `.npmrc`, or its Actions secrets. A long-lived token in a repository is exactly the finding R7
+  reports in someone else's, so the product does not carry one.
+- Provenance is generated for every published version (`--provenance`). npm attests a public source
+  repository only, so a private repository makes provenance impossible: publicity is a delivery
+  requirement, not a marketing choice (`odd/tasks/funky-secure-v0.2.md`, L4).
+- The account requires 2FA for writes. The OIDC path never uses an interactive session.
+
+### 17.3 Tag-driven, immutable releases
+
+- A release is triggered by pushing a `vX.Y.Z` tag. The tag string and `package.json` `version` must
+  be identical; a mismatch exits `2` and publishes nothing.
+- The release workflow runs on `push: tags: ['v*']` only. It is never reachable from `pull_request`
+  or from a branch push, which is why a malicious pull request cannot reach the publish job even
+  after it merges (the subject of R9, applied here).
+- The ordering is fixed: green gate on the commit, then the tag, then publication. A red gate means
+  no tag, and a tag is never moved afterwards — a correction is a new patch version.
+- The release body records the tarball `sha256` and the provenance URL, so a later audit can bind
+  the published bytes to the commit that produced them without trusting this document.
+
+### 17.4 The prepublish gate is the product running on itself
+
+`prepublishOnly` runs, in this order: the full `node --test` suite, the drift gate, the self-scan at
+`--fail-on warn`, and the packed-file check. A package that fails its own audit cannot be published,
+by construction rather than by discipline.
+
+The packed-file check compares the `npm pack --dry-run --json` file list with the `files` contract of
+section 14: `bin/`, `src/`, `docs/`, `README.md`, `LICENSE` and `package.json`. Any other entry fails
+the release. A fixture, a golden, a stray note or a `.env` that reached the tree is a defect the
+release must not discover in public.
+
+### 17.5 Version and release notes
+
+- Semantic versioning. `0.x` may break in a minor, and a break is declared with the
+  `type:breaking-change` label and a migration note in the release body.
+- The release body is the changelog of that version: it names every rule added, changed or removed,
+  every severity deviation from 9.1, and every user-visible message that changed.
+- `version` and the tag are checked against each other, and the tag is the only source of the
+  published version string.
+
+### 17.6 What automation does not decide
+
+Publication is a human decision with a mechanical precondition. The owner decides that a version
+ships and pushes the tag; the pipeline decides whether that tag may produce a tarball. Provenance
+proves who built what from which commit, never that the code is safe — and this document says so
+explicitly, because a supply-chain auditor that overclaims its own guarantees is making the mistake it
+reports.
+
+### 17.7 The release path is tested
+
+A test asserts the workflow's shape (15.4): it triggers on tags only, it never runs on
+`pull_request`, `id-token: write` appears in the release job and nowhere else, and no token name
+appears in the file. A delivery contract that no test reads is a comment.
+
+---
+
+## 18. Relationship with funky-ai
 
 **No action in `funky-ai`.** That repository has no published npm package and is intentionally out of
 scope (D-10). Therefore:
@@ -1385,7 +1529,7 @@ Semantic mapping for anyone who used the old command:
 
 ---
 
-## 18. Risks
+## 19. Risks
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
@@ -1399,10 +1543,13 @@ Semantic mapping for anyone who used the old command:
 | K8 | The tool reports a policy the machine contradicts (global vs repository) | medium | medium | The effective value is reported exactly as pnpm reports it and the rule claims no source (12.2); no precedence logic of our own (4.1) |
 | K9 | A rule's documentation and its code drift | low | medium | The drift gate (13.2) |
 | K10 | `migrate --apply` deletes a lockfile someone needed | low | high | Refusal without a pnpm lockfile, dirty-tree check, non-default-branch requirement, and only step 4 is automatable |
+| K11 | A leaked npm credential publishes a malicious version | medium | high | No long-lived token exists: trusted publishing over OIDC with provenance, `id-token: write` limited to the release job (17.2) |
+| K12 | The published tarball differs from the tagged commit | low | high | Publication only on a `vX.Y.Z` tag whose name matches `version`, packed-file check inside `prepublishOnly`, and provenance binding commit to tarball (17.3, 17.4) |
+| K13 | The release path silently loses its guarantees in a later edit | medium | high | The workflow's shape is asserted by a test (15.4, 17.7); `actions-pinned-sha` and `pull-request-target` cover it from the product side |
 
 ---
 
-## 19. Resolved design questions
+## 20. Resolved design questions
 
 Resolved in this revision:
 
@@ -1415,7 +1562,7 @@ Resolved in this revision:
 6. **No lifecycle-script posture is seeded** and no `ignoreScripts` write exists (2.3, N6).
 7. **No state file** in v0.1 (4.4).
 8. **No enforcement of pnpm**: recommend and migrate (G4, N3).
-9. **`funky-ai` untouched** (17).
+9. **`funky-ai` untouched** (18).
 10. **Help and docs are generated from the catalog and gated in CI** (13).
 11. **Severity deviations from the friction guidance are declared per rule and justified in place:**
     R3 `foreign-lockfile`, R4 `quarantine`, R8 `actions-pinned-sha` (8.2, 9.1).
@@ -1469,6 +1616,21 @@ Added or corrected in revision 3:
 26. **Appendix E records the measurement**, and Appendix C.2 corrects where the `ignoreScripts`
     reading comes from (Appendix E, C.2, E1–E8).
 
+Added or corrected in revision 4:
+
+27. **The product has a delivery contract** (section 17): trusted publishing over OIDC, provenance on
+    every version, no long-lived token, tag-driven immutable releases, a `prepublishOnly` gate and a
+    packed-file check.
+28. **0.2 adds exactly three rules**, and F5's start order is reversed: `ci-no-safety-overrides`,
+    `pull-request-target` and `workflow-permissions`, chosen because they reuse the workflow reader
+    that R8/R9 already need (8.3, 16 F5, 8.4).
+29. **`hook-drift` is out of 0.2** until a decision admits a committed, reviewable baseline (8.3,
+    4.4).
+30. **Publicity is a delivery requirement**: npm attests provenance for a public source repository
+    only, so the repository being public is a precondition of section 17.2, not a preference.
+31. **Sections 17-20 are renumbered 18-21** by this revision. No v0.1 rule, severity, code or
+    message changes.
+
 **OD-1 (resolved)** — after E1, R4's declared severity and the policy default of 4320 rested on a
 justification the measurement refuted: the value is NOT inherited from the machine by default (the
 built-in default is 1440, non-strict). The owner decided: "La regla mide el gate, no el número". The
@@ -1485,7 +1647,7 @@ Nothing else in 0.1.0 depends on this.
 
 ---
 
-## 20. Acceptance criteria
+## 21. Acceptance criteria
 
 `funky-secure` `0.1.0` is accepted when all of the following hold:
 
@@ -1511,6 +1673,24 @@ Nothing else in 0.1.0 depends on this.
     `off` contributes neither a finding nor a count (10.1, 10.2, 9.2).
 14. `init --format json` and `migrate --format json` emit the plan document of 11.2, with absolute
     paths and content digests.
+
+### 21.1 v0.2 acceptance (added in revision 4)
+
+`0.2.0` is accepted when, in addition to keeping every v0.1 criterion above:
+
+15. The catalog has twelve rules, each with its page, its boundary test and its `skip` path (8.2,
+    8.3).
+16. The release workflow triggers on `v*` tags only, declares `id-token: write` in that job and
+    nowhere else, and references no npm token (17.2, 17.3).
+17. A tag whose name and `package.json` `version` disagree exits `2` and publishes nothing (17.3).
+18. `prepublishOnly` runs the suite, the drift gate, the self-scan and the packed-file check, and a
+    test asserts the workflow's shape (17.4, 17.7, 15.4).
+19. The packed file list equals the `files` contract of section 14, checked in CI rather than by eye
+    (17.4).
+20. A published version carries provenance, and its release body records the tarball `sha256` and
+    the provenance URL (17.2, 17.3).
+21. `hook-drift` is absent from the catalog, and its absence is explained where a reader looks for
+    it (8.3, 13.2).
 
 ---
 

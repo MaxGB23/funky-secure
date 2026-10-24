@@ -114,11 +114,16 @@ fixture repository under a deterministic collector, and `tests/drift.test.js` fa
 stops matching what the code produces. `tests/self.test.js` asserts this repository passes its own
 scan; if it stops doing so, that test fails, which is the point.
 
-The normative specification is [`rfcs/funky-secure-rfc.md`](rfcs/funky-secure-rfc.md) (revision 3,
-v1.2). The implementation tasks, decisions and evidence are in
-[`odd/tasks/funky-secure-v0.1.md`](odd/tasks/funky-secure-v0.1.md), the decision log for review is
+The normative specification is [`rfcs/funky-secure-rfc.md`](rfcs/funky-secure-rfc.md) (revision 4,
+v1.3). The implementation tasks, decisions and evidence are in
+[`odd/tasks/funky-secure-v0.1.md`](odd/tasks/funky-secure-v0.1.md) and
+[`odd/tasks/funky-secure-v0.2.md`](odd/tasks/funky-secure-v0.2.md), the decision log for review is
 [`docs/decisions.md`](docs/decisions.md), and the empirical record behind the rules is
 [`odd/evidence/e1-e8.md`](odd/evidence/e1-e8.md).
+
+Publication runs through npm Trusted Publishing over OIDC with provenance, from a tagged commit, with
+a `prepublishOnly` gate that runs the suite, the drift gate and the self-scan: see RFC 17. Nothing is
+published by pushing a branch.
 
 MIT.
 
