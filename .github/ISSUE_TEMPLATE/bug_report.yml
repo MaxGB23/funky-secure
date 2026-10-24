@@ -1,0 +1,89 @@
+name: Bug report
+description: funky-secure reported, wrote or exited with the wrong answer.
+title: "bug: "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A wrong finding is worse than no finding, so this report needs evidence, not a summary.
+        Read `CONTRIBUTING.md` first and fill every field.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what should have happened
+      description: One sentence each. Name the rule and the verdict it gave against the verdict it owes.
+      placeholder: "`quarantine` reported `pass` on a repository whose pnpm gate auto-approves; it should report `quarantine-not-strict`."
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: The exact command
+      placeholder: "funky-secure scan --scope repo --format json"
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Full output and exit code
+      description: Paste everything the command printed, both streams, and the exit code (0, 1 or 2).
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rule
+    attributes:
+      label: Which rule
+      description: Run `funky-secure explain --list` and pick from the catalog.
+      options:
+        - package-manager-pin
+        - lockfile-committed
+        - foreign-lockfile
+        - quarantine
+        - exact-versions
+        - env-not-tracked
+        - sensitive-ignored
+        - actions-pinned-sha
+        - no-bot-auto-merge
+        - not rule specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The smallest repository layout that still fails, as a file tree and the files that matter. Never your real project, and never a real credential.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node version, pnpm version, operating system, and whether the repository is a pnpm workspace.
+      placeholder: "node v22.11.0, pnpm 12.3.4, Windows 11, single-package repository"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Report checklist
+      options:
+        - label: I named the rule and the verdict it gave, not just the message.
+          required: true
+        - label: I pasted the full output and the exit code.
+          required: true
+        - label: My reproduction is minimal and contains no real secret, token or private URL.
+          required: true
+        - label: If a file was written, I attached its original bytes and its bytes after the run.
+          required: true
+        - label: I checked that this is not a declared deviation in RFC 8.2 or `docs/decisions.md`.
+          required: true

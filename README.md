@@ -121,3 +121,15 @@ v1.2). The implementation tasks, decisions and evidence are in
 [`odd/evidence/e1-e8.md`](odd/evidence/e1-e8.md).
 
 MIT.
+
+## Contributing
+
+Every pull request closes an issue that carries `status:approved`, applies exactly one `type:*`
+label and lives on a `type/description` branch. The full policy — the hard rules (zero dependencies,
+pure rules, the write guard), the issue checklists, the pull request checklist and the local commands
+— is [`CONTRIBUTING.md`](CONTRIBUTING.md); the templates are in
+[`.github/`](.github/PULL_REQUEST_TEMPLATE.md).
+
+The repository enforces that policy instead of hoping for it: `scripts/check-pr-policy.js` runs on
+every pull request (`pr-policy` in CI) and fails when the body links no issue, when the label count
+is not exactly one, or when the branch name does not follow the convention.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: The contract this tool must keep
+    url: https://github.com/MaxGB23/funky-secure/blob/main/rfcs/funky-secure-rfc.md
+    about: Read the RFC before proposing a behavior change. The RFC changes before the code does.
+  - name: Decisions already made
+    url: https://github.com/MaxGB23/funky-secure/blob/main/docs/decisions.md
+    about: Recorded decisions and their reasons. An entry here is not reopened with code.
