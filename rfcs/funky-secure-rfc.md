@@ -1,6 +1,14 @@
 # RFC: funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 4 (v1.3). v0.1 implemented and merged; v0.2 specified.**
+> **STATUS: PROPOSED — revision 5 (v1.4). v0.1 and v0.2 implemented and merged.**
+>
+> **Revision 5** raises the declared runtime floor to `>= 22` and makes the CI policy normative
+> (15.4): the matrix runs the floor and the Active LTS, runner labels are exact rather than
+> `-latest`, actions are pinned by commit SHA to a release that is current on the day it ships with
+> the bump procedure written down, and `setup-node` fetches the newest patch of each line. The
+> previous floor, `>= 20.11`, promised a runtime that stopped receiving security fixes in April
+> 2026, and the matrix had been proving the promise on exactly that line. This is a breaking
+> package-contract change and ships as `0.3.0`; no rule, severity, code or message changes.
 >
 > **Revision 4** turns the product on itself. It adds section 17, the delivery and release contract —
 > trusted publishing over OIDC with provenance, no long-lived token anywhere, tag-driven immutable
@@ -1260,7 +1268,7 @@ funky-secure/
 │   ├── fixtures/                  # read-only repository fixtures per rule
 │   ├── cli.test.js                # exit codes, flag parsing, help content
 │   └── drift.test.js              # section 13.2
-├── package.json                   # zero dependencies, bin, files, engines >= 20.11
+├── package.json                   # zero dependencies, bin, files, engines >= 22
 ├── LICENSE                        # MIT, as funky-forge
 └── README.md
 ```
@@ -1308,6 +1316,20 @@ node bin/funky-secure.js scan --scope repo --fail-on warn
 
 and a test asserts the self-scan is clean. A rule that cannot pass on this repository is not
 releasable, which is the mechanism that prevents the situation described in 2.8.
+
+**The CI policy (revision 5).** A declared floor that is never executed is a promise nobody checked,
+and a floor that is already end-of-life is a promise that cannot be kept. Four rules follow from that:
+
+1. **The matrix runs the floor and the Active LTS** (`[22, 24]` at revision 5), on both platforms the
+   code branches on. Raising the floor is a package-contract change and therefore an RFC change.
+2. **Runner labels are exact** (`ubuntu-24.04`, `windows-2025`), not `-latest`: the label pins the
+   image *major*, not the patches, so an operating-system migration cannot turn a green suite red on
+   the runner vendor's schedule.
+3. **Actions are pinned by full commit SHA** with the release in a trailing comment, refreshed by a
+   written procedure rather than by a bot. A pin whose bump procedure is not written down is a pin
+   that will rot into a vulnerable one.
+4. **Runtime patches float** (`check-latest: true`): pinning the identity of an action is the point;
+   freezing the patch of a runtime only freezes the security fix that has not shipped yet.
 
 The release path is gated by the same suite, and the gate itself has a test (17.7): the workflow that
 publishes triggers on a tag only, is never reachable from `pull_request`, and names no long-lived
@@ -1616,6 +1638,14 @@ Added or corrected in revision 3:
 26. **Appendix E records the measurement**, and Appendix C.2 corrects where the `ignoreScripts`
     reading comes from (Appendix E, C.2, E1–E8).
 
+Added or corrected in revision 5:
+
+32. **The floor is `>= 22`** and the matrix runs it with the Active LTS; the previous floor was an
+    end-of-life runtime that the matrix executed anyway (15.4, 21.1).
+33. **The CI pinning policy is normative**: exact runner labels, SHA-pinned actions with a written
+    bump procedure, floating runtime patches (15.4).
+34. **This is the breaking change of `0.3.0`**; no rule, severity, code or message changes.
+
 Added or corrected in revision 4:
 
 27. **The product has a delivery contract** (section 17): trusted publishing over OIDC, provenance on
@@ -1691,6 +1721,8 @@ Nothing else in 0.1.0 depends on this.
     the provenance URL (17.2, 17.3).
 21. `hook-drift` is absent from the catalog, and its absence is explained where a reader looks for
     it (8.3, 13.2).
+22. The suite runs on the declared floor and on the Active LTS, on both platforms, and a test fails
+    when a leg, an exact runner label or the floor leaves the matrix (15.4).
 
 ---
 
