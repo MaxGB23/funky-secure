@@ -40,7 +40,7 @@ name; the same order applies to `funky-forge`.
 | ID | Task | Spec | Route | Commit |
 |---|---|---|---|---|
 | T1 | RFC v1.4: the floor, the matrix and the CI pinning policy as normative | S1, S2, S3, S4, S5, S6 | inline | `ddc1cf6`, PR #20 → `4bb7e99` |
-| T2 | Implementation: `engines`, matrix, labels, SHAs, `check-latest`, dropped install step, `.gitattributes`, `0.3.0` | S1-S6 | inline | this commit |
+| T2 | Implementation: `engines`, matrix, labels, SHAs, `check-latest`, dropped install step, `.gitattributes`, `0.3.0` | S1-S6 | inline | `92c560f`, PR #22 → `361a68b` |
 | T3 | Branch protection on `main` with the final five check names | S7 | blocked: owner's go-ahead | — |
 | T4 | `funky-forge`: stabilise its check names, then protection and contribution templates | S7 | blocked: separate repository, needs the owner's authorization | — |
 
@@ -68,3 +68,10 @@ repository's own YAML parser does not apply, because this repository has no YAML
 and already asserts the workflow shape in `tests/release-workflow.test.js` and
 `tests/ci-coverage.test.js`; and its Node matrix is not copied blind — the floor is a contract decision
 (L2), not a recipe.
+
+L5 — 2026-10-24, T1 and T2 executed: RFC v1.4 in PR #20 (`ddc1cf6`, merged `4bb7e99`) and the
+implementation in PR #22 (`92c560f`, merged `361a68b`). The four legs are green on
+`ubuntu-24.04`/`windows-2025` at Node 22 and 24, which is the first time the declared floor has been
+executed rather than assumed. 318 tests, drift gate 11/11, self-scan PASS. The six coverage tests failed
+on four assertions before the workflows changed (binary markers, exact labels, floor plus Active LTS,
+`check-latest`), which is the RED state this task was written against.
