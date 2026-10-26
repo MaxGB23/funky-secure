@@ -1,6 +1,17 @@
 # RFC: funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 5 (v1.4). v0.1 and v0.2 implemented and merged.**
+> **STATUS: PROPOSED — revision 6 (v1.5). v0.1, v0.2 and v0.3 implemented and merged; nothing
+> published.**
+>
+> **Revision 6** polishes the interface the owner uses, after using it: `init` stops depending on the
+> machine that runs it and becomes a pnpm bootstrap (11.2, 11.2.1), the managed block gains
+> `savePrefix: ''` so a later `pnpm add` cannot reintroduce a caret (W1c, D-18), a human plan ends
+> with the steps the tool refuses to take (11.2.2), every failure message a human reads ends with the
+> action (4.6, 10.4), a scope skip says what it did not verify and how to verify it (7.2, 10.3), and
+> the report states its provenance in one line, claiming only what the repository declares and never
+> an origin pnpm does not report (9.4, 10.2, 10.3). Section 13.4 gains `docs/guide.md` as the entry
+> point for a reader who is not a supply-chain specialist (13.4). No rule, severity, code or exit code
+> changes; the release number is decided when the owner is satisfied, not by this revision.
 >
 > **Revision 5** raises the declared runtime floor to `>= 22` and makes the CI policy normative
 > (15.4): the matrix runs the floor and the Active LTS, runner labels are exact rather than
@@ -372,6 +383,13 @@ distinction between "read the machine" and "protect the repository" is the produ
 A finding carries either an exact command, or an explicit "manual" classification with the rule's
 documentation. "Consider reviewing your configuration" is not a finding; it is noise that trains the
 reader to skip the output.
+
+A finding that a command can fix never carries `kind: none`. When the fix needs a decision the tool
+cannot make (rotate a credential, choose a branch, resolve a SHA), the remediation names the decision
+and the command that follows it, so the output still ends with something a human can run. The
+measured form of this rule: a command the tool prints must work on the version the tool supports.
+`pnpm add --save-exact <name>@<range>` exits `0` and leaves the range untouched on pnpm 12, so it is
+not an admissible remediation for a floating specifier (R5, E1).
 
 ### 4.7 One name, one package, zero runtime dependencies
 
@@ -863,6 +881,12 @@ list exemptions, and the report shows the effective number so the lowering is vi
 never invisible. In non-strict mode pnpm itself grows that list, which is why the strictness fact
 matters more than the number.
 
+**Provenance.** The effective configuration merges the machine, the workspace and the environment and
+reports no origin (E2), so a report never attributes a value to the project or to the machine. What it
+states exactly, and does: which file the preset came from, and whether the repository itself declares
+the quarantine key. The distinction matters because the alternative — a `PASS` produced by the
+reviewer's own machine configuration — is indistinguishable from a hardened repository.
+
 ---
 
 ## 10. Report contract
@@ -907,6 +931,12 @@ finding and no count.
   "tool": { "name": "funky-secure", "version": "0.1.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
+  "provenance": {
+    "configPath": "funky-secure.config.json",
+    "presetSource": "config",
+    "machineIncluded": true,
+    "quarantineDeclaredIn": "pnpm-workspace.yaml"
+  },
   "targets": [
     { "kind": "machine", "detail": "pnpm 12.3.4" },
     { "kind": "repo-root", "path": "." },
@@ -921,6 +951,11 @@ Determinism rules: no timestamp field; ordering is `scope` (machine, repo) → `
 importers sorted by path) → `rule` (catalog order) → `path` → `line`; numbers are integers; strings
 are NFC; JSON is 2-space indented with a trailing newline. `--with-timestamp` adds `generatedAt` and
 is excluded from golden tests by construction.
+
+`provenance` is additive to `schemaVersion: 1` and carries no unmeasurable claim: `configPath` is the
+discovered config file or `null`, `presetSource` is `config`, `flag` or `default`, `machineIncluded`
+follows the scope, and `quarantineDeclaredIn` is the repository file that declares the key or `null`.
+It is a function of the resolved facts, so it does not break determinism and changes no count.
 
 `summary` counts every rule verdict exactly once: `error`, `warn` and `info` count the failing
 findings by their effective severity; `pass` and `skip` count those statuses. A passing finding is
@@ -937,6 +972,14 @@ them, never one line each (10.1); skipped rules keep their own line, with the re
 only when `stdout` is a TTY and `NO_COLOR` is unset; the plain text is valid on its own
 (Appendix D.1).
 
+Immediately after the title line, one `provenance` line states the preset and its source, whether the
+repository declares the quarantine key, and whether the machine was excluded — the same facts as the
+JSON field of 10.2, in one line, never a claim about where an effective value came from.
+
+A skipped rule states what was not verified and the command that verifies it, not only the contract
+that excluded it: `--scope repo` omitting the machine is a fact a CI reader has to be able to act on
+(7.2).
+
 ### 10.4 Exit codes
 
 | Code | Meaning |
@@ -947,6 +990,11 @@ only when `stdout` is a TTY and `NO_COLOR` is unset; the plain text is valid on 
 
 `2` is the fail-closed code. A CI job that only distinguishes zero from non-zero still behaves
 correctly, and a job that cares can tell the two apart without parsing text.
+
+Exit codes are a machine contract, not a user interface. Every message a human reads — usage error,
+config error, refusal, tool failure — leads with the action and puts the internal diagnosis after a
+`reason:` label or behind `--verbose`. A refusal that begins with the reason it could not check the
+branch is a defect of the same class as a stale help text: it leaves the reader to translate.
 
 ### 10.5 `--fail-on`
 
@@ -978,8 +1026,8 @@ funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
 funky-secure init [--preset baseline|strict] [--apply] [--allow-dirty] [--format human|json]
 ```
 
-Default is a **plan**: it runs the same scan, derives the writes that would fix the fixable
-findings, prints them, and exits `0`. `init` reports, it does not judge: it uses the `--fail-on none`
+Default is a **plan**: it runs the same scan, derives the writes the policy and the repository's own
+files call for, prints them, and exits `0`. `init` reports, it does not judge: it uses the `--fail-on none`
 semantics of section 10.5 internally and does not accept the flag (`scan` is the only command that
 does), because a plan is an offer, not a verdict. It exits `2` only when the tool cannot answer
 (10.4), never because the plan is non-empty.
@@ -988,8 +1036,9 @@ With `--apply` it performs exactly these writes, and no others:
 
 | # | Target | Condition | Operation |
 |---|---|---|---|
-| W1a | `pnpm-workspace.yaml` | effective `minimumReleaseAgeStrict` is false: the quarantine auto-approves instead of gating (8.2 R4, E1) | managed block with `minimumReleaseAgeStrict: true` |
+| W1a | `pnpm-workspace.yaml` | the managed block does not already declare `minimumReleaseAgeStrict: true`, whether or not the machine satisfies it (11.2.1) | managed block with `minimumReleaseAgeStrict: true` |
 | W1b | `pnpm-workspace.yaml` | `--preset strict` passed | the same managed block also carries `minimumReleaseAge: 4320` |
+| W1c | `pnpm-workspace.yaml` | the managed block does not already carry `savePrefix: ''` (D-18) | the same managed block also carries `savePrefix: ''` |
 | W2 | `.gitignore` | `sensitive-ignored` fails | managed block with the missing entries required by R7: `.env`, `.env.*`, `!.env.example`, `!.env.test.example`, `*.pem`, `*.key`, plus `.npmrc` only when the repository does not track a root `.npmrc` without a token |
 | W3 | `package.json` | `package-manager-pin` fails **without** conflict | set `packageManager` |
 | W4 | `funky-secure.config.json` | `--preset strict` passed | persist `{ "preset": "strict" }` so CI agrees |
@@ -1023,11 +1072,14 @@ Managed block format (line-based, no YAML parser):
 # funky-secure:begin (managed block — do not edit by hand)
 minimumReleaseAgeStrict: true
 minimumReleaseAge: 4320
+savePrefix: ''
 # funky-secure:end
 ```
 
 The second key is written only when `--preset strict` was passed (W1b); the first is written whenever
-the effective strictness is false (W1a).
+the managed block does not declare it (W1a); `savePrefix: ''` is written whenever the block lacks it
+(W1c), because it is the project-level setting that stops a later `pnpm add` from saving a caret
+(4.6, D-18).
 
 Rules for the block:
 
@@ -1048,6 +1100,32 @@ Safety rules for `--apply`:
 - Every write is printed before it happens, with its absolute path and a content digest, on the same
   run (no dry-run/apply race).
 - `init` never runs an install, never resolves a version, never touches the network.
+
+#### 11.2.1 The plan reads the repository, never the host
+
+A plan item is derived from the repository's own files and the declared policy, never from the
+effective configuration the machine happens to satisfy. The distinction is not academic: a machine
+whose global pnpm configuration already carries `minimumReleaseAge: 4320` makes the quarantine rule
+pass, so a plan derived from that verdict writes nothing, and the repository is only hardened on that
+one laptop. The same defect runs the other way on a machine with a lower global value, which produces
+a repository nobody else can reproduce. So W1a's condition is "the managed block does not declare it",
+not "the effective strictness is false", and the machine's effective value is reported, never used to
+suppress a write.
+
+#### 11.2.2 `next steps`: the steps the tool refuses to take
+
+A human plan ends with the steps only a human can run, in the order they must run, printed and never
+executed:
+
+- `pnpm install` when the repository has no `pnpm-lock.yaml`, because the tool never resolves or
+  installs (4.7, 11.6).
+- `funky-secure migrate --from npm --apply` when a foreign lockfile coexists with the pnpm one
+  (11.3).
+- `git add` for the paths the plan wrote, so the next `--apply` over the same state is not refused as
+  dirty (11.2, safety rules).
+
+The block is part of the human rendering only. `--format json` carries the plan document of 10.5 and
+no prose, and a plan with no human step prints no `next steps` heading.
 
 ### 11.3 `migrate`
 
@@ -1216,6 +1294,7 @@ something that was true before the last release.
 
 ```
 docs/
+  guide.md            the entry point: how to read the output, basic vs advanced commands, recipes
   concept.md          what the product is, what it refuses to be, the two scopes
   cli.md              every command and flag, exit codes, JSON schema
   architecture.md     the four layers, the data flow, the invariants, the module map
@@ -1724,6 +1803,22 @@ Nothing else in 0.1.0 depends on this.
 22. The suite runs on the declared floor and on the Active LTS, on both platforms, and a test fails
     when a leg, an exact runner label or the floor leaves the matrix (15.4).
 
+### 21.2 v1.5 acceptance (added in revision 6)
+
+23. `init` writes W1a from the repository's own declaration, and a machine whose global configuration
+    already satisfies the policy does not suppress the write; a test proves the plan is identical on
+    a satisfying and a non-satisfying effective configuration (11.2.1).
+24. `init --apply` on a repository with no `pnpm-workspace.yaml` creates it with the managed block and
+    no `packages:` key, and the block carries `savePrefix: ''` (W1c, 11.2).
+25. A human plan ends with a `next steps` block naming only the steps the tool refuses to take, and a
+    plan with no human step prints no such heading (11.2.2).
+26. Every failing finding in the catalog carries a remediation, and every remediation that names a
+    command is a command that works on the supported pnpm line (4.6).
+27. The human report and the JSON document carry the same `provenance` facts, and neither attributes
+    an effective pnpm value to the project or the machine (9.4, 10.2, 10.3).
+28. `docs/guide.md` exists, is linked from `README.md`, and explains every symbol the human renderer
+    emits plus a "if you see this, do this" row for each catalog rule (13.4).
+
 ---
 
 ## Appendix A — Decision log
@@ -1749,6 +1844,8 @@ which the decision was taken.
 | D-14 | Help is always current; complete architecture docs are a deliverable | "en funky-forge tenemos una politica de el comando help se actualiza siempre, no refleja estado no actualizado, tambien tenemos docs de la arquitectura completa." | 13, 14 |
 | D-15 | This session ends with the RFC; implementation happens in another session | "Esta sesion terminará con la redaccion de un mega rfc, tal cual se hizo en funky-forge, para tener todo recabado y aprobarlo e implementar en otra sesio" (as typed; truncated in the source message) | whole document |
 | D-16 | R4 measures the gate, not the number: preset-dependent floor, `warn` in `baseline` and `error` in `strict` | "La regla mide el gate, no el número" | 8.2 R4, 9.1, 9.4, 11.2 |
+| D-17 | `init` must make a pnpm project usable on its own, independent of the machine that runs it | "A veces solo quiero inicializar un proyecto con pnpm y que ya tenga una config minima. Sin contar la config global, a veces podría preferirse por proyecto algo diferente." | 11.2, 11.2.1, 11.2.2 |
+| D-18 | The managed block carries `savePrefix: ''`: no carets by construction, not only by report | "El caso de usar carets en los package no me gusta" (D-6), and the measured fact that `pnpm add` saves `1.3.0` with the key and `^1.3.0` without it | W1c, 11.2, 4.6 |
 
 ---
 
@@ -1885,6 +1982,12 @@ verdict  FAIL (threshold: error)
   "tool": { "name": "funky-secure", "version": "0.1.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
+  "provenance": {
+    "configPath": null,
+    "presetSource": "default",
+    "machineIncluded": true,
+    "quarantineDeclaredIn": null
+  },
   "targets": [
     { "kind": "machine", "detail": "pnpm 12.3.4" },
     { "kind": "repo-root", "path": "." },
