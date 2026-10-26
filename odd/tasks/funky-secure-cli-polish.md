@@ -140,3 +140,12 @@ fresh repository outside this one (`M:/pruebas/funky-live-bootstrap`, tool insta
 Not closed by this feature, by design: the release number (the owner decides when he is satisfied) and
 the README image (pending). `docs/rules/foreign-lockfile.md` keeps its per-manager `--from` remediation:
 that is the rule's message, not the plan's next step, and the page already explains the yarn case.
+
+L10 — 2026-10-26, the owner decided the release number: `0.4.0`, and the branch is delivered as a pull
+request rather than a direct push to `main`. The reason recorded for the number is the one this document
+already applied to the RFC: the polish changed observable behavior (`init` writes more, `scan` prints a
+provenance line, exit `2` changed shape), so it carries its own number instead of being folded into
+`0.3.0`, and nothing normative is retconned. Cost, paid in this commit: `package.json`, the six golden
+reports (they embed the tool version), the three JSON samples in `docs/cli.md`, and the RFC status line.
+`odd/tasks/funky-secure-v0.3.md` and RFC §34 keep saying `0.3.0` because they record what shipped then,
+not what ships now.

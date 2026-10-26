@@ -1,6 +1,6 @@
 # RFC: funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 6 (v1.5). v0.1, v0.2 and v0.3 implemented and merged; nothing
+> **STATUS: PROPOSED — revision 6 (v1.5). v0.1, v0.2, v0.3 and v0.4 implemented and merged; nothing
 > published.**
 >
 > **Revision 6** polishes the interface the owner uses, after using it: `init` stops depending on the
@@ -11,7 +11,8 @@
 > the report states its provenance in one line, claiming only what the repository declares and never
 > an origin pnpm does not report (9.4, 10.2, 10.3). Section 13.4 gains `docs/guide.md` as the entry
 > point for a reader who is not a supply-chain specialist (13.4). No rule, severity, code or exit code
-> changes; the release number is decided when the owner is satisfied, not by this revision.
+> changes. This revision ships as `0.4.0`; whether that number is the first one published to npm is the
+> owner's decision and not a property of the document.
 >
 > **Revision 5** raises the declared runtime floor to `>= 22` and makes the CI policy normative
 > (15.4): the matrix runs the floor and the Active LTS, runner labels are exact rather than
