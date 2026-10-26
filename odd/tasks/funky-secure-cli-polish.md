@@ -95,3 +95,15 @@ L6 — 2026-10-26, S7 corrected before implementation: RFC 9.4 and E2 record tha
 configuration reports no origin, so the report states only what the repository file declares. The
 first draft of S7 asked for a `project`/`machine` attribution and would have printed a fact the tool
 cannot measure.
+
+L7 — 2026-10-26, T1 first handoff and the decision taken on it. S5 and S7 landed with the two-line
+refusal shape (`funky-secure: <action>` then `reason: <diagnosis>`) and the `provenance` line/field,
+goldens were regenerated deliberately, and the suite stood at 328/329 with the single failure being
+S6. The worker could not satisfy S6 because the two skip messages are owned by
+`src/rules/package-manager-pin.js` and `src/rules/quarantine.js`, which the handoff's surface list did
+not include, so it stopped and asked instead of widening its own scope. Decision: approve option A
+(rule, doc and test page for both rules) and extend it — S4 says *every* fail carries an actionable
+remediation, and the worker measured that `no-bot-auto-merge` and `env-not-tracked` still carried
+`kind: 'none'`, so those two rules and their pages join the same work unit. Recorded because the
+narrow surface was the parent's defect, not the worker's, and because a spec sentence ("every fail")
+was implemented for the two rules the task named instead of for the catalog.

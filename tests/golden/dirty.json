@@ -10,6 +10,12 @@
     "quarantineMinutes": 1440,
     "failOn": "error"
   },
+  "provenance": {
+    "preset": "baseline",
+    "presetSource": "default",
+    "quarantine": "not declared in this repository",
+    "machine": "included"
+  },
   "targets": [
     {
       "kind": "machine",
@@ -70,7 +76,8 @@
         "path": ".env"
       },
       "remediation": {
-        "kind": "none"
+        "kind": "manual",
+        "command": "git rm --cached .env"
       },
       "doc": "funky-secure explain env-not-tracked",
       "code": "env-tracked"
@@ -117,7 +124,7 @@
       },
       "remediation": {
         "kind": "manual",
-        "command": "pnpm add --save-exact left-pad@^1.3.0"
+        "command": "pnpm pkg set 'dependencies.left-pad=1.3.0' && pnpm install"
       },
       "doc": "funky-secure explain exact-versions",
       "code": "floating-range"

@@ -32,14 +32,17 @@ no value is ever printed (N5). The rule reports that a file is committed, never 
 
 ## Remediation
 
-There is no automatic fix: deleting a credential from a working tree is a decision, not a generated
-edit. The message carries the manual escape and the part that matters:
+`manual`, one command per tracked file: `git rm --cached <path>` removes the file from the index and
+leaves the working copy alone, so nothing is deleted by accident. The tool prints it and never runs
+it: deleting a credential from a working tree is a decision, not a generated edit.
+
+Rotation stays in the message, because it is the part no command can do:
 
 > removing the file from the index (`git rm --cached <path>`) does not remove it from history, so
 > the credentials it contains must be rotated.
 
-Rotation is the remediation. Deleting the file while keeping the secret live is the accident this
-rule exists to catch.
+Rotation is the remediation; the printed command only stops the leak from growing. Deleting the file
+while keeping the secret live is the accident this rule exists to catch.
 
 ## Limits
 

@@ -53,7 +53,9 @@ All candidates ignored, nothing sensitive tracked and no token is a pass.
 A tracked sensitive file is manual: `git rm --cached <path>`. Removing a file from the index does not
 remove it from history, so a credential that was committed must be rotated — the removal command
 alone is not the fix. A tracked root `.npmrc` with a token is removed the same way; an untracked one
-is a local credential the rule reports but cannot remove for you.
+is a local credential this rule reports and cannot delete for you, so its remediation says what the
+human must do: rotate the `_authToken`, then delete the file. No finding leaves the remediation
+empty (RFC 4.6), which is why the untracked case carries an action instead of `none`.
 
 ## Limits
 

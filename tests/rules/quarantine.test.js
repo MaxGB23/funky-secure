@@ -149,6 +149,26 @@ test('no pnpm configuration is a skip, not a guessed pass', () => {
   assert.ok(finding.message.startsWith('skipped: '));
 });
 
+test('a machine excluded by the scope contract says what was not verified and how to verify it', () => {
+  const context = ctx(null);
+  context.scope = 'repo';
+  context.machine = null;
+
+  const [finding] = rule.detect(context);
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'machine-out-of-scope');
+  assert.notEqual(
+    finding.probeUnavailable,
+    true,
+    'a scope contract skip is not an unavailable required probe',
+  );
+  assert.equal(
+    finding.message,
+    'skipped: the quarantine was not verified because the machine configuration is out of scope; run funky-secure scan --scope all to verify the release-age gate',
+  );
+});
+
 function scratch(t) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-quarantine-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

@@ -4,6 +4,10 @@
  * Grouped by target, one line per finding, the remediation indented under it, and a summary that
  * separates pass from fail from skip. Passing rules are rolled up into one line that names them.
  * Colour is applied only when the caller says stdout is a TTY and NO_COLOR is unset.
+ *
+ * The provenance line (S7) states the preset, the source it came from, what was measured about the
+ * quarantine and whether the machine scope was excluded — never a value attributed to a source that
+ * pnpm does not report (E2).
  */
 
 import { TARGET_ORDER } from './report.js';
@@ -111,6 +115,21 @@ function plural(count, singular, pluralForm) {
 }
 
 /**
+ * The one-line provenance of the report (S7), placed right after the title. It repeats no effective
+ * pnpm value: the preset source is a measured fact, and the quarantine clause says only what was
+ * measured — declared by this repository, not declared, or not verified.
+ * @param {{ preset: string, presetSource: string, quarantine: string, machine: string }} provenance
+ * @returns {string}
+ */
+function provenanceLine(provenance) {
+  return (
+    `provenance  preset ${provenance.preset} (${provenance.presetSource})` +
+    `  ·  quarantine ${provenance.quarantine}` +
+    `  ·  machine ${provenance.machine}`
+  );
+}
+
+/**
  * @param {object} report the object built by `buildReport`
  * @param {{ color?: boolean }} [options]
  * @returns {string}
@@ -124,8 +143,9 @@ export function renderHuman(report, { color = false } = {}) {
 
   const lines = [
     `${report.tool.name} scan  ·  preset ${report.policy.preset}  ·  scope ${report.scope}`,
-    '',
   ];
+  if (report.provenance) lines.push(provenanceLine(report.provenance));
+  lines.push('');
 
   for (const kind of TARGET_ORDER) {
     const kindTargets = targets.filter((target) => target.kind === kind);

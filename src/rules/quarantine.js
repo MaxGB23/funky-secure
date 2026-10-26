@@ -11,6 +11,9 @@
  * `detect` is pure: the machine configuration arrives in `ctx.machine.config`. The preset floor
  * arrives in the optional second argument, because the engine does not pass the policy yet; without
  * it the baseline floor of the active major is used, and that fallback is reported in the evidence.
+ *
+ * A skip caused by the scope contract names what was not verified and the command that verifies it
+ * (S6); a skip caused by an unavailable probe stays `probeUnavailable` (RFC 7.3).
  */
 
 import { quarantineFloor } from '../lib/policy.js';
@@ -53,8 +56,10 @@ export default {
     const config = ctx.machine?.config;
     if (config === null || config === undefined) {
       // `--scope repo` is the supported CI gate (RFC 7.2): the machine configuration is deliberately
-      // out of contract there, so its absence is not an unavailable required probe.
-      const outOfScope = ctx.machine?.configOutOfScope === true;
+      // out of contract there, so its absence is not an unavailable required probe. Either signal —
+      // no machine facts at all, or machine facts collected without their configuration — is the
+      // scope contract, and the skip states what it did not verify (S6).
+      const outOfScope = ctx.machine === null || ctx.machine?.configOutOfScope === true;
       return [
         {
           status: 'skip',
@@ -62,7 +67,7 @@ export default {
           scope: 'repo',
           target: 'repo-root',
           message: outOfScope
-            ? 'skipped: the quarantine is read from the machine configuration, which --scope repo excludes by contract'
+            ? 'skipped: the quarantine was not verified because the machine configuration is out of scope; run funky-secure scan --scope all to verify the release-age gate'
             : 'skipped: pnpm config list --json was unavailable',
           probeUnavailable: !outOfScope,
         },

@@ -9,6 +9,19 @@ import { UsageError } from '../lib/errors.js';
 import { TOOL } from '../lib/tool.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
+/**
+ * A usage error that carries the action it asks for: `cli.run` prints that action first and the
+ * message after a `reason:` label (S5).
+ * @param {string} message the diagnosis, including the offending id
+ * @param {string} action what the human must do
+ * @returns {UsageError}
+ */
+function usage(message, action) {
+  const error = new UsageError(message);
+  error.action = action;
+  return error;
+}
+
 function severityOf(rule) {
   return {
     baseline: rule.severity?.baseline ?? 'warn',
@@ -96,7 +109,10 @@ export async function run({
 }) {
   if (list) {
     if (positionals.length > 0) {
-      throw new UsageError(`--list accepts no rule id (got "${positionals[0]}")`);
+      throw usage(
+        `--list accepts no rule id (got "${positionals[0]}")`,
+        'pass --list on its own to list the whole catalog',
+      );
     }
     const text =
       format === 'json' ? jsonDocument(catalog.map(ruleDocument)) : renderList(catalog);
@@ -105,16 +121,22 @@ export async function run({
   }
 
   if (positionals.length === 0) {
-    throw new UsageError('explain needs a rule id (or --list)');
+    throw usage(
+      'explain needs a rule id (or --list)',
+      'pass a rule id, or --list to see the catalog',
+    );
   }
   if (positionals.length > 1) {
-    throw new UsageError(`explain accepts one rule id (got "${positionals.join(' ')}")`);
+    throw usage(
+      `explain accepts one rule id (got "${positionals.join(' ')}")`,
+      'pass one rule id',
+    );
   }
 
   const id = positionals[0];
   const rule = catalog.find((candidate) => candidate.id === id) ?? null;
   if (rule === null) {
-    throw new UsageError(`unknown rule id "${id}"`);
+    throw usage(`unknown rule id "${id}"`, 'run funky-secure explain --list to see the rule ids');
   }
 
   stdout.write(format === 'json' ? jsonDocument([ruleDocument(rule)]) : renderRule(rule));

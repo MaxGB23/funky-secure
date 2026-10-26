@@ -48,6 +48,14 @@ No configuration at all (`pnpm config list --json` unavailable) is `skip: no-pnp
 `minimumReleaseAge` that is not a number is `skip: unreadable-minimum-release-age` for the same
 reason: a coerced zero would be a claim the configuration never made.
 
+A machine excluded by the scope contract is different (RFC 7.2, S6): under `--scope repo` the
+machine facts are absent by contract, so the skip is `machine-out-of-scope`, it is not an
+unavailable required probe, and its message says what was not verified and the command that
+verifies it:
+
+> skipped: the quarantine was not verified because the machine configuration is out of scope; run
+> funky-secure scan --scope all to verify the release-age gate
+
 **Declared severity deviation (RFC 8.2 R4, 9.1).** `warn` in `baseline`, `error` in `strict`.
 Friction 2 would be `warn` in both presets; `strict` promotes it because that is the author's own
 bar, while `baseline` only warns on the inherited non-strict default so the rule stays adoptable

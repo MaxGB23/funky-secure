@@ -111,7 +111,72 @@ test('reports every floating specifier with its dependency, type and file:line',
     ['package.json', 'package.json', 'package.json', 'package.json', 'package.json'],
   );
   assert.ok(failures.every((finding) => finding.remediation.kind === 'manual'));
-  assert.equal(failures[0].remediation.command, 'pnpm add --save-exact left-pad@^1.3.0');
+  // That lockfile records specifiers only, so no resolved version was measured: the remediation
+  // resolves the range first and the next scan prints the exact pin (S4, RFC 4.9).
+  assert.equal(
+    failures[0].remediation.command,
+    'pnpm install --lockfile-only && funky-secure scan --only exact-versions',
+  );
+});
+
+test('a floating range is pinned with pnpm pkg set, in the section the entry lives in', () => {
+  const text = `{
+  "dependencies": {
+    "left-pad": "^1.3.0"
+  },
+  "devDependencies": {
+    "@scope/tool": "~2.0.0"
+  }
+}`;
+  const lockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      left-pad:
+        specifier: ^1.3.0
+        version: 1.3.0
+    devDependencies:
+      '@scope/tool':
+        specifier: ~2.0.0
+        version: 2.0.1
+`;
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+  const floats = findings.filter((finding) => finding.code === 'floating-range');
+
+  assert.deepEqual(
+    floats.map((finding) => finding.remediation),
+    [
+      { kind: 'manual', command: "pnpm pkg set 'dependencies.left-pad=1.3.0' && pnpm install" },
+      {
+        kind: 'manual',
+        command: "pnpm pkg set 'devDependencies.@scope/tool=2.0.1' && pnpm install",
+      },
+    ],
+  );
+  assert.deepEqual(
+    floats.map((finding) => finding.remediation.command.includes('--save-exact')),
+    [false, false],
+    'the measured no-op command is never printed',
+  );
+});
+
+test('without a measured resolution the remediation resolves first, never a guessed version', () => {
+  const findings = rule.detect(ctx({ importers: [importer('.', ROOT_FLOATING)] }));
+  const [floating] = findings.filter((finding) => finding.code === 'floating-range');
+
+  assert.deepEqual(floating.remediation, {
+    kind: 'manual',
+    command: 'pnpm install --lockfile-only && funky-secure scan --only exact-versions',
+  });
+  assert.equal(
+    findings.some((finding) => /pnpm pkg set/.test(finding.remediation?.command ?? '')),
+    false,
+    'no version is invented when the lockfile records none',
+  );
 });
 
 test('computes the 1-based line of each specifier key', () => {
@@ -370,7 +435,35 @@ test('redacts credentials a URL specifier carries in its userinfo', () => {
   assert.ok(finding, 'a URL specifier is a floating range');
   assert.equal(finding.evidence.specifier, 'https://***@example.com/repo.tgz');
   assert.match(finding.message, /https:\/\/\*\*\*@example\.com\/repo\.tgz/);
-  assert.match(finding.remediation.command, /https:\/\/\*\*\*@example\.com\/repo\.tgz/);
+  assert.ok(!JSON.stringify(finding).includes('ghp_secret'), 'no credential reaches the report');
+});
+
+test('redacts a credential a recorded resolution carries, so the remediation never prints it', () => {
+  const text = `{
+  "dependencies": {
+    "private-tarball": "https://user:ghp_secret@example.com/repo.tgz"
+  }
+}`;
+  const lockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      private-tarball:
+        specifier: https://user:ghp_secret@example.com/repo.tgz
+        version: https://user:ghp_secret@example.com/repo.tgz
+`;
+  const [finding] = rule
+    .detect(
+      ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(
+    finding.remediation.command,
+    `pnpm pkg set 'dependencies.private-tarball=https://***@example.com/repo.tgz' && pnpm install`,
+  );
   assert.ok(!JSON.stringify(finding).includes('ghp_secret'), 'no credential reaches the report');
 });
 

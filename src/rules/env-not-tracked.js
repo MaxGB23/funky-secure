@@ -1,9 +1,12 @@
 /**
- * R6 — `env-not-tracked`: is any environment file committed? (RFC 8.2 R6, E4)
+ * R6 — `env-not-tracked`: is any environment file committed? (RFC 8.2 R6, E4, 4.6)
  *
  * The collector resolves the complete tracked list once, so the rule needs no pathspec: it filters
  * that list by basename and excludes the template names the RFC's over-matching glob would
  * otherwise report (E4). No git probe is added, no file is read and no value is ever printed (N5).
+ *
+ * A tracked environment file carries the command that removes it from the index (S4). Rotation stays
+ * in the message, because no command can undo a secret that already reached history.
  */
 
 /** The RFC's mandatory template exclusion list (RFC 8.2 R6, E4). */
@@ -82,7 +85,7 @@ export default {
         `${path} is tracked by git; removing it from the index (git rm --cached ${path}) does not ` +
         'remove it from history, so the credentials it contains must be rotated',
       evidence: { path },
-      remediation: { kind: 'none' },
+      remediation: { kind: 'manual', command: `git rm --cached ${path}` },
     }));
   },
 };

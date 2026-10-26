@@ -10,6 +10,12 @@
     "quarantineMinutes": 1440,
     "failOn": "error"
   },
+  "provenance": {
+    "preset": "baseline",
+    "presetSource": "default",
+    "quarantine": "declared in pnpm-workspace.yaml",
+    "machine": "included"
+  },
   "targets": [
     {
       "kind": "machine",

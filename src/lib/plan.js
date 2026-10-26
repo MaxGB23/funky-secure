@@ -110,6 +110,19 @@ export function renderPlanHuman({ command, preset, plan, refused = [], apply = f
 }
 
 /**
+ * A refusal that leads with the action (S5): `cli.run` prints `action` first and the diagnosis after
+ * a `reason:` label, so the diagnosis stays the error message.
+ * @param {string} action what the human must do first
+ * @param {string} message the internal diagnosis
+ * @returns {ConfigError}
+ */
+function refusal(action, message) {
+  const error = new ConfigError(message);
+  error.action = action;
+  return error;
+}
+
+/**
  * The only place in the product that writes a file (RFC 11.2, 11.5).
  *
  * A dirty target is refused unless `--allow-dirty`: a security tool does not mix its edits with a
@@ -129,12 +142,17 @@ export async function applyPlan({ plan, allowDirty = false, cwd, collector, stdo
     const paths = writes.map((item) => relative(cwd, item.path));
     const dirty = await statusPorcelain(collector, paths);
     if (dirty === null) {
-      throw new ConfigError('cannot check the working tree: git status failed');
+      throw refusal(
+        'pass --allow-dirty, or fix git so git status answers, then re-run',
+        'cannot check the working tree: git status failed',
+      );
     }
     const touched = dirty.filter((entry) => paths.includes(entry.slice(3)));
     if (touched.length > 0) {
-      throw new ConfigError(
-        `refusing to write over uncommitted changes: ${touched.map((entry) => entry.slice(3)).join(', ')} (commit them, or pass --allow-dirty)`,
+      const named = touched.map((entry) => entry.slice(3)).join(', ');
+      throw refusal(
+        `commit ${named} or pass --allow-dirty, then re-run`,
+        `refusing to write over uncommitted changes: ${named}`,
       );
     }
   }

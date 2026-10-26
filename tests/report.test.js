@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildReport, severityRank } from '../src/lib/report.js';
+import { renderHuman } from '../src/lib/render-human.js';
 import { renderJson } from '../src/lib/render-json.js';
 
 const tool = { name: 'funky-secure', version: '0.1.0' };
@@ -223,4 +224,75 @@ test('normalizes strings to NFC so two byte-equal inputs render byte-equal outpu
   });
 
   assert.equal(report.findings[0].message, 'caf\u00e9');
+});
+
+/// Provenance (S7): the report states where its preset came from and what it measured about the
+/// quarantine, and it never claims a source the run did not observe.
+
+const PROVENANCE = Object.freeze({
+  preset: 'strict',
+  presetSource: '--preset',
+  quarantine: 'not verified (machine excluded)',
+  machine: 'excluded',
+});
+
+test('carries the provenance facts in the json document and null when nothing was measured', () => {
+  const stated = buildReport({
+    scope: 'repo',
+    policy: { ...policy, preset: 'strict' },
+    catalog,
+    tool,
+    findings: [],
+    provenance: PROVENANCE,
+  });
+
+  assert.deepEqual(JSON.parse(renderJson(stated)).provenance, PROVENANCE);
+
+  const bare = buildReport({ scope: 'repo', policy, catalog, tool, findings: [] });
+  assert.equal(JSON.parse(renderJson(bare)).provenance, null, 'no provenance is claimed without one');
+});
+
+test('renders one provenance line right after the title, and omits it when nothing was measured', () => {
+  const stated = buildReport({
+    scope: 'repo',
+    policy: { ...policy, preset: 'strict' },
+    catalog,
+    tool,
+    findings: [],
+    provenance: PROVENANCE,
+  });
+  const lines = renderHuman(stated).split('\n');
+
+  assert.equal(lines[0], 'funky-secure scan  ·  preset strict  ·  scope repo');
+  assert.equal(
+    lines[1],
+    'provenance  preset strict (--preset)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
+  );
+  assert.equal(lines[2], '');
+
+  const bare = renderHuman(buildReport({ scope: 'repo', policy, catalog, tool, findings: [] }));
+  assert.equal(bare.includes('provenance'), false);
+});
+
+test('names the config file and the default as the preset source, and never a project value', () => {
+  const render = (provenance) =>
+    renderHuman(
+      buildReport({
+        scope: 'all',
+        policy: { ...policy, preset: 'strict' },
+        catalog,
+        tool,
+        findings: [],
+        provenance,
+      }),
+    ).split('\n')[1];
+
+  assert.equal(
+    render({ ...PROVENANCE, presetSource: 'funky-secure.config.json', machine: 'included', quarantine: 'declared in pnpm-workspace.yaml' }),
+    'provenance  preset strict (funky-secure.config.json)  ·  quarantine declared in pnpm-workspace.yaml  ·  machine included',
+  );
+  assert.equal(
+    render({ ...PROVENANCE, presetSource: 'default', machine: 'included', quarantine: 'not declared in this repository' }),
+    'provenance  preset strict (default)  ·  quarantine not declared in this repository  ·  machine included',
+  );
 });

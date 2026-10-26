@@ -42,9 +42,12 @@ locked and every runner resolves its own tree. Severity is `error` in both prese
 - `lockfile-untracked` — `manual`: `git add pnpm-lock.yaml`.
 - `lockfile-ignored` — `manual`: `git check-ignore -v pnpm-lock.yaml` names the file, line and
   pattern of the ignore source; the fix is removing that rule, or re-adding the file explicitly.
-- `lockfile-missing` — `manual`: `pnpm install --lockfile-only` writes the lockfile without
-  installing packages.
+- `lockfile-missing` — `manual`: `pnpm install` resolves the manifest and writes the lockfile. It is
+  the same human step `migrate` prints and `init` lists as a next step, and the tool never runs it.
 - Outside git the tracked and ignored parts are not evaluated, so no write is recommended.
+
+Every failure of this rule carries its command (RFC 4.6): the rule can fix nothing itself, so a
+`fail` that printed no action would be the noise the contract forbids.
 
 The finding never performs a git write. `git add` is printed for the human, not executed.
 

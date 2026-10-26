@@ -392,9 +392,10 @@ test('a dirty target file exits 2 naming the file unless --allow-dirty', async (
 
   const refused = runner(dir, { tracked, dirty: ['package.json'] });
   assert.equal(await refused.run(['init', '--apply']), 2);
-  assert.match(
+  assert.equal(
     refused.stderr.text,
-    /^funky-secure: refusing to write over uncommitted changes: package\.json \(commit them, or pass --allow-dirty\)$/m,
+    'funky-secure: commit package.json or pass --allow-dirty, then re-run\n' +
+      'reason: refusing to write over uncommitted changes: package.json\n',
   );
   assert.equal(existsSync(join(dir, 'pnpm-workspace.yaml')), false);
 

@@ -81,7 +81,10 @@ test('fails gh pr merge --auto in a job that only runs for dependabot', () => {
   assert.equal(findings[0].evidence.job, 'dependabot');
   assert.equal(findings[0].evidence.step, 0);
   assert.match(findings[0].evidence.run, /gh pr merge --auto/);
-  assert.deepEqual(findings[0].remediation, { kind: 'none' });
+  assert.deepEqual(findings[0].remediation, {
+    kind: 'manual',
+    command: 'edit .github/workflows/automerge.yml:8 and delete the automatic merge step',
+  });
 });
 
 test('fails a known automerge action in a job named for the bot', () => {
@@ -108,6 +111,10 @@ test('fails a known automerge action in a job named for the bot', () => {
   assert.equal(findings[0].evidence.job, 'update');
   assert.equal(findings[0].evidence.uses, 'peter-evans/enable-pull-request-automerge@v3');
   assert.equal(findings[0].line, 8);
+  assert.deepEqual(findings[0].remediation, {
+    kind: 'manual',
+    command: 'edit .github/workflows/renovate.yml:8 and delete the automerge action step',
+  });
 });
 
 test('passes the same merge command when the job is not restricted to a bot', () => {
@@ -160,6 +167,10 @@ test('fails pull_request_target with a PR-head checkout in the same job', () => 
   assert.equal(findings[0].path, '.github/workflows/pr-target.yml');
   assert.equal(findings[0].evidence.job, 'build');
   assert.equal(findings[0].line, 8);
+  assert.deepEqual(findings[0].remediation, {
+    kind: 'manual',
+    command: 'edit .github/workflows/pr-target.yml:8 and drop the checkout of the pull request head',
+  });
 });
 
 test('passes pull_request_target when no job checks out the PR head', () => {

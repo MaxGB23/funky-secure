@@ -3,6 +3,11 @@
  *
  * Pure. Rules hand in findings; the verdict is computed here, once, from severities and
  * `--fail-on` — never inside a rule, never inside a renderer.
+ *
+ * The report also carries its provenance (S7): the preset and the source it came from, what the run
+ * measured about the quarantine, and whether the machine scope was excluded. The provenance is the
+ * caller's observation, never an inference — a report built without one says so with `null` rather
+ * than guessing where a preset came from.
  */
 
 import { ConfigError, severityRank } from './policy.js';
@@ -75,6 +80,7 @@ function validateFinding(finding) {
  * @param {Array<object>} [options.targets]
  * @param {Array<object>} [options.findings]
  * @param {Array<{ id: string }>} [options.catalog] catalog order, used to break ties
+ * @param {{ preset: string, presetSource: string, quarantine: string, machine: string } | null} [options.provenance]
  * @param {{ name: string, version: string }} options.tool
  */
 export function buildReport({
@@ -83,6 +89,7 @@ export function buildReport({
   targets = [],
   findings = [],
   catalog = [],
+  provenance = null,
   tool,
 }) {
   const ruleIndex = new Map(catalog.map((rule, index) => [rule.id, index]));
@@ -121,6 +128,7 @@ export function buildReport({
       quarantineMinutes: policy.quarantineMinutes,
       failOn: policy.failOn,
     },
+    provenance: provenance === null ? null : toNfc(provenance),
     targets: targets.map((target) => toNfc(target)),
     summary,
     findings: normalized.map(({ ruleIndex, ...finding }) => finding),

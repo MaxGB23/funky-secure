@@ -10,6 +10,12 @@
     "quarantineMinutes": 1440,
     "failOn": "error"
   },
+  "provenance": {
+    "preset": "baseline",
+    "presetSource": "default",
+    "quarantine": "not declared in this repository",
+    "machine": "included"
+  },
   "targets": [
     {
       "kind": "machine",
@@ -98,7 +104,8 @@
         "line": 11
       },
       "remediation": {
-        "kind": "none"
+        "kind": "manual",
+        "command": "edit .github/workflows/pr-target.yml:11 and drop the checkout of the pull request head"
       },
       "doc": "funky-secure explain no-bot-auto-merge",
       "code": "pr-target-head-checkout"

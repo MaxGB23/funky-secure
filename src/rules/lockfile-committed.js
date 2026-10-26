@@ -1,9 +1,12 @@
 /**
- * R2 — `lockfile-committed` (RFC 8.2).
+ * R2 — `lockfile-committed` (RFC 8.2, 4.6).
  *
  * Pure: presence, the tracked set and the ignore verdicts are resolved by the collector, so this
  * rule never runs git and never reads the lockfile. The lockfileVersion is deliberately not compared
  * with pnpm (RFC 4.1).
+ *
+ * Every failure names the human action that fixes it (S4): the rule can fix nothing itself, so the
+ * remediation is the command a person runs, never a silent `none`.
  */
 
 const DOC = 'docs/rules/lockfile-committed.md';
@@ -25,7 +28,7 @@ export default {
     'pnpm-lock.yaml at the repository root. Outside git only existence is checked and the finding states that the tracked and ignored parts were not evaluated. Inside git a present lockfile must appear in the tracked set and must not match a git ignore rule; an absent file fails with lockfile-missing, an untracked one with lockfile-untracked, an ignored one with lockfile-ignored.',
   evidence: '{ path, present, tracked, ignored } with null where git did not answer',
   remediation:
-    'manual — git add pnpm-lock.yaml (untracked), git check-ignore -v pnpm-lock.yaml to find the ignore source (ignored), pnpm install --lockfile-only (missing).',
+    'manual — git add pnpm-lock.yaml (untracked), git check-ignore -v pnpm-lock.yaml to find the ignore source (ignored), pnpm install (missing).',
   limits:
     'Does not compare lockfileVersion with the installed pnpm: pnpm performs that check on install and a second copy would go stale (RFC 4.1). It does not parse the lockfile, does not read .gitignore and cannot see an ignore rule git did not report through the collected facts.',
   docs: DOC,
@@ -55,7 +58,7 @@ export default {
           'lockfile-missing',
           `${LOCKFILE} is missing from the repository root; installs are not reproducible without it`,
           evidence,
-          { kind: 'manual', command: 'pnpm install --lockfile-only' },
+          { kind: 'manual', command: 'pnpm install' },
         ),
       ];
     }
