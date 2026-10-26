@@ -19,22 +19,33 @@ a plan you read first, and never pretends a policy it cannot verify.
 ## What it writes, and when
 
 `scan` writes nothing at all. Two commands can write, and both print the exact change before it
-happens. `init --apply` performs five writes, each of them a fix for a finding the same run reported:
+happens. `init --apply` performs the writes below, in this order. Each one is a fix for a finding the
+same run reported, and each one is planned from the repository's own files — never from the effective
+configuration the machine happens to satisfy, so the same repository state produces the same plan on
+any laptop:
 
 | Write | File | Change |
 |---|---|---|
 | W1a | `pnpm-workspace.yaml` | `minimumReleaseAgeStrict: true` — turns the quarantine into a gate |
 | W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 4320` — the strict-preset floor, same managed block |
+| W1c | `pnpm-workspace.yaml` | `savePrefix: ''` — stops a later `pnpm add` from saving a caret |
 | W2 | `.gitignore` | the managed block covering the sensitive paths |
 | W3 | `package.json` | `packageManager: pnpm@<version>` — only when the pin is missing |
 | W4 | `funky-secure.config.json` | the strict preset, so CI agrees with the run |
+
+A repository with no `pnpm-workspace.yaml` gets one containing the managed block and nothing else, so
+`init --apply` is a usable pnpm bootstrap rather than a patch for an already-configured repository.
+The human plan ends with the steps the tool refuses to run — `pnpm install` when there is no lockfile,
+`funky-secure migrate --apply` when a foreign lockfile coexists with the pnpm one, `git add` of what
+it wrote — printed in order and never executed.
 
 `migrate --apply` performs one removal: the foreign lockfile, step 4 of its plan. It refuses to
 do so without a `pnpm-lock.yaml` (never delete the only lockfile), on the default branch, with a
 detached `HEAD`, with uncommitted changes in the files it would remove, or when git cannot report the
 tree. `init --apply` refuses a target file with uncommitted changes the same way. Every refusal exits
-`2` and names the reason; a value that exists and differs is reported as a `conflict` and left alone,
-never overwritten. A second `--apply` over the same state writes nothing.
+`2` with the action on the first line and the reason on the second; a value that exists and differs is
+reported as a `conflict` and left alone, never overwritten. A second `--apply` over the same state
+writes nothing.
 
 What stays manual is deliberate: removing a file from the git index, rotating a credential, resolving
 a SHA for an action tag, and re-resolving a dependency range all need a decision or the network, so

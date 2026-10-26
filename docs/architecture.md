@@ -45,6 +45,10 @@ report, which is why the plan and the report cannot describe different repositor
   reviewed change, not an incidental import. Probes are cached per run and never retried.
 - **The verdict is computed once**, in the report layer, from effective severities and `--fail-on` —
   never inside a rule, never inside a renderer.
+- **Provenance is stated, never inferred.** The report says which file the preset came from and
+  whether the repository itself declares the quarantine key; it never attributes an effective pnpm
+  value to the project or to the machine, because the effective configuration reports no origin
+  (RFC 9.4, E2). Both renderings read the one object `scan` resolved.
 - **The renderers never compute.** Human and JSON read the same report object, so they cannot
   disagree; a passing finding is serialized away only because the report already counted it.
 - **The machine is read-only, permanently.** No probe writes an environment variable, a global
