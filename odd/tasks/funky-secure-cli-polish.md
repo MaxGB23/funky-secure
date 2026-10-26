@@ -61,9 +61,10 @@ target list, and no version bump. The drift gate, the goldens and the self-scan 
 
 | ID | Task | Spec | Route | Commit |
 |---|---|---|---|---|
-| T1 | Messages and remediations: actionable failures, one-sentence exit 2, informing skips, provenance header | S4, S5, S6, S7 | worker | — |
-| T2 | Deterministic `init`, pnpm bootstrap, `savePrefix: ''`, `next steps` | S1, S2, S3 | worker | — |
-| T3 | `docs/guide.md`, README in the funky-forge shape, architecture/cli/concept/decisions sync | S8 | inline | — |
+| T0 | RFC revision 6 (v1.5): write catalog W1c, host-independent plan, next steps, message rule, provenance, guide in the doc set | all | inline | `f077c73` |
+| T1 | Messages and remediations: actionable failures, one-sentence exit 2, informing skips, provenance header | S4, S5, S6, S7 | worker | `eea6e32` |
+| T2 | Deterministic `init`, pnpm bootstrap, `savePrefix: ''`, `next steps` | S1, S2, S3 | worker | `8146d61` (spec wording `a3fdbd3`) |
+| T3 | `docs/guide.md`, README in the funky-forge shape, architecture/cli/concept/decisions sync | S8 | inline | `5451ce5` |
 
 ## Log
 
@@ -116,3 +117,26 @@ not see (no fixture has an untracked token). RED first (the new rule test failed
 recorded: the first draft of the S5/documented shape mentioned `--verbose`, a flag that does not exist;
 `docs/cli.md`, RFC 10.4 and S5 were corrected to the single two-line shape the implementation actually
 produces.
+
+L9 — 2026-10-26, feature closed on evidence. T2 committed as `8146d61` (spec wording first, in
+`a3fdbd3`), the suite runs 347/347 with the drift gate green, `scan --scope repo --fail-on warn` exits
+0, no golden changed, and the working tree is clean. Re-measured live from the repacked tarball in a
+fresh repository outside this one (`M:/pruebas/funky-live-bootstrap`, tool installed from
+`.tmp/funky-secure-0.3.0.tgz`), which is the only measurement this document accepts as proof:
+
+- `init --preset strict` on a repository with no `pnpm-workspace.yaml` plans four writes — pin, managed
+  block, `.gitignore`, strict config — on a machine whose global configuration already satisfies the
+  policy, which is S1 proven where it used to fail; the block it writes is the gate, the 4320 floor and
+  `savePrefix: ''`, and the plan ends with `pnpm install` plus the `git add` of the four paths.
+- `--apply` performs exactly those four writes with their digests, a second `--apply` prints
+  `nothing to apply`, and `savePrefix: ''` takes effect: `pnpm add left-pad` then saved `1.3.0`, where
+  the same command without the key saved `^1.3.0`. The smallest-reproduction caveat is recorded: pnpm
+  does not rewrite a specifier that already exists, so the key prevents new carets and `exact-versions`
+  remains the way to fix the ones already there.
+- `--scope all --strict-probes` exits 1 in that repository, correctly and legibly: the three `ci` rules
+  report the unavailable required probe instead of passing, which is the `--strict-probes` contract.
+- T3 committed as `5451ce5`.
+
+Not closed by this feature, by design: the release number (the owner decides when he is satisfied) and
+the README image (pending). `docs/rules/foreign-lockfile.md` keeps its per-manager `--from` remediation:
+that is the rule's message, not the plan's next step, and the page already explains the yarn case.
