@@ -75,8 +75,20 @@ a guess.
 
 ## Remediation
 
-`auto`: `funky-secure init --apply` writes the managed block that sets
-`minimumReleaseAgeStrict: true`, plus `minimumReleaseAge: 4320` under `--preset strict`.
+`auto`: `funky-secure init --apply` writes one managed block in `pnpm-workspace.yaml` that carries
+`minimumReleaseAgeStrict: true`, plus `minimumReleaseAge: 4320` under `--preset strict`, plus
+`savePrefix: ''`. The last key is W1c (D-18) and it is not about the quarantine: it is the
+project-level setting that stops a later `pnpm add` from saving a caret, measured on pnpm 12.3.4 as
+`^1.3.0` without the key and `1.3.0` with it, so a repository cannot drift back to floating ranges
+after it is reported clean.
+
+The plan reads the repository, never the machine (RFC 11.2.1). W1a's condition is "this repository's
+`pnpm-workspace.yaml` does not declare `minimumReleaseAgeStrict: true` inside the managed block", not
+"the effective strictness is false": a machine whose global configuration already meets the policy
+would otherwise make this rule pass and the block would never be written, hardening the repository
+only on that one laptop. The effective value above stays the finding's evidence; it is never a plan
+input. The same key declared **outside** the block is refused as a conflict — two sources for one
+setting is the defect this product reports.
 
 Manual equivalents: `pnpm config set minimum-release-age-strict true --location=project` and
 `pnpm config set minimum-release-age 4320 --location=project`. In pnpm 12 both write

@@ -3,7 +3,13 @@
  * offer, not a verdict: the command exits 0 whatever the plan contains.
  */
 
-import { applyPlan, derivePlan, renderPlanHuman, renderPlanJson } from '../lib/plan.js';
+import {
+  applyPlan,
+  deriveNextSteps,
+  derivePlan,
+  renderPlanHuman,
+  renderPlanJson,
+} from '../lib/plan.js';
 import { collectScan } from '../lib/scan.js';
 import { TOOL } from '../lib/tool.js';
 import { planStrictConfig } from '../lib/writers.js';
@@ -81,7 +87,15 @@ export async function run({
   const text =
     format === 'json'
       ? renderPlanJson({ tool: TOOL, command: 'init', policy, plan })
-      : renderPlanHuman({ command: 'init', preset: policy.preset, plan, apply });
+      : renderPlanHuman({
+          command: 'init',
+          preset: policy.preset,
+          plan,
+          apply,
+          // The steps a human must run (RFC 11.2.2). The human rendering only: the JSON document is a
+          // pure plan and carries no prose.
+          nextSteps: deriveNextSteps({ plan, repo: ctx.repo }),
+        });
   stdout.write(text);
 
   if (!apply) return 0;

@@ -1,5 +1,5 @@
 /**
- * The five writes of `init --apply` (RFC 11.2): W1a, W1b, W2, W3 and W4.
+ * The five writes of `init --apply` (RFC 11.2): W1a, W1b and W1c in one managed block, W2, W3 and W4.
  *
  * A builder receives bytes and resolved facts and returns the bytes it would write; none of them
  * reads or writes a file, so the plan is a pure function of the repository state the scan already
@@ -17,7 +17,7 @@
 
 import { basename, resolve } from 'node:path';
 
-import { upsertBlock } from './managed-block.js';
+import { upsertBlock, blockValues } from './managed-block.js';
 import { validateWriteTarget } from './paths.js';
 import { planItem } from './plan.js';
 import { QUARANTINE_STRICT_MINUTES } from './policy.js';
@@ -37,8 +37,45 @@ export const GITIGNORE_ENTRIES = Object.freeze([
   '*.key',
 ]);
 
-const QUARANTINE_GATE_LINE = 'minimumReleaseAgeStrict: true';
+const QUARANTINE_GATE_KEY = 'minimumReleaseAgeStrict';
+const QUARANTINE_GATE_LINE = `${QUARANTINE_GATE_KEY}: true`;
+const SAVE_PREFIX_KEY = 'savePrefix';
+const SAVE_PREFIX_LINE = `${SAVE_PREFIX_KEY}: ''`;
+const EMPTY_PREFIX_VALUES = new Set(["''", '""']);
 const AUTH_TOKEN = /_authToken\s*=/;
+
+/**
+ * `a`, `a and b`, `a, b and c`: the shapes the reason sentences are built from.
+ * @param {string[]} items
+ * @returns {string}
+ */
+function joinWords(items) {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+}
+
+/**
+ * What this repository's own managed block declares (RFC 11.2.1, W1a and W1c).
+ *
+ * W1a's condition is "the block does not declare `minimumReleaseAgeStrict: true`", never "the effective
+ * strictness is false": the plan reads these bytes and the bytes next to them, so a machine whose
+ * global configuration already satisfies the policy cannot suppress the write. The machine's effective
+ * value stays a *finding* of the `quarantine` rule; it is never a plan input.
+ *
+ * A key declared outside the block declares nothing here: that is the duplicate source `upsertBlock`
+ * refuses, so it becomes a conflict instead of a silent `would-skip`.
+ *
+ * @param {string | null | undefined} text the bytes of `pnpm-workspace.yaml`, `null` when absent
+ * @returns {{ gate: boolean, savePrefix: boolean }}
+ */
+export function workspaceBlockFacts(text) {
+  const block = blockValues(typeof text === 'string' ? text : '');
+  return {
+    gate: block.values[QUARANTINE_GATE_KEY] === 'true',
+    savePrefix: EMPTY_PREFIX_VALUES.has(block.values[SAVE_PREFIX_KEY]),
+  };
+}
 
 /**
  * The findings the engine reported for one rule. Plan functions read the report instead of calling
@@ -55,7 +92,10 @@ export function findingsOf(report, ruleId) {
 /**
  * The effective quarantine strictness the manager applies (E1): a reported flag wins, and an
  * explicitly configured `minimumReleaseAge` makes pnpm default the flag to true. `null` means the
- * configuration was not available, so W1a cannot be planned from it.
+ * configuration was not available.
+ *
+ * This is the `quarantine` rule's *finding* input and never a plan input: W1a reads the repository's
+ * own managed block (RFC 11.2.1).
  * @param {object} ctx
  * @returns {boolean | null}
  */
@@ -132,13 +172,15 @@ export function planTarget(ctx, { relative, operation, result }) {
 }
 
 /**
- * W1a and W1b in one managed block of `pnpm-workspace.yaml`.
+ * W1a, W1b and W1c in one managed block of `pnpm-workspace.yaml`.
  *
- * `minimumReleaseAgeStrict: true` is always written (the gate flip). `minimumReleaseAge: 4320` is
- * written only for the strict preset, in the same block, so the file stays one unit of review.
- * A file that declares either key outside the block is a conflict: two sources for one setting is
- * the defect this product reports. A missing file is created with the block only — never a
- * `packages:` key — and the reason says the repository becomes a pnpm workspace root.
+ * `minimumReleaseAgeStrict: true` is always written (the gate flip, W1a). `minimumReleaseAge: 4320` is
+ * written only for the strict preset (W1b), in the same block, so the file stays one unit of review.
+ * `savePrefix: ''` is always written too (W1c): it is the project-level setting that stops a later
+ * `pnpm add` from saving a caret, which measurement on pnpm 12.3.4 confirms (`^1.3.0` without the key,
+ * `1.3.0` with it). A file that declares any of these keys outside the block is a conflict: two sources
+ * for one setting is the defect this product reports. A missing file is created with the block only —
+ * never a `packages:` key — and the reason says the repository becomes a pnpm workspace root.
  *
  * @param {{ workspaceYaml?: string | null, preset?: string }} [options]
  * @returns {{ ok: true, operation: string, content: string, reason: string, state: string } | { ok: false, state: 'conflict', reason: string, key: string | null }}
@@ -155,11 +197,19 @@ export function writeQuarantineGate({ workspaceYaml = null, exists = false, pres
   const existing = typeof workspaceYaml === 'string' ? workspaceYaml : null;
   const strictFloor = preset === 'strict';
   const body = [QUARANTINE_GATE_LINE];
-  const keys = ['minimumReleaseAgeStrict'];
+  const keys = [QUARANTINE_GATE_KEY];
+  const values = [QUARANTINE_GATE_LINE];
+  const effects = ['turn the quarantine into a gate'];
   if (strictFloor) {
     body.push(`minimumReleaseAge: ${QUARANTINE_STRICT_MINUTES}`);
     keys.push('minimumReleaseAge');
+    values.push(`minimumReleaseAge: ${QUARANTINE_STRICT_MINUTES}`);
+    effects.push('set the strict floor');
   }
+  body.push(SAVE_PREFIX_LINE);
+  keys.push(SAVE_PREFIX_KEY);
+  values.push(SAVE_PREFIX_LINE);
+  effects.push('stop a later pnpm add from saving a caret');
 
   const upserted = upsertBlock(existing ?? '', body.join('\n'), { keys });
   if (!upserted.ok) {
@@ -179,19 +229,15 @@ export function writeQuarantineGate({ workspaceYaml = null, exists = false, pres
     };
   }
 
-  const values = strictFloor
-    ? 'minimumReleaseAgeStrict: true and minimumReleaseAge: 4320'
-    : 'minimumReleaseAgeStrict: true';
-  const effect = strictFloor
-    ? 'turn the quarantine into a gate and set the strict floor'
-    : 'turns the quarantine into a gate';
+  const written = joinWords(values);
+  const effect = joinWords(effects);
 
   let reason;
   if (upserted.changed) {
     const creates = existing === null;
-    reason = `${values} ${effect}${creates ? `; creating ${WORKSPACE_RELATIVE} makes this repository a pnpm workspace root` : ''}`;
+    reason = `${written} ${effect}${creates ? `; creating ${WORKSPACE_RELATIVE} makes this repository a pnpm workspace root` : ''}`;
   } else {
-    reason = `the managed block already carries ${values}`;
+    reason = `the managed block already carries ${written}`;
   }
 
   return {
@@ -493,8 +539,9 @@ export function planStrictConfig(ctx, { configText = null, existingPath = null }
 
 /**
  * Every write the RFC authorizes for this run, in W1..W4 order: a convenience for callers that hold
- * a context and a report. Conditions follow RFC 11.2 — W1a when the effective strictness is false,
- * W1b when the preset is `strict`, W2 when `sensitive-ignored` failed, W3 when
+ * a context and a report. Conditions follow RFC 11.2 and 11.2.1 — W1a when this repository's managed
+ * block does not declare the gate, whatever the machine applies, W1b when the preset is `strict`, W1c
+ * when the block does not carry `savePrefix: ''`, W2 when `sensitive-ignored` failed, W3 when
  * `package-manager-pin` failed (a conflicting pin becomes a conflict item), W4 when the preset is
  * `strict`. Without a report the rule-driven writes (W2, W3) are not planned: no finding, no fix.
  *
@@ -510,10 +557,10 @@ export function planFor(
 
   const items = [];
   const preset = policy.preset === 'strict' ? 'strict' : 'baseline';
+  const block = workspaceBlockFacts(ctx.repo.files?.workspaceYaml?.text ?? null);
 
-  // W1a: the quarantine auto-approves instead of gating. W1b: the strict preset also asks for the
-  // floor, whether or not the gate is already strict.
-  if (quarantineStrictness(ctx) === false || preset === 'strict') {
+  // W1a, W1b, W1c: the repository's own block is the condition, never the effective strictness.
+  if (!block.gate || !block.savePrefix || preset === 'strict') {
     items.push(
       planTarget(ctx, {
         relative: WORKSPACE_RELATIVE,

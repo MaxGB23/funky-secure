@@ -39,10 +39,12 @@ function bodyLinesOf(body) {
 }
 
 /**
+ * Splits a top-level `key: value` line. An indented line, a comment and a line without a top-level
+ * colon declare nothing, and a quoted key is unquoted.
  * @param {string} line
- * @returns {string | null}
+ * @returns {{ key: string, value: string } | null}
  */
-function topLevelKeyOf(line) {
+function declarationOf(line) {
   if (line === '' || /^[ \t]/.test(line)) return null;
   const trimmed = line.trimEnd();
   if (trimmed.startsWith('#')) return null;
@@ -53,12 +55,20 @@ function topLevelKeyOf(line) {
     index = trimmed.indexOf(':', index + 1);
   }
   if (index === -1) return null;
-  const key = trimmed.slice(0, index).trim();
+  let key = trimmed.slice(0, index).trim();
   if (key === '') return null;
   if ((key.startsWith("'") && key.endsWith("'")) || (key.startsWith('"') && key.endsWith('"'))) {
-    return key.slice(1, -1);
+    key = key.slice(1, -1);
   }
-  return key;
+  return { key, value: trimmed.slice(index + 1).trim() };
+}
+
+/**
+ * @param {string} line
+ * @returns {string | null}
+ */
+function topLevelKeyOf(line) {
+  return declarationOf(line)?.key ?? null;
 }
 
 /**
@@ -96,6 +106,29 @@ export function readBlock(text) {
     startLine: start + 1,
     endLine: end + 1,
   };
+}
+
+/**
+ * The declarations the managed block carries, keyed by top-level name and valued by the raw text after
+ * the colon — `savePrefix: ''` is the value `"''"`, so a caller can tell an empty string from an absent
+ * key. A file without a block declares nothing, and a begin marker without an end marker is reported
+ * as malformed instead of being read as declarations.
+ * @param {string} text
+ * @returns {{ present: boolean, malformed: boolean, values: Record<string, string> }}
+ */
+export function blockValues(text) {
+  const block = readBlock(text);
+  /** @type {Record<string, string>} */
+  const values = {};
+  if (block.present !== true) {
+    return { present: false, malformed: block.malformed === true, values };
+  }
+  for (const line of block.body.split(/\r\n|\n|\r/)) {
+    const declaration = declarationOf(line);
+    if (declaration === null) continue;
+    values[declaration.key] = declaration.value;
+  }
+  return { present: true, malformed: false, values };
 }
 
 /**

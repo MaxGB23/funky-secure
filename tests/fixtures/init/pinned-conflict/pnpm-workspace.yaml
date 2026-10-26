@@ -4,4 +4,5 @@ packages:
 # funky-secure:begin (managed block — do not edit by hand)
 minimumReleaseAgeStrict: true
 minimumReleaseAge: 4320
+savePrefix: ''
 # funky-secure:end

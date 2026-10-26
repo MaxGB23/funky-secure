@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { BEGIN, END, readBlock, upsertBlock } from '../src/lib/managed-block.js';
+import { BEGIN, END, blockValues, readBlock, upsertBlock } from '../src/lib/managed-block.js';
 
 const BODY = 'minimumReleaseAgeStrict: true';
 
@@ -88,4 +88,29 @@ test('preserves CRLF line endings and the trailing newline', () => {
 
 test('reads an absent block as absent', () => {
   assert.deepEqual(readBlock('node_modules/\n'), { present: false });
+});
+
+test('reads the declarations of the block, not the lines around it', () => {
+  const text = ['minimumReleaseAge: 1440', '', BEGIN, BODY, "savePrefix: ''", END, ''].join('\n');
+
+  assert.deepEqual(blockValues(text), {
+    present: true,
+    malformed: false,
+    values: { minimumReleaseAgeStrict: 'true', savePrefix: "''" },
+  });
+});
+
+test('a file without a block declares nothing', () => {
+  assert.deepEqual(blockValues('packages:\n  - packages/*\n'), {
+    present: false,
+    malformed: false,
+    values: {},
+  });
+  assert.deepEqual(blockValues(''), { present: false, malformed: false, values: {} });
+});
+
+test('a begin marker without an end marker declares nothing and is reported malformed', () => {
+  const text = [BEGIN, BODY, ''].join('\n');
+
+  assert.deepEqual(blockValues(text), { present: false, malformed: true, values: {} });
 });

@@ -12,6 +12,7 @@ import { dirname, relative } from 'node:path';
 
 import { ConfigError } from './errors.js';
 import { statusPorcelain } from './git.js';
+import { FOREIGN_LOCKFILES } from './targets.js';
 
 export const PLAN_STATES = ['would-write', 'would-skip', 'conflict'];
 
@@ -73,9 +74,59 @@ export function renderPlanJson({ tool, command, policy, plan, refused = [], time
 }
 
 /**
- * @param {{ command: string, preset: string, plan: Array<object>, refused?: Array<object> }} options
+ * The paths a plan writes, relative to the repository root and in plan order (RFC 11.2.2). A plan item
+ * that is already at policy or refused writes nothing, so it is not staged either.
+ * @param {Array<object>} plan
+ * @param {string | null} root
+ * @returns {string[]}
  */
-export function renderPlanHuman({ command, preset, plan, refused = [], apply = false }) {
+function writtenPaths(plan, root) {
+  const paths = [];
+  for (const item of plan) {
+    if (item.state !== 'would-write') continue;
+    const path = typeof root === 'string' ? relative(root, item.path) : item.path;
+    const normalized = path.split('\\').join('/');
+    if (!paths.includes(normalized)) paths.push(normalized);
+  }
+  return paths;
+}
+
+/**
+ * The steps only a human can run (RFC 11.2.2), in the order they must run. This tool never runs an
+ * install, never migrates and never stages (RFC 11.6), so each step is printed and left alone.
+ *
+ * `pnpm install` comes first because a repository with no lockfile has nothing to verify;
+ * `migrate --apply` needs the pnpm lockfile to exist first, which is why it is the case where the
+ * foreign lockfile coexists with the pnpm one; `git add` closes the sequence so the next `--apply`
+ * over the same state is not refused as dirty.
+ *
+ * `--from` is deliberately omitted from the migrate step: the plan names the command, and `migrate`
+ * names the manager it actually finds. A `yarn.lock` needs `pnpm import`, not `pnpm install`, so
+ * pinning `--from npm` here would force the wrong step on a yarn repository (RFC 11.2.2, 11.3).
+ *
+ * @param {{ plan?: Array<object>, repo?: object | null }} [options]
+ * @returns {string[]}
+ */
+export function deriveNextSteps({ plan = [], repo = null } = {}) {
+  if (repo === null || repo === undefined) return [];
+  const present = Array.isArray(repo.present) ? repo.present : [];
+  const hasLockfile = present.includes('pnpm-lock.yaml');
+  const foreign = present.filter((name) => FOREIGN_LOCKFILES.includes(name));
+
+  const steps = [];
+  if (!hasLockfile) steps.push('pnpm install');
+  if (hasLockfile && foreign.length > 0) steps.push('funky-secure migrate --apply');
+
+  const written = writtenPaths(plan, repo.root ?? null);
+  if (written.length > 0) steps.push(`git add ${written.join(' ')}`);
+
+  return steps;
+}
+
+/**
+ * @param {{ command: string, preset: string, plan: Array<object>, refused?: Array<object>, nextSteps?: string[] }} options
+ */
+export function renderPlanHuman({ command, preset, plan, refused = [], apply = false, nextSteps = [] }) {
   const mode = apply ? 'applying the plan below' : 'plan only (nothing has been written)';
   const lines = [`funky-secure ${command}  ·  preset ${preset}  ·  ${mode}`, ''];
 
@@ -105,6 +156,11 @@ export function renderPlanHuman({ command, preset, plan, refused = [], apply = f
   const skips = plan.filter((item) => item.state === 'would-skip').length;
   const conflicts = plan.filter((item) => item.state === 'conflict').length;
   lines.push(`summary  ${writes} write${writes === 1 ? '' : 's'} · ${skips} already at policy · ${conflicts} conflict${conflicts === 1 ? '' : 's'}`);
+
+  if (nextSteps.length > 0) {
+    lines.push('', 'next steps');
+    for (const step of nextSteps) lines.push(`  ${step}`);
+  }
 
   return `${lines.join('\n')}\n`;
 }

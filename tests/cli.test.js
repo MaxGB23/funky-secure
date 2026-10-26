@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { FLAGS, parseArgs, renderHelp, run } from '../src/cli.js';
+import { BEGIN, END } from '../src/lib/managed-block.js';
 import { catalog } from '../src/rules/index.js';
 import { FIXTURES, buildFixtureCollector } from '../scripts/gen-golden.js';
 
@@ -320,24 +321,50 @@ test('explain with an unknown rule id exits 2 and names the id', async (t) => {
   assert.ok(streams.stderr.text.includes('ghost'));
 });
 
-test('init prints a plan and writes nothing without --apply', async (t) => {
+test('init prints a non-empty plan and writes nothing without --apply', async (t) => {
   const dir = scratch(t);
   const streams = io(dir);
   const code = await run(['init'], streams);
 
   assert.equal(code, 0);
-  assert.ok(streams.stdout.text.includes('nothing to apply'));
-  assert.deepEqual(readdirSync(dir), []);
+  // A directory with no pnpm-workspace.yaml gets one planned (W1a/W1c), so this proves the write did
+  // not happen while the plan was non-empty — not that the plan happened to be empty.
+  assert.match(streams.stdout.text, /would write/);
+  assert.ok(streams.stdout.text.includes('pnpm-workspace.yaml'));
+  assert.equal(streams.stdout.text.includes('nothing to apply'), false);
+  // The steps the tool refuses to take are printed, never executed (RFC 11.2.2).
+  assert.match(streams.stdout.text, /next steps\n {2}pnpm install\n/);
+  assert.deepEqual(readdirSync(dir), [], 'the plan wrote nothing');
 });
 
 test('init --apply on an empty plan writes nothing', async (t) => {
   const dir = scratch(t);
+  // A repository already at policy: the pin is declared, the managed block carries the gate and
+  // savePrefix, a pnpm lockfile exists and nothing else is left to plan.
+  writeFileSync(
+    join(dir, 'package.json'),
+    '{\n  "name": "at-policy",\n  "private": true,\n  "packageManager": "pnpm@12.3.4"\n}\n',
+  );
+  writeFileSync(
+    join(dir, 'pnpm-workspace.yaml'),
+    `${BEGIN}\nminimumReleaseAgeStrict: true\nsavePrefix: ''\n${END}\n`,
+  );
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const before = ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].map((name) => [
+    name,
+    readFileSync(join(dir, name), 'utf8'),
+  ]);
+
   const streams = io(dir);
   const code = await run(['init', '--apply'], streams);
 
   assert.equal(code, 0);
   assert.ok(streams.stdout.text.includes('nothing to apply'));
-  assert.deepEqual(readdirSync(dir), []);
+  assert.equal(streams.stdout.text.includes('next steps'), false, 'no human step applies');
+  for (const [name, text] of before) {
+    assert.equal(readFileSync(join(dir, name), 'utf8'), text, `${name} was written`);
+  }
+  assert.deepEqual(readdirSync(dir).sort(), before.map(([name]) => name).sort());
 });
 
 test('migrate prints the five RFC steps in order from the repository facts', async (t) => {
