@@ -141,6 +141,12 @@ The exit code is the stable contract for CI and for agents (RFC 10.4).
 There is one code per outcome and no code is reused: the RFC defines `0`, `1` and `2`, and
 everything that is neither a violation nor a tool failure exits `0` (see the `0` row above).
 
+A code `2` is two lines on stderr: `funky-secure: <the action to take>` and `reason: <the internal
+diagnosis>`. The action comes first because the reader needs it first; the diagnosis is what the tool
+knows and the human may not, and it is complete — there is no verbose mode to ask for more. The same
+shape applies to every refusal (`init` over a dirty target, `migrate` on the default branch): the first
+line names the fix, the second names the condition that refused.
+
 ## JSON documents
 
 ### Scan report
@@ -151,9 +157,15 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.3.0" },
+  "tool": { "name": "funky-secure", "version": "0.4.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
+  "provenance": {
+    "configPath": null,
+    "presetSource": "default",
+    "machineIncluded": true,
+    "quarantineDeclaredIn": null
+  },
   "targets": [],
   "summary": { "error": 0, "warn": 0, "info": 0, "pass": 0, "skip": 0, "verdict": "pass" },
   "findings": []
@@ -170,7 +182,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.3.0" },
+  "tool": { "name": "funky-secure", "version": "0.4.0" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -203,7 +215,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.3.0" },
+  "tool": { "name": "funky-secure", "version": "0.4.0" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```

@@ -102,6 +102,20 @@ async function migrate(t, argv, dir, collectorOptions = {}) {
 
 const STEPS = /1\. evidence[\s\S]*2\. report-only[\s\S]*3\. human step[\s\S]*4\. removal[\s\S]*5\. ci follow-up/;
 
+/**
+ * The two lines of a refusal (S5): one actionable sentence first, the internal diagnosis after a
+ * `reason:` label. Returns them split, and asserts the shape every refusal must have.
+ * @param {string} stderr
+ * @returns {{ action: string, reason: string }}
+ */
+function refusal(stderr) {
+  const lines = stderr.split('\n');
+  assert.match(lines[0], /^funky-secure: \S/);
+  assert.match(lines[1], /^reason: /);
+  assert.equal(lines[2], '', 'a refusal is exactly two lines');
+  return { action: lines[0].slice('funky-secure: '.length), reason: lines[1].slice('reason: '.length) };
+}
+
 test('apply on a clean feature branch removes exactly the foreign lockfile', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
@@ -135,8 +149,9 @@ test('apply refuses without pnpm-lock.yaml and keeps the only lockfile', async (
   const result = await migrate(t, ['migrate', '--apply'], dir, { defaultRef: 'origin/main' });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /^funky-secure: refusing to remove package-lock\.json: pnpm-lock\.yaml is absent/);
-  assert.ok(result.stderr.includes('never delete the only lockfile'));
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
+  assert.equal(reason, 'refusing to remove package-lock.json: pnpm-lock.yaml is absent (never delete the only lockfile)');
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json']);
 });
 
@@ -153,9 +168,12 @@ test('apply refuses on the default branch read from origin/HEAD', async (t) => {
   });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /refusing to remove package-lock\.json: the current branch main is the default branch/);
-  assert.ok(result.stderr.includes('refs/remotes/origin/HEAD'));
-  assert.equal(result.stderr.includes('fallback'), false);
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(action, 'switch to a feature branch and re-run migrate --apply');
+  assert.equal(
+    reason,
+    'refusing to remove package-lock.json: the current branch main is the default branch, read from refs/remotes/origin/HEAD',
+  );
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
 });
 
@@ -170,10 +188,12 @@ test('apply without a remote says the main/master check is a fallback', async (t
     const result = await migrate(t, ['migrate', '--apply'], dir, { branch, defaultRef: null });
 
     assert.equal(result.code, 2);
-    assert.match(result.stderr, new RegExp(`the current branch ${branch} matches the main/master check`));
-    assert.ok(result.stderr.includes('fallback'), 'the refusal states that the check is a fallback');
-    assert.ok(result.stderr.includes('refs/remotes/origin/HEAD'));
-    assert.ok(readdirSync(dir).includes('package-lock.json'));
+    const { action, reason } = refusal(result.stderr);
+    assert.equal(action, 'switch to a feature branch and re-run migrate --apply');
+    assert.equal(
+      reason,
+      `refusing to remove package-lock.json: the current branch ${branch} matches the main/master check, which is a fallback because refs/remotes/origin/HEAD could not be read (the repository has no remote)`,
+    );
     assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
   }
 });
@@ -192,8 +212,12 @@ test('apply refuses a dirty lockfile path, and --allow-dirty proceeds', async (t
   });
 
   assert.equal(refused.code, 2);
-  assert.match(refused.stderr, /refusing to remove package-lock\.json: uncommitted changes for package-lock\.json/);
-  assert.ok(refused.stderr.includes('--allow-dirty'));
+  const { action, reason } = refusal(refused.stderr);
+  assert.equal(action, 'commit package-lock.json or pass --allow-dirty, then re-run');
+  assert.equal(
+    reason,
+    'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
+  );
   assert.deepEqual(readdirSync(refusedDir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
 
   const allowedDir = repository(t, files);
@@ -228,9 +252,11 @@ test('apply refuses a dirty lockfile when run from a subdirectory', async (t) =>
   const code = await run(['migrate', '--apply'], { cwd, env: {}, stdout, stderr, collector });
 
   assert.equal(code, 2);
-  assert.match(
-    stderr.text,
-    /refusing to remove package-lock\.json: uncommitted changes for package-lock\.json/,
+  const { action, reason } = refusal(stderr.text);
+  assert.equal(action, 'commit package-lock.json or pass --allow-dirty, then re-run');
+  assert.equal(
+    reason,
+    'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
   );
   const status = collector.calls.find((args) => args[0] === 'status');
   assert.deepEqual(status, [
@@ -256,7 +282,12 @@ test('apply refuses when git cannot report the working tree status', async (t) =
   });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /refusing to remove package-lock\.json: git could not report the working tree status/);
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(action, 'pass --allow-dirty, or fix git so git status answers, then re-run');
+  assert.equal(
+    reason,
+    'refusing to remove package-lock.json: git could not report the working tree status (git status --porcelain -z failed)',
+  );
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
 });
 
@@ -270,7 +301,9 @@ test('apply refuses a detached HEAD', async (t) => {
   const result = await migrate(t, ['migrate', '--apply'], dir, { branch: 'HEAD', defaultRef: 'origin/main' });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /refusing to remove package-lock\.json: HEAD is detached/);
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(action, 'check out a branch and re-run migrate --apply');
+  assert.equal(reason, 'refusing to remove package-lock.json: HEAD is detached');
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
 });
 
@@ -284,7 +317,12 @@ test('migrate refuses outside git and removes nothing', async (t) => {
   const result = await migrate(t, ['migrate', '--apply'], dir, { root: null });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /^funky-secure: migrate needs a git repository/);
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(action, 'run migrate inside a git worktree');
+  assert.equal(
+    reason,
+    'migrate needs a git repository: step 4 removes a tracked lockfile on a branch, and this directory is not inside one',
+  );
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
 });
 
@@ -312,7 +350,9 @@ test('a bun-only repository is refused for the missing pnpm lockfile, not remove
   const result = await migrate(t, ['migrate', '--apply'], dir, { defaultRef: 'origin/main' });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /refusing to remove bun\.lock: pnpm-lock\.yaml is absent/);
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
+  assert.equal(reason, 'refusing to remove bun.lock: pnpm-lock.yaml is absent (never delete the only lockfile)');
   assert.deepEqual(readdirSync(dir).sort(), ['bun.lock', 'package.json']);
 });
 
@@ -449,6 +489,7 @@ test('step 4 refuses before it deletes anything, so no lockfile is ever half-rem
   const code = await run(['migrate', '--apply'], { cwd: dir, env: {}, stdout, stderr, collector });
 
   assert.equal(code, 2);
-  assert.match(stderr.text, /yarn\.lock/);
+  const { reason } = refusal(stderr.text);
+  assert.match(reason, /yarn\.lock/);
   assert.ok(existsSync(join(dir, 'package-lock.json')), 'the first target was not deleted');
 });

@@ -11,14 +11,21 @@
  * `detect` is pure: the machine configuration arrives in `ctx.machine.config`. The preset floor
  * arrives in the optional second argument, because the engine does not pass the policy yet; without
  * it the baseline floor of the active major is used, and that fallback is reported in the evidence.
+ *
+ * A skip caused by the scope contract names what was not verified and the command that verifies it
+ * (S6); a skip caused by an unavailable probe stays `probeUnavailable` (RFC 7.3).
+ *
+ * `detect` and `plan` read different things on purpose (RFC 11.2.1): the finding reports the
+ * effective configuration the machine applies, while the plan reads only the repository's own
+ * `pnpm-workspace.yaml`, so a machine that already satisfies the policy cannot suppress the write.
  */
 
 import { quarantineFloor } from '../lib/policy.js';
 import {
   WORKSPACE_RELATIVE,
-  findingsOf,
   planTarget,
   quarantineStrictness,
+  workspaceBlockFacts,
   writeQuarantineGate,
 } from '../lib/writers.js';
 
@@ -39,7 +46,7 @@ export default {
   evidence:
     'effective value, inherited or configured, effective strictness, the preset floor, and the minimumReleaseAgeExclude entries (count and values).',
   remediation:
-    'funky-secure init --apply writes minimumReleaseAgeStrict: true (and the 4320 floor under --preset strict). Manual: pnpm config set minimum-release-age-strict true --location=project. The hotfix escape hatch is minimumReleaseAgeExclude.',
+    'funky-secure init --apply writes minimumReleaseAgeStrict: true (and the 4320 floor under --preset strict), plus savePrefix: \'\' so a later pnpm add cannot save a caret. Manual: pnpm config set minimum-release-age-strict true --location=project. The hotfix escape hatch is minimumReleaseAgeExclude.',
   limits:
     'The effective listing merges global, workspace and environment configuration and cannot attribute a value to its source (E2), so the report never claims one. A hand-written .npmrc value is silently ignored by pnpm and cannot be detected here (E8). An unavailable version leaves the active major unknown and the 11/12 line default is used.',
   docs: DOC,
@@ -53,8 +60,10 @@ export default {
     const config = ctx.machine?.config;
     if (config === null || config === undefined) {
       // `--scope repo` is the supported CI gate (RFC 7.2): the machine configuration is deliberately
-      // out of contract there, so its absence is not an unavailable required probe.
-      const outOfScope = ctx.machine?.configOutOfScope === true;
+      // out of contract there, so its absence is not an unavailable required probe. Either signal —
+      // no machine facts at all, or machine facts collected without their configuration — is the
+      // scope contract, and the skip states what it did not verify (S6).
+      const outOfScope = ctx.machine === null || ctx.machine?.configOutOfScope === true;
       return [
         {
           status: 'skip',
@@ -62,7 +71,7 @@ export default {
           scope: 'repo',
           target: 'repo-root',
           message: outOfScope
-            ? 'skipped: the quarantine is read from the machine configuration, which --scope repo excludes by contract'
+            ? 'skipped: the quarantine was not verified because the machine configuration is out of scope; run funky-secure scan --scope all to verify the release-age gate'
             : 'skipped: pnpm config list --json was unavailable',
           probeUnavailable: !outOfScope,
         },
@@ -137,25 +146,24 @@ export default {
   },
 
   /**
-   * RFC 8.2 fix `auto` (W1a, W1b): one managed block carrying the gate and, under the strict preset,
-   * the 4320 floor. The trigger is the rule's own failing finding, read from the report of this run
-   * (recomputed from the machine fact when no report is passed).
+   * RFC 8.2 fix `auto` (W1a, W1b, W1c): one managed block carrying the gate, the 4320 floor under the
+   * strict preset and `savePrefix: ''`.
+   *
+   * The trigger is this repository's own `pnpm-workspace.yaml`, never the verdict of this run: a plan
+   * derived from the finding would write nothing on a machine whose global configuration already
+   * satisfies the policy, and the repository would only be hardened on that one laptop (RFC 11.2.1).
+   * The effective value stays the finding's business.
    *
    * @param {object} ctx resolved context
-   * @param {{ policy?: { preset?: string }, report?: object }} [options]
+   * @param {{ policy?: { preset?: string } }} [options]
    * @returns {Array<object>} plan items
    */
-  plan(ctx, { policy = {}, report } = {}) {
+  plan(ctx, { policy = {} } = {}) {
     if (!ctx.repo) return [];
 
-    const gate =
-      report === undefined
-        ? quarantineStrictness(ctx) === false
-        : findingsOf(report, this.id).some(
-            (finding) => finding.status === 'fail' && finding.code === 'quarantine-not-strict',
-          );
+    const block = workspaceBlockFacts(ctx.repo.files?.workspaceYaml?.text ?? null);
     const strictFloor = policy.preset === 'strict';
-    if (!gate && !strictFloor) return [];
+    if (block.gate && block.savePrefix && !strictFloor) return [];
 
     return [
       planTarget(ctx, {
@@ -163,6 +171,7 @@ export default {
         operation: 'managed block',
         result: writeQuarantineGate({
           workspaceYaml: ctx.repo.files?.workspaceYaml?.text ?? null,
+          exists: (ctx.repo.present ?? []).includes(WORKSPACE_RELATIVE),
           preset: strictFloor ? 'strict' : 'baseline',
         }),
       }),

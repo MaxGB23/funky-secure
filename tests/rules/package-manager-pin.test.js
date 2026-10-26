@@ -161,6 +161,10 @@ test('machine facts out of scope are a skip, not a failed required probe', () =>
   assert.equal(finding.status, 'skip');
   assert.equal(finding.code, 'no-pnpm');
   assert.equal(finding.probeUnavailable, undefined);
+  assert.equal(
+    finding.message,
+    'skipped: the machine is out of scope, so the declared packageManager pin was not compared with the pnpm that answers; run funky-secure scan --scope all to verify it',
+  );
 });
 
 test('no root package.json is a skip', () => {

@@ -1,11 +1,15 @@
 /**
  * R9 — `no-bot-auto-merge`: can a dependency update reach the default branch without a human
- * reading it? (RFC 8.2 R9, E6)
+ * reading it? (RFC 8.2 R9, E6, 4.6)
  *
  * Two independent signals. The configuration signal is evidence, never a failure: `info` is a
  * severity in the report contract, not a status, and v0.1 cannot lower one finding's severity
  * without changing the policy model, so it rides on a pass. The merge path is attributed through
  * the structural reader, so a step belongs to the job that runs it.
+ *
+ * Every failure carries the edit that removes the path (S4). No shell command deletes a step from a
+ * workflow, so the remediation is the `manual` edit itself, naming the file and the line, and it is
+ * never empty (RFC 4.6).
  */
 
 import { declaresTrigger, parseWorkflow } from '../lib/workflows.js';
@@ -29,6 +33,20 @@ const MERGE_RULE = 'an update is merged by a person after reading the diff and r
  */
 function skip(code, reason) {
   return { status: 'skip', code, message: `skipped: ${reason}`, probeUnavailable: true };
+}
+
+/**
+ * The remediation of an automatic merge path (S4): the edit that removes it, at the exact place the
+ * finding points to. A workflow step is not removable by a command, so the action names the file and
+ * the line instead of leaving the field empty.
+ * @param {string} path repo-relative workflow path
+ * @param {number | undefined} line 1-based line of the step
+ * @param {string} action what to delete there
+ * @returns {{ kind: string, command: string }}
+ */
+function editStep(path, line, action) {
+  const at = Number.isInteger(line) ? `${path}:${line}` : path;
+  return { kind: 'manual', command: `edit ${at} and ${action}` };
 }
 
 /** @param {object} job a job from the structural reader */
@@ -152,7 +170,7 @@ export default {
                 line: step.line,
                 message: `job "${job.id}" runs gh pr merge for a bot actor; ${MERGE_RULE}`,
                 evidence: { job: job.id, step: step.index, run: step.run },
-                remediation: { kind: 'none' },
+                remediation: editStep(file.path, step.line, 'delete the automatic merge step'),
               });
               continue;
             }
@@ -164,7 +182,7 @@ export default {
                 line: step.line,
                 message: `job "${job.id}" runs an automerge action for a bot actor; ${MERGE_RULE}`,
                 evidence: { job: job.id, step: step.index, uses: step.uses },
-                remediation: { kind: 'none' },
+                remediation: editStep(file.path, step.line, 'delete the automerge action step'),
               });
             }
           }
@@ -180,7 +198,7 @@ export default {
           line: checkout.line,
           message: `job "${job.id}" runs on pull_request_target and checks out the pull request head; repository secrets are exposed to untrusted code`,
           evidence: { job: job.id, line: checkout.line },
-          remediation: { kind: 'none' },
+          remediation: editStep(file.path, checkout.line, 'drop the checkout of the pull request head'),
         });
       }
     }

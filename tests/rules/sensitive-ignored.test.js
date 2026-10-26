@@ -113,6 +113,18 @@ test('a root .npmrc with an auth token is redacted in the evidence and absent fr
   assert.ok(!JSON.stringify(failures[0]).includes('npm_secret_value'));
 });
 
+test('an untracked .npmrc with a token still names the action: rotate it, then delete the file', () => {
+  const text = '//registry.npmjs.org/:_authToken=npm_secret_value\n';
+  const [finding] = rule
+    .detect(ctx({ npmrc: { path: '/repo/.npmrc', text } }))
+    .filter((candidate) => candidate.code === 'npmrc-token');
+
+  assert.equal(finding.remediation.kind, 'manual');
+  assert.match(finding.remediation.command, /rotate/);
+  assert.match(finding.remediation.command, /\.npmrc/);
+  assert.equal(finding.remediation.command.includes('npm_secret_value'), false);
+});
+
 test('tracked *.pem and *.key files are findings with a manual removal command', () => {
   const findings = rule.detect(ctx({ tracked: ['certs/server.pem', 'server.key', 'src/index.js'] }));
   const failures = findings.filter((finding) => finding.status === 'fail');

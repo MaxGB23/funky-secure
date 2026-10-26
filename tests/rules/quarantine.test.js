@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { resolvePolicy } from '../../src/lib/policy.js';
+import { BEGIN, END } from '../../src/lib/managed-block.js';
 import rule from '../../src/rules/quarantine.js';
 
 /**
@@ -149,6 +150,26 @@ test('no pnpm configuration is a skip, not a guessed pass', () => {
   assert.ok(finding.message.startsWith('skipped: '));
 });
 
+test('a machine excluded by the scope contract says what was not verified and how to verify it', () => {
+  const context = ctx(null);
+  context.scope = 'repo';
+  context.machine = null;
+
+  const [finding] = rule.detect(context);
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'machine-out-of-scope');
+  assert.notEqual(
+    finding.probeUnavailable,
+    true,
+    'a scope contract skip is not an unavailable required probe',
+  );
+  assert.equal(
+    finding.message,
+    'skipped: the quarantine was not verified because the machine configuration is out of scope; run funky-secure scan --scope all to verify the release-age gate',
+  );
+});
+
 function scratch(t) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-quarantine-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -184,13 +205,17 @@ function withRepo(context, root, workspaceYaml = null) {
   return context;
 }
 
-test('plan() writes the gate when the quarantine is non-strict', (t) => {
-  const dir = scratch(t);
-  const context = withRepo(ctx({ registry: 'https://registry.npmjs.org/' }), dir);
+const DECLARED_BLOCK = [BEGIN, 'minimumReleaseAgeStrict: true', "savePrefix: ''", END, ''].join('\n');
 
-  const items = rule.plan(context, {
+test('plan() writes the gate for a repository that declares nothing, whatever the machine applies', (t) => {
+  const dir = scratch(t);
+  // The effective configuration already satisfies the policy and the report says so; the repository
+  // declares nothing, so the plan still writes. This is the defect W1a closes (RFC 11.2.1).
+  const satisfied = withRepo(ctx({ minimumReleaseAge: 4320, minimumReleaseAgeStrict: true }), dir);
+
+  const items = rule.plan(satisfied, {
     policy: { preset: 'baseline' },
-    report: reportFor('fail', 'quarantine-not-strict'),
+    report: reportFor('pass'),
   });
 
   assert.equal(items.length, 1);
@@ -200,25 +225,32 @@ test('plan() writes the gate when the quarantine is non-strict', (t) => {
   assert.equal(item.state, 'would-write');
   assert.ok(item.path.startsWith(dir));
   assert.ok(item.content.includes('minimumReleaseAgeStrict: true'));
+  assert.ok(item.content.includes("savePrefix: ''"), 'the same block carries savePrefix: \'\' (W1c)');
   assert.ok(!item.content.includes('minimumReleaseAge:'));
   assert.match(item.reason, /minimumReleaseAgeStrict/);
 });
 
-test('plan() adds the strict floor under --preset strict and plans nothing when the gate passes', (t) => {
+test('plan() plans nothing when the repository block declares the keys, and the strict floor comes from it', (t) => {
   const dir = scratch(t);
-  const passing = withRepo(ctx({ minimumReleaseAge: 4320, minimumReleaseAgeStrict: true }), dir);
+  // The machine does not satisfy the policy; the repository does. The plan reads the repository.
+  const declared = withRepo(ctx({ registry: 'https://registry.npmjs.org/' }), dir, DECLARED_BLOCK);
 
   assert.deepEqual(
-    rule.plan(passing, { policy: { preset: 'baseline' }, report: reportFor('pass') }),
+    rule.plan(declared, {
+      policy: { preset: 'baseline' },
+      report: reportFor('fail', 'quarantine-not-strict'),
+    }),
     [],
   );
 
-  const [item] = rule.plan(passing, {
+  const [item] = rule.plan(declared, {
     policy: { preset: 'strict' },
-    report: reportFor('pass'),
+    report: reportFor('fail', 'quarantine-not-strict'),
   });
+  assert.equal(item.state, 'would-write');
   assert.ok(item.content.includes('minimumReleaseAgeStrict: true'));
   assert.ok(item.content.includes('minimumReleaseAge: 4320'));
+  assert.ok(item.content.includes("savePrefix: ''"));
 });
 
 test('plan() refuses to duplicate a key declared outside the managed block', (t) => {

@@ -24,8 +24,9 @@ Reads `packageManager` from the root `package.json` and compares it with the ver
 An unverifiable pin is not a wrong pin, so an unavailable version probe is a skip rather than a
 failure; under `--strict-probes` the engine turns that skip into an error. A `--scope repo` scan
 never probes the machine, so its skip is an out-of-scope fact and is not reported as an unavailable
-required probe. Severity is `error` in both presets and friction is 0: the declaration is one line in
-a file every Node repository has.
+required probe: the message says the pin was not compared with the pnpm that answers and names the
+command that verifies it (S6), `funky-secure scan --scope all`. Severity is `error` in both presets
+and friction is 0: the declaration is one line in a file every Node repository has.
 
 ## Evidence
 
@@ -44,6 +45,8 @@ The executable path is evidence, not message text: a report body never carries a
 - `pin-conflict` — `manual`: `corepack use pnpm@<observed version>`. A value that exists and differs
   is never overwritten (RFC 4.3); the plan reports it as a conflict instead.
 - `no-pnpm`, `no-package-json` — `none`: the rule cannot answer, so it does not recommend a write.
+  A scope-contract skip is not a missing fact: it still names the command that answers the question
+  (`funky-secure scan --scope all`), inside the message.
 
 ## Limits
 

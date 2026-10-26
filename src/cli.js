@@ -3,9 +3,14 @@
  *
  * Nothing here reads the repository or runs a probe. `--help` renders the static contract from
  * `COMMANDS`, `FLAGS` and the catalog, so two machines always see the same text (13.3).
+ *
+ * Every exit-2 message leads with the action a human must take and prints the internal diagnosis
+ * after a `reason:` label (S5, RFC 4.6). The only repository fact this file knows is the config file
+ * name, and it uses it to label the action of a config error — never to read the file.
  */
 
-import { UsageError } from './lib/errors.js';
+import { ConfigError, UsageError } from './lib/errors.js';
+import { CONFIG_FILENAME } from './lib/config.js';
 import { TOOL } from './lib/tool.js';
 import { run as explain } from './commands/explain.js';
 import { run as init } from './commands/init.js';
@@ -61,6 +66,41 @@ const DEFAULT_VALUES = Object.freeze({
 const COMMAND_NAMES = COMMANDS.map((command) => command.name);
 const FLAG_BY_NAME = new Map(FLAGS.map((flag) => [flag.name, flag]));
 
+/** The action of a usage error, unless the site names a better one (S5). */
+const HELP_ACTION = 'run funky-secure --help to see the accepted commands and flags';
+/** The action of any other exit-2 failure: the reason line names the input at fault (S5). */
+const INPUT_ACTION = 'fix the input the reason line names, then run the command again';
+
+/**
+ * A usage error that carries the action it asks for. `run` prints that action first and the message
+ * after a `reason:` label, so the thrown message stays the internal diagnosis (S5).
+ * @param {string} message the diagnosis, including the offending argument
+ * @param {string} [action] what the human must do
+ * @returns {UsageError}
+ */
+function usage(message, action = HELP_ACTION) {
+  const error = new UsageError(message);
+  error.action = action;
+  return error;
+}
+
+/**
+ * The two parts of one exit-2 message: the action first, the diagnosis after the `reason:` label.
+ * An error that carries no action of its own still gets one, from its class (S5).
+ * @param {unknown} error
+ * @returns {{ action: string, reason: string }}
+ */
+function exitMessage(error) {
+  const reason = error instanceof Error ? error.message : String(error);
+  const stated = typeof error?.action === 'string' ? error.action : '';
+  if (stated !== '') return { action: stated, reason };
+  if (error instanceof UsageError) return { action: HELP_ACTION, reason };
+  if (error instanceof ConfigError && reason.startsWith(CONFIG_FILENAME)) {
+    return { action: `fix ${CONFIG_FILENAME} and run the command again`, reason };
+  }
+  return { action: INPUT_ACTION, reason };
+}
+
 const HANDLERS = { scan, init, migrate, explain };
 
 function defaultsFor(command) {
@@ -92,7 +132,7 @@ export function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (typeof token !== 'string') {
-      throw new UsageError(`arguments must be strings (got ${typeof token})`);
+      throw usage(`arguments must be strings (got ${typeof token})`);
     }
 
     if (!token.startsWith('--')) {
@@ -106,13 +146,13 @@ export function parseArgs(argv) {
     const inline = equals === -1 ? null : token.slice(equals + 1);
     const flag = FLAG_BY_NAME.get(name);
     if (flag === undefined) {
-      throw new UsageError(`unknown flag "${name}"`);
+      throw usage(`unknown flag "${name}"`);
     }
     used.push(flag);
 
     if (flag.boolean === true) {
       if (inline !== null) {
-        throw new UsageError(`${flag.name} takes no value (got "${inline}")`);
+        throw usage(`${flag.name} takes no value (got "${inline}")`, `pass ${flag.name} on its own`);
       }
       options[flag.key] = true;
       continue;
@@ -122,14 +162,17 @@ export function parseArgs(argv) {
     if (value === null) {
       const next = argv[index + 1];
       if (next === undefined || next.startsWith('--')) {
-        throw new UsageError(`${flag.name} needs a value${acceptedValues(flag)}`);
+        throw usage(`${flag.name} needs a value${acceptedValues(flag)}`, `add a value after ${flag.name}`);
       }
       value = next;
       index += 1;
     }
 
     if (flag.values !== null && flag.values !== undefined && !flag.values.includes(value)) {
-      throw new UsageError(`${flag.name} must be one of ${flag.values.join(', ')} (got "${value}")`);
+      throw usage(
+        `${flag.name} must be one of ${flag.values.join(', ')} (got "${value}")`,
+        `pass ${flag.name} one of ${flag.values.join(', ')}`,
+      );
     }
 
     if (flag.list === true) {
@@ -138,7 +181,7 @@ export function parseArgs(argv) {
         .map((id) => id.trim())
         .filter((id) => id !== '');
       if (ids.length === 0) {
-        throw new UsageError(`${flag.name} needs at least one rule id`);
+        throw usage(`${flag.name} needs at least one rule id`, `pass ${flag.name} at least one rule id`);
       }
       options[flag.key] = [...(options[flag.key] ?? []), ...ids];
     } else {
@@ -147,21 +190,26 @@ export function parseArgs(argv) {
   }
 
   if (command !== null && !COMMAND_NAMES.includes(command)) {
-    throw new UsageError(`unknown command "${command}" (expected ${COMMAND_NAMES.join(', ')})`);
+    throw usage(
+      `unknown command "${command}" (expected ${COMMAND_NAMES.join(', ')})`,
+      'run funky-secure --help to see the commands',
+    );
   }
 
   for (const flag of used) {
     if (command === null) break;
     if (!flag.commands.includes(command)) {
-      throw new UsageError(
+      throw usage(
         `${flag.name} is not accepted by ${command} (accepted by ${flag.commands.join(', ')})`,
+        `drop ${flag.name} or pass it to ${flag.commands.join(' or ')}`,
       );
     }
   }
 
   if (command !== null && command !== 'explain' && positionals.length > 0) {
-    throw new UsageError(
+    throw usage(
       `unexpected argument "${positionals[0]}" (${command} takes no positional arguments)`,
+      `drop "${positionals[0]}"`,
     );
   }
 
@@ -247,9 +295,9 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
 }
 
 /**
- * Runs one command (RFC 10.4): `UsageError` and `ConfigError` become exit 2 with one
- * `funky-secure:` line on stderr, any other error fails closed the same way, and no stack trace is
- * ever written to stdout.
+ * Runs one command (RFC 10.4): `UsageError` and `ConfigError` become exit 2 with the action on the
+ * first line and the diagnosis after a `reason:` label, any other error fails closed the same way,
+ * and no stack trace is ever written to stdout.
  *
  * @param {string[]} argv
  * @param {{ cwd?: string, env?: object, stdout?: object, stderr?: object, collector?: object, catalog?: Array<object> }} [io]
@@ -280,8 +328,9 @@ export async function run(argv, io = {}) {
       collector: io.collector,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    stderr.write(`funky-secure: ${message}\n`);
+    const { action, reason } = exitMessage(error);
+    stderr.write(`funky-secure: ${action}\n`);
+    if (reason !== '') stderr.write(`reason: ${reason}\n`);
     return 2;
   }
 }

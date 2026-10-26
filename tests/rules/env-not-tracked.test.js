@@ -51,7 +51,7 @@ test('fails a committed .env and names the rotation requirement', () => {
   assert.equal(finding.code, 'env-tracked');
   assert.equal(finding.path, '.env');
   assert.deepEqual(finding.evidence, { path: '.env' });
-  assert.equal(finding.remediation.kind, 'none');
+  assert.deepEqual(finding.remediation, { kind: 'manual', command: 'git rm --cached .env' });
   assert.match(finding.message, /\.env/);
   assert.match(finding.message, /rotat/i);
 });
@@ -82,6 +82,11 @@ test('fails an environment file nested at any depth', () => {
   assert.equal(findings[0].status, 'fail');
   assert.equal(findings[0].code, 'env-tracked');
   assert.equal(findings[0].path, 'packages/api/.env');
+  assert.deepEqual(findings[0].remediation, {
+    kind: 'manual',
+    command: 'git rm --cached packages/api/.env',
+  });
+  assert.match(findings[0].message, /must be rotated/, 'the message keeps the rotation the fix does not do');
 });
 
 test('reports one finding per tracked environment file, in path order', () => {
@@ -96,6 +101,11 @@ test('reports one finding per tracked environment file, in path order', () => {
       ['fail', '.env.local'],
       ['fail', 'b/.env'],
     ],
+  );
+  assert.deepEqual(
+    findings.map((finding) => finding.remediation.command),
+    ['git rm --cached .env', 'git rm --cached .env.local', 'git rm --cached b/.env'],
+    'every tracked environment file names its own index removal',
   );
 });
 

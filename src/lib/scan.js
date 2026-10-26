@@ -2,9 +2,12 @@
  * One scan, collected once: targets, policy, context and the report object. Commands render it;
  * `init` also derives a plan from it. Keeping this in one place is what stops the plan and the
  * report from disagreeing.
+ *
+ * This module also resolves the report's provenance (S7), because it is the only place that sees the
+ * preset flag, the loaded config and the repository's own `pnpm-workspace.yaml` in one run.
  */
 
-import { loadConfig } from './config.js';
+import { CONFIG_FILENAME, loadConfig } from './config.js';
 import { createCollector } from './probes.js';
 import { evaluate } from './engine.js';
 import { repoRoot } from './git.js';
@@ -12,6 +15,49 @@ import { resolvePolicy } from './policy.js';
 import { buildReport } from './report.js';
 import { machineFacts, repoFacts } from './targets.js';
 import { TOOL } from './tool.js';
+
+/**
+ * Whether this repository's own `pnpm-workspace.yaml` declares the quarantine age. A line scan, not a
+ * YAML parse (RFC 4.7), and `false` when the file was not read: an unread file is never reported as
+ * an absence (S7).
+ * @param {object | null | undefined} repo the resolved repository facts
+ * @returns {boolean}
+ */
+function declaresQuarantineAge(repo) {
+  const text = repo?.files?.workspaceYaml?.text;
+  return typeof text === 'string' && /^minimumReleaseAge\s*:/m.test(text);
+}
+
+/**
+ * What the report measured about itself (S7): the preset and the source it came from, whether this
+ * repository declares the quarantine key, and whether the machine scope was excluded. It never
+ * attributes an effective pnpm value to the project or the machine, because the effective
+ * configuration reports no origin (E2).
+ *
+ * @param {{ effectiveScope: string, policy: { preset: string }, presetFromFlag?: string, loaded: { config: object | null }, repo: object | null }} options
+ * @returns {{ preset: string, presetSource: string, quarantine: string, machine: string }}
+ */
+function provenanceOf({ effectiveScope, policy, presetFromFlag, loaded, repo }) {
+  const presetSource =
+    presetFromFlag !== undefined
+      ? '--preset'
+      : loaded.config?.preset === undefined
+        ? 'default'
+        : CONFIG_FILENAME;
+
+  let quarantine;
+  if (effectiveScope === 'repo') quarantine = 'not verified (machine excluded)';
+  else if (effectiveScope === 'machine') quarantine = 'not verified (repository excluded)';
+  else if (declaresQuarantineAge(repo?.facts)) quarantine = 'declared in pnpm-workspace.yaml';
+  else quarantine = 'not declared in this repository';
+
+  return {
+    preset: policy.preset,
+    presetSource,
+    quarantine,
+    machine: effectiveScope === 'repo' ? 'excluded' : 'included',
+  };
+}
 
 /**
  * @param {object} options
@@ -73,8 +119,7 @@ export async function collectScan({
     configPath: loaded.path,
   };
 
-  const findings = evaluate({ ctx, policy, catalog, strictProbes });
-  // Under `--scope repo` the answering version is a fact the pin rule needs, but the machine is not
+  const findings = evaluate({ ctx, policy, catalog, strictProbes });  // Under `--scope repo` the answering version is a fact the pin rule needs, but the machine is not
   // part of the reported scope: no machine target is listed and no machine finding is emitted.
   const targets = [
     ...(effectiveScope === 'repo' ? [] : machine?.targets ?? []),
@@ -87,6 +132,13 @@ export async function collectScan({
     targets,
     findings,
     catalog,
+    provenance: provenanceOf({
+      effectiveScope,
+      policy,
+      presetFromFlag: preset,
+      loaded,
+      repo,
+    }),
     tool: TOOL,
   });
 

@@ -2,13 +2,19 @@
   "schemaVersion": 1,
   "tool": {
     "name": "funky-secure",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "scope": "all",
   "policy": {
     "preset": "baseline",
     "quarantineMinutes": 1440,
     "failOn": "error"
+  },
+  "provenance": {
+    "preset": "baseline",
+    "presetSource": "default",
+    "quarantine": "not declared in this repository",
+    "machine": "included"
   },
   "targets": [
     {
@@ -98,7 +104,8 @@
         "line": 11
       },
       "remediation": {
-        "kind": "none"
+        "kind": "manual",
+        "command": "edit .github/workflows/pr-target.yml:11 and drop the checkout of the pull request head"
       },
       "doc": "funky-secure explain no-bot-auto-merge",
       "code": "pr-target-head-checkout"

@@ -116,7 +116,7 @@ export default {
         evidence: { path: '.npmrc', token: '<redacted>' },
         remediation: tracked?.has?.('.npmrc')
           ? { kind: 'manual', command: 'git rm --cached .npmrc' }
-          : { kind: 'none' },
+          : { kind: 'manual', command: 'rotate the _authToken and delete .npmrc' },
       });
     }
 

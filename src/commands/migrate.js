@@ -1,9 +1,9 @@
 /**
- * `migrate` (RFC 11.3): the five-step plan for leaving npm or yarn behind.
+ * `migrate` (RFC 11.3, 4.6): the five-step plan for leaving npm or yarn behind.
  *
  * The tool never runs steps 1-3 or 5. `--apply` performs step 4 only: it removes the foreign
- * lockfile(s) after re-checking every precondition (RFC 11.5 point 4), and refuses with a named
- * reason instead of doing nothing quietly.
+ * lockfile(s) after re-checking every precondition (RFC 11.5 point 4), and refuses with the action a
+ * human must take first, followed by the reason (S5) — never a silent no-op.
  */
 
 import { lstat, rm } from 'node:fs/promises';
@@ -47,6 +47,22 @@ const TARGET_REFUSALS = Object.freeze({
   unresolvable: 'the file or its directory cannot be resolved',
   'outside-root': 'the file resolves outside the repository root',
 });
+
+/**
+ * A refusal that leads with the action (S5). `cli.run` prints `action` on the first line and the
+ * diagnosis after a `reason:` label, so the diagnosis stays the error message.
+ * @param {string} action what the human must do first
+ * @param {string} message the internal diagnosis
+ * @returns {ConfigError}
+ */
+function refusal(action, message) {
+  const error = new ConfigError(message);
+  error.action = action;
+  return error;
+}
+
+/** The action of a branch precondition: the removal only makes sense on a feature branch (S5). */
+const FEATURE_BRANCH_ACTION = 'switch to a feature branch and re-run migrate --apply';
 
 function npmrcLines(text) {
   if (typeof text !== 'string') return [];
@@ -111,7 +127,8 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
   const names = foreign.join(', ');
 
   if (!hasPnpmLock) {
-    throw new ConfigError(
+    throw refusal(
+      'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply',
       `refusing to remove ${names}: pnpm-lock.yaml is absent (never delete the only lockfile)`,
     );
   }
@@ -120,39 +137,45 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
     const paths = foreign.map((name) => relative(cwd, join(root, name)));
     const dirty = await statusPorcelain(collector, paths);
     if (dirty === null) {
-      throw new ConfigError(
+      throw refusal(
+        'pass --allow-dirty, or fix git so git status answers, then re-run',
         `refusing to remove ${names}: git could not report the working tree status (git status --porcelain -z failed)`,
       );
     }
     const touched = [...new Set(dirty.map((entry) => entry.slice(3)))];
     if (touched.length > 0) {
-      throw new ConfigError(
-        `refusing to remove ${names}: uncommitted changes for ${touched.join(', ')} (git status --porcelain -z); commit them, or pass --allow-dirty`,
+      throw refusal(
+        `commit ${touched.join(', ')} or pass --allow-dirty, then re-run`,
+        `refusing to remove ${names}: uncommitted changes for ${touched.join(', ')} (git status --porcelain -z)`,
       );
     }
   }
 
   if (branch === null) {
-    throw new ConfigError(
+    throw refusal(
+      'check out a feature branch and re-run migrate --apply',
       `refusing to remove ${names}: git could not resolve the current branch (git rev-parse --abbrev-ref HEAD failed)`,
     );
   }
   if (branch === 'HEAD') {
-    throw new ConfigError(
-      `refusing to remove ${names}: HEAD is detached; step 4 needs a branch, so check one out first`,
+    throw refusal(
+      'check out a branch and re-run migrate --apply',
+      `refusing to remove ${names}: HEAD is detached`,
     );
   }
 
   const base = await defaultBranch(collector);
   if (base === null) {
     if (FALLBACK_DEFAULT_BRANCHES.includes(branch)) {
-      throw new ConfigError(
-        `refusing to remove ${names}: the current branch ${branch} matches the main/master check, which is a fallback here because refs/remotes/origin/HEAD could not be read (the repository has no remote); switch to a feature branch first`,
+      throw refusal(
+        FEATURE_BRANCH_ACTION,
+        `refusing to remove ${names}: the current branch ${branch} matches the main/master check, which is a fallback because refs/remotes/origin/HEAD could not be read (the repository has no remote)`,
       );
     }
   } else if (branch === base) {
-    throw new ConfigError(
-      `refusing to remove ${names}: the current branch ${branch} is the default branch, read from refs/remotes/origin/HEAD; switch to a feature branch first`,
+    throw refusal(
+      FEATURE_BRANCH_ACTION,
+      `refusing to remove ${names}: the current branch ${branch} is the default branch, read from refs/remotes/origin/HEAD`,
     );
   }
 
@@ -165,7 +188,8 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
     const path = join(root, name);
     const target = validateWriteTarget({ root, relative: name, expectedBasename: name });
     if (!target.ok) {
-      throw new ConfigError(
+      throw refusal(
+        `remove ${name} by hand if it is the foreign lockfile you meant to delete`,
         `refusing to remove ${path}: ${TARGET_REFUSALS[target.reason] ?? target.reason}`,
       );
     }
@@ -173,10 +197,14 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
     try {
       info = await lstat(path);
     } catch {
-      throw new ConfigError(`refusing to remove ${path}: it disappeared before the removal`);
+      throw refusal(
+        're-run migrate --apply to re-read the lockfiles',
+        `refusing to remove ${path}: it disappeared before the removal`,
+      );
     }
     if (!info.isFile()) {
-      throw new ConfigError(
+      throw refusal(
+        `remove ${path} by hand if it is a lockfile you meant to delete`,
         `refusing to remove ${path}: it is not a regular file (step 4 removes files only)`,
       );
     }
@@ -225,7 +253,8 @@ export async function run({
   });
 
   if (ctx.repo?.inGit !== true) {
-    throw new ConfigError(
+    throw refusal(
+      'run migrate inside a git worktree',
       'migrate needs a git repository: step 4 removes a tracked lockfile on a branch, and this directory is not inside one',
     );
   }

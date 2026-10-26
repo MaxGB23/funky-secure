@@ -71,14 +71,33 @@ No floating specifier and no desync is a pass.
 
 ## Remediation
 
-Manual, one command per finding: `pnpm add --save-exact <name>@<specifier>` re-resolves the offender
-and pins the exact version. The command names the current specifier rather than a version this tool
-would have to invent: resolving a version is a network call, and the tool makes none (RFC 4.9).
+Manual, one command per finding, and the command names a version the repository already records.
 
-A desync is refreshed with `pnpm install --lockfile-only`.
+**A floating range.** `pnpm add --save-exact <name>@<range>` is a measured no-op on pnpm 12.3.4: pnpm
+keeps the specifier the package already declares and exits 0, so the range survives and the finding
+comes back. The command that works is
 
-There is no auto fix in v0.1. Rewriting a range in `package.json` without re-resolving is how a
-lockfile desync is created, so the fix and the resolution must happen in one `pnpm` command.
+```sh
+pnpm pkg set 'dependencies.<name>=<version>' && pnpm install
+```
+
+with the section of the entry (`dependencies`, `devDependencies`, `optionalDependencies` or
+`peerDependencies`), the package name as written — a scoped name keeps its `@scope/` prefix — and the
+version `pnpm-lock.yaml` records in that importer's dependency block. `pnpm install` then refreshes
+the lockfile and `node_modules` from the new specifier.
+
+That version is the only one this rule may print: it is read from the repository, and the tool
+resolves nothing (RFC 4.9). When the lockfile records no version for the dependency — no lockfile, an
+unsupported shape, or the inline dependency form — the remediation resolves first and re-measures:
+
+```sh
+pnpm install --lockfile-only && funky-secure scan --only exact-versions
+```
+
+**A desync** is refreshed with `pnpm install --lockfile-only`.
+
+There is no auto fix. Rewriting a range in `package.json` without re-resolving is how a lockfile
+desync is created, so the fix and the resolution must happen in one `pnpm` command.
 
 ## Limits
 

@@ -58,7 +58,10 @@ export default {
           status: 'skip',
           code: 'no-pnpm',
           path: PATH,
-          message: 'skipped: the machine is out of scope, so no pnpm answered the pin',
+          // `--scope repo` excludes the machine by contract (RFC 7.2), so the skip names what was
+          // not verified and the command that verifies it (S6).
+          message:
+            'skipped: the machine is out of scope, so the declared packageManager pin was not compared with the pnpm that answers; run funky-secure scan --scope all to verify it',
           evidence,
           remediation: { kind: 'none' },
         },

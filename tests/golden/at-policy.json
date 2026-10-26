@@ -2,13 +2,19 @@
   "schemaVersion": 1,
   "tool": {
     "name": "funky-secure",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "scope": "all",
   "policy": {
     "preset": "baseline",
     "quarantineMinutes": 1440,
     "failOn": "error"
+  },
+  "provenance": {
+    "preset": "baseline",
+    "presetSource": "default",
+    "quarantine": "declared in pnpm-workspace.yaml",
+    "machine": "included"
   },
   "targets": [
     {

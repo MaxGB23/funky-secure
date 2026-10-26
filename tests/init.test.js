@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { run } from '../src/cli.js';
+import { BEGIN, END } from '../src/lib/managed-block.js';
 import { collectScan } from '../src/lib/scan.js';
 import { planFor } from '../src/lib/writers.js';
 import { catalog } from '../src/rules/index.js';
@@ -339,7 +340,10 @@ test('an existing conflicting pin is a conflict item and is never written', asyn
   const applied = runner(dir, { tracked });
   assert.equal(await applied.run(['init', '--apply']), 0);
   assert.match(applied.stdout.text, /conflicts/);
+  // With the fixture block carrying the gate, the floor and savePrefix, the pin conflict is the only
+  // plan item: nothing is written at all, and package.json keeps its bytes.
   assert.match(applied.stdout.text, /nothing to apply/);
+  assert.equal(writeCount(applied.stdout.text), 0);
   assert.doesNotMatch(applied.stdout.text, /^write {2}.*package\.json/m);
   assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before);
 });
@@ -392,9 +396,10 @@ test('a dirty target file exits 2 naming the file unless --allow-dirty', async (
 
   const refused = runner(dir, { tracked, dirty: ['package.json'] });
   assert.equal(await refused.run(['init', '--apply']), 2);
-  assert.match(
+  assert.equal(
     refused.stderr.text,
-    /^funky-secure: refusing to write over uncommitted changes: package\.json \(commit them, or pass --allow-dirty\)$/m,
+    'funky-secure: commit package.json or pass --allow-dirty, then re-run\n' +
+      'reason: refusing to write over uncommitted changes: package.json\n',
   );
   assert.equal(existsSync(join(dir, 'pnpm-workspace.yaml')), false);
 
@@ -474,4 +479,150 @@ test('the header never claims nothing was written when --apply performs writes',
   assert.match(applied.stdout.text, /applying the plan below/);
   assert.equal(applied.stdout.text.includes('nothing has been written'), false);
   assert.ok(writeCount(applied.stdout.text) > 0);
+});
+
+const SATISFYING = { minimumReleaseAge: 4320, minimumReleaseAgeStrict: true };
+
+test('the plan is identical whether or not the machine satisfies the policy (RFC 11.2.1)', async (t) => {
+  const dir = scratch(t, 'below-policy');
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  // The same repository, two machines: one whose effective configuration meets the policy and one
+  // whose does not. Only the collector's answer changes, and the plan must not notice.
+  const satisfied = runner(dir, { tracked, globalConfig: SATISFYING });
+  const unsatisfied = runner(dir, { tracked, globalConfig: {} });
+
+  assert.equal(await satisfied.run(['init', '--format', 'json']), 0);
+  assert.equal(await unsatisfied.run(['init', '--format', 'json']), 0);
+  assert.equal(
+    satisfied.stdout.text,
+    unsatisfied.stdout.text,
+    'the plan document must read the repository, not the effective configuration',
+  );
+
+  const document = JSON.parse(satisfied.stdout.text);
+  const workspace = document.plan.find((item) => item.target === 'pnpm-workspace.yaml');
+  assert.ok(workspace, 'a satisfying machine configuration must not suppress the write');
+  assert.equal(workspace.state, 'would-write');
+
+  const humanSatisfied = runner(dir, { tracked, globalConfig: SATISFYING });
+  const humanUnsatisfied = runner(dir, { tracked, globalConfig: {} });
+  assert.equal(await humanSatisfied.run(['init']), 0);
+  assert.equal(await humanUnsatisfied.run(['init']), 0);
+  assert.equal(humanSatisfied.stdout.text, humanUnsatisfied.stdout.text);
+  assert.match(humanSatisfied.stdout.text, /would write/);
+});
+
+test('init --apply on a repository with no pnpm-workspace.yaml creates the managed block only (S2)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "bootstrap",\n  "private": true\n}\n');
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+
+  assert.equal(
+    await runner(dir, { tracked: ['package.json', 'pnpm-lock.yaml'] }).run(['init', '--apply']),
+    0,
+  );
+
+  const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
+  assert.equal(
+    workspace,
+    `${BEGIN}\nminimumReleaseAgeStrict: true\nsavePrefix: ''\n${END}\n`,
+    'the created file carries the managed block and nothing else',
+  );
+  assert.equal(workspace.includes('packages:'), false, 'init never synthesizes a packages: key');
+});
+
+test('a savePrefix declared outside the managed block is a conflict, never a second source (W1c)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "outside",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  writeFileSync(join(dir, 'pnpm-workspace.yaml'), "savePrefix: '^'\n");
+
+  const preview = runner(dir, { tracked: ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'] });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+
+  const document = JSON.parse(preview.stdout.text);
+  const item = document.plan.find((entry) => entry.target === 'pnpm-workspace.yaml');
+  assert.equal(item.state, 'conflict');
+  assert.equal(
+    item.reason,
+    'pnpm-workspace.yaml already declares savePrefix outside the managed block; two sources for one setting are not written',
+  );
+  assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), "savePrefix: '^'\n");
+});
+
+test('next steps names pnpm install first when the repository has no pnpm-lock.yaml (S3)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "no-lockfile",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+
+  const preview = runner(dir, { tracked: ['package.json'] });
+  assert.equal(await preview.run(['init']), 0);
+
+  assert.ok(
+    preview.stdout.text.endsWith(
+      'next steps\n  pnpm install\n  git add pnpm-workspace.yaml .gitignore\n',
+    ),
+    preview.stdout.text,
+  );
+});
+
+test('next steps names the migrate command when a foreign lockfile coexists with the pnpm one (S3)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "mixed",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  writeFileSync(join(dir, 'package-lock.json'), '{}\n');
+
+  const preview = runner(dir, { tracked: ['package.json', 'pnpm-lock.yaml', 'package-lock.json'] });
+  assert.equal(await preview.run(['init']), 0);
+
+  assert.ok(
+    preview.stdout.text.endsWith(
+      'next steps\n  funky-secure migrate --apply\n  git add pnpm-workspace.yaml .gitignore\n',
+    ),
+    preview.stdout.text,
+  );
+});
+
+test('the migrate step carries no --from, so a yarn lockfile is not forced through npm (S3)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "yarn-mixed",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  writeFileSync(join(dir, 'yarn.lock'), '# yarn lockfile v1\n');
+
+  const preview = runner(dir, { tracked: ['package.json', 'pnpm-lock.yaml', 'yarn.lock'] });
+  assert.equal(await preview.run(['init']), 0);
+
+  // `migrate` resolves the manager it finds: `pnpm import` for a yarn lockfile, `pnpm install`
+  // otherwise. Naming `--from npm` here would force the wrong step (RFC 11.2.2, 11.3).
+  assert.ok(
+    preview.stdout.text.endsWith(
+      'next steps\n  funky-secure migrate --apply\n  git add pnpm-workspace.yaml .gitignore\n',
+    ),
+    preview.stdout.text,
+  );
+  assert.equal(preview.stdout.text.includes('--from'), false, preview.stdout.text);
+});
+
+test('a plan with no human step prints no next steps heading (S3)', async (t) => {
+  const dir = scratch(t, 'at-policy');
+
+  const preview = runner(dir, {
+    tracked: ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'],
+  });
+  assert.equal(await preview.run(['init']), 0);
+
+  assert.match(preview.stdout.text, /nothing to apply/);
+  assert.equal(preview.stdout.text.includes('next steps'), false, preview.stdout.text);
+});
+
+test('the JSON plan document carries no next steps prose (S3)', async (t) => {
+  const dir = scratch(t, 'below-policy');
+
+  const preview = runner(dir, { tracked: ['package.json', 'pnpm-lock.yaml'] });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+
+  const document = JSON.parse(preview.stdout.text);
+  assert.ok(document.plan.length > 0);
+  assert.equal(preview.stdout.text.includes('next steps'), false);
+  assert.equal(preview.stdout.text.includes('pnpm install'), false);
 });

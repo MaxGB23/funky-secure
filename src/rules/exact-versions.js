@@ -1,5 +1,5 @@
 /**
- * R5 — `exact-versions` (RFC 8.2).
+ * R5 — `exact-versions` (RFC 8.2, 4.6, 4.9).
  *
  * Two questions in one rule: is a dependency specifier exact, and does `pnpm-lock.yaml` record the
  * same specifier? The first is answered from `package.json`, the second from the bounded lockfile
@@ -13,6 +13,9 @@
  * - `1` and `1.2` are ranges in npm semantics, so they are floating.
  * - A specifier whose shape this rule does not recognize is not reported; a guessed finding is worse
  *   than a missed one, and the doc page says so.
+ * - A floating range is pinned with `pnpm pkg set` and the version the lockfile records (S4):
+ *   `pnpm add --save-exact <name>@<range>` is a measured no-op on pnpm 12.3.4, because pnpm keeps the
+ *   specifier the package already has.
  */
 
 import { parseLockfile } from '../lib/lockfile.js';
@@ -32,9 +35,10 @@ const PARTIAL_LITERAL = /^\d+(?:\.\d+)*$/;
 const TAG_LITERAL = /^[a-z][a-z0-9._-]*$/i;
 
 /**
- * A specifier is echoed in messages, evidence and remediation, and a URL specifier can carry
- * credentials in its userinfo (`https://user:token@host/repo.tgz`). Every user but a bare `git` is
- * replaced, so a scan never prints a secret; the shape stays legible (RFC 4.9: never a guessed value).
+ * A specifier is echoed in messages and evidence, and the version the lockfile records is echoed in
+ * the remediation, and a URL specifier can carry credentials in its userinfo
+ * (`https://user:token@host/repo.tgz`). Every user but a bare `git` is replaced, so a scan never
+ * prints a secret; the shape stays legible (RFC 4.9: never a guessed value).
  * @param {unknown} specifier
  * @returns {unknown}
  */
@@ -214,6 +218,41 @@ function lockfileSpecifier(lock, name) {
   return null;
 }
 
+/**
+ * The version pnpm resolved for one dependency of one importer, as `pnpm-lock.yaml` records it. The
+ * inline dependency form carries no version, so this is `null` there: the rule never guesses one.
+ * @param {object | undefined} lock
+ * @param {string} name
+ * @param {string} type the section the entry lives in
+ * @returns {string | null}
+ */
+function recordedVersion(lock, name, type) {
+  const record = lock?.[type]?.[name];
+  if (!record || typeof record.version !== 'string' || record.version === '') return null;
+  return record.version;
+}
+
+/**
+ * The remediation of a floating range (S4). `pnpm add --save-exact <name>@<range>` is a measured
+ * no-op on pnpm 12.3.4 — pnpm keeps the range the package already declares — so the command that
+ * works is `pnpm pkg set` with the resolved version the lockfile records, followed by `pnpm install`.
+ *
+ * With no recorded version the tool invents nothing (RFC 4.9): the remediation is the resolve step
+ * plus the scan, which then prints the exact pin for that repository.
+ *
+ * @param {{ type: string, dependency: string, version: string | null }} options
+ * @returns {{ kind: string, command: string }}
+ */
+function floatingRemediation({ type, dependency, version }) {
+  if (typeof version !== 'string' || version === '') {
+    return {
+      kind: 'manual',
+      command: 'pnpm install --lockfile-only && funky-secure scan --only exact-versions',
+    };
+  }
+  return { kind: 'manual', command: `pnpm pkg set '${type}.${dependency}=${version}' && pnpm install` };
+}
+
 export default {
   id: 'exact-versions',
   title: 'Dependency specifiers are exact',
@@ -227,7 +266,7 @@ export default {
   evidence:
     '{ specifier, dependency, type } for a floating range, { specifier, resolved } for a desync (resolved is null when the lockfile has no record).',
   remediation:
-    'Manual: pnpm add --save-exact <name>@<specifier> re-resolves and pins the offender; a desync is refreshed with pnpm install --lockfile-only. No auto fix in v0.1, because rewriting a range without re-resolving is how a lockfile desync is created.',
+    "Manual: pnpm pkg set '<section>.<name>=<version>' && pnpm install pins the version pnpm-lock.yaml records, because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.",
   limits:
     'The rule resolves nothing: the command names the current specifier and pnpm writes the exact version. A specifier shape this rule does not recognize is not reported. An unsupported lockfile shape (lockfileVersion other than 9.0, catalogs, overrides, patchedDependencies) skips the comparison rather than guessing it. peerDependencies are compared like any other section, so a lockfile that does not record them reports a desync.',
   docs: DOC,
@@ -255,6 +294,33 @@ export default {
     const importers = Array.isArray(ctx.repo.importers) ? ctx.repo.importers : [];
     let inspected = 0;
 
+    // The lockfile is read once, before the specifiers are walked, because the remediation of a
+    // floating range names the version it records (S4). No lockfile and an unsupported shape are
+    // still skips of the comparison only (RFC 7.3).
+    const lockfileText = ctx.repo.files?.lockfile?.text;
+    let parsed = null;
+    let skip = null;
+
+    if (typeof lockfileText !== 'string') {
+      skip = {
+        status: 'skip',
+        code: 'no-lockfile',
+        message: 'skipped: no pnpm-lock.yaml to compare specifiers against',
+      };
+    } else {
+      const read = parseLockfile(lockfileText);
+      if (read.supported) {
+        parsed = read;
+      } else {
+        skip = {
+          status: 'skip',
+          code: 'unsupported-lockfile-shape',
+          message: `skipped: ${read.detail}`,
+          evidence: { reason: read.reason },
+        };
+      }
+    }
+
     for (const importer of importers) {
       if (importer.json === null || typeof importer.json !== 'object') continue;
       inspected += 1;
@@ -267,6 +333,10 @@ export default {
 
         if (isFloating(entry.specifier)) {
           const shown = redactedSpecifier(entry.specifier);
+          const version =
+            parsed === null
+              ? null
+              : recordedVersion(parsed.importers[importer.dir], entry.dependency, entry.type);
           findings.push({
             status: 'fail',
             code: 'floating-range',
@@ -278,55 +348,37 @@ export default {
               dependency: entry.dependency,
               type: entry.type,
             },
-            remediation: {
-              kind: 'manual',
-              command: `pnpm add --save-exact ${entry.dependency}@${shown}`,
-            },
+            remediation: floatingRemediation({
+              type: entry.type,
+              dependency: entry.dependency,
+              // A recorded resolution can be a URL too, so it is redacted like the specifier.
+              version: redactedSpecifier(version),
+            }),
           });
         }
       }
     }
 
-    const lockfileText = ctx.repo.files?.lockfile?.text;
-    let skip = null;
+    if (parsed !== null) {
+      for (const { importer, path, line, entry } of comparisons) {
+        const lock = parsed.importers[importer.dir];
+        const recorded = lockfileSpecifier(lock, entry.dependency);
+        if (recorded !== null && recorded === entry.specifier.trim()) continue;
 
-    if (typeof lockfileText !== 'string') {
-      skip = {
-        status: 'skip',
-        code: 'no-lockfile',
-        message: 'skipped: no pnpm-lock.yaml to compare specifiers against',
-      };
-    } else {
-      const parsed = parseLockfile(lockfileText);
-
-      if (!parsed.supported) {
-        skip = {
-          status: 'skip',
-          code: 'unsupported-lockfile-shape',
-          message: `skipped: ${parsed.detail}`,
-          evidence: { reason: parsed.reason },
-        };
-      } else {
-        for (const { importer, path, line, entry } of comparisons) {
-          const lock = parsed.importers[importer.dir];
-          const recorded = lockfileSpecifier(lock, entry.dependency);
-          if (recorded !== null && recorded === entry.specifier.trim()) continue;
-
-          const shown = redactedSpecifier(entry.specifier);
-          const shownResolved = redactedSpecifier(recorded);
-          findings.push({
-            status: 'fail',
-            code: 'lockfile-desync',
-            path,
-            line: line ?? undefined,
-            message:
-              recorded === null
-                ? `${entry.dependency}@${shown} is not recorded in pnpm-lock.yaml`
-                : `${entry.dependency} is ${shown} in package.json but ${shownResolved} in pnpm-lock.yaml`,
-            evidence: { specifier: shown, resolved: shownResolved },
-            remediation: { kind: 'manual', command: 'pnpm install --lockfile-only' },
-          });
-        }
+        const shown = redactedSpecifier(entry.specifier);
+        const shownResolved = redactedSpecifier(recorded);
+        findings.push({
+          status: 'fail',
+          code: 'lockfile-desync',
+          path,
+          line: line ?? undefined,
+          message:
+            recorded === null
+              ? `${entry.dependency}@${shown} is not recorded in pnpm-lock.yaml`
+              : `${entry.dependency} is ${shown} in package.json but ${shownResolved} in pnpm-lock.yaml`,
+          evidence: { specifier: shown, resolved: shownResolved },
+          remediation: { kind: 'manual', command: 'pnpm install --lockfile-only' },
+        });
       }
     }
 

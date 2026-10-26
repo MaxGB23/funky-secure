@@ -43,9 +43,19 @@ the bot files found.
 
 ## Remediation
 
-None. There is nothing to write: removing an automation is a review decision, and the rule does not
-edit workflows. The message states the rule that replaces it — an update is merged by a person
-after reading the diff and running the gate.
+`manual`, and it names the edit rather than a shell command: no command deletes a step from a
+workflow, so printing one would be a claim the tool cannot keep.
+
+- `automerge-for-bot` on a `gh pr merge` step — `edit <workflow>:<line> and delete the automatic merge
+  step`.
+- `automerge-for-bot` on an automerge action — `edit <workflow>:<line> and delete the automerge action
+  step`.
+- `pr-target-head-checkout` — `edit <workflow>:<line> and drop the checkout of the pull request head`.
+
+The line is the 1-based line of the step the finding reports, so an editor opens at the place to
+edit. The rule does not edit workflows and does not rewrite one: removing an automation is a review
+decision. The message states the rule that replaces it — an update is merged by a person after
+reading the diff and running the gate.
 
 ## Limits
 
