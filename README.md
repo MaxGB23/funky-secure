@@ -9,7 +9,7 @@ The point is a verdict you can defend: every finding names the file and line tha
 action is a command or an edit, and the report says whether the policy came from this repository or
 from the laptop that ran it.
 
-![Four neon panels: what funky-secure reads, twelve stateless rules in four families, one verdict carrying PASS and FAIL, and findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
+![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
 ## 📦 What you get
 

@@ -149,3 +149,20 @@ provenance line, exit `2` changed shape), so it carries its own number instead o
 reports (they embed the tool version), the three JSON samples in `docs/cli.md`, and the RFC status line.
 `odd/tasks/funky-secure-v0.3.md` and RFC §34 keep saying `0.3.0` because they record what shipped then,
 not what ships now.
+
+L11 — 2026-10-26, the README diagram was settled by the owner, and the decision is a departure from the
+sibling product's look. Four generated attempts tried to reach the funky-forge rendering language by
+describing it and failed; a copy of that diagram restyled by text replacement read as a clone; a hand
+written SVG and a generated-plate plus SVG-text composite were both rejected. What the owner chose is the
+glass variant: translucent bevelled panels, numbered stages and a tube that closes the loop. So the two
+READMEs are no longer twins on purpose, and `docs/images/README.md` records that the material differs.
+
+One artwork, one committed name: `docs/images/diagram.jpg`. The alternatives and the discarded attempts
+were moved out of the repository to `M:/pruebas/funky-diagram-drafts/` rather than left as numbered files
+in a path that ships, because `diagram2.jpg`, `diagram3.jpg` and `4.jpg` is not a naming scheme anyone can
+read six months from now.
+
+Two known defects in the shipped raster, both from the editing passes rather than from the drawing: the
+verdict panel is titled "VERDICT ENGINE" instead of "ONE VERDICT", and the command line reads
+`init · apply · migrate · apply` where it must read `init --apply · migrate --apply`. The next pass that
+corrects them is the same two-string edit that produced the correct wording in the discarded attempt.
