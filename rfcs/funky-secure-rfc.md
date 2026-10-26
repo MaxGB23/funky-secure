@@ -993,7 +993,7 @@ correctly, and a job that cares can tell the two apart without parsing text.
 
 Exit codes are a machine contract, not a user interface. Every message a human reads — usage error,
 config error, refusal, tool failure — leads with the action and puts the internal diagnosis after a
-`reason:` label or behind `--verbose`. A refusal that begins with the reason it could not check the
+`reason:` label. A refusal that begins with the reason it could not check the
 branch is a defect of the same class as a stale help text: it leaves the reader to translate.
 
 ### 10.5 `--fail-on`
@@ -1119,8 +1119,9 @@ executed:
 
 - `pnpm install` when the repository has no `pnpm-lock.yaml`, because the tool never resolves or
   installs (4.7, 11.6).
-- `funky-secure migrate --from npm --apply` when a foreign lockfile coexists with the pnpm one
-  (11.3).
+- `funky-secure migrate --apply` when a foreign lockfile coexists with the pnpm one; `--from` is
+  omitted so the plan names the manager it actually finds — a `yarn.lock` needs `pnpm import`, not
+  `pnpm install` (11.3).
 - `git add` for the paths the plan wrote, so the next `--apply` over the same state is not refused as
   dirty (11.2, safety rules).
 

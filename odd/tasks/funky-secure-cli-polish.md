@@ -20,9 +20,9 @@ to the same managed block so a later `pnpm add` cannot reintroduce a caret. Meas
 12.3.4: `pnpm add left-pad` saves `^1.3.0` without the key and `1.3.0` with it.
 
 S3 — `init` ends with a `next steps` block naming only the steps a human must run, in order, never
-executed by the tool: `pnpm install` when no `pnpm-lock.yaml` exists, `funky-secure migrate --from
-npm --apply` when a foreign lockfile exists, and `git add` of the paths it wrote. A plan with no
-human step prints no `next steps` heading.
+executed by the tool: `pnpm install` when no `pnpm-lock.yaml` exists, `funky-secure migrate --apply`
+when a foreign lockfile exists (no `--from`, so the plan names the manager it finds), and `git add` of
+the paths it wrote. A plan with no human step prints no `next steps` heading.
 
 S4 — Every `fail` carries an actionable remediation. A rule that cannot fix what it reported prints
 the exact human action instead of nothing, so `lockfile-committed` names `pnpm install`. The
@@ -31,9 +31,9 @@ the exact human action instead of nothing, so `lockfile-committed` names `pnpm i
 `pnpm pkg set 'dependencies.<name>=<version>'` followed by `pnpm install`.
 
 S5 — A message a human reads ends with the action. Usage errors, refusals and exit-2 failures print
-one actionable sentence first; the internal diagnosis follows only after a `reason:` label or under
-`--verbose`. `migrate --apply` on the default branch says "switch to a feature branch" before it
-explains the `origin/HEAD` fallback.
+one actionable sentence first; the internal diagnosis follows only after a `reason:` label. `migrate
+--apply` on the default branch says "switch to a feature branch" before it explains the `origin/HEAD`
+fallback.
 
 S6 — A `skip` informs. A rule skipped because of the scope contract names what was not verified and
 the command that verifies it (`--scope all`), instead of printing only the contract reason.
@@ -107,3 +107,12 @@ remediation, and the worker measured that `no-bot-auto-merge` and `env-not-track
 `kind: 'none'`, so those two rules and their pages join the same work unit. Recorded because the
 narrow surface was the parent's defect, not the worker's, and because a spec sentence ("every fail")
 was implemented for the two rules the task named instead of for the catalog.
+
+L8 — 2026-10-26, T1 committed as `eea6e32` after one inline correction: the verification audit found
+`sensitive-ignored`'s `npmrc-token` finding on an untracked `.npmrc` still carrying `kind: 'none'`,
+which is a `fail` without an action and therefore an S4 violation the worker's golden-based guard could
+not see (no fixture has an untracked token). RED first (the new rule test failed with `'none' !==
+'manual'`), then the rule prints `rotate the _authToken and delete .npmrc`, then 332/332 green. Also
+recorded: the first draft of the S5/documented shape mentioned `--verbose`, a flag that does not exist;
+`docs/cli.md`, RFC 10.4 and S5 were corrected to the single two-line shape the implementation actually
+produces.
