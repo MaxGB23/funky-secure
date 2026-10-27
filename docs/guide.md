@@ -21,7 +21,7 @@ There are two ways to use it, and both get the whole product:
 
 ## How to read the output
 
-One report has five parts, in this order:
+One report has these parts, in this order:
 
 ```text
 funky-secure scan  ·  preset baseline  ·  scope repo
@@ -41,6 +41,7 @@ passing  3 rules (foreign-lockfile, actions-pinned-sha, no-bot-auto-merge)   · 
 
 summary  1 error · 1 warning · 0 info · 3 passing · 8 skipped
 verdict  FAIL (threshold: error)
+next     manual: each finding names the file, its line, and the action
 ```
 
 **The symbols.** Four, and nothing else:
@@ -62,6 +63,13 @@ pnpm's own configuration, which is not in the repository and does not travel wit
 **`summary`** counts each rule verdict once: how many rules failed at each severity, how many passed,
 how many were skipped. **`verdict`** compares those failures with the threshold (`--fail-on`, default
 `error`) and prints `PASS` or `FAIL`.
+
+**`next`** is the last block, and it is an instruction rather than a count: the one command that
+moves the repository forward. When a finding can be fixed automatically it names `funky-secure init`
+and how many fixes it can plan — nothing is written until you add `--apply` — then one
+`funky-secure explain <rule>` for the finding to read first. A `PASS` says `nothing to do`; a `FAIL`
+where nothing is automatic says the work is manual, because each finding above already names its
+file, its line and the action. The block is human output only — `--format json` gains no field for it.
 
 **Exit codes** are for the machine, not for you: `0` nothing at or above the threshold, `1` a policy
 violation, `2` the tool could not answer. If you are reading the output yourself, the `verdict` line

@@ -8,9 +8,13 @@
  * The provenance line (S7) states the preset, the source it came from, what was measured about the
  * quarantine and whether the machine scope was excluded — never a value attributed to a source that
  * pnpm does not report (E2).
+ *
+ * The renderer ends with the `next` block (RFC 10.3, S1-S5): the one command that moves the repository
+ * forward, in the same gutter as `summary` and `verdict`.
  */
 
-import { TARGET_ORDER } from './report.js';
+import { severityRank, TARGET_ORDER } from './report.js';
+import { catalog as defaultCatalog } from '../rules/index.js';
 
 const SYMBOL = { error: '✖', warn: '⚠', info: 'ℹ', skip: '–' };
 const ANSI = {
@@ -23,6 +27,8 @@ const ANSI = {
 };
 
 const WRAP = 100;
+/** The label column shared by `summary`, `verdict` and `next`, and by their continuation lines. */
+const LABEL_WIDTH = 9;
 
 function paint(text, tone, color) {
   if (!color || !ANSI[tone]) return text;
@@ -130,6 +136,65 @@ function provenanceLine(provenance) {
 }
 
 /**
+ * The one rule a reader should open next: the highest-severity failing finding, ties broken by the
+ * catalog order — never alphabetical order and never the order the report happens to print, because
+ * report order groups by target first (RFC 10.2). Two runs over the same state name the same rule.
+ *
+ * @param {Array<object>} failing findings that are neither pass nor skip
+ * @param {Array<{ id: string }>} catalog catalog order, the tie-break of RFC 10.3
+ * @returns {string} a rule id
+ */
+function ruleToRead(failing, catalog) {
+  const order = new Map(catalog.map((rule, index) => [rule.id, index]));
+  const rank = (finding) => order.get(finding.rule) ?? catalog.length;
+
+  let chosen = failing[0];
+  for (const finding of failing.slice(1)) {
+    const severity = severityRank(finding.severity);
+    const chosenSeverity = severityRank(chosen.severity);
+    if (severity > chosenSeverity || (severity === chosenSeverity && rank(finding) < rank(chosen))) {
+      chosen = finding;
+    }
+  }
+  return chosen.rule;
+}
+
+/**
+ * The block a human `scan` ends with (RFC 10.3, S1-S5): the one command that moves the repository
+ * forward, in the same nine-character gutter as `summary` and `verdict`.
+ *
+ * Exactly one of three shapes, decided by the report and nothing else. An automatic fix wins even
+ * when the verdict is a pass, because the fixes are still available; the manual shape is what is
+ * left when the run failed and nothing in it can be written. The block names no path, no time and no
+ * machine value, so two runs over the same state produce the same bytes.
+ *
+ * @param {{ summary: { verdict: string }, findings: Array<object> }} report
+ * @param {Array<{ id: string }>} catalog catalog order, used to break a severity tie
+ * @returns {string[]}
+ */
+function nextBlock({ summary, findings }, catalog) {
+  const gutter = 'next'.padEnd(LABEL_WIDTH);
+  const indent = ' '.repeat(LABEL_WIDTH);
+  const failing = findings.filter(
+    (finding) => finding.status !== 'pass' && finding.status !== 'skip',
+  );
+  const automatic = failing.filter((finding) => finding.remediation?.kind === 'auto');
+
+  if (automatic.length > 0) {
+    return [
+      `${gutter}funky-secure init  plan the ${plural(automatic.length, 'fix', 'fixes')} it can make (nothing is written)`,
+      `${indent}funky-secure explain ${ruleToRead(failing, catalog)}   what this rule wants, and why`,
+    ];
+  }
+
+  if (summary.verdict === 'pass') {
+    return [`${gutter}nothing to do: everything at or above the policy passes`];
+  }
+
+  return [`${gutter}manual: each finding names the file, its line, and the action`];
+}
+
+/**
  * @param {object} report the object built by `buildReport`
  * @param {{ color?: boolean }} [options]
  * @returns {string}
@@ -182,6 +247,7 @@ export function renderHuman(report, { color = false } = {}) {
   const verdict = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
   const tone = summary.verdict === 'fail' ? 'error' : 'pass';
   lines.push(`verdict  ${paint(verdict, tone, color)} (threshold: ${policy.failOn})`);
+  lines.push(...nextBlock(report, defaultCatalog));
 
   return `${lines.join('\n')}\n`;
 }

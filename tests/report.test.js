@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { buildReport, severityRank } from '../src/lib/report.js';
 import { renderHuman } from '../src/lib/render-human.js';
 import { renderJson } from '../src/lib/render-json.js';
+import { catalog as ruleCatalog } from '../src/rules/index.js';
 
 const tool = { name: 'funky-secure', version: '0.1.0' };
 const catalog = [{ id: 'alpha' }, { id: 'beta' }, { id: 'gamma' }];
@@ -294,5 +295,164 @@ test('names the config file and the default as the preset source, and never a pr
   assert.equal(
     render({ ...PROVENANCE, presetSource: 'default', machine: 'included', quarantine: 'not declared in this repository' }),
     'provenance  preset strict (default)  ·  quarantine not declared in this repository  ·  machine included',
+  );
+});
+
+/// The `next` block (RFC 10.3, S1-S5): after `summary` and `verdict`, the human report names the one
+/// command that moves the repository forward, in the same nine-character gutter as those two labels.
+
+const NEXT = 'next     '; // nine characters, exactly like `summary  ` and `verdict  `
+const CONTINUATION = ' '.repeat(NEXT.length);
+
+function renderedLines(report) {
+  return renderHuman(report).split('\n').filter((line) => line !== '');
+}
+
+function nextBlock(report) {
+  const lines = renderedLines(report);
+  const start = lines.findIndex((line) => line.startsWith('next'));
+  return start === -1 ? [] : lines.slice(start);
+}
+
+function reportWith(findings, failOn = 'error') {
+  return buildReport({
+    scope: 'repo',
+    policy: { ...policy, failOn },
+    catalog: ruleCatalog,
+    tool,
+    targets: [{ kind: 'repo-root', path: '.' }],
+    findings,
+  });
+}
+
+const AUTO_QUARANTINE = finding({
+  rule: 'quarantine',
+  severity: 'error',
+  target: 'repo-root',
+  path: 'pnpm-workspace.yaml',
+  remediation: { kind: 'auto', command: 'funky-secure init --apply' },
+});
+
+const AUTO_SENSITIVE = finding({
+  rule: 'sensitive-ignored',
+  severity: 'warn',
+  target: 'repo-root',
+  path: '.gitignore',
+  remediation: { kind: 'auto', command: 'funky-secure init --apply' },
+});
+
+test('ends with init, the number of automatic fixes, and one rule to read next', () => {
+  const report = reportWith([
+    AUTO_QUARANTINE,
+    AUTO_SENSITIVE,
+    finding({
+      rule: 'lockfile-committed',
+      severity: 'warn',
+      target: 'repo-root',
+      path: 'pnpm-lock.yaml',
+      remediation: { kind: 'none' },
+    }),
+  ]);
+
+  assert.deepEqual(nextBlock(report), [
+    `${NEXT}funky-secure init  plan the 2 fixes it can make (nothing is written)`,
+    `${CONTINUATION}funky-secure explain quarantine   what this rule wants, and why`,
+  ]);
+});
+
+test('says nothing is left to do when the verdict passes', () => {
+  assert.deepEqual(nextBlock(reportWith([])), [
+    `${NEXT}nothing to do: everything at or above the policy passes`,
+  ]);
+});
+
+test('says the work is manual when the verdict fails and nothing is automatic', () => {
+  const report = reportWith(
+    [
+      finding({
+        rule: 'exact-versions',
+        severity: 'warn',
+        target: 'importer',
+        path: 'package.json',
+        line: 4,
+        remediation: { kind: 'manual', command: 'pnpm install --lockfile-only' },
+      }),
+    ],
+    'warn',
+  );
+
+  assert.deepEqual(nextBlock(report), [
+    `${NEXT}manual: each finding names the file, its line, and the action`,
+  ]);
+});
+
+test('breaks a severity tie by catalog order, never by alphabetical order', () => {
+  const report = reportWith(
+    [
+      finding({
+        rule: 'actions-pinned-sha',
+        severity: 'warn',
+        target: 'repo-root',
+        path: '.github/workflows/ci.yml',
+        remediation: { kind: 'auto', command: 'funky-secure init --apply' },
+      }),
+      finding({
+        rule: 'exact-versions',
+        severity: 'warn',
+        target: 'importer',
+        path: 'package.json',
+        line: 4,
+        remediation: { kind: 'auto', command: 'funky-secure init --apply' },
+      }),
+    ],
+    'warn',
+  );
+
+  // Alphabetically `actions-pinned-sha` comes first, and the report order puts it first too because
+  // `repo-root` precedes `importer`; the catalog has `exact-versions` at position 5 and
+  // `actions-pinned-sha` at position 8, so catalog order is the only rule that names the second.
+  assert.equal(
+    nextBlock(report)[1],
+    `${CONTINUATION}funky-secure explain exact-versions   what this rule wants, and why`,
+  );
+});
+
+test('renders the same next block bytes on every run over the same state', () => {
+  const report = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE]);
+  const block = nextBlock(report).join('\n');
+
+  assert.equal(renderHuman(report), renderHuman(report));
+  assert.doesNotMatch(block, /\d{4}-\d{2}-\d{2}T/, 'the block carries no timestamp');
+  assert.equal(block.includes('/'), false, 'the block names no path');
+});
+
+test('adds no field to the json document for the next block', () => {
+  const report = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE]);
+  const json = renderJson(report);
+
+  assert.deepEqual(Object.keys(JSON.parse(json)), [
+    'schemaVersion',
+    'tool',
+    'scope',
+    'policy',
+    'provenance',
+    'targets',
+    'summary',
+    'findings',
+  ]);
+  assert.equal(json.includes('next'), false, 'the json document gained a next field');
+  assert.equal(nextBlock(report).length, 2, 'the human report does carry the block');
+});
+
+test('keeps summary and verdict in their gutter, with the next block last', () => {
+  const lines = renderedLines(reportWith([AUTO_QUARANTINE], 'warn'));
+  const summaryAt = lines.findIndex((line) => line.startsWith('summary'));
+
+  assert.equal(lines[summaryAt].slice(0, 9), 'summary  ');
+  assert.equal(lines[summaryAt + 1].slice(0, 9), 'verdict  ');
+  assert.equal(lines[summaryAt + 2].slice(0, 9), NEXT);
+  assert.equal(
+    lines.at(-1),
+    `${CONTINUATION}funky-secure explain quarantine   what this rule wants, and why`,
   );
 });
