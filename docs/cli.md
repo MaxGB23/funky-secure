@@ -34,6 +34,33 @@ or `baseline`.
 - `--with-timestamp` adds `generatedAt` to the JSON document. It is the only non-deterministic field
   and is excluded from golden tests by construction.
 
+#### Human output
+
+A human report groups the findings by target, rolls the passing rules into one line, and ends with
+`summary`, `verdict` and a `next` block (RFC 10.3). `next` occupies the same nine-character label
+gutter as the two lines above it, and a continuation line is indented to match:
+
+```text
+summary  2 errors · 0 warnings · 0 info · 5 passing · 5 skipped
+verdict  FAIL (threshold: error)
+next     funky-secure init  plan the 1 fix it can make (nothing is written)
+         funky-secure explain lockfile-committed   what this rule wants, and why
+```
+
+The block names exactly one command, and it has one of three shapes, decided by the report alone:
+
+- at least one failing finding carries an `auto` remediation: `funky-secure init`, the number of
+  fixes it can plan, and the fact that nothing is written yet, followed by one
+  `funky-secure explain <rule>` line. `<rule>` is the highest-severity failing finding, ties broken by
+  catalog order, so the same state names the same rule on every run.
+- the verdict is `pass`: `nothing to do: everything at or above the policy passes`.
+- the verdict is `fail` and no finding is automatic: `manual: each finding names the file, its line,
+  and the action`.
+
+The block is human output only: the JSON document of RFC 10.2 gains no field for it, because a
+reader that wants the plan runs `init` for it. Since it carries no path, timestamp or machine value,
+two runs over the same state print the same bytes.
+
 ### `init`
 
 ```text

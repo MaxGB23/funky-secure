@@ -49,8 +49,10 @@ report, which is why the plan and the report cannot describe different repositor
   whether the repository itself declares the quarantine key; it never attributes an effective pnpm
   value to the project or to the machine, because the effective configuration reports no origin
   (RFC 9.4, E2). Both renderings read the one object `scan` resolved.
-- **The renderers never compute.** Human and JSON read the same report object, so they cannot
-  disagree; a passing finding is serialized away only because the report already counted it.
+- **The renderers never compute evidence, and the human one may choose.** Both read the same report
+  object, so they cannot disagree; a passing finding is serialized away only because the report already
+  counted it. The one choice a renderer makes is which already-resolved fact to name: the `next` block
+  names one rule to read next from the findings the report carries (RFC 10.3).
 - **The machine is read-only, permanently.** No probe writes an environment variable, a global
   config or a store.
 - **There are two write paths, and both are plans.** `init --apply` writes only through

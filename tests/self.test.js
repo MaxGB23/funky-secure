@@ -42,6 +42,15 @@ test('the repository passes its own scan at --fail-on warn', async () => {
   assert.match(stdout, /verdict {2}PASS/);
 });
 
+test('the human self-scan ends with the next block saying nothing is left to do', async () => {
+  const { stdout } = await selfScan(['scan', '--scope', 'repo', '--fail-on', 'warn']);
+
+  assert.ok(
+    stdout.endsWith('next     nothing to do: everything at or above the policy passes\n'),
+    `the self-scan does not end with the next block:\n${stdout}`,
+  );
+});
+
 test('the JSON self-scan passes and every finding is a declared skip', async () => {
   const { code, stdout, stderr } = await selfScan(['scan', '--scope', 'repo', '--format', 'json']);
 

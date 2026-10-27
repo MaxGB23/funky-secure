@@ -1,7 +1,14 @@
 # RFC: funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 6 (v1.5). v0.1, v0.2, v0.3 and v0.4 implemented and merged; nothing
+> **STATUS: PROPOSED — revision 7 (v1.6). v0.1, v0.2, v0.3 and v0.4 implemented and merged; nothing
 > published.**
+>
+> **Revision 7** closes the loop a first run leaves open. Revision 6 made every finding actionable on
+> its own, but a human who ran `scan` on an unconfigured repository read the verdict and stopped: the
+> report named findings and no next command. The human output of `scan` now ends with one `next` block
+> naming the single command that moves the repository forward and one rule to read next (10.3). The
+> JSON document is unchanged (10.2): the machine contract does not grow a field for a sentence whose
+> content the plan already holds.
 >
 > **Revision 6** polishes the interface the owner uses, after using it: `init` stops depending on the
 > machine that runs it and becomes a pnpm bootstrap (11.2, 11.2.1), the managed block gains
@@ -929,7 +936,7 @@ finding and no count.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.1.0" },
+  "tool": { "name": "funky-secure", "version": "0.4.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "provenance": {
@@ -980,6 +987,17 @@ JSON field of 10.2, in one line, never a claim about where an effective value ca
 A skipped rule states what was not verified and the command that verifies it, not only the contract
 that excluded it: `--scope repo` omitting the machine is a fact a CI reader has to be able to act on
 (7.2).
+
+A human `scan` ends by naming the next command, not only the verdict. After `summary` and `verdict`, one
+`next` block uses the same label gutter and says exactly one of three things: when at least one failing
+finding carries an `auto` remediation, `funky-secure init` together with the number of fixes it can make
+and the fact that nothing is written yet; when the verdict is `pass`, that nothing is left to do; when
+the verdict is `fail` and no finding is automatic, that the work is manual and each finding already names
+its file, line and action. When the block names `init`, a second line names one rule through
+`funky-secure explain <rule>`, chosen as the highest-severity failing finding with ties broken by catalog
+order, so the two runs over the same state produce the same bytes. The block is human output only: the
+JSON document of 10.2 does not gain a field for it, because a reader that wants the plan asks for the
+plan (10.5, 11.2.1).
 
 ### 10.4 Exit codes
 
@@ -1821,6 +1839,13 @@ Nothing else in 0.1.0 depends on this.
 28. `docs/guide.md` exists, is linked from `README.md`, and explains every symbol the human renderer
     emits plus a "if you see this, do this" row for each catalog rule (13.4).
 
+### 21.3 v1.6 acceptance (added in revision 7)
+
+29. The human `scan` output ends with a `next` block that names `funky-secure init` with the number of
+    automatic fixes when such findings exist, says nothing is left to do when the verdict is `pass`, and
+    says the work is manual when no failing finding is automatic; the rule it names through `explain` is
+    the same on every run over the same state (10.3).
+
 ---
 
 ## Appendix A — Decision log
@@ -1963,7 +1988,7 @@ repo-root
 
 importer  packages/api/package.json
   ⚠ exact-versions      packages/api/package.json:14  yaml@^2.9.0 is a floating range
-                        → pnpm add --save-exact yaml@2.9.0
+                        → pnpm pkg set 'dependencies.yaml=2.9.0' && pnpm install
 
 ci
   ⚠ actions-pinned-sha  .github/workflows/ci.yml:31  pnpm/action-setup@v6 is not a commit SHA
@@ -1974,6 +1999,8 @@ passing  5 rules (package-manager-pin, foreign-lockfile, env-not-tracked, sensit
 
 summary  1 error · 3 warnings · 0 info · 5 passing · 0 skipped
 verdict  FAIL (threshold: error)
+next     funky-secure init  plan the 1 fix it can make (nothing is written)
+         funky-secure explain lockfile-committed   what this rule wants, and why
 ```
 
 ### D.2 `scan --format json` (abridged to one finding)
@@ -1981,7 +2008,7 @@ verdict  FAIL (threshold: error)
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.1.0" },
+  "tool": { "name": "funky-secure", "version": "0.4.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "provenance": {
