@@ -12,12 +12,17 @@
 funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
                   [--format human|json] [--fail-on error|warn|info|none]
                   [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
+                  [--verbose]
 ```
 
 - Read-only, always. No file is created, modified or removed, in any scope.
 - Default: `--scope auto`, `--format human`, `--fail-on error`, preset from config or `baseline`.
 - `--strict-probes`: a required probe that is unavailable becomes `error` (exit `2`) instead of
   `skip`. CI uses it to refuse a green build that measured nothing.
+- `--verbose`: the human report gains what 10.3 leaves out by default — the id of every finding, the
+  reason and the verifying command of each skipped rule in place of the collapsed line, the ids of the
+  passing rules, and the machine block's paths unbroken. It is a rendering flag: it changes no count,
+  no ordering and no byte of the JSON document, which is the same document with and without it.
 - Output: section 10. Exit: section 10.4.
 
 ### 11.2 `init`

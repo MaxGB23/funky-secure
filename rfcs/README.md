@@ -8,6 +8,7 @@ document that changes without a new record.
 | # | Title | Status | Supersedes | Superseded by | Present contract |
 |---|---|---|---|---|---|
 | [0001](0001-funky-secure-v1/rfc.md) | funky-secure as a supply-chain auditor and initializer | `implemented` | — | — | [`docs/spec/`](../docs/spec/README.md) |
+| [0002](0002-human-output-v2/rfc.md) | Human output v2 | `accepted` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.1 |
 
 ## Layout
 
@@ -17,6 +18,8 @@ rfcs/
   0001-funky-secure-v1/
     rfc.md                     the record
     evidence/                  measurements, diagrams and excerpts it rests on
+  0002-human-output-v2/
+    rfc.md                     the record
 ```
 
 A record owns its evidence: anything a decision was argued from — a measurement, a diagram, an

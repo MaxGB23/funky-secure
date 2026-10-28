@@ -46,6 +46,19 @@ The contract for each rule is section 8.2 of [`rules.md`](rules.md). The page a 
 page names the spec as its normative source. Both are kept: the spec states the obligation, the page
 explains it.
 
+## Amendments
+
+A section leaves the verbatim comparison the moment a later record replaces its contract: the record
+stays frozen, and this directory becomes the authority for the new text. The rule the drift gate
+enforces follows the registry instead of a hard-coded list — an amendment must name a record that
+exists and is not still a `draft`, and the file must keep its section heading so the number keeps
+resolving.
+
+| § | Record | What it replaced |
+|---|---|---|
+| 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | the human report: three-line findings, header order, labels instead of ids, `--verbose`, the 96-column bound |
+| 11 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | `scan --verbose` in the synopsis, and its contract as human presentation that changes no JSON byte |
+
 ## Changing the contract
 
 1. Open a pull request against the file this table names, not against the record.

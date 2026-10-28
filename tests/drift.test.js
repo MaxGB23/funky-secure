@@ -147,6 +147,42 @@ test('docs/decisions.md exists and records every decision the RFC number', () =>
 
 const RECORD = join(ROOT, 'rfcs', '0001-funky-secure-v1', 'rfc.md');
 
+/**
+ * The index table as a map from file name to its row. The prose and the amendments table both cite
+ * files, so the row must be recognised by its shape — number, topic, local `.md` link — and not by
+ * looking up a name inside a regular expression.
+ * @param {string} index
+ * @returns {Map<string, { section: number, path: string }>}
+ */
+function specRows(index) {
+  const rows = new Map();
+
+  for (const line of index.split('\n')) {
+    const row = line.match(/^\| (\d+) \| [^|]*\| \[`([^`]+\.md)`\]\(([^)]+)\) \|$/);
+    if (row !== null) rows.set(row[2], { section: Number(row[1]), path: row[3] });
+  }
+
+  return rows;
+}
+
+/**
+ * The amendments table: section number to the record that replaced its contract. A section that is
+ * amended leaves the verbatim comparison, because the spec becomes the authority for its new text.
+ * @param {string} index
+ * @returns {Map<number, { number: string, path: string }>}
+ */
+function amendmentsIn(index) {
+  const amendments = new Map();
+  const table = index.split('## Amendments')[1];
+  if (table === undefined) return amendments;
+
+  for (const line of table.split('\n')) {
+    const row = line.match(/^\| (\d+) \| \[`([^`]+)`\]\(([^)]+)\) \|/);
+    if (row !== null) amendments.set(Number(row[1]), { number: row[2], path: row[3] });
+  }
+  return amendments;
+}
+
 function recordSections() {
   const text = readFileSync(RECORD, 'utf8');
   return [...text.matchAll(/^## (\d+)\. /gm)].map((match) => Number(match[1]));
@@ -180,6 +216,8 @@ test('docs/spec/README.md maps every section of the record to the file that carr
 test('every file docs/spec/README.md points at exists, and no section body was reworded', () => {
   const index = readFileSync(join(ROOT, 'docs', 'spec', 'README.md'), 'utf8');
   const record = readFileSync(RECORD, 'utf8');
+  const amended = amendmentsIn(index);
+  const rows = specRows(index);
 
   // Only the table's own targets are local files; the prose cites the record, which lives elsewhere.
   const targets = [...index.matchAll(/\[`([^`/]*\.md)`\]/g)].map((match) => match[1]);
@@ -193,6 +231,24 @@ test('every file docs/spec/README.md points at exists, and no section body was r
     const text = readFileSync(path, 'utf8');
     const body = text.slice(text.indexOf('\n## ') + 1).trimEnd();
     assert.ok(body.startsWith('## '), `${target} carries no section of the record`);
+
+    // A section a later record amended is the authority now, so it is no longer compared with the
+    // frozen record — but the amendment must name a record that exists and is not still a draft,
+    // and the file must keep the section heading, or its number stops resolving.
+    const section = rows.get(target)?.section ?? null;
+    const amendment = section === null ? null : amended.get(section);
+    if (amendment !== null && amendment !== undefined) {
+      const recordPath = join(ROOT, 'docs', 'spec', amendment.path);
+      assert.ok(existsSync(recordPath), `${target} is amended by a record that is not there`);
+      assert.match(
+        readFileSync(recordPath, 'utf8'),
+        /\| \*\*Status\*\* \| `(accepted|implemented|closed)`/,
+        `${target} is amended by a record that is still a draft`,
+      );
+      assert.match(body, new RegExp(`^## ${section}\\. `), `${target} lost its section number`);
+      continue;
+    }
+
     assert.ok(record.includes(body), `${target} no longer matches the record verbatim`);
   }
 });

@@ -28,9 +28,9 @@ S10. **Nothing else moves.** Exit codes, the JSON document, rule severities, mes
 
 | ID | Spec | Work | Commit |
 |---|---|---|---|
-| T1 | S3, S4 | `label` on the 12 rules, catalog test asserting one per rule, `--verbose` flag parsed and documented | pending |
-| T2 | S1, S2, S5, S6, S7, S8 | Renderer rewritten, tests per shape, width gate, captures in `docs/cli.md` and `docs/guide.md` | pending |
-| T3 | S9 | Spec 10.3 and 11.1, RFC 0002 record, decision rows | pending |
+| T1 | S3, S4 | `label` on the 12 rules, catalog test asserting one per rule, `--verbose` flag parsed and documented | `0154f56` |
+| T2 | S1, S2, S5, S6, S7, S8 | Renderer rewritten, tests per shape, width gate, captures in `docs/cli.md` and `docs/guide.md` | `bcf807e`, plus the docs work below |
+| T3 | S9 | Spec 10.3 and 11.1, RFC 0002 record, decision rows | next commit |
 
 ## Log
 
@@ -38,4 +38,22 @@ L1 (verbatim): "me gusta tu propuesta, implementala sin pr, quiero revisar todo 
 
 L2 (decision, parent): the approved plan is the requirement source; no spec is invented beyond what that plan listed. The version bump to 0.5.0 is deliberately left for after the owner's review, because it regenerates the goldens and would mix presentation work with release bookkeeping.
 
-L3 (finding, parent): `--verbose` does not exist today — the plan assumed it did. It is added by T1 rather than simulated by a second flag name, so S4 and S8 have somewhere to put what they remove from the default output.
+L3 (finding, parent): `--verbose` does not exist today — the plan assumed it did. It is added by T1
+rather than simulated by a second flag name, so S4 and S8 have somewhere to put what they remove
+from the default output.
+
+L4 (finding, worker): S9 broke a gate that was too strong from birth. `tests/drift.test.js` asserted
+every spec file was a verbatim slice of the frozen record for ever, which is only true until a later
+record replaces the contract. The worker stopped instead of editing a surface it did not own.
+
+L5 (decision, parent, 2026-10-28): a section leaves the verbatim comparison when `docs/spec/README.md`
+lists it in a new **Amendments** table naming the record that replaced it, and the gate follows the
+registry: it requires the named record to exist and not to be a `draft`, and it still requires every
+file to keep its section heading so the number keeps resolving. Sections 10 and 11 are amended by
+RFC 0002; the other seven keep the verbatim comparison. No exemption list is hard-coded in the test.
+
+L6 (review, parent): the surviving sentence "a skipped rule states what was not verified and the
+command that verifies it" contradicted the collapse in the same section. It now says where that
+obligation moves when skips collapse: behind `--verbose`, named by the collapsed line.
+
+L7 (open): the version bump to 0.5.0 and the two diagram strings are deliberately not in this branch.
