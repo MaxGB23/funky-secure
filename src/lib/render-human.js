@@ -1,16 +1,19 @@
 /**
- * Human rendering (RFC 10.3, Appendix D.1).
+ * Human rendering (spec 10.3, record RFC 0001 Appendix D.1).
  *
- * Grouped by target, one line per finding, the remediation indented under it, and a summary that
- * separates pass from fail from skip. Passing rules are rolled up into one line that names them.
- * Colour is applied only when the caller says stdout is a TTY and NO_COLOR is unset.
+ * A human reads this without the catalog: a finding is a heading line naming the subject and the
+ * file, the message under it, and the action last (S1). The header carries the counts and the verdict
+ * before anything else (S2), because the first thing a reader wants is the answer, not the evidence.
+ *
+ * The rule id is not printed: it is a name for tooling, and it stays in the JSON document, in
+ * `--help`, in `explain` and behind `--verbose` (S4). Nothing here prints more than 96 columns (S5);
+ * the only shortened value is a machine path, whose length is not ours to bound.
  *
  * The provenance line (S7) states the preset, the source it came from, what was measured about the
  * quarantine and whether the machine scope was excluded — never a value attributed to a source that
  * pnpm does not report (E2).
  *
- * The renderer ends with the `next` block (RFC 10.3, S1-S5): the one command that moves the repository
- * forward, in the same gutter as `summary` and `verdict`.
+ * The renderer ends with the `next` block (S1-S5): the one command that moves the repository forward.
  */
 
 import { severityRank, TARGET_ORDER } from './report.js';
@@ -26,13 +29,74 @@ const ANSI = {
   reset: '\u001b[0m',
 };
 
-const WRAP = 100;
+/** The hard width bound of S5. A rendered line never exceeds it. */
+const WIDTH = 96;
+/** Messages stop earlier than the hard bound: a paragraph that fills 96 columns is not scannable. */
+const MESSAGE_WIDTH = 86;
+/** The column a message and an action hang from: two spaces, the symbol, two spaces. */
+const PREFIX = '  ';
+const INDENT = '     ';
+const ACTION = '     → ';
 /** The label column shared by `summary`, `verdict` and `next`, and by their continuation lines. */
 const LABEL_WIDTH = 9;
+/** The rule under the header, 90 columns so it does not compete with the text above it. */
+const SEPARATOR = '─'.repeat(90);
+/** How much of a machine path survives shortening: enough to recognise it, not enough to dominate. */
+const PATH_ROOM = 44;
 
 function paint(text, tone, color) {
   if (!color || !ANSI[tone]) return text;
   return `${ANSI[tone]}${text}${ANSI.reset}`;
+}
+
+/**
+ * Shortens a long value in the middle, keeping both ends. Deterministic by construction: the same
+ * input always yields the same output, and the cut points depend only on the length.
+ * @param {string} text
+ * @param {number} max
+ * @returns {string}
+ */
+function shorten(text, max) {
+  if (text.length <= max) return text;
+  if (max <= 1) return '…';
+  const keep = max - 1;
+  const head = Math.ceil(keep * 0.6);
+  const tail = keep - head;
+  return `${text.slice(0, head)}…${tail > 0 ? text.slice(-tail) : ''}`;
+}
+
+/**
+ * Greedy wrap on spaces. A single word longer than the width is split, because the width bound is
+ * asserted by a test and a long token is not a licence to cross it.
+ * @param {string} text
+ * @param {number} width
+ * @returns {string[]}
+ */
+function wrap(text, width) {
+  const lines = [];
+  let line = '';
+
+  for (const word of String(text).split(' ')) {
+    if (word.length > width) {
+      if (line !== '') {
+        lines.push(line);
+        line = '';
+      }
+      for (let index = 0; index < word.length; index += width) {
+        lines.push(word.slice(index, index + width));
+      }
+      line = lines.pop() ?? '';
+      continue;
+    }
+    if (line === '') line = word;
+    else if (line.length + 1 + word.length > width) {
+      lines.push(line);
+      line = word;
+    } else line += ` ${word}`;
+  }
+
+  if (line !== '' || lines.length === 0) lines.push(line);
+  return lines;
 }
 
 function pathLabel(finding) {
@@ -40,90 +104,177 @@ function pathLabel(finding) {
   return finding.line ? `${finding.path}:${finding.line}` : finding.path;
 }
 
-function blockFor(kind, targets, findings) {
-  const facts = targets.map((target) => target.detail).filter(Boolean);
-
-  if (kind !== 'importer') {
-    if (targets.length === 0 && findings.length === 0) return null;
-    return { heading: kind, facts, findings };
-  }
-
-  const paths = [
-    ...new Set([...targets.map((t) => t.path), ...findings.map((f) => f.path)].filter(Boolean)),
-  ].sort();
-  if (paths.length === 0) {
-    return findings.length === 0 ? null : { heading: 'importer', facts, findings };
-  }
-  return paths.map((path) => ({
-    heading: `importer  ${path}`,
-    facts: [],
-    findings: findings.filter((finding) => finding.path === path),
-  }));
-}
-
-function renderBlock(block, color) {
-  const lines = [block.heading];
-  for (const fact of block.facts) lines.push(`  ${fact}`);
-
-  const ruleWidth = Math.max(...block.findings.map((finding) => finding.rule.length), 0);
-  const pathWidth = Math.max(
-    ...block.findings.map((finding) => pathLabel(finding).length),
-    0,
-  );
-
-  for (const finding of block.findings) {
-    const symbol =
-      finding.status === 'skip'
-        ? SYMBOL.skip
-        : SYMBOL[finding.severity] ?? SYMBOL.error;
-    const tone = finding.status === 'skip' ? 'skip' : finding.severity;
-
-    const prefix = `  ${paint(symbol, tone, color)} `;
-    let line = prefix + finding.rule.padEnd(ruleWidth);
-    const path = pathLabel(finding);
-    if (path) line += `  ${path.padEnd(pathWidth)}`;
-    line += `  ${finding.message}`;
-    lines.push(line);
-
-    if (finding.remediation && finding.remediation.command) {
-      const indent = ' '.repeat(prefix.length + ruleWidth + (path ? 2 + pathWidth : 0) + 2);
-      lines.push(`${indent}→ ${finding.remediation.command}`);
-    }
-  }
-
-  return lines;
-}
-
-function rollupPassing(passing, skipped) {
-  const head = `passing  ${passing.length} rule${passing.length === 1 ? '' : 's'} (`;
-  // Appendix D.1 aligns the continuation under the parenthesis, at the width of `passing  `.
-  const indent = ' '.repeat('passing  '.length);
-  const lines = [];
-  let current = head;
-
-  passing.forEach((finding, index) => {
-    const piece = (index === 0 ? '' : ', ') + finding.rule;
-    if (current.length + piece.length > WRAP && current !== head) {
-      lines.push(`${current},`);
-      current = indent + finding.rule;
-    } else {
-      current += piece;
-    }
-  });
-
-  lines.push(`${current})`);
-  lines[lines.length - 1] += `   ·   ${skipped} skipped`;
-  return lines;
-}
-
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
+function toneOf(finding) {
+  return finding.status === 'skip' ? 'skip' : (finding.severity ?? 'error');
+}
+
+function symbolOf(finding) {
+  return finding.status === 'skip' ? SYMBOL.skip : (SYMBOL[finding.severity] ?? SYMBOL.error);
+}
+
 /**
- * The one-line provenance of the report (S7), placed right after the title. It repeats no effective
- * pnpm value: the preset source is a measured fact, and the quarantine clause says only what was
- * measured — declared by this repository, not declared, or not verified.
+ * The name a human sees for a rule: its label from the catalog, never its id (S3, S4). A finding that
+ * carries an unknown id falls back to the id, because a report must render even when it is odd.
+ */
+function labelOf(finding, labels) {
+  return labels.get(finding.rule) ?? finding.rule;
+}
+
+/**
+ * One finding in at most three shapes: heading, message, action (S1). The id appears only under
+ * `--verbose`, on its own indented line, so it never competes with the sentence.
+ * @param {object} finding
+ * @param {{ color: boolean, verbose: boolean }} options
+ * @returns {string[]}
+ */
+function renderFinding(finding, { color, verbose, labels }) {
+  const tone = toneOf(finding);
+  const head = `${PREFIX}${paint(symbolOf(finding), tone, color)}  ${labelOf(finding, labels)}`;
+  const location = pathLabel(finding);
+  const room = WIDTH - head.length - '  ·  '.length;
+  const lines = [
+    location === '' ? head : `${head}  ·  ${paint(shorten(location, Math.max(room, PATH_ROOM)), 'skip', color)}`,
+  ];
+
+  for (const line of wrap(finding.message, MESSAGE_WIDTH)) lines.push(INDENT + line);
+
+  const command = finding.remediation?.command;
+  if (command) {
+    const pieces = wrap(command, WIDTH - ACTION.length);
+    lines.push(ACTION + pieces[0]);
+    for (const piece of pieces.slice(1)) lines.push(' '.repeat(ACTION.length) + piece);
+  }
+
+  if (verbose) lines.push(`${INDENT}·  ${finding.rule}`);
+  return lines;
+}
+
+/**
+ * A target with too many skipped rules to be useful says how many and which, then how to expand:
+ * `--verbose` is where each reason and its verifying command live (S7). A single skip is cheaper to
+ * print than to explain, so it keeps its own block and needs no flag.
+ * @param {Array<object>} skipped
+ * @param {{ color: boolean, verbose: boolean }} options
+ * @returns {string[]}
+ */
+function renderSkipped(skipped, options) {
+  if (skipped.length === 0) return [];
+  if (options.verbose || skipped.length === 1) {
+    return skipped.flatMap((finding) => ['', ...renderFinding(finding, options)]);
+  }
+
+  const head = `${PREFIX}${paint(SYMBOL.skip, 'skip', options.color)}  ${plural(skipped.length, 'rule', 'rules')} not verified: `;
+  const names = skipped.map((finding) => labelOf(finding, options.labels)).join(', ');
+  const lines = wrap(names, WIDTH - head.length).map((line, index) =>
+    index === 0 ? head + line : ' '.repeat(head.length) + line,
+  );
+  lines.push(`${ACTION}funky-secure scan --verbose, each names what was not verified and how to verify it`);
+  return lines;
+}
+
+/**
+ * A target fact is prose the collector produced, and the machine block embeds two absolute paths in
+ * it. The default report bounds them; `--verbose` prints the fact verbatim and the JSON keeps it whole
+ * (S8), so nothing is lost, only shortened where a human is reading.
+ * @param {string} fact
+ * @param {boolean} verbose
+ * @returns {string[]}
+ */
+function renderFact(fact, verbose) {
+  const text = verbose
+    ? fact
+    : fact.replace(/\S{45,}/g, (token) => (/[/\\]/.test(token) ? shorten(token, PATH_ROOM) : token));
+  return wrap(text, WIDTH - 2).map((line, index) => (index === 0 ? `  ${line}` : `  ${line}`));
+}
+
+/** The heading of a block: the target kind, upper case, and the path when the kind is an importer. */
+function blockName(block) {
+  const kind = block.kind === 'importer' ? `IMPORTER  ${block.path ?? ''}`.trimEnd() : block.kind.toUpperCase();
+  return kind;
+}
+
+/**
+ * @param {{ kind: string, path?: string, facts: string[], findings: object[], passing: object[], skipped: object[] }} block
+ * @param {{ color: boolean, verbose: boolean }} options
+ * @returns {string[]}
+ */
+function renderBlock(block, options) {
+  const name = blockName(block);
+  const failing = block.findings;
+
+  if (failing.length === 0 && block.skipped.length === 0) {
+    const facts = block.facts.flatMap((fact) => renderFact(fact, options.verbose));
+    if (block.passing.length === 0 && block.facts.length === 0) return [];
+    if (block.passing.length === 0) return [name, ...facts];
+    const count = plural(block.passing.length, 'rule', 'rules');
+    return [`${name}   all ${count} pass`, ...facts];
+  }
+
+  const lines = [name, ...block.facts.flatMap((fact) => renderFact(fact, options.verbose))];
+  const groups = failing.map((finding) => renderFinding(finding, options));
+  const skipped = renderSkipped(block.skipped, options);
+  if (skipped.length > 0) groups.push(skipped);
+
+  // One blank line between findings: a paragraph that runs straight into the next one is the
+  // problem this output was rewritten to fix.
+  groups.forEach((group, index) => {
+    if (index > 0) lines.push('');
+    lines.push(...group);
+  });
+  return lines;
+}
+
+/**
+ * Splits one target kind into the blocks that are printed under it. `importer` is the only kind that
+ * can be about several files at once, so it is the only one that is split by path.
+ * @returns {Array<object>}
+ */
+function blocksFor(kind, targets, findings, passing) {
+  const ofKind = (finding) => finding.target === kind;
+  const kindTargets = targets.filter((target) => target.kind === kind);
+  const kindFindings = findings.filter(ofKind);
+  const kindPassing = passing.filter(ofKind);
+  const facts = kindTargets.map((target) => target.detail).filter(Boolean);
+
+  if (kind === 'importer') {
+    const paths = [
+      ...new Set(
+        [...kindTargets.map((t) => t.path), ...kindFindings.map((f) => f.path), ...kindPassing.map((f) => f.path)]
+          .filter(Boolean),
+      ),
+    ].sort();
+    if (paths.length === 0) {
+      return kindFindings.length === 0 && kindPassing.length === 0
+        ? []
+        : [{ kind, path: null, facts, findings: kindFindings, passing: kindPassing, skipped: [] }];
+    }
+    return paths.map((path) => ({
+      kind,
+      path,
+      facts: [],
+      findings: kindFindings.filter((finding) => finding.path === path),
+      passing: kindPassing.filter((finding) => finding.path === path),
+      skipped: [],
+    }));
+  }
+
+  return [
+    {
+      kind,
+      facts,
+      findings: kindFindings.filter((finding) => finding.status !== 'skip'),
+      passing: kindPassing,
+      skipped: kindFindings.filter((finding) => finding.status === 'skip'),
+    },
+  ];
+}
+
+/**
+ * The one-line provenance of the report (S7). It repeats no effective pnpm value.
  * @param {{ preset: string, presetSource: string, quarantine: string, machine: string }} provenance
  * @returns {string}
  */
@@ -135,14 +286,45 @@ function provenanceLine(provenance) {
   );
 }
 
+/** The counts line, unchanged in wording and gutter: only its position moved (S2). */
+function summaryLine(summary) {
+  return (
+    `${'summary'.padEnd(LABEL_WIDTH)}${plural(summary.error, 'error', 'errors')} · ` +
+    `${plural(summary.warn, 'warning', 'warnings')} · ${summary.info} info · ` +
+    `${summary.pass} passing · ${plural(summary.skip, 'skipped', 'skipped')}`
+  );
+}
+
+/**
+ * The rule ids of the passing rules, for `--verbose` only: the default report counts them (S6).
+ * @param {Array<object>} passing
+ * @returns {string[]}
+ */
+function passingIds(passing) {
+  const head = `${'passing'.padEnd(LABEL_WIDTH)}${passing.length} rules (`;
+  const indent = ' '.repeat(LABEL_WIDTH);
+  const lines = [];
+  let current = head;
+
+  passing.forEach((finding, index) => {
+    const piece = (index === 0 ? '' : ', ') + finding.rule;
+    if (current.length + piece.length > WIDTH && current !== head) {
+      lines.push(`${current},`);
+      current = indent + finding.rule;
+    } else current += piece;
+  });
+
+  lines.push(`${current})`);
+  return lines;
+}
+
 /**
  * The one rule a reader should open next: the highest-severity failing finding, ties broken by the
  * catalog order — never alphabetical order and never the order the report happens to print, because
- * report order groups by target first (RFC 10.2). Two runs over the same state name the same rule.
- *
- * @param {Array<object>} failing findings that are neither pass nor skip
- * @param {Array<{ id: string }>} catalog catalog order, the tie-break of RFC 10.3
- * @returns {string} a rule id
+ * report order groups by target first (10.2). Two runs over the same state name the same rule.
+ * @param {Array<object>} failing
+ * @param {Array<{ id: string }>} catalog
+ * @returns {string}
  */
 function ruleToRead(failing, catalog) {
   const order = new Map(catalog.map((rule, index) => [rule.id, index]));
@@ -160,16 +342,11 @@ function ruleToRead(failing, catalog) {
 }
 
 /**
- * The block a human `scan` ends with (RFC 10.3, S1-S5): the one command that moves the repository
- * forward, in the same nine-character gutter as `summary` and `verdict`.
- *
+ * The block a human `scan` ends with (S1-S5): the one command that moves the repository forward.
  * Exactly one of three shapes, decided by the report and nothing else. An automatic fix wins even
- * when the verdict is a pass, because the fixes are still available; the manual shape is what is
- * left when the run failed and nothing in it can be written. The block names no path, no time and no
- * machine value, so two runs over the same state produce the same bytes.
- *
+ * when the verdict is a pass, because the fixes are still available.
  * @param {{ summary: { verdict: string }, findings: Array<object> }} report
- * @param {Array<{ id: string }>} catalog catalog order, used to break a severity tie
+ * @param {Array<{ id: string }>} catalog
  * @returns {string[]}
  */
 function nextBlock({ summary, findings }, catalog) {
@@ -196,57 +373,39 @@ function nextBlock({ summary, findings }, catalog) {
 
 /**
  * @param {object} report the object built by `buildReport`
- * @param {{ color?: boolean }} [options]
+ * @param {{ color?: boolean, verbose?: boolean }} [options]
  * @returns {string}
  */
-export function renderHuman(report, { color = false } = {}) {
+export function renderHuman(report, { color = false, verbose = false } = {}) {
   const targets = report.targets ?? [];
   const findings = report.findings ?? [];
-  // A passing finding is rolled up into one line (RFC 10.3); it is never printed as a finding, so a
-  // repository that is fine cannot look like a repository that is not.
+  // A passing finding is never printed as a finding: the header counted it, and a repository that is
+  // fine cannot be allowed to look like a repository that is not (10.1).
   const visible = findings.filter((finding) => finding.status !== 'pass');
+  const passing = findings.filter((finding) => finding.status === 'pass');
+  const options = { color, verbose, labels: new Map(defaultCatalog.map((rule) => [rule.id, rule.label ?? rule.id])) };
 
+  const verdict = report.summary.verdict === 'fail' ? 'FAIL' : 'PASS';
   const lines = [
     `${report.tool.name} scan  ·  preset ${report.policy.preset}  ·  scope ${report.scope}`,
   ];
   if (report.provenance) lines.push(provenanceLine(report.provenance));
-  lines.push('');
+  lines.push(summaryLine(report.summary));
+  lines.push(
+    `${'verdict'.padEnd(LABEL_WIDTH)}${paint(verdict, verdict === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${report.policy.failOn})`,
+  );
+  lines.push(SEPARATOR, '');
 
   for (const kind of TARGET_ORDER) {
-    const kindTargets = targets.filter((target) => target.kind === kind);
-    const kindFindings = visible.filter((finding) => finding.target === kind);
-    if (kindTargets.length === 0 && kindFindings.length === 0) continue;
-
-    const block = blockFor(kind, kindTargets, kindFindings);
-    const blocks = Array.isArray(block) ? block : block === null ? [] : [block];
-    for (const item of blocks) {
-      if (item.findings.length === 0 && item.facts.length === 0) continue;
-      lines.push(...renderBlock(item, color));
-      lines.push('');
+    for (const block of blocksFor(kind, targets, visible, passing)) {
+      const rendered = renderBlock(block, options);
+      if (rendered.length === 0) continue;
+      lines.push(...rendered, '');
     }
   }
 
-  if (visible.length === 0) {
-    lines.push('nothing to report', '');
-  }
+  if (verbose && passing.length > 0) lines.push(...passingIds(passing), '');
 
-  const passing = findings.filter((finding) => finding.status === 'pass');
-  const skipped = findings.filter((finding) => finding.status === 'skip').length;
-
-  if (passing.length > 0) {
-    lines.push(...rollupPassing(passing, skipped), '');
-  } else if (skipped > 0) {
-    lines.push(`passing  0 rules   ·   ${skipped} skipped`, '');
-  }
-
-  const { summary, policy } = report;
-  lines.push(
-    `summary  ${plural(summary.error, 'error', 'errors')} · ${plural(summary.warn, 'warning', 'warnings')} · ${summary.info} info · ${summary.pass} passing · ${plural(summary.skip, 'skipped', 'skipped')}`,
-  );
-
-  const verdict = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
-  const tone = summary.verdict === 'fail' ? 'error' : 'pass';
-  lines.push(`verdict  ${paint(verdict, tone, color)} (threshold: ${policy.failOn})`);
   lines.push(...nextBlock(report, defaultCatalog));
 
   return `${lines.join('\n')}\n`;
