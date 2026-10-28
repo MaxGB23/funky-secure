@@ -20,9 +20,9 @@ S6. `AGENTS.md` exists at the repository root, minimal, and names the new paths 
 
 | ID | Spec | Work | Commit |
 |---|---|---|---|
-| T1 | S1, S2, S5 | Freeze 0001 (rename + status block), `rfcs/README.md` index, every live reference updated, drift-gate literal updated | pending |
-| T2 | S3, S4 | `docs/spec/` extracted verbatim, index mapping section to file, drift gate asserting the index covers the record | pending |
-| T3 | S5, S6 | `AGENTS.md`, decision-log entries, `CONTRIBUTING.md` RFC-first rule restated in the new model | pending |
+| T1 | S1, S2, S5 | Freeze 0001 (rename + status block), `rfcs/README.md` index, every live reference updated, drift-gate literal updated | `2f5f88e` |
+| T2 | S3, S4 | `docs/spec/` extracted verbatim, index mapping section to file, drift gate asserting the index covers the record | `c310269` |
+| T3 | S5, S6 | `AGENTS.md`, decision-log entries, `CONTRIBUTING.md` RFC-first rule restated in the new model | `c310269` |
 
 ## Log
 
@@ -33,3 +33,9 @@ L2 (verbatim): "arranca, tambien recuerda crear un agents.md en root minimo con 
 L3 (decision, parent): the record is not rewritten, so extraction is a copy of the normative sections into `docs/spec/`, not a cut: the frozen body keeps its prose and the spec becomes the authority for the present. Duplication between `docs/spec/rules.md` and `docs/rules/<id>.md` is resolved by role — the spec is normative text, the rule page is the reader's page and names the spec as the normative source.
 
 L4 (decision, parent): the record keeps Context, Problems, Goals, Principles, Testing, Implementation plan, Delivery history, Risks, Resolved questions, Acceptance and Appendices A-E; the spec carries Identity, Scope, Rules, Policy, Report, Commands, Machine, Documentation and Layout. Delivery (17) is extracted to `docs/delivery.md` because it describes a posture, not a version.
+L5 (evidence): 358/358 tests, self-scan `--scope repo --fail-on warn` exit 0. The record body was
+verified byte-identical after the freeze, and each of the ten extracted files was verified to still
+appear verbatim in the record. The slice counter reports one large commit in `c310269`; it is a move,
+not authored work — 1,352 added lines of copied text against 40 lines of new prose and gates.
+
+L6 (open): the release path is still undecided (manual vs OIDC), so nothing here touches publication.
