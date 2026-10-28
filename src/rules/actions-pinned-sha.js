@@ -87,6 +87,7 @@ function unpinned(path, step) {
 export default {
   id: 'actions-pinned-sha',
   title: 'Actions are pinned to a commit SHA',
+  label: 'Pinned actions',
   scope: ['repo'],
   targets: ['ci'],
   friction: 1,

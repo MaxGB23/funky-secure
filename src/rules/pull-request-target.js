@@ -98,6 +98,7 @@ function headCheckout(step) {
 export default {
   id: 'pull-request-target',
   title: 'A pull_request_target workflow does not check the pull request head out',
+  label: 'pull_request_target',
   scope: ['repo'],
   targets: ['ci'],
   friction: 1,

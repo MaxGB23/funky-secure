@@ -18,6 +18,7 @@ function migrateCommand(files) {
 export default {
   id: 'foreign-lockfile',
   title: 'No other package manager shapes this repository',
+  label: 'Foreign lockfile',
   scope: ['repo'],
   targets: ['repo-root'],
   friction: 0,

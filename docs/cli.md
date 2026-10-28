@@ -23,6 +23,7 @@ release (RFC 13.1, 13.3).
 funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
                   [--format human|json] [--fail-on error|warn|info|none]
                   [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
+                  [--verbose]
 ```
 
 Read-only audit. It resolves targets, runs the active rules and renders one report. Defaults are
@@ -35,6 +36,9 @@ or `baseline`.
   refuse a green build that measured nothing.
 - `--with-timestamp` adds `generatedAt` to the JSON document. It is the only non-deterministic field
   and is excluded from golden tests by construction.
+- `--verbose` restores what the default human report leaves out: every rule id, the reason and the
+  verifying command of each skipped rule, and the machine block full binary path. The JSON document
+  is the same with or without it.
 
 #### Human output
 
@@ -149,6 +153,7 @@ accept it is a usage error, never a silently ignored argument. Enumerated values
 | `--ignore` | `scan` | comma-separated rule ids | never run these rules; repeats accumulate |
 | `--strict-probes` | `scan` | boolean | unavailable required probe becomes `error` |
 | `--with-timestamp` | `scan` | boolean | add `generatedAt` to the JSON report |
+| `--verbose` | `scan` | boolean | show rule ids, per-rule skip reasons and the machine binary path |
 | `--apply` | `init`, `migrate` | boolean | perform the write plan instead of only printing it |
 | `--allow-dirty` | `init`, `migrate` | boolean | allow writing over uncommitted target files |
 | `--from` | `migrate` | `npm`, `yarn`, `auto` | declared origin; default `auto` |

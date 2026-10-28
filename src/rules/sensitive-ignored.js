@@ -25,6 +25,7 @@ const AUTH_TOKEN = /_authToken=/;
 export default {
   id: 'sensitive-ignored',
   title: 'Sensitive files are ignored and untracked',
+  label: 'Sensitive files',
   scope: ['repo'],
   targets: ['repo-root'],
   friction: 0,

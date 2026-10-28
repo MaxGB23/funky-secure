@@ -35,6 +35,7 @@ const AUTO = { kind: 'auto', command: 'funky-secure init --apply' };
 export default {
   id: 'quarantine',
   title: 'Quarantine is a gate, not an approval list',
+  label: 'Quarantine',
   scope: ['repo'],
   targets: ['repo-root'],
   friction: 2,

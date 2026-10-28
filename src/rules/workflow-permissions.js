@@ -74,6 +74,7 @@ function writeAllFinding(path, where, line) {
 export default {
   id: 'workflow-permissions',
   title: 'Every workflow declares least-privilege permissions',
+  label: 'Workflow permissions',
   scope: ['repo'],
   targets: ['ci'],
   friction: 1,

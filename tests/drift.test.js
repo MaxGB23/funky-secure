@@ -36,6 +36,20 @@ test('every docs/rules page declares a rule id the catalog contains', () => {
   }
 });
 
+test('every catalog rule carries its own short human label', () => {
+  const seen = new Map();
+
+  for (const rule of catalog) {
+    assert.equal(typeof rule.label, 'string', `${rule.id} carries no label`);
+    const label = rule.label.trim();
+    assert.equal(label, rule.label, `${rule.id} label has stray whitespace`);
+    assert.ok(label.length > 0 && label.length <= 28, `${rule.id} label is ${label.length} chars`);
+    assert.doesNotMatch(label, /[🌀-🫿☀-➿]/u, `${rule.id} label carries an emoji`);
+    assert.equal(seen.has(label), false, `"${label}" is used by ${seen.get(label)} and ${rule.id}`);
+    seen.set(label, rule.id);
+  }
+});
+
 test('help output contains every catalog rule id and every parsed flag', () => {
   const help = renderHelp({ catalog });
 

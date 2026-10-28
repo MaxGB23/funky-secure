@@ -31,6 +31,7 @@ function readablePackageJson(ctx) {
 export default {
   id: 'package-manager-pin',
   title: 'package.json declares the pnpm that answers',
+  label: 'Package manager',
   scope: ['repo'],
   targets: ['repo-root'],
   friction: 0,
