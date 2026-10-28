@@ -57,3 +57,10 @@ command that verifies it" contradicted the collapse in the same section. It now 
 obligation moves when skips collapse: behind `--verbose`, named by the collapsed line.
 
 L7 (open): the version bump to 0.5.0 and the two diagram strings are deliberately not in this branch.
+
+L8 (dogfooding, parent): building the tour (`M:/pruebas/cli-tour`) surfaced a rule defect that is
+not this feature s: `no-bot-auto-merge` (R9) also reports `pr-target-head-checkout` with R14 s
+own message (`src/rules/no-bot-auto-merge.js:200`), so one hazard in one workflow step produces two
+findings under two different labels, and the summary counts it twice. With labels now visible the
+duplication is obvious in a way the ids hid. It needs a rule-semantics decision and its own record;
+nothing in this branch changes it.
