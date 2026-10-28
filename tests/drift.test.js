@@ -127,6 +127,62 @@ test('docs/decisions.md exists and records every decision the RFC number', () =>
   }
 });
 
+/// The two axes (docs/spec/README.md): the record is frozen history, the spec is the present contract.
+/// These gates keep the record from silently losing sections and keep the spec from drifting away
+/// from the record it was extracted from.
+
+const RECORD = join(ROOT, 'rfcs', '0001-funky-secure-v1', 'rfc.md');
+
+function recordSections() {
+  const text = readFileSync(RECORD, 'utf8');
+  return [...text.matchAll(/^## (\d+)\. /gm)].map((match) => Number(match[1]));
+}
+
+test('the frozen record still has every numbered section, in order', () => {
+  assert.ok(existsSync(RECORD), 'rfcs/0001-funky-secure-v1/rfc.md is missing');
+
+  // A section is never removed from a record: the inventory is asserted, not inferred, so that an
+  // accidental edit of history fails here instead of being noticed by a reader months later.
+  const sections = recordSections();
+  assert.deepEqual(
+    sections,
+    Array.from({ length: 21 }, (_, index) => index + 1),
+    'the record no longer carries sections 1 through 21',
+  );
+});
+
+test('docs/spec/README.md maps every section of the record to the file that carries it', () => {
+  const index = readFileSync(join(ROOT, 'docs', 'spec', 'README.md'), 'utf8');
+
+  for (const section of recordSections()) {
+    assert.match(
+      index,
+      new RegExp(`^\\| ${section} \\|`, 'm'),
+      `docs/spec/README.md has no row for section ${section}`,
+    );
+  }
+});
+
+test('every file docs/spec/README.md points at exists, and no section body was reworded', () => {
+  const index = readFileSync(join(ROOT, 'docs', 'spec', 'README.md'), 'utf8');
+  const record = readFileSync(RECORD, 'utf8');
+
+  // Only the table's own targets are local files; the prose cites the record, which lives elsewhere.
+  const targets = [...index.matchAll(/\[`([^`/]*\.md)`\]/g)].map((match) => match[1]);
+  assert.ok(targets.length > 0, 'the spec index points at no file');
+
+  for (const target of targets) {
+    const path = join(ROOT, 'docs', 'spec', target);
+    assert.ok(existsSync(path), `the spec index points at a missing ${path}`);
+
+    // Each file is a verbatim slice of the record: header, blank line, then the section itself.
+    const text = readFileSync(path, 'utf8');
+    const body = text.slice(text.indexOf('\n## ') + 1).trimEnd();
+    assert.ok(body.startsWith('## '), `${target} carries no section of the record`);
+    assert.ok(record.includes(body), `${target} no longer matches the record verbatim`);
+  }
+});
+
 /// The golden gate (RFC 15.2). The fixtures, the deterministic collector and the renderer are the
 /// generator's, imported above, so this test cannot drift from `scripts/gen-golden.js`.
 

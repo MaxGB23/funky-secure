@@ -1,0 +1,57 @@
+# Specification
+
+This directory is what the code owes. It is the only document set that describes what is true **now**,
+and it is edited freely: a behaviour change starts here, in its own pull request.
+
+The record behind it — what was decided, in the order it was decided — is
+[`rfcs/0001-funky-secure-v1/rfc.md`](../../rfcs/0001-funky-secure-v1/rfc.md), frozen at revision 7. It
+is never edited again. Where the two disagree, this directory wins and the record is corrected by a
+dated `## Errata` entry, never by a rewrite.
+
+Every section number in this repository (`10.3`, `11.2.1`, `8.2 R7`) is the citation used by code,
+tests, commit messages and the decision log. The table below is that map: it says which file carries
+each number now.
+
+| § | Topic | Carried by |
+|---|---|---|
+| 1 | Context | record only |
+| 2 | Problems with the current design | record only |
+| 3 | Goals and non-goals | record only |
+| 4 | Design principles | record only |
+| 5 | Target architecture | record only — the code view is [`../architecture.md`](../architecture.md) |
+| 6 | Identity and naming | [`identity.md`](identity.md) |
+| 7 | Scope model and targets | [`scope.md`](scope.md) |
+| 8 | Rule catalog | [`rules.md`](rules.md) |
+| 9 | Policy model | [`policy.md`](policy.md) |
+| 10 | Report contract | [`report.md`](report.md) |
+| 11 | Command contracts | [`commands.md`](commands.md) |
+| 12 | Machine scope contract | [`machine.md`](machine.md) |
+| 13 | Help, documentation and the drift gate | [`documentation.md`](documentation.md) |
+| 14 | Repository and package layout | [`layout.md`](layout.md) |
+| 15 | Testing and validation plan | record only — the suite is the plan |
+| 16 | Implementation plan | record only — history of how it was built |
+| 17 | Delivery and release | [`../delivery.md`](../delivery.md) |
+| 18 | Relationship with funky-ai | record only |
+| 19 | Risks | record only |
+| 20 | Resolved design questions | record only — the answers live in [`../decisions.md`](../decisions.md) |
+| 21 | Acceptance criteria | record only — one release's definition of done |
+
+Appendices A–E and the closing note stay in the record: a decision log, the evidence a defect existed,
+the measured environment, output examples of that revision, and the empirical validation results.
+
+## Rules
+
+The contract for each rule is section 8.2 of [`rules.md`](rules.md). The page a user reads about a rule
+— why it exists, what its finding means, how to fix it — is [`../rules/<id>.md`](../rules/), and each
+page names the spec as its normative source. Both are kept: the spec states the obligation, the page
+explains it.
+
+## Changing the contract
+
+1. Open a pull request against the file this table names, not against the record.
+2. If the change introduces behaviour the record never decided, write the next record first —
+   see [`../../rfcs/README.md`](../../rfcs/README.md).
+3. If the change contradicts something the record decided, the record is corrected with a `## Errata`
+   entry that names what was wrong and what replaced it.
+4. Run the suite: `tests/drift.test.js` fails when this table stops covering the record, when a rule
+   page disappears, or when a flag loses its documentation.
