@@ -5,9 +5,14 @@ repository's supply-chain posture. Every contribution is judged by that: a wrong
 than no finding, and a written file is worse than a refused plan.
 
 Read [`docs/concept.md`](docs/concept.md) for what the tool is, and
-[`rfcs/funky-secure-rfc.md`](rfcs/funky-secure-rfc.md) for the normative contract. **When a change
-disagrees with the RFC, the RFC changes first, in its own pull request.** Decisions already made are
-listed in [`docs/decisions.md`](docs/decisions.md); do not reopen one with code.
+[`docs/spec/`](docs/spec/README.md) for the normative contract. **When a change disagrees with the
+spec, the spec changes first, in its own pull request** — it is the one document that describes what
+is true now. Decisions already made are listed in [`docs/decisions.md`](docs/decisions.md); do not
+reopen one with code.
+
+RFCs under [`rfcs/`](rfcs/README.md) are the **record** of those decisions, not the description of
+the product: once a record is `implemented` or `closed` its body is frozen, and a change of direction
+opens the next numbered record instead of editing it.
 
 ## Hard rules
 
@@ -43,18 +48,19 @@ request have different checklists because they need different evidence.
 - [ ] Environment: `node --version`, `pnpm --version`, operating system, and whether the repository
       is a pnpm workspace.
 - [ ] If a file was written, the original bytes and the bytes after the run.
-- [ ] Confirmed the finding is not a documented deviation (RFC 8.2 and
+- [ ] Confirmed the finding is not a documented deviation (spec 8.2 and
       [`docs/decisions.md`](docs/decisions.md)).
 
 ### Feature request checklist
 
 - [ ] The problem, not the solution: what question about a repository this tool cannot answer today.
-- [ ] Which of the nine rules it touches, or the argument for a tenth (RFC 8.3 is the intake).
+- [ ] Which of the nine rules it touches, or the argument for a tenth (spec 8.3 is the intake).
 - [ ] The facts it needs and where they come from (`ctx.repo`, `ctx.machine`, a collector probe).
 - [ ] What it does when that fact is missing: the `skip` code and its message.
 - [ ] Severity in `baseline` and `strict`, friction, and the single command that fixes it — or why it
       is unfixable by design.
-- [ ] The RFC section that must change before the code does.
+- [ ] The spec section that must change before the code does, or the argument that this needs its
+      own RFC record.
 
 ### Issue acceptance
 

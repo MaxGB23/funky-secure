@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: The contract this tool must keep
-    url: https://github.com/MaxGB23/funky-secure/blob/main/rfcs/funky-secure-rfc.md
-    about: Read the RFC before proposing a behavior change. The RFC changes before the code does.
+    url: https://github.com/MaxGB23/funky-secure/blob/main/docs/spec/README.md
+    about: Read the contract before proposing a behavior change. The spec changes before the code does.
+  - name: The record behind the contract
+    url: https://github.com/MaxGB23/funky-secure/blob/main/rfcs/README.md
+    about: Frozen RFCs and their status. A closed record is history and is not edited.
   - name: Decisions already made
     url: https://github.com/MaxGB23/funky-secure/blob/main/docs/decisions.md
     about: Recorded decisions and their reasons. An entry here is not reopened with code.

@@ -1,8 +1,10 @@
 # Command line
 
 One binary, `funky-secure`, with four commands: `scan`, `init`, `migrate` and `explain`. Every
-command is defined by the contract of the RFC (`rfcs/funky-secure-rfc.md`, sections 10 and 11); this
-page is the operating manual, not a second specification.
+command is defined by the contract in [`spec/report.md`](spec/report.md) and
+[`spec/commands.md`](spec/commands.md) — the record behind them is
+`rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11. This page is the operating manual, not a
+second specification.
 
 ```text
 funky-secure <command> [options]

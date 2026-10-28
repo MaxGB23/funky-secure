@@ -1,7 +1,17 @@
-# RFC: funky-secure as a supply-chain auditor and initializer
+# RFC 0001 — funky-secure as a supply-chain auditor and initializer
 
-> **STATUS: PROPOSED — revision 7 (v1.6). v0.1, v0.2, v0.3 and v0.4 implemented and merged; nothing
-> published.**
+| | |
+|---|---|
+| **Status** | `implemented` — frozen record. v0.1, v0.2, v0.3 and v0.4 are implemented and merged; nothing is published. |
+| **Revision** | 7 (v1.6), the last one. This body is history: it is not edited again. |
+| **Present contract** | [`docs/spec/`](../../docs/spec/README.md) — extracted from this document section by section. Where the two disagree, the spec is what the code owes. |
+| **Supersedes** | nothing; this is the first record. |
+| **Superseded by** | nothing. Later features are their own records under [`rfcs/`](../README.md). |
+
+> **How to read this file.** It records what was decided and why, in the order it was decided. Every
+> heading number (`10.3`, `11.2.1`) is still the citation used across the repository, and
+> [`docs/spec/README.md`](../../docs/spec/README.md) maps each one to the file that carries it now.
+> Read this to understand a decision; read the spec to know what is true.
 >
 > **Revision 7** closes the loop a first run leaves open. Revision 6 made every finding actionable on
 > its own, but a human who ran `scan` on an unconfigured repository read the verdict and stopped: the

@@ -115,7 +115,10 @@ test('docs/decisions.md exists and records every decision the RFC number', () =>
   assert.ok(existsSync(path), 'docs/decisions.md is missing');
 
   const text = readFileSync(path, 'utf8');
-  assert.ok(text.includes('rfcs/funky-secure-rfc.md'), 'decisions.md does not point at the RFC');
+  assert.ok(
+    text.includes('rfcs/0001-funky-secure-v1/rfc.md'),
+    'decisions.md does not point at the record behind the contract',
+  );
 
   // Appendix A defines D-1 through D-16. The bound is asserted rather than inferred so that a
   // silently truncated log fails here instead of passing on the numbers it happens to mention.

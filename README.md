@@ -121,7 +121,8 @@ migrated, never required.
 - [CLI reference](docs/cli.md) — every command, flag, exit code and JSON field.
 - [Concept](docs/concept.md) — what the product is and what it refuses to be.
 - [Architecture](docs/architecture.md) — the four layers and the invariants behind the guarantees.
-- [Decisions](docs/decisions.md) — the decision log; the [RFC](rfcs/funky-secure-rfc.md) is normative.
+- [Spec](docs/spec/README.md) — the normative contract: targets, rules, report, commands, exit codes.
+- [Decisions](docs/decisions.md) — the decision log, and the [RFC record](rfcs/README.md) it came from.
 
 ## 🛠️ Development
 
