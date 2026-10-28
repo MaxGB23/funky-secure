@@ -1,7 +1,8 @@
 # Decision log
 
-The normative specification is [`../rfcs/funky-secure-rfc.md`](../rfcs/funky-secure-rfc.md). This page
-is the review surface for the decisions behind it: first the product decisions of RFC Appendix A,
+The normative specification is [`spec/`](spec/README.md), extracted from the frozen record
+[`../rfcs/0001-funky-secure-v1/rfc.md`](../rfcs/0001-funky-secure-v1/rfc.md). This page is the review
+surface for the decisions behind it: first the product decisions of that record's Appendix A,
 then the implementation decisions taken during F0–F4 and recorded in
 [`../odd/tasks/funky-secure-v0.1.md`](../odd/tasks/funky-secure-v0.1.md).
 
@@ -28,7 +29,7 @@ Nothing here restates the RFC. Each line names the decision and the section or f
 | D-15 | The RFC session ends with the document; implementation happens in another session. | whole document |
 | D-16 | R4 measures the gate, not the number: a preset-dependent floor, `warn` in `baseline`, `error` in `strict`. | 8.2 R4, 9.1, 9.4, 11.2 |
 
-## Implementation decisions (F0–F4)
+## Implementation decisions (F0–F4, and after)
 
 | # | Decision | Binds |
 |---|---|---|
@@ -53,3 +54,6 @@ Nothing here restates the RFC. Each line names the decision and the section or f
 | I-19 | An exit-2 message is two lines: `funky-secure: <action>` and `reason: <diagnosis>`. The action is carried on the error by the site that knows it (a usage error names the accepted values, a refusal names the branch to switch to) and falls back to a class default, so `src/lib/config.js` and `src/lib/policy.js` need no change and still produce an actionable first line. | `src/cli.js` (`exitMessage`, `usage`), `src/commands/explain.js`, `src/commands/migrate.js`, `src/lib/plan.js`, 4.6, 10.4 |
 | I-20 | Every finding whose status is `fail` carries an action; `{ kind: 'none' }` is reserved for `pass` and `skip`, and a test walks the golden fixtures asserting that every rendered `✖`/`⚠`/`ℹ` line is followed by a `→`, plus a non-vacuity assertion that the walk reaches the two rules that used to be empty. Where no shell command is honest — deleting a workflow step — the remediation is `manual` and names the file and the 1-based step line the finding already reports. `exact-versions` prints `pnpm pkg set '<section>.<name>=<version>' && pnpm install` because `pnpm add --save-exact <name>@<range>` was measured to exit 0 and change nothing on pnpm 12.3.4. | `src/rules/*`, `tests/cli.test.js`, `docs/rules/exact-versions.md`, 4.6, 8.2 R2/R5/R6/R9 |
 | I-21 | A skip caused by the scope contract is a message the rule owns, naming what was not verified and the command that verifies it; `quarantine` treats `ctx.machine === null` as the same contract (`machine-out-of-scope`) while keeping `no-pnpm-config` for an available machine that answers without configuration, so the existing probe-unavailable test still describes a real case. | `src/rules/package-manager-pin.js`, `src/rules/quarantine.js`, 7.2, 10.3 |
+| I-22 | The repository has two axes, and each document belongs to exactly one (S1-S3). A **record** is immutable once `implemented` or `closed`: `rfcs/NNNN-<slug>/rfc.md` and `odd/tasks/<feature>.md`, whose Log is append-only. The **present** is edited freely and has one owner: `docs/spec/` for the contract and this page for the decisions. The record of 2026-10-28 is frozen at revision 7 under `implemented`; correcting it is a dated `## Errata` append or the next numbered record, never a rewrite. | `rfcs/README.md`, `odd/tasks/rfc-registry.md`, `CONTRIBUTING.md` |
+| I-23 | The contract was **copied**, not cut, out of the frozen record: `docs/spec/{identity,scope,rules,policy,report,commands,machine,documentation,layout}.md` and `docs/delivery.md` are verbatim slices of sections 6-14 and 17, so the record keeps its prose and the spec becomes the authority for the present. The duplication that this creates with `docs/rules/<id>.md` is resolved by role instead of by deletion: the spec states the obligation, the page explains it and names the spec as normative. | `docs/spec/`, `docs/delivery.md`, `tests/drift.test.js` |
+| I-24 | The drift gate enforces the split rather than trusting it: the record must still carry sections 1-21 in order (history is not edited silently), `docs/spec/README.md` must map every one of them to a file, and every mapped file must still contain its section verbatim. A section number stays the citation across the repository, so `10.3` and `11.2.1` keep resolving after the move. | `tests/drift.test.js`, `docs/spec/README.md` |

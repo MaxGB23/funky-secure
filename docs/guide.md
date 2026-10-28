@@ -3,7 +3,7 @@
 This page is for the person who has to decide what to do about a repository today. It assumes no
 prior knowledge of supply chains, and it does not replace the reference: every flag, exit code and
 JSON field lives in [`cli.md`](cli.md), and the normative contract is the
-[RFC](../rfcs/funky-secure-rfc.md).
+[spec](spec/README.md).
 
 `funky-secure` answers one question: **is this repository — and the machine that builds it —
 configured the way we decided?** It reads, it never installs, and it never edits your machine. What

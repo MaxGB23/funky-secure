@@ -73,5 +73,5 @@ unavailable required probe under `--strict-probes`, or a refused write — and n
 
 The full command and flag reference is in [`cli.md`](cli.md); the layers and invariants are in
 [`architecture.md`](architecture.md); the decisions a reviewer wants are in
-[`decisions.md`](decisions.md); the normative specification is
-[`../rfcs/funky-secure-rfc.md`](../rfcs/funky-secure-rfc.md).
+[`decisions.md`](decisions.md); the normative specification is [`spec/`](spec/README.md), and the
+record of how it was decided is [`../rfcs/0001-funky-secure-v1/rfc.md`](../rfcs/0001-funky-secure-v1/rfc.md).
