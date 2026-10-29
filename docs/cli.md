@@ -1,6 +1,7 @@
 # Command line
 
-One binary, `funky-secure`, with five commands: `start`, `scan`, `init`, `migrate` and `explain`.
+One binary, `funky-secure`, with six commands: `start`, `scan`, `init`, `migrate`, `explain` and
+`skill`.
 Every command is defined by the contract in [`spec/report.md`](spec/report.md) and
 [`spec/commands.md`](spec/commands.md) — the record behind them is
 `rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11, amended by records 0002 and 0003. This page is
@@ -381,7 +382,7 @@ The exit code is the stable contract for CI and for agents (RFC 10.4).
 
 | Code | Meaning |
 |---|---|
-| `0` | No finding at or above `--fail-on`. Skips and infos do not fail. `--help`, no command, `start`, and `init` without `--apply` also exit `0`. |
+| `0` | No finding at or above `--fail-on`. Skips and infos do not fail. `--help`, no command, `start`, `skill`, and `init` without `--apply` also exit `0`. |
 | `1` | At least one policy violation at or above `--fail-on`. Never used for a tool failure. |
 | `2` | The tool could not answer: bad usage, unknown command or rule id, malformed config, unreadable input, unavailable required probe under `--strict-probes`, or a refused write. Fail closed. |
 
@@ -469,3 +470,35 @@ on stdout, where the plan was printed.
 
 `explain <id> --format json` uses the same envelope with one rule and adds the rule's `question`,
 `detection`, `evidence`, `remediation` and `limits` fields.
+
+### `skill`
+
+```text
+funky-secure skill [--help]
+```
+
+Prints the agent skill this package ships, `skills/funky-secure/SKILL.md`, byte for byte on stdout —
+no header, no wrapper, no trailing note — so the redirect is the installation:
+
+```sh
+# this project, committed with it
+npx funky-secure skill > .agents/skills/funky-secure/SKILL.md
+
+# or every project
+npx funky-secure skill > ~/.agents/skills/funky-secure/SKILL.md
+```
+
+stderr carries the two lines that say where to put it, and nothing else:
+
+```text
+funky-secure skill: write it to .agents/skills/funky-secure/SKILL.md in this project
+funky-secure skill: or to ~/.agents/skills/funky-secure/SKILL.md for every project
+```
+
+Neither line names an agent product: the command is the distribution channel for any runtime that
+reads a skill directory, and npm has no convention for installing one. The file is resolved relative
+to the installed module, never from the working directory, so it works inside a repository, outside
+one, and in a directory that is not a repository at all — it reads nothing about the repository, runs
+no rule and spawns no probe. `--help` is the only flag it accepts; any other flag, and any trailing
+argument, is a usage error (exit `2`). A shipped file that cannot be read is exit `2` with the usual
+two-line message and an empty stdout, never a partial file a redirect would save.

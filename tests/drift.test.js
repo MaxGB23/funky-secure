@@ -168,6 +168,21 @@ test('the package description carries no rule count that can drift', () => {
   assert.doesNotMatch(manifest.description, /\bnine\b|\bten\b|\beleven\b|\btwelve\b|\d+ (stateless )?rules/i);
 });
 
+test('the shipped skill names only commands the CLI dispatches', () => {
+  const path = join(ROOT, 'skills', 'funky-secure', 'SKILL.md');
+  assert.ok(existsSync(path), 'skills/funky-secure/SKILL.md is missing');
+
+  const text = readFileSync(path, 'utf8');
+  const known = new Set(COMMANDS.map((command) => command.name));
+  const named = [...text.matchAll(/funky-secure ([a-z][a-z-]*)/g)].map((match) => match[1]);
+  const commands = named.filter((word) => !word.startsWith('-'));
+
+  assert.ok(commands.length > 0, 'the skill names no command at all');
+  for (const command of new Set(commands)) {
+    assert.ok(known.has(command), `the skill names "${command}", which the CLI does not dispatch`);
+  }
+});
+
 test('docs/decisions.md exists and records every decision the RFC number', () => {
   const path = join(ROOT, 'docs', 'decisions.md');
   assert.ok(existsSync(path), 'docs/decisions.md is missing');

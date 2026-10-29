@@ -245,4 +245,33 @@ about what the recommended preset leaves unrun.
 
 Exit: `0` in every state, including a repository already past the start; `2` for a usage error only.
 
+### 11.8 `skill`
+
+```
+funky-secure skill [--help]
+```
+
+Read-only, always, and it answers one question — *what does an agent need to know before it touches
+this repository* — with the file this package ships rather than with prose it renders. stdout carries
+the bytes of `skills/funky-secure/SKILL.md` exactly as published: no header, no wrapper, no trailing
+note, so `funky-secure skill > .agents/skills/funky-secure/SKILL.md` produces that file itself. stderr
+carries the two lines that say where to put it, the project-local `.agents/skills/funky-secure/` and
+the user-level `~/.agents/skills/funky-secure/`. Neither line names an agent product: the command is
+the distribution channel for any runtime that reads a skill directory, and the hint is a hint rather
+than a second copy of the file.
+
+It reads nothing about the repository: no rule runs, no probe is spawned and no fact is collected, and
+the file is resolved relative to the installed module rather than from the working directory, so the
+same bytes are printed inside a repository, outside one, and from a directory that is not a repository
+at all.
+
+`--help` is the only flag it accepts and it takes no positional argument; any other argument is a
+usage error. It exits `0` whenever the file is printed, and `2` for a usage error and for a shipped
+file that cannot be read — in which case stdout stays empty and the usual two-line message names the
+fix, because an empty or partial file would be saved by the very redirect it is meant for.
+
+This section is amended by record 0004, whose distribution amendment makes the binary the documented
+channel; the installed file remains the source to copy from at
+`node_modules/funky-secure/skills/funky-secure/SKILL.md`.
+
 ---

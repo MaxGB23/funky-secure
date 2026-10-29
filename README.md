@@ -61,6 +61,7 @@ severity — instead of into whoever happened to run the command.
 | `init` | what can be fixed, and exactly how | the printed plan, only with `--apply` |
 | `migrate` | how do I leave npm or yarn | the foreign lockfile's removal, only with `--apply` |
 | `explain` | what does one rule actually check | nothing |
+| `skill` | what does an agent need to know before it acts | nothing: it prints the shipped skill on stdout |
 
 ## ⚡ Quick start
 
@@ -129,6 +130,7 @@ migrated, never required.
 - [Concept](docs/concept.md) — what the product is and what it refuses to be.
 - [Architecture](docs/architecture.md) — the four layers and the invariants behind the guarantees.
 - [Spec](docs/spec/README.md) — the normative contract: targets, rules, report, commands, exit codes.
+- [Agent skill](skills/README.md) — the instructions an agent loads before touching a repository. The binary prints it, so any runtime can be given it with `npx funky-secure skill > .agents/skills/funky-secure/SKILL.md`.
 - [Decisions](docs/decisions.md) — the decision log, and the [RFC record](rfcs/README.md) it came from.
 
 ## 🛠️ Development
