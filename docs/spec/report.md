@@ -91,9 +91,8 @@ When the effective policy sets at least one rule `off`, the header gains exactly
 between `verdict` and the separator, in the same nine-character gutter:
 
 ```
-not run  5 of 12 rules; off by policy: Foreign lockfile, Environment files, Pinned
-         actions, Bot auto-merge, CI install flags, pull_request_target, Workflow
-         permissions
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot auto-merge,
+         CI install flags, pull_request_target, Workflow permissions
 ```
 
 The two numbers are how many catalog rules still run and how many the catalog has. A rule at `off`
@@ -129,9 +128,10 @@ tool, so it stays in the JSON document (10.2), in `--help`, in `explain` and in 
 (11.1). The label is a second field of the same catalog entry (13.1), so the catalog stays the only
 source and no second list of names exists to drift.
 
-A target with nothing to report is one line: `CI   all 5 rules pass`. Passing rules are counted in
-`summary` and never printed one line each (10.1); `--verbose` restores their ids in a single
-`passing` line.
+A target with nothing to report is two lines: the heading, and the count under it at the same five
+columns a finding hangs from — `CI` then `     all 5 rules pass` — so a clean block reads like every
+other block instead of like a sentence with a colon. Passing rules are counted in `summary` and never
+printed one line each (10.1); `--verbose` restores their ids in a single `passing` line.
 
 Skips collapse by target. Two or more skipped rules in one target print one `–` line naming the
 labels that were not verified and the command that expands them, `funky-secure scan --verbose`,

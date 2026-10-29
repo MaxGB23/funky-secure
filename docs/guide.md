@@ -86,12 +86,11 @@ pnpm's own configuration, which is not in the repository and does not travel wit
 evidence, and it counts what you actually got:
 
 ```text
-not run  5 of 12 rules; off by policy: Foreign lockfile, Environment files, Pinned
-         actions, Bot auto-merge, CI install flags, pull_request_target, Workflow
-         permissions
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
 ```
 
-Five of twelve rules ran and the seven named ones did not, so a `PASS` here means "passed the five that
+Six of twelve rules ran and the six named ones did not, so a `PASS` here means "passed the six that
 ran", not "this repository is fully checked". A rule that is off prints nothing and is not counted in
 `summary`, so without the line a run would look clean while it measured almost nothing. `--only` and
 `--ignore` never print it: picking rules for one run does not change the policy, and the line is a
@@ -114,9 +113,9 @@ already said it.
 
 A block heading is where the finding was measured, in upper case: `REPO-ROOT` for the repository,
 `IMPORTER <path>` for a `package.json`, `CI` for workflows, `MACHINE` for the pnpm that answers on
-this computer. A target with nothing to report is a single line, `CI   all 5 rules pass`, and a
-target with more than one skipped rule is a single line naming their labels plus the flag that
-expands them.
+this computer. A target with nothing to report prints its heading and one line under it, `all 5
+rules pass`, and a target with more than one skipped rule is a single line naming their labels plus
+the flag that expands them.
 
 ## The commands you actually need
 
@@ -132,8 +131,11 @@ answers it in order, with only the steps that still apply, because the order is 
 workspace block has to exist before the install that reads it, and a lockfile can only exist after the
 first dependency. From an empty directory that is `git init`, `pnpm init`,
 `funky-secure init --apply`, `pnpm add <your first dependency>`, and `funky-secure scan --preset
-starter` last. It writes nothing itself — `init --apply` is still the only writer — and it exits `0` in
-every state, because it is advice and not a gate.
+starter` last. A project a framework generator produced is the case the order turns on: while another
+manager's lockfile is still there it names `funky-secure migrate` first, before `init --apply`, and it
+does not name the first add at all, because adding now would write a second lockfile beside the npm
+one. It writes nothing itself — `init --apply` is still the only writer — and it exits `0` in every
+state, because it is advice and not a gate.
 
 `scan` is the product. `init` exists because a diagnosis you cannot act on is half useful: it runs the
 same scan and turns the fixable findings into writes — the package-manager pin, the quarantine gate,
@@ -179,14 +181,16 @@ only the pnpm on this computer; `--scope all` is both, explicitly. Two rules dep
 age policy — so under `--scope repo` they are reported as *not verified*, and their message names
 `--scope all`. A green CI gate therefore does not prove those two, by contract.
 
-**Presets.** `--preset starter` is the one to use when you are starting a project: it runs five rules
-at the severity they carry in `baseline` — the package-manager pin, the lockfile, the release-age
-quarantine, exact specifiers, and the files `.gitignore` must cover — and turns the other seven `off`:
-the foreign lockfile, tracked environment files, and the five CI and workflow rules, because a
-repository minutes old has none of those for them to read. It says so in the `not run` line instead of
-claiming a coverage it does not have, and it keeps the same quarantine floor as `baseline`. What it
-does not cover is exactly the seven it names — so it is a starting gate, not a CI gate: switch to
-`--preset baseline` (default) or `--preset strict` once the repository has a workflow to check.
+**Presets.** `--preset starter` is the one to use when you are starting a project: it runs six rules
+at the severity they carry in `baseline` — the package-manager pin, the lockfile, the foreign lockfile,
+the release-age quarantine, exact specifiers, and the files `.gitignore` must cover — and turns the
+other six `off`: tracked environment files and the five CI and workflow rules, because a repository
+minutes old has none of those for them to read. The foreign lockfile is in the set because that is
+exactly what a framework generator leaves behind: a manifest and someone else's lockfile. It says so
+in the `not run` line instead of claiming a coverage it does not have, and it keeps the same quarantine
+floor as `baseline`. What it does not cover is exactly the six it names — so it is a starting gate,
+not a CI gate: switch to `--preset baseline` (default) or `--preset strict` once the repository has a
+workflow to check.
 `strict` also asks for the 72-hour quarantine floor. `--fail-on error|warn|info|none` decouples
 reporting from gating, and `--strict-probes` turns an unavailable required probe into an error so CI
 cannot go green having measured nothing.

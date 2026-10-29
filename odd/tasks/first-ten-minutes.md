@@ -60,3 +60,29 @@ severity is `off`, through `offByPolicy(policy)`, so narrowing a run claims no c
 
 L9 (evidence): 385/385 tests and the self-scan at exit 0 on the final tree; 376/376 on `988c577` in a
 clean worktree, so the first slice stands alone. Goldens show zero diff against `main`.
+
+L10 (measurement and amendment, 2026-10-28): two framework-generated shapes were built and measured
+after the first slice shipped. Shape A, an `npm create next-app` repository — manifest with `next`,
+`react` and `react-dom` ranges, `app/page.jsx`, a `.gitignore`, `package-lock.json`, no
+`pnpm-lock.yaml`: `funky-secure start` printed `pnpm add <your first dependency>` as step 2, which
+writes a second lockfile beside the npm one, and `scan --preset starter` reported nothing about the
+foreign lockfile at all, because the preset turned `foreign-lockfile` `off`. Shape B, the same
+repository with `pnpm-lock.yaml` instead of `package-lock.json`: already answered correctly, and it
+stays the regression case. Amends S4 and S5; S1-S3 and S6-S9 stand.
+
+- S5 now reads six rules: `foreign-lockfile` joins the `starter` set at the `warn` it already carries
+  in `baseline`, and the other six rules stay `off`. `baseline` and `strict` are untouched. The
+  honesty line becomes `not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+  auto-merge, CI install flags, pull_request_target, Workflow permissions`.
+- S4's path gains one conditional step: while a foreign lockfile is present, `funky-secure migrate`
+  is printed before `funky-secure init --apply`, because the posture is written once the repository
+  has one package manager, and `pnpm add <your first dependency>` is not printed, because adding now
+  would write a second lockfile. A `pnpm-lock.yaml` that appears during the migration is the
+  migration's business, not that step's. The rest of the path and the continuous numbering are
+  unchanged, and `why this order` grows by exactly one line in that state.
+- The fact comes from the repository presence list the collector already resolved, from the same
+  context the command already receives: no probe, no rule change, no dependency (S9 holds).
+- Evidence: 388/388 tests and the self-scan at exit 0; `tests/policy.test.js` asserts the six-id
+  active set and the untouched `baseline`/`strict`, `tests/start.test.js` asserts both framework
+  shapes end to end through the real CLI. Recorded in the RFC as `## Amendment — 2026-10-28`, because
+  that record is still `accepted` and its branch is open.

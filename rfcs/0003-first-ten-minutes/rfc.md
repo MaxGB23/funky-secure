@@ -101,3 +101,43 @@ The work is done when the suite shows all of these:
   `docs/architecture.md` flow; the amendments table names only records that exist and are not drafts.
 - `node --test` passes, and `node bin/funky-secure.js scan --scope repo --fail-on warn` exits `0` on
   this repository.
+
+## Amendment — 2026-10-28
+
+Two gaps were measured on repositories a framework generator produced, after this record's work
+shipped on `feat/start`. The branch is still open, so the record is amended here instead of being
+superseded; nothing above changes, and this section states what the record now says.
+
+**What was measured.** A project from `npm create next-app` has a manifest, an app directory, a
+`.gitignore` and `package-lock.json`, and no `pnpm-lock.yaml`. `funky-secure start` answered it with
+`pnpm add <your first dependency>` as step 2, which is wrong advice there: the add writes a second
+lockfile beside the npm one. The same repository was told, by `--preset starter`, that
+`foreign-lockfile` was `off` — the only rule that says another package manager still shapes the
+repository was the one a framework beginner never saw. The same shape with `pnpm-lock.yaml` in place
+of `package-lock.json` was already answered correctly.
+
+**What changed.** The `starter` set of the Decision is six rules, not five: `foreign-lockfile` joins it
+at the `warn` it already carries in `baseline`, and the other six rules stay `off`. The honesty line
+therefore reads `not run  6 of 12 rules` and names six rules, not seven. `baseline` and `strict` do
+not change at all. `start`'s path gains one conditional step: while a foreign lockfile is present it
+prints `funky-secure migrate` before `funky-secure init --apply`, because the posture is written once
+the repository has one package manager, and it does not print the first add, because adding now would
+write a second lockfile; a `pnpm-lock.yaml` that appears during the migration is the migration's
+business, not that step's. `why this order` grows by one line, and only in that state. The fact is read
+from the repository presence list the collector already resolved, so the "no probe, no dependency"
+promise of 11.7 holds.
+
+**What did not change.** `start` still writes nothing, still exits `0` in every state, still derives
+everything from the same collection and the same plan, and still names `starter` last. The JSON
+document gains nothing (10.2), and `--only` / `--ignore` still never produce the `not run` line.
+
+**Why the set, not the severity.** Adding the rule at its `baseline` severity keeps the preset a
+reduced `baseline`: nothing becomes louder, and a repository that wants the whole catalog can run
+`baseline` (default) or `strict`. Leaving it out would have kept the preset quiet about the one fact
+that shapes a framework-generated repository, which is the opposite of what a day-zero preset is for.
+
+**Evidence.** `tests/policy.test.js` asserts the active set is exactly the six ids and that
+`baseline` and `strict` resolve as before; `tests/start.test.js` asserts the npm-shaped path
+(`migrate` before `init --apply`, no `pnpm add`, exit `0`, continuous numbering) and the pnpm-shaped
+path (neither step, continuous numbering). The suite passes and
+`node bin/funky-secure.js scan --scope repo --fail-on warn` exits `0` on this repository.

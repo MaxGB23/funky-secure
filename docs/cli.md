@@ -31,11 +31,11 @@ entry point for a repository that has nothing yet. It prints the steps that stil
 guidance, not a gate. `--help` is the only flag it accepts; a `--preset` on `start` is a usage error
 (exit `2`), because the preset it recommends is named in the answer.
 
-The steps are `git init`, `pnpm init`, `funky-secure init --apply` with the number of writes it is
-holding, `pnpm add <your first dependency>`, and `funky-secure scan --preset starter` last. Each one
-prints only while its condition holds: a repository that already has a manifest, a lockfile and a
-commit, but no managed block, is told to run `init --apply` and then `scan`, numbered from `1`. An
-empty directory, from a real run:
+The steps are `git init`, `pnpm init`, `funky-secure migrate`, `funky-secure init --apply` with the
+number of writes it is holding, `pnpm add <your first dependency>`, and `funky-secure scan --preset
+starter` last. Each one prints only while its condition holds: a repository that already has a
+manifest, a lockfile and a commit, but no managed block, is told to run `init --apply` and then
+`scan`, numbered from `1`. An empty directory, from a real run:
 
 ```text
 funky-secure start  ·  guidance, nothing is written
@@ -50,18 +50,41 @@ why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
   only exist after the first add
 
-not run  5 of 12 rules; off by policy: Foreign lockfile, Environment files, Pinned
-         actions, Bot auto-merge, CI install flags, pull_request_target, Workflow
-         permissions
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
+```
+
+A project a framework generator left behind is the case the order turns on. It has a manifest and a
+lockfile, and the lockfile belongs to another manager, so `migrate` comes first — the posture is
+written once the repository has one package manager — and the first add is never asked for, because
+adding now would write a second lockfile beside the npm one. A `pnpm-lock.yaml` that appears during
+the migration is the migration's business, not this step's. A repository of the shape
+`npm create next-app` leaves behind, from a real run:
+
+```text
+funky-secure start  ·  guidance, nothing is written
+
+  1  funky-secure migrate
+  2  funky-secure init --apply  plan the 3 writes (nothing is written)
+  3  funky-secure scan --preset starter
+
+why this order
+  the workspace block has to exist before the install that reads it, and a lockfile can
+  only exist after the first add
+  migrate comes first, because two lockfiles resolve two dependency trees
+
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
 ```
 
 `why this order` is the reason the sequence is not a list: the managed block has to exist before the
-install that reads it, and a lockfile can only exist after the first add. The `not run` block is the
-same line the report prints (RFC 10.3), describing `starter` — the preset step 5 runs — so the reader
-knows what the recommended preset does not check before running it. A repository past the start is
-told so in one line in place of the list, `the repository is past the start; the next step is
-funky-secure scan`, never handed a stale checklist; `why this order` and the `not run` block follow
-either way, because they describe the command and the preset rather than the repository.
+install that reads it, a lockfile can only exist after the first add, and a migration leads when a
+second package manager is still there. The `not run` block is the same line the report prints (RFC
+10.3), describing `starter` — the preset step 6 runs — so the reader knows what the recommended
+preset does not check before running it. A repository past the start is told so in one line in place
+of the list, `the repository is past the start; the next step is funky-secure scan --preset starter`,
+never handed a stale checklist; `why this order` and the `not run` block follow either way, because
+they describe the command and the preset rather than the repository.
 
 `start` derives everything from the same collection and the same write plan `scan` and `init` use, so
 it cannot contradict the report about the same repository (RFC 11.7). Exit `0` in every state,
@@ -149,17 +172,18 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
   The same line for the `starter` preset:
 
 ```text
-not run  5 of 12 rules; off by policy: Foreign lockfile, Environment files, Pinned
-         actions, Bot auto-merge, CI install flags, pull_request_target, Workflow
-         permissions
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
 ```
 
-- **A clean target is one line.** `CI   all 5 rules pass`, never one line per rule: the passes are
-  counted in `summary`. A repository at policy, from a different run:
+- **A clean target is two lines.** The heading, then `all 5 rules pass` at the same five columns a
+  finding hangs from, never one line per rule: the passes are counted in `summary`. A repository at
+  policy, from a different run:
 
 ```text
 funky-secure scan  ·  preset strict  ·  scope repo
-provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine
+            excluded)  ·  machine excluded
 summary  0 errors · 0 warnings · 0 info · 8 passing · 4 skipped
 verdict  PASS (threshold: error)
 ──────────────────────────────────────────────────────────────────────────────────────────
@@ -168,7 +192,8 @@ REPO-ROOT
   –  4 rules not verified: Package manager, Quarantine, Environment files, Sensitive files
      → funky-secure scan --verbose, each names what was not verified and how to verify it
 
-CI   all 5 rules pass
+CI
+     all 5 rules pass
 
 next     nothing to do: everything at or above the policy passes
 ```

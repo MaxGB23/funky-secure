@@ -57,7 +57,7 @@ number keeps resolving.
 
 | § | Record | What it replaced |
 |---|---|---|
-| 9 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 9.1: the `starter` preset, the five rules it keeps and the seven it turns `off`, and the quarantine floor it keeps |
+| 9 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 9.1: the `starter` preset, the six rules it keeps and the six it turns `off`, and the quarantine floor it keeps |
 | 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | the human report: three-line findings, header order, labels instead of ids, `--verbose`, the 96-column bound |
 | 10 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the `not run` line, so a reduced preset states the coverage it does not have |
 | 11 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | `scan --verbose` in the synopsis, and its contract as human presentation that changes no JSON byte |
