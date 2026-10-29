@@ -400,16 +400,18 @@ The exit code is the stable contract for CI and for agents (RFC 10.4).
 |---|---|
 | `0` | No finding at or above `--fail-on`. Skips and infos do not fail. `--help`, no command, `start`, `skill`, and `init` without `--apply` also exit `0`. |
 | `1` | At least one policy violation at or above `--fail-on`. Never used for a tool failure. |
-| `2` | The tool could not answer: bad usage, unknown command or rule id, malformed config, unreadable input, unavailable required probe under `--strict-probes`, or a refused write. Fail closed. |
+| `2` | The tool could not answer: bad usage, unknown command or rule id, malformed config, unreadable input, or an unavailable required probe under `--strict-probes`. Fail closed. |
+| `3` | The tool understood the situation and refused to act: the branch is the default one, the target is dirty, the foreign lockfile is the only one, the skill destination is a symbolic link. Nothing was written. |
 
-There is one code per outcome and no code is reused: the RFC defines `0`, `1` and `2`, and
-everything that is neither a violation nor a tool failure exits `0` (see the `0` row above).
+There is one code per outcome and no code is reused: `0` is a report within the threshold, `1` is a
+report past it, `2` is a question the tool could not answer, and `3` is a decision not to act. A refusal
+is not a `2`: it is a policy outcome about a situation the tool read correctly, and a script that
+branching on the exit code must be able to tell a decision from a crash. It is not a `1` either,
+because no finding crossed the threshold and nothing about the repository was judged.
 
-A code `2` is two lines on stderr: `funky-secure: <the action to take>` and `reason: <the internal
-diagnosis>`. The action comes first because the reader needs it first; the diagnosis is what the tool
-knows and the human may not, and it is complete — there is no verbose mode to ask for more. The same
-shape applies to every refusal (`init` over a dirty target, `migrate` on the default branch): the first
-line names the fix, the second names the condition that refused.
+Codes `2` and `3` are two lines on stderr: `funky-secure: <the action to take>` and `reason: <the
+internal diagnosis>`. The action comes first because the reader needs it first; the diagnosis is what
+the tool knows and the human may not, and it is complete — there is no verbose mode to ask for more.
 
 ## JSON documents
 

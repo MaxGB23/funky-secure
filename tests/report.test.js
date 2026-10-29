@@ -522,6 +522,33 @@ test('a clean target is one line, and never lists its rules', () => {
   assert.equal(lines[heading + 1], '     all 1 rule pass', 'the count hangs from the finding indent');
 });
 
+test('the verdict names what it did not verify, so PASS is never read as checked', () => {
+  // Field report: `scan --scope repo` printed `verdict  PASS` with two rules unverified. The skip lines
+  // said so below, and a reader who stops at the verdict — or a CI log that greps it — read "pass" as
+  // "checked". The count belongs in the word, not only in the listing under it.
+  const report = reportWith([
+    finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' }),
+    finding({ rule: 'exact-versions', status: 'skip', path: null, message: 'not verified either' }),
+  ]);
+  const line = renderedLines(report).find((entry) => entry.startsWith('verdict'));
+
+  assert.equal(line, 'verdict  PASS (threshold: error · 2 rules not verified)');
+  assert.ok(line.length <= 96, 'the verdict stays inside the column bound');
+});
+
+test('the verdict says nothing extra when every rule was verified', () => {
+  const line = renderedLines(
+    reportWith([finding({ rule: 'quarantine', status: 'pass', path: null, message: 'strict and mature' })]),
+  ).find((entry) => entry.startsWith('verdict'));
+  assert.equal(line, 'verdict  PASS (threshold: error)');
+});
+
+test('a single unverified rule is singular in the verdict', () => {
+  const report = reportWith([finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' })]);
+  const line = renderedLines(report).find((entry) => entry.startsWith('verdict'));
+  assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified)');
+});
+
 test('a single skipped rule keeps its own block; two or more collapse into one line', () => {
   const one = renderedLines(
     reportWith([finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' })]),

@@ -22,3 +22,20 @@ export class UsageError extends Error {
     this.name = 'UsageError';
   }
 }
+
+/**
+ * A decision not to act (exit code 3, RFC 10.4): the tool understood the situation, refused, and wrote
+ * nothing. Distinct from `ConfigError`, which means it could not answer, and from exit 1, which is a
+ * report whose findings crossed the threshold. A refusal carries the action that lifts it.
+ */
+export class RefusalError extends Error {
+  /**
+   * @param {string} message the diagnosis, after the `reason:` label
+   * @param {string} [action] what the human must do first
+   */
+  constructor(message, action) {
+    super(message);
+    this.name = 'RefusalError';
+    if (action !== undefined) this.action = action;
+  }
+}

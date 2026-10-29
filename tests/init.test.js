@@ -390,12 +390,12 @@ test('the JSON plan document carries target, operation, absolute path, digest, r
   assert.deepEqual(snapshot(dir), before);
 });
 
-test('a dirty target file exits 2 naming the file unless --allow-dirty', async (t) => {
+test('a dirty target file exits 3 naming the file unless --allow-dirty', async (t) => {
   const dir = scratch(t, 'below-policy');
   const tracked = ['package.json', 'pnpm-lock.yaml'];
 
   const refused = runner(dir, { tracked, dirty: ['package.json'] });
-  assert.equal(await refused.run(['init', '--apply']), 2);
+  assert.equal(await refused.run(['init', '--apply']), 3, 'the write path refuses, it never fails to answer');
   assert.equal(
     refused.stderr.text,
     'funky-secure: commit package.json or pass --allow-dirty, then re-run\n' +

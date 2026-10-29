@@ -70,6 +70,8 @@ number keeps resolving.
 | 11 | [`0006`](../../rfcs/0006-human-defaults/rfc.md) | 11.4: a missing rule id is not an error — the bare `explain` prints the catalog, and `--list` is the explicit synonym with identical output |
 | 8 | [`0007`](../../rfcs/0007-remediation-routes/rfc.md) | 8.2 R5: the pin is `pnpm pkg set` with a bracketed property path, because a dot path cannot carry a scoped name, and `pnpm add --save-exact` is not the remediation on pnpm 12.3.4 |
 | 8 | [`0007`](../../rfcs/0007-remediation-routes/rfc.md) | 8.2 R4: the manual quarantine route names the file the value lands in — `pnpm-workspace.yaml`, never an `.npmrc` |
+| 10 | [`0008`](../../rfcs/0008-refusal-honesty/rfc.md) | 10.4: a fourth exit code, `3`, for a refusal — understood, refused, nothing written — so a policy decision never shares the code of a question the tool could not answer |
+| 10 | [`0008`](../../rfcs/0008-refusal-honesty/rfc.md) | 10.3: the verdict line carries the number of rules it did not verify, and stays byte-identical when that number is zero |
 
 ## Changing the contract
 

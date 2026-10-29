@@ -148,7 +148,7 @@ test('apply refuses without pnpm-lock.yaml and keeps the only lockfile', async (
 
   const result = await migrate(t, ['migrate', '--apply'], dir, { defaultRef: 'origin/main' });
 
-  assert.equal(result.code, 2);
+  assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
   assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
   assert.equal(reason, 'refusing to remove package-lock.json: pnpm-lock.yaml is absent (never delete the only lockfile)');
@@ -167,7 +167,7 @@ test('apply refuses on the default branch read from origin/HEAD', async (t) => {
     defaultRef: 'origin/main',
   });
 
-  assert.equal(result.code, 2);
+  assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
   assert.equal(action, 'switch to a feature branch and re-run migrate --apply');
   assert.equal(
@@ -187,7 +187,7 @@ test('apply without a remote says the main/master check is a fallback', async (t
 
     const result = await migrate(t, ['migrate', '--apply'], dir, { branch, defaultRef: null });
 
-    assert.equal(result.code, 2);
+    assert.equal(result.code, 3);
     const { action, reason } = refusal(result.stderr);
     assert.equal(action, 'switch to a feature branch and re-run migrate --apply');
     assert.equal(
@@ -211,7 +211,7 @@ test('apply refuses a dirty lockfile path, and --allow-dirty proceeds', async (t
     dirty: [' M package-lock.json'],
   });
 
-  assert.equal(refused.code, 2);
+  assert.equal(refused.code, 3);
   const { action, reason } = refusal(refused.stderr);
   assert.equal(action, 'commit package-lock.json or pass --allow-dirty, then re-run');
   assert.equal(
@@ -251,7 +251,7 @@ test('apply refuses a dirty lockfile when run from a subdirectory', async (t) =>
   });
   const code = await run(['migrate', '--apply'], { cwd, env: {}, stdout, stderr, collector });
 
-  assert.equal(code, 2);
+  assert.equal(code, 3);
   const { action, reason } = refusal(stderr.text);
   assert.equal(action, 'commit package-lock.json or pass --allow-dirty, then re-run');
   assert.equal(
@@ -291,6 +291,47 @@ test('apply refuses when git cannot report the working tree status', async (t) =
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json', 'pnpm-lock.yaml']);
 });
 
+test('an exit code names one thing: 3 is a refusal, 2 is a question git did not answer', async (t) => {
+  // Field report F2: `migrate --apply` exited 2 when it refused to delete a foreign lockfile on the
+  // default branch, and 2 is documented as "the tool could not answer". A script or an agent branching
+  // on the exit code could not tell a policy decision from a crash. The contract now separates them:
+  // 1 is a report whose findings crossed the threshold, 2 is a question the tool could not answer, and
+  // 3 is a decision not to act — understood, refused, nothing written.
+  const files = {
+    'package.json': PACKAGE_JSON,
+    'package-lock.json': '{"lockfileVersion": 3}',
+    'pnpm-lock.yaml': "lockfileVersion: 9\n",
+  };
+
+  // Understood: the branch is the default one, so the tool decided not to act.
+  const refusedDir = repository(t, files);
+  const refused = await migrate(t, ['migrate', '--apply'], refusedDir, {
+    branch: 'main',
+    defaultRef: 'origin/main',
+  });
+  assert.equal(refused.code, 3, 'a refusal is a decision, not a failure to answer');
+  refusal(refused.stderr);
+
+  // Unanswerable: git was asked for the branch and did not give one, so there was nothing to decide.
+  const unansweredDir = repository(t, files);
+  const unanswered = await migrate(t, ['migrate', '--apply'], unansweredDir, {
+    branch: null,
+    defaultRef: 'origin/main',
+  });
+  assert.equal(unanswered.code, 2, 'a question the tool could not answer stays 2');
+  assert.match(unanswered.stderr, /^funky-secure: check out a feature branch/);
+  assert.match(unanswered.stderr, /git could not resolve the current branch/);
+
+  // Neither wrote anything: the plan is printed, the removal is not performed.
+  for (const dir of [refusedDir, unansweredDir]) {
+    assert.deepEqual(
+      readdirSync(dir).sort(),
+      ['package-lock.json', 'package.json', 'pnpm-lock.yaml'],
+      'a refusal leaves every file where it was',
+    );
+  }
+});
+
 test('apply refuses a detached HEAD', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
@@ -300,7 +341,7 @@ test('apply refuses a detached HEAD', async (t) => {
 
   const result = await migrate(t, ['migrate', '--apply'], dir, { branch: 'HEAD', defaultRef: 'origin/main' });
 
-  assert.equal(result.code, 2);
+  assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
   assert.equal(action, 'check out a branch and re-run migrate --apply');
   assert.equal(reason, 'refusing to remove package-lock.json: HEAD is detached');
@@ -316,7 +357,7 @@ test('migrate refuses outside git and removes nothing', async (t) => {
 
   const result = await migrate(t, ['migrate', '--apply'], dir, { root: null });
 
-  assert.equal(result.code, 2);
+  assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
   assert.equal(action, 'run migrate inside a git worktree');
   assert.equal(
@@ -349,7 +390,7 @@ test('a bun-only repository is refused for the missing pnpm lockfile, not remove
 
   const result = await migrate(t, ['migrate', '--apply'], dir, { defaultRef: 'origin/main' });
 
-  assert.equal(result.code, 2);
+  assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
   assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
   assert.equal(reason, 'refusing to remove bun.lock: pnpm-lock.yaml is absent (never delete the only lockfile)');
@@ -488,7 +529,7 @@ test('step 4 refuses before it deletes anything, so no lockfile is ever half-rem
   const collector = fakeCollector({ root: dir, defaultRef: 'origin/main' });
   const code = await run(['migrate', '--apply'], { cwd: dir, env: {}, stdout, stderr, collector });
 
-  assert.equal(code, 2);
+  assert.equal(code, 3);
   const { reason } = refusal(stderr.text);
   assert.match(reason, /yarn\.lock/);
   assert.ok(existsSync(join(dir, 'package-lock.json')), 'the first target was not deleted');

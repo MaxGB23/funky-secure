@@ -323,7 +323,7 @@ test('--install refuses to downgrade a newer installed copy, even with a termina
 
   const { code, err } = await install(['skill', '--install'], { cwd, home, confirm: () => true });
 
-  assert.equal(code, 2, 'a downgrade was performed without --force');
+  assert.equal(code, 3, 'a downgrade was performed without --force, or the refusal lost its code');
   assert.match(err, /9\.0\.0/, 'the diagnosis does not name the newer version');
   assert.match(err, /--force to downgrade/, 'the action does not name the downgrade');
   assert.equal(readFileSync(path, 'utf8'), variant('9.0.0'), 'the newer file was replaced');
@@ -432,7 +432,7 @@ test('--install refuses a symbolic link destination instead of writing through i
 
   const { code, err } = await install(['skill', '--install'], { cwd, home });
 
-  assert.equal(code, 2, 'a symlinked destination was written through');
+  assert.equal(code, 3, 'a symlinked destination was written through, or the refusal lost its code');
   assert.match(err, /symbolic link/, 'the diagnosis does not name the link');
   assert.equal(readFileSync(outside, 'utf8'), 'not ours\n', 'the link target was overwritten');
 });

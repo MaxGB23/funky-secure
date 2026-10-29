@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 
-import { UsageError } from '../lib/errors.js';
+import { RefusalError, UsageError } from '../lib/errors.js';
 import { SYMBOL } from '../lib/render-human.js';
 import { repoRoot } from '../lib/git.js';
 import { createCollector } from '../lib/probes.js';
@@ -215,11 +215,9 @@ export async function run({
     // A downgrade is not a routine repair: this binary has nothing better to offer than what is
     // installed, and only an explicit --force may take the newer copy away.
     if (keep) return report(SYMBOL.info, `Kept  ·  ${found.display}`, 'it is newer than the version this binary ships');
-    throw Object.assign(
-      new Error(
-        `refusing to replace ${found.display}: it is version ${found.installedVersion}, and this binary ships ${shippedVersion}`,
-      ),
-      { action: 'install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill' },
+    throw new RefusalError(
+      `refusing to replace ${found.display}: it is version ${found.installedVersion}, and this binary ships ${shippedVersion}`,
+      'install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill',
     );
   }
 

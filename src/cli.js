@@ -9,7 +9,7 @@
  * name, and it uses it to label the action of a config error — never to read the file.
  */
 
-import { ConfigError, UsageError } from './lib/errors.js';
+import { ConfigError, RefusalError, UsageError } from './lib/errors.js';
 import { CONFIG_FILENAME } from './lib/config.js';
 import { TOOL } from './lib/tool.js';
 import { run as explain } from './commands/explain.js';
@@ -312,9 +312,10 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
 }
 
 /**
- * Runs one command (RFC 10.4): `UsageError` and `ConfigError` become exit 2 with the action on the
- * first line and the diagnosis after a `reason:` label, any other error fails closed the same way,
- * and no stack trace is ever written to stdout.
+ * Runs one command (RFC 10.4): `RefusalError` becomes exit 3 — understood, refused, nothing written —
+ * while `UsageError` and `ConfigError` become exit 2 for a question the tool could not answer. Both
+ * print the action on the first line and the diagnosis after a `reason:` label, any other error fails
+ * closed as 2, and no stack trace is ever written to stdout.
  *
  * @param {string[]} argv
  * @param {{ cwd?: string, env?: object, stdout?: object, stderr?: object, stdin?: object, collector?: object, catalog?: Array<object>, skillPath?: string, home?: string, confirm?: () => boolean }} [io]
@@ -352,6 +353,6 @@ export async function run(argv, io = {}) {
     const { action, reason } = exitMessage(error);
     stderr.write(`funky-secure: ${action}\n`);
     if (reason !== '') stderr.write(`reason: ${reason}\n`);
-    return 2;
+    return error instanceof RefusalError ? 3 : 2;
   }
 }

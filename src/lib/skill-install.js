@@ -26,6 +26,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { RefusalError } from './errors.js';
+
 /** The shipped file, resolved against this module so `cwd` cannot move it. */
 export const SHIPPED = fileURLToPath(new URL('../../skills/funky-secure/SKILL.md', import.meta.url));
 
@@ -33,7 +35,8 @@ export const SHIPPED = fileURLToPath(new URL('../../skills/funky-secure/SKILL.md
 export const SKILL_SEGMENTS = Object.freeze(['.agents', 'skills', 'funky-secure', 'SKILL.md']);
 
 /**
- * An exit-2 failure that carries the action it asks for, in the shape `cli.js` prints.
+ * An exit-2 failure that carries the action it asks for, in the shape `cli.js` prints. A refusal to act
+ * — a symbolic link in the way — is a `RefusalError` instead, because it exits 3.
  * @param {string} message the diagnosis
  * @param {string} action what the human must do
  * @returns {Error}
@@ -136,7 +139,7 @@ export function inspectInstallation({ destination, bytes, shippedVersion }) {
 
   if (!existsSync(path)) return { state: 'absent', installedVersion: null, shippedVersion, path, display };
   if (lstatSync(path).isSymbolicLink()) {
-    throw failure(
+    throw new RefusalError(
       `refusing to write ${display}: it is a symbolic link`,
       'remove the link and run the command again, or install with --user',
     );
