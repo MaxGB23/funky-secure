@@ -56,6 +56,7 @@ severity — instead of into whoever happened to run the command.
 
 | Command | The question it answers | Writes |
 |---|---|---|
+| `start` | what do I run first, in which order | nothing, ever |
 | `scan` | what is wrong here, with evidence | nothing, ever |
 | `init` | what can be fixed, and exactly how | the printed plan, only with `--apply` |
 | `migrate` | how do I leave npm or yarn | the foreign lockfile's removal, only with `--apply` |
@@ -64,10 +65,16 @@ severity — instead of into whoever happened to run the command.
 ## ⚡ Quick start
 
 ```sh
+npx funky-secure start          # a new repository: the ordered steps, ending at --preset starter
 npx funky-secure scan           # audit: read the report, follow the → lines
 npx funky-secure init           # the plan, with paths and digests; writes nothing
 npx funky-secure init --apply   # perform exactly that plan
 ```
+
+In a new repository, `funky-secure start` is the first command: it prints the steps that still apply,
+in the order that makes them work, and it writes nothing — `init --apply` stays the only writer. It
+ends by pointing the first scan at `--preset starter`, the five rules a project needs on day zero,
+and states which rules that preset leaves `off` instead of claiming a coverage it does not have.
 
 `init` also ends with the steps it will not take for you, in order: `pnpm install` when there is no
 lockfile, `funky-secure migrate --apply` when another manager's lockfile is still around, and `git add`

@@ -1,6 +1,7 @@
 import { renderHuman } from '../lib/render-human.js';
 import { renderJson } from '../lib/render-json.js';
 import { collectScan } from '../lib/scan.js';
+import { offByPolicy } from '../lib/render-human.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
 /**
@@ -24,7 +25,7 @@ export async function run({
   catalog = defaultCatalog,
   collector,
 }) {
-  const { report } = await collectScan({
+  const { report, policy } = await collectScan({
     cwd,
     env,
     scope,
@@ -41,7 +42,7 @@ export async function run({
   const text =
     format === 'json'
       ? renderJson(report, withTimestamp ? { timestamp: new Date().toISOString() } : {})
-      : renderHuman(report, { color, verbose });
+      : renderHuman(report, { color, verbose, off: offByPolicy(policy) });
 
   stdout.write(text);
   return report.summary.verdict === 'fail' ? 1 : 0;

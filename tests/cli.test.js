@@ -462,12 +462,24 @@ test('scan --scope repo keeps every machine fact out of the contract and says wh
   assert.match(quarantine.message, /--scope all/);
 });
 
+/** The provenance line as printed: it may wrap, so the assertion joins its continuation line. */
+function provenanceOf(text) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('provenance'));
+  const block = [lines[start]];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.startsWith('            ')) break;
+    block.push(line.trim());
+  }
+  return block.join(' ');
+}
+
 test('the human report states its provenance from the config file, the flag or the default', async (t) => {
   const bare = scratch(t);
   const fromDefault = io(bare);
   await run(['scan', '--scope', 'repo'], fromDefault);
   assert.equal(
-    fromDefault.stdout.text.split('\n')[1],
+    provenanceOf(fromDefault.stdout.text),
     'provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
   );
 
@@ -477,14 +489,14 @@ test('the human report states its provenance from the config file, the flag or t
   const fromConfig = io(configured);
   await run(['scan', '--scope', 'repo'], fromConfig);
   assert.equal(
-    fromConfig.stdout.text.split('\n')[1],
+    provenanceOf(fromConfig.stdout.text),
     'provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
   );
 
   const fromFlag = io(configured);
   await run(['scan', '--scope', 'repo', '--preset', 'baseline'], fromFlag);
   assert.equal(
-    fromFlag.stdout.text.split('\n')[1],
+    provenanceOf(fromFlag.stdout.text),
     'provenance  preset baseline (--preset)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
   );
 });

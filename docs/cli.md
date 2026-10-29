@@ -1,10 +1,10 @@
 # Command line
 
-One binary, `funky-secure`, with four commands: `scan`, `init`, `migrate` and `explain`. Every
-command is defined by the contract in [`spec/report.md`](spec/report.md) and
+One binary, `funky-secure`, with five commands: `start`, `scan`, `init`, `migrate` and `explain`.
+Every command is defined by the contract in [`spec/report.md`](spec/report.md) and
 [`spec/commands.md`](spec/commands.md) — the record behind them is
-`rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11. This page is the operating manual, not a
-second specification.
+`rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11, amended by records 0002 and 0003. This page is
+the operating manual, not a second specification.
 
 The flow of each command is drawn in [`architecture.md`](architecture.md#command-flows).
 
@@ -19,10 +19,81 @@ release (RFC 13.1, 13.3).
 
 ## Commands
 
+### `start`
+
+```text
+funky-secure start [--help]
+```
+
+Read-only, always: no file written, nothing installed, nothing touched on the machine. This is the
+entry point for a repository that has nothing yet. It prints the steps that still apply, numbered from
+`1`, in the order that makes them work, and it exits `0` whatever state the repository is in — it is
+guidance, not a gate. `--help` is the only flag it accepts; a `--preset` on `start` is a usage error
+(exit `2`), because the preset it recommends is named in the answer.
+
+The steps are `git init`, `pnpm init`, `funky-secure migrate`, `funky-secure init --apply` with the
+number of writes it is holding, `pnpm add <your first dependency>`, and `funky-secure scan --preset
+starter` last. Each one prints only while its condition holds: a repository that already has a
+manifest, a lockfile and a commit, but no managed block, is told to run `init --apply` and then
+`scan`, numbered from `1`. An empty directory, from a real run:
+
+```text
+funky-secure start  ·  guidance, nothing is written
+
+  1  git init
+  2  pnpm init
+  3  funky-secure init --apply  plan the 1 write (nothing is written)
+  4  pnpm add <your first dependency>
+  5  funky-secure scan --preset starter
+
+why this order
+  the workspace block has to exist before the install that reads it, and a lockfile can
+  only exist after the first add
+
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
+```
+
+A project a framework generator left behind is the case the order turns on. It has a manifest and a
+lockfile, and the lockfile belongs to another manager, so `migrate` comes first — the posture is
+written once the repository has one package manager — and the first add is never asked for, because
+adding now would write a second lockfile beside the npm one. A `pnpm-lock.yaml` that appears during
+the migration is the migration's business, not this step's. A repository of the shape
+`npm create next-app` leaves behind, from a real run:
+
+```text
+funky-secure start  ·  guidance, nothing is written
+
+  1  funky-secure migrate
+  2  funky-secure init --apply  plan the 3 writes (nothing is written)
+  3  funky-secure scan --preset starter
+
+why this order
+  the workspace block has to exist before the install that reads it, and a lockfile can
+  only exist after the first add
+  migrate comes first, because two lockfiles resolve two dependency trees
+
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
+```
+
+`why this order` is the reason the sequence is not a list: the managed block has to exist before the
+install that reads it, a lockfile can only exist after the first add, and a migration leads when a
+second package manager is still there. The `not run` block is the same line the report prints (RFC
+10.3), describing `starter` — the preset step 6 runs — so the reader knows what the recommended
+preset does not check before running it. A repository past the start is told so in one line in place
+of the list, `the repository is past the start; the next step is funky-secure scan --preset starter`,
+never handed a stale checklist; `why this order` and the `not run` block follow either way, because
+they describe the command and the preset rather than the repository.
+
+`start` derives everything from the same collection and the same write plan `scan` and `init` use, so
+it cannot contradict the report about the same repository (RFC 11.7). Exit `0` in every state,
+including a repository at policy; `2` only for a usage error.
+
 ### `scan`
 
 ```text
-funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
+funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict|starter]
                   [--format human|json] [--fail-on error|warn|info|none]
                   [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
                   [--verbose]
@@ -94,12 +165,25 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
   in sync. `title` stays where a rule is explained (`--help`, `explain`) because it is a statement
   about the repository, and a heading needs the subject of the finding instead.
 - **The target kind is the heading of its block**: `REPO-ROOT`, `IMPORTER <path>`, `CI`, `MACHINE`.
-- **A clean target is one line.** `CI   all 5 rules pass`, never one line per rule: the passes are
-  counted in `summary`. A repository at policy, from a different run:
+- **A reduced preset states its own coverage.** When the effective policy turns at least one rule
+  `off`, one `not run` line sits between `verdict` and the separator, in the gutter, naming how many
+  rules still run and which ones do not, in catalog order. `--only` and `--ignore` never produce it,
+  because narrowing one run is not a policy change, and the JSON document gains nothing (RFC 10.3).
+  The same line for the `starter` preset:
+
+```text
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
+```
+
+- **A clean target is two lines.** The heading, then `all 5 rules pass` at the same five columns a
+  finding hangs from, never one line per rule: the passes are counted in `summary`. A repository at
+  policy, from a different run:
 
 ```text
 funky-secure scan  ·  preset strict  ·  scope repo
-provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine
+            excluded)  ·  machine excluded
 summary  0 errors · 0 warnings · 0 info · 8 passing · 4 skipped
 verdict  PASS (threshold: error)
 ──────────────────────────────────────────────────────────────────────────────────────────
@@ -108,7 +192,8 @@ REPO-ROOT
   –  4 rules not verified: Package manager, Quarantine, Environment files, Sensitive files
      → funky-secure scan --verbose, each names what was not verified and how to verify it
 
-CI   all 5 rules pass
+CI
+     all 5 rules pass
 
 next     nothing to do: everything at or above the policy passes
 ```
@@ -198,7 +283,7 @@ carries no path, timestamp or machine value, two runs over the same state print 
 ### `init`
 
 ```text
-funky-secure init [--preset baseline|strict] [--format human|json] [--apply] [--allow-dirty]
+funky-secure init [--preset baseline|strict|starter] [--format human|json] [--apply] [--allow-dirty]
 ```
 
 Default is a plan: it runs the same scan, derives the writes that would fix the fixable findings,
@@ -272,9 +357,9 @@ accept it is a usage error, never a silently ignored argument. Enumerated values
 
 | Flag | Accepted by | Values | Meaning |
 |---|---|---|---|
-| `--help` | `scan`, `init`, `migrate`, `explain` | boolean | print the static help and exit `0` |
+| `--help` | every command | boolean | print the static help and exit `0` |
 | `--scope` | `scan` | `auto`, `repo`, `machine`, `all` | target scope; default `auto` |
-| `--preset` | `scan`, `init` | `baseline`, `strict` | policy preset; default from config, else `baseline` |
+| `--preset` | `scan`, `init` | `baseline`, `strict`, `starter` | policy preset; default from config, else `baseline` |
 | `--format` | `scan`, `init`, `explain` | `human`, `json` | output format; default `human` |
 | `--fail-on` | `scan` | `error`, `warn`, `info`, `none` | verdict threshold; default `error` |
 | `--only` | `scan` | comma-separated rule ids | run only these rules; repeats accumulate |
@@ -296,7 +381,7 @@ The exit code is the stable contract for CI and for agents (RFC 10.4).
 
 | Code | Meaning |
 |---|---|
-| `0` | No finding at or above `--fail-on`. Skips and infos do not fail. `--help`, no command, `init` without `--apply`, and a successful `explain` also exit `0`. |
+| `0` | No finding at or above `--fail-on`. Skips and infos do not fail. `--help`, no command, `start`, and `init` without `--apply` also exit `0`. |
 | `1` | At least one policy violation at or above `--fail-on`. Never used for a tool failure. |
 | `2` | The tool could not answer: bad usage, unknown command or rule id, malformed config, unreadable input, unavailable required probe under `--strict-probes`, or a refused write. Fail closed. |
 

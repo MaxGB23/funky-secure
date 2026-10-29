@@ -10,7 +10,7 @@ import { ConfigError } from './errors.js';
 export { ConfigError };
 
 /** @type {readonly string[]} */
-export const PRESETS = ['baseline', 'strict'];
+export const PRESETS = ['baseline', 'strict', 'starter'];
 /** @type {readonly string[]} */
 export const RULE_SEVERITIES = ['off', 'info', 'warn', 'error'];
 /** @type {readonly string[]} */
@@ -25,6 +25,51 @@ export const QUARANTINE_DEFAULT_MINUTES = 1440;
 export const QUARANTINE_STRICT_MINUTES = 4320;
 /** The first pnpm major with a built-in quarantine; before it the default is 0 (RFC 9.4). */
 export const QUARANTINE_FIRST_GATED_MAJOR = 11;
+
+/**
+ * The preset-to-severity map: the one place a preset states which rules it runs, beside `PRESETS` and
+ * never a second catalog — every rule keeps its own `severity` object. A preset that is not a key here
+ * takes each rule's own severity for that preset.
+ *
+ * `starter` is the day-zero preset (record 0003, S5 and L10): it runs exactly these six at their
+ * `baseline` severity and turns every other catalog rule `off`, so it is a reduced `baseline`, never a
+ * second `strict`. Adding a rule to the catalog therefore leaves it `off` under `starter` until this list
+ * says otherwise, which is the safe direction for a preset that claims to check less.
+ *
+ * `foreign-lockfile` belongs to the day-zero set (L10): a repository a framework generator produced
+ * starts with someone else's lockfile, and it is the one rule that names a second package manager. It
+ * keeps the `warn` of `baseline`, so including it keeps the preset gentle.
+ *
+ * @type {Readonly<Record<string, { atBaseline: readonly string[], otherwise: string }>>}
+ */
+export const PRESET_SEVERITY = Object.freeze({
+  starter: Object.freeze({
+    atBaseline: Object.freeze([
+      'package-manager-pin',
+      'lockfile-committed',
+      'foreign-lockfile',
+      'quarantine',
+      'exact-versions',
+      'sensitive-ignored',
+    ]),
+    otherwise: 'off',
+  }),
+});
+
+/**
+ * The severity one preset gives one rule: the preset's own opinion when it carries one, otherwise the
+ * rule's own severity for that preset, and `warn` for a catalog entry that declares neither.
+ * @param {{ id: string, severity?: Record<string, string> }} rule
+ * @param {string} preset
+ * @returns {string}
+ */
+function presetSeverity(rule, preset) {
+  const declared = PRESET_SEVERITY[preset];
+  if (declared === undefined) return rule.severity?.[preset] ?? 'warn';
+  return declared.atBaseline.includes(rule.id)
+    ? (rule.severity?.baseline ?? 'warn')
+    : declared.otherwise;
+}
 
 const SEVERITY_RANK = { off: 0, info: 1, warn: 2, error: 3 };
 
@@ -50,6 +95,8 @@ export function severityRank(severity) {
  */
 export function quarantineFloor({ preset = DEFAULT_PRESET, override, major } = {}) {
   if (override !== undefined) return override;
+  // `starter` is a reduced `baseline`, not a stricter one: it keeps the manager's default gate and
+  // never the 4320 floor of `strict` (record 0003, S5, RFC 9.4).
   if (preset === 'strict') return QUARANTINE_STRICT_MINUTES;
   if (typeof major === 'number' && major < QUARANTINE_FIRST_GATED_MAJOR) return 0;
   return QUARANTINE_DEFAULT_MINUTES;
@@ -139,8 +186,7 @@ export function resolvePolicy({
   const active = [];
 
   for (const rule of catalog) {
-    const presetSeverity = rule.severity?.[preset] ?? 'warn';
-    const severity = configured[rule.id] ?? presetSeverity;
+    const severity = configured[rule.id] ?? presetSeverity(rule, preset);
     severities[rule.id] = severity;
 
     if (severity === 'off') continue;

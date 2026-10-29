@@ -1,5 +1,5 @@
 /**
- * The command line: one argv parser, four commands, one exit-code contract (RFC 10.4, 11, 13).
+ * The command line: one argv parser, five commands, one exit-code contract (RFC 10.4, 11, 13).
  *
  * Nothing here reads the repository or runs a probe. `--help` renders the static contract from
  * `COMMANDS`, `FLAGS` and the catalog, so two machines always see the same text (13.3).
@@ -16,10 +16,12 @@ import { run as explain } from './commands/explain.js';
 import { run as init } from './commands/init.js';
 import { run as migrate } from './commands/migrate.js';
 import { run as scan } from './commands/scan.js';
+import { run as start } from './commands/start.js';
 import { catalog as defaultCatalog } from './rules/index.js';
 
-/** Commands in help order (RFC 11, 13.1). */
+/** Commands in help order (RFC 11, 13.1, record 0003 11.7). */
 export const COMMANDS = Object.freeze([
+  { name: 'start', summary: 'Print the ordered steps from an empty directory to a first scan. Read-only, exits 0.' },
   { name: 'scan', summary: 'Read-only audit: report findings and the verdict. Exits 0, 1 or 2.' },
   { name: 'init', summary: 'Print the write plan; --apply performs it.' },
   { name: 'migrate', summary: 'Print the five-step plan for leaving npm or yarn; --apply performs step 4.' },
@@ -31,9 +33,9 @@ export const COMMANDS = Object.freeze([
  * is a usage error, never a silently ignored argument.
  */
 export const FLAGS = Object.freeze([
-  { name: '--help', key: 'help', commands: ['scan', 'init', 'migrate', 'explain'], boolean: true },
+  { name: '--help', key: 'help', commands: ['start', 'scan', 'init', 'migrate', 'explain'], boolean: true },
   { name: '--scope', key: 'scope', commands: ['scan'], values: ['auto', 'repo', 'machine', 'all'] },
-  { name: '--preset', key: 'preset', commands: ['scan', 'init'], values: ['baseline', 'strict'] },
+  { name: '--preset', key: 'preset', commands: ['scan', 'init'], values: ['baseline', 'strict', 'starter'] },
   {
     name: '--format',
     key: 'format',
@@ -102,7 +104,7 @@ function exitMessage(error) {
   return { action: INPUT_ACTION, reason };
 }
 
-const HANDLERS = { scan, init, migrate, explain };
+const HANDLERS = { start, scan, init, migrate, explain };
 
 function defaultsFor(command) {
   const options = {};

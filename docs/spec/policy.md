@@ -12,15 +12,33 @@
 |---|---|---|
 | `baseline` (default) | Adoptable anywhere without a fight | Friction-0 rules are `error`; friction 1–2 are `warn` |
 | `strict` | The author's own repositories | Friction 0–1 rules are `error`; friction 2 stays `warn` unless the policy promotes it (`exact-versions`, `quarantine`) |
+| `starter` | A project on day zero, before there is anything to check | Exactly six rules at the severity they carry in `baseline`: `package-manager-pin`, `lockfile-committed`, `foreign-lockfile`, `quarantine`, `exact-versions`, `sensitive-ignored`. Every other rule is `off` |
 
 Declared deviations from that table, all visible in the rule headings of section 8.2:
 
-- **`foreign-lockfile` (R3)** stays `warn` in both presets: G4 says recommend pnpm, not require it.
+- **`foreign-lockfile` (R3)** stays `warn` in every preset: G4 says recommend pnpm, not require it, and
+  `starter` runs it at that `warn` (0003 L10).
 - **`quarantine` (R4)** is promoted to `error` in `strict` and stays `warn` in `baseline`, and its
   floor follows the preset: the manager's built-in default in `baseline`, `4320` in `strict` (8.2 R4,
   9.4).
 - **`actions-pinned-sha` (R8)** is `error` in both presets: pinning a reference is a one-line edit with
   no behavioral cost, so the friction class of the *finding* is not the friction of the *fix*.
+
+`starter` is **additive**: it is a subset of `baseline`, and `baseline` and `strict` do not change at
+all — not one severity, not one declared deviation, not one byte of their output. It runs the six
+day-zero questions and turns the other six rules `off`: tracked environment files and the five CI and
+workflow rules. Those read artefacts a new project does not have yet, and `off` is stated rather than
+silent, so a green report under `starter` names the coverage it does not have (10.3). The foreign
+lockfile belongs to the set because a repository a framework generator produced starts with another
+manager's lockfile, and it is the one rule that says a second package manager still shapes the
+repository; it keeps the `warn` of `baseline`, so including it keeps the preset gentle. `starter` is
+selectable through `--preset starter` and through `preset` in the config file, and an added catalog
+rule stays `off` under it until the preset says otherwise, because a preset that claims to check less
+must fail in the safe direction.
+
+`starter` keeps the manager's quarantine floor: `quarantineFloor('starter')` is the documented
+default for the pinned major, the same value `baseline` uses, and never the `4320` minutes of
+`strict` (9.4). A reduced preset reduces the set of rules, not the standard of the rules it keeps.
 
 Preset resolution order (highest wins):
 
@@ -63,9 +81,10 @@ comments) so there is no parser to depend on and no code execution path.
 ### 9.4 Quarantine policy and its source
 
 The floor R4 compares against is preset-dependent: `baseline` uses the manager's documented built-in
-default for the pinned major (1440 minutes on the pnpm 11/12 line, 0 before 11), and `strict` uses
-`4320` (72 hours). `quarantineMinutes` in the repository config overrides the preset floor for both
-presets — the value is policy, not law: a repository with a documented hotfix process may lower it or
+default for the pinned major (1440 minutes on the pnpm 11/12 line, 0 before 11), `starter` uses the
+same manager default because it is a reduced `baseline` (9.1), and `strict` uses `4320` (72 hours).
+`quarantineMinutes` in the repository config overrides the preset floor for every preset — the value
+is policy, not law: a repository with a documented hotfix process may lower it or
 list exemptions, and the report shows the effective number so the lowering is visible in review.
 `minimumReleaseAgeExclude` entries are reported in the evidence (count and values), so an exemption is
 never invisible. In non-strict mode pnpm itself grows that list, which is why the strictness fact

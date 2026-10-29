@@ -266,18 +266,21 @@ test('renders one provenance line right after the title, and omits it when nothi
 
   assert.equal(lines[0], 'funky-secure scan  ·  preset strict  ·  scope repo');
   assert.equal(
-    lines[1],
-    'provenance  preset strict (--preset)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
+    `${lines[1]}\n${lines[2]}`,
+    'provenance  preset strict (--preset)  ·  quarantine not verified (machine excluded)  ·  machine\n' +
+      '            excluded',
+    'the provenance wraps in its own gutter rather than letting the terminal fold it',
   );
-  assert.match(lines[2], /^summary  /, 'the counts follow the provenance line');
+  assert.match(lines[3], /^summary  /, 'the counts follow the provenance line');
 
   const bare = renderHuman(buildReport({ scope: 'repo', policy, catalog, tool, findings: [] }));
   assert.equal(bare.includes('provenance'), false);
 });
 
 test('names the config file and the default as the preset source, and never a project value', () => {
-  const render = (provenance) =>
-    renderHuman(
+  // The provenance line wraps now, so the assertion reads the block with its continuations joined.
+  const render = (provenance) => {
+    const text = renderHuman(
       buildReport({
         scope: 'all',
         policy: { ...policy, preset: 'strict' },
@@ -286,7 +289,16 @@ test('names the config file and the default as the preset source, and never a pr
         findings: [],
         provenance,
       }),
-    ).split('\n')[1];
+    );
+    const lines = text.split('\n');
+    const at = lines.findIndex((line) => line.startsWith('provenance'));
+    const collected = [lines[at]];
+    for (const line of lines.slice(at + 1)) {
+      if (!line.startsWith('            ')) break;
+      collected.push(line.trim());
+    }
+    return collected.join(' ');
+  };
 
   assert.equal(
     render({ ...PROVENANCE, presetSource: 'funky-secure.config.json', machine: 'included', quarantine: 'declared in pnpm-workspace.yaml' }),
@@ -505,7 +517,9 @@ test('no rendered line exceeds 96 columns, even with a long machine path', () =>
 test('a clean target is one line, and never lists its rules', () => {
   const lines = renderedLines(reportWith([finding({ rule: 'alpha', status: 'pass' })]));
 
-  assert.ok(lines.includes('REPO-ROOT   all 1 rule pass'), `missing the clean target line in ${lines.join('|')}`);
+  const heading = lines.indexOf('REPO-ROOT');
+  assert.ok(heading !== -1, `missing the clean target heading in ${lines.join('|')}`);
+  assert.equal(lines[heading + 1], '     all 1 rule pass', 'the count hangs from the finding indent');
 });
 
 test('a single skipped rule keeps its own block; two or more collapse into one line', () => {
@@ -543,4 +557,124 @@ test('--verbose restores the ids, the skip reasons and the passing rules', () =>
 test('renders the same bytes on every run over the same state', () => {
   const report = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE, LONG]);
   assert.equal(renderHuman(report, { verbose: true }), renderHuman(report, { verbose: true }));
+});
+
+/// The honesty line (record 0003, S6, 10.3): when the effective policy leaves catalog rules unrun,
+/// the human report says how many rules it does run and names the ones it does not, between `verdict`
+/// and the separator, in the same nine-character gutter. A run that disables nothing is unchanged,
+/// and the JSON document never learns about any of it.
+
+const NOT_RUN = 'not run  '; // nine characters, exactly like `summary  ` and `verdict  `
+const NOT_RUN_INDENT = ' '.repeat(NOT_RUN.length);
+
+/** The five `starter` runs, in catalog order. */
+/** The five the starter preset runs. */
+const STARTER_ACTIVE = [
+  'package-manager-pin',
+  'foreign-lockfile',
+  'lockfile-committed',
+  'quarantine',
+  'exact-versions',
+  'sensitive-ignored',
+];
+/** The six the starter preset turns off, by the id the policy carries. */
+const STARTER_OFF = ruleCatalog
+  .map((rule) => rule.id)
+  .filter((id) => !STARTER_ACTIVE.includes(id));
+
+/** The same six, by the label a human reads, in catalog order. */
+const DISABLED_LABELS = [
+  'Environment files',
+  'Pinned actions',
+  'Bot auto-merge',
+  'CI install flags',
+  'pull_request_target',
+  'Workflow permissions',
+];
+
+/** The honesty block of one rendering, or `[]` when it prints none. */
+function honestyBlock(report, off) {
+  const text = off === undefined ? renderHuman(report) : renderHuman(report, { off });
+  const lines = text.split('\n').filter((line) => line !== '');
+  const start = lines.findIndex((line) => line.startsWith(NOT_RUN));
+  if (start === -1) return [];
+  const block = [lines[start]];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.startsWith(NOT_RUN_INDENT)) break;
+    block.push(line);
+  }
+  return block;
+}
+
+/** The same rendering with the honesty block removed, so a test can prove it added nothing else. */
+function withoutHonesty(text) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => line.startsWith(NOT_RUN));
+  if (start === -1) return text;
+  let end = start + 1;
+  while (end < lines.length && lines[end].startsWith(NOT_RUN_INDENT)) end += 1;
+  return [...lines.slice(0, start), ...lines.slice(end)].join('\n');
+}
+
+test('states how many rules a reduced policy runs and names the ones it does not', () => {
+  const block = honestyBlock(reportWith([AUTO_QUARANTINE]), STARTER_OFF);
+
+  assert.ok(block.length > 0, 'a policy that disables rules prints the line');
+  assert.equal(block[0].slice(0, NOT_RUN.length), NOT_RUN, 'the line sits in the shared gutter');
+
+  const sentence = block.map((line) => line.slice(NOT_RUN.length)).join(' ');
+  assert.equal(
+    sentence,
+    `6 of 12 rules; off by policy: ${DISABLED_LABELS.join(', ')}`,
+    'the count is the active rules against the catalog, and the names are the labels in catalog order',
+  );
+
+  for (const line of block) {
+    assert.ok(line.length <= 86, `the honesty line is ${line.length} columns: ${line}`);
+  }
+  for (const line of block.slice(1)) {
+    assert.match(line, /^ {9}\S/, 'a continuation line hangs from the gutter, not from column zero');
+  }
+});
+
+test('prints the honesty line after the verdict and before the separator', () => {
+  const lines = renderHuman(reportWith([]), { off: STARTER_OFF })
+    .split('\n')
+    .filter((line) => line !== '');
+  const verdictAt = lines.findIndex((line) => line.startsWith('verdict'));
+  const separatorAt = lines.indexOf('─'.repeat(90));
+
+  assert.equal(lines[verdictAt + 1].slice(0, NOT_RUN.length), NOT_RUN, 'immediately after the verdict');
+  assert.ok(verdictAt + 1 < separatorAt, 'the line is in the header, before the findings');
+});
+
+test('prints no honesty line when the policy disables nothing, so baseline bytes do not move', () => {
+  const report = reportWith([AUTO_QUARANTINE]);
+  assert.deepEqual(honestyBlock(report, []), [], 'nothing is disabled, nothing is claimed');
+  assert.equal(renderHuman(report).includes('not run'), false, 'a caller that passes no active list renders as before');
+  assert.equal(
+    withoutHonesty(renderHuman(report, { off: STARTER_OFF })),
+    renderHuman(report),
+    'the honesty block is the only difference between a reduced policy and a full one',
+  );
+});
+
+test('adds nothing to the json document, whatever the policy disables', () => {
+  const full = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE]);
+  const reduced = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE]);
+  const json = renderJson(full);
+
+  assert.equal(renderJson(reduced), json, 'the same findings render the same bytes');
+  assert.equal(json.includes('not run'), false, 'the machine contract carries no coverage prose');
+  assert.equal(json.includes('off by policy'), false);
+  assert.deepEqual(Object.keys(JSON.parse(json)), [
+    'schemaVersion',
+    'tool',
+    'scope',
+    'policy',
+    'provenance',
+    'targets',
+    'summary',
+    'findings',
+  ]);
 });

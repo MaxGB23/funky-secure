@@ -49,15 +49,19 @@ explains it.
 ## Amendments
 
 A section leaves the verbatim comparison the moment a later record replaces its contract: the record
-stays frozen, and this directory becomes the authority for the new text. The rule the drift gate
-enforces follows the registry instead of a hard-coded list — an amendment must name a record that
-exists and is not still a `draft`, and the file must keep its section heading so the number keeps
-resolving.
+stays frozen, and this directory becomes the authority for the new text. One section may be amended
+more than once, by more than one record, so a row is an amendment and not a section: the rule the
+drift gate enforces follows the registry instead of a hard-coded list — every amendment must name a
+record that exists and is not still a `draft`, and the file must keep its section heading so the
+number keeps resolving.
 
 | § | Record | What it replaced |
 |---|---|---|
+| 9 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 9.1: the `starter` preset, the six rules it keeps and the six it turns `off`, and the quarantine floor it keeps |
 | 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | the human report: three-line findings, header order, labels instead of ids, `--verbose`, the 96-column bound |
+| 10 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the `not run` line, so a reduced preset states the coverage it does not have |
 | 11 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | `scan --verbose` in the synopsis, and its contract as human presentation that changes no JSON byte |
+| 11 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 11.1 and 11.2: `--preset starter` in both synopses; 11.7: the `start` command |
 
 ## Changing the contract
 
@@ -66,5 +70,6 @@ resolving.
    see [`../../rfcs/README.md`](../../rfcs/README.md).
 3. If the change contradicts something the record decided, the record is corrected with a `## Errata`
    entry that names what was wrong and what replaced it.
-4. Run the suite: `tests/drift.test.js` fails when this table stops covering the record, when a rule
-   page disappears, or when a flag loses its documentation.
+4. Run the suite: `tests/drift.test.js` fails when this table stops covering the record, when an
+   amendment names a record that is missing or still a `draft`, when a rule page disappears, or when a
+   flag loses its documentation.

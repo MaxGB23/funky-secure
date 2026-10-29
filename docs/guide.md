@@ -12,9 +12,10 @@ command or edit a human has to make.
 
 There are two ways to use it, and both get the whole product:
 
-- **You are starting out.** Run it, read the report, run the command under each finding. You do not
-  need to know why the quarantine matters to benefit from it — but if you want to, every rule page
-  under [`rules/`](rules/) explains the attack it prevents.
+- **You are starting out.** Run `funky-secure start` in the directory and follow the numbered steps it
+  prints; after them, run it again and read the report, doing what each `→` line says. You do not need
+  to know why the quarantine matters to benefit from it — but if you want to, every rule page under
+  [`rules/`](rules/) explains the attack it prevents.
 - **You already do this for a living.** `--format json` and the exit codes are a stable contract for
   CI and for agents, `--scope` separates repository facts from machine facts, and `--only` /
   `--ignore` / `funky-secure.config.json` make the policy per repository instead of per person.
@@ -80,6 +81,21 @@ lists the passing rules by name, and stops shortening machine paths.
 carries the setting; `not declared in this repository` means whatever value was measured came from
 pnpm's own configuration, which is not in the repository and does not travel with it.
 
+**The `not run` line** appears only when the policy you are running turns rules off, which is what
+`--preset starter` does. It sits between `verdict` and the separator, so you read it before the
+evidence, and it counts what you actually got:
+
+```text
+not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions
+```
+
+Six of twelve rules ran and the six named ones did not, so a `PASS` here means "passed the six that
+ran", not "this repository is fully checked". A rule that is off prints nothing and is not counted in
+`summary`, so without the line a run would look clean while it measured almost nothing. `--only` and
+`--ignore` never print it: picking rules for one run does not change the policy, and the line is a
+claim about the policy. The list is in catalog order, so it is the same list in every report.
+
 **`summary`** counts each rule verdict once: how many rules failed at each severity, how many passed,
 how many were skipped. **`verdict`** compares those failures with the threshold (`--fail-on`, default
 `error`) and prints `PASS` or `FAIL`.
@@ -97,17 +113,29 @@ already said it.
 
 A block heading is where the finding was measured, in upper case: `REPO-ROOT` for the repository,
 `IMPORTER <path>` for a `package.json`, `CI` for workflows, `MACHINE` for the pnpm that answers on
-this computer. A target with nothing to report is a single line, `CI   all 5 rules pass`, and a
-target with more than one skipped rule is a single line naming their labels plus the flag that
-expands them.
+this computer. A target with nothing to report prints its heading and one line under it, `all 5
+rules pass`, and a target with more than one skipped rule is a single line naming their labels plus
+the flag that expands them.
 
-## The three commands you actually need
+## The commands you actually need
 
 ```sh
+funky-secure start         # the ordered path out of an empty directory; writes nothing, always exits 0
 funky-secure scan          # audit; writes nothing; exits non-zero when the gate fails
 funky-secure init --apply  # write the fixes it can write, after printing them
 funky-secure migrate       # the plan for leaving npm or yarn; --apply removes the foreign lockfile
 ```
+
+`start` is the entry point for a new project. It answers one question — what do I run first — and it
+answers it in order, with only the steps that still apply, because the order is the point: the
+workspace block has to exist before the install that reads it, and a lockfile can only exist after the
+first dependency. From an empty directory that is `git init`, `pnpm init`,
+`funky-secure init --apply`, `pnpm add <your first dependency>`, and `funky-secure scan --preset
+starter` last. A project a framework generator produced is the case the order turns on: while another
+manager's lockfile is still there it names `funky-secure migrate` first, before `init --apply`, and it
+does not name the first add at all, because adding now would write a second lockfile beside the npm
+one. It writes nothing itself — `init --apply` is still the only writer — and it exits `0` in every
+state, because it is advice and not a gate.
 
 `scan` is the product. `init` exists because a diagnosis you cannot act on is half useful: it runs the
 same scan and turns the fixable findings into writes — the package-manager pin, the quarantine gate,
@@ -153,10 +181,19 @@ only the pnpm on this computer; `--scope all` is both, explicitly. Two rules dep
 age policy — so under `--scope repo` they are reported as *not verified*, and their message names
 `--scope all`. A green CI gate therefore does not prove those two, by contract.
 
-**Presets.** `--preset baseline` (default) and `--preset strict`. The catalog sets the severity of
-every rule per preset; `strict` also asks for the 72-hour quarantine floor. `--fail-on error|warn|
-info|none` decouples reporting from gating, and `--strict-probes` turns an unavailable required probe
-into an error so CI cannot go green having measured nothing.
+**Presets.** `--preset starter` is the one to use when you are starting a project: it runs six rules
+at the severity they carry in `baseline` — the package-manager pin, the lockfile, the foreign lockfile,
+the release-age quarantine, exact specifiers, and the files `.gitignore` must cover — and turns the
+other six `off`: tracked environment files and the five CI and workflow rules, because a repository
+minutes old has none of those for them to read. The foreign lockfile is in the set because that is
+exactly what a framework generator leaves behind: a manifest and someone else's lockfile. It says so
+in the `not run` line instead of claiming a coverage it does not have, and it keeps the same quarantine
+floor as `baseline`. What it does not cover is exactly the six it names — so it is a starting gate,
+not a CI gate: switch to `--preset baseline` (default) or `--preset strict` once the repository has a
+workflow to check.
+`strict` also asks for the 72-hour quarantine floor. `--fail-on error|warn|info|none` decouples
+reporting from gating, and `--strict-probes` turns an unavailable required probe into an error so CI
+cannot go green having measured nothing.
 
 **Per repository, not per person.** `funky-secure.config.json` at the repository root accepts
 `preset`, `quarantineMinutes` and `rules` (a rule id mapped to `off`, `info`, `warn` or `error`). This

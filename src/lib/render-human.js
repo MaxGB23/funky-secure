@@ -21,6 +21,7 @@ import { catalog as defaultCatalog } from '../rules/index.js';
 
 const SYMBOL = { error: '✖', warn: '⚠', info: 'ℹ', skip: '–' };
 const ANSI = {
+  heading: '[1m',
   error: '\u001b[31m',
   warn: '\u001b[33m',
   info: '\u001b[36m',
@@ -41,6 +42,8 @@ const ACTION = '     → ';
 const LABEL_WIDTH = 9;
 /** The rule under the header, 90 columns so it does not compete with the text above it. */
 const SEPARATOR = '─'.repeat(90);
+/** The honesty line stops before the 96-column bound: it is a note, not a paragraph (10.3). */
+const HONESTY_WIDTH = 86;
 /** How much of a machine path survives shortening: enough to recognise it, not enough to dominate. */
 const PATH_ROOM = 44;
 
@@ -203,7 +206,7 @@ function blockName(block) {
  * @returns {string[]}
  */
 function renderBlock(block, options) {
-  const name = blockName(block);
+  const name = paint(blockName(block), 'heading', options.color);
   const failing = block.findings;
 
   if (failing.length === 0 && block.skipped.length === 0) {
@@ -211,7 +214,7 @@ function renderBlock(block, options) {
     if (block.passing.length === 0 && block.facts.length === 0) return [];
     if (block.passing.length === 0) return [name, ...facts];
     const count = plural(block.passing.length, 'rule', 'rules');
-    return [`${name}   all ${count} pass`, ...facts];
+    return [name, `${INDENT}all ${count} pass`, ...facts];
   }
 
   const lines = [name, ...block.facts.flatMap((fact) => renderFact(fact, options.verbose))];
@@ -279,10 +282,18 @@ function blocksFor(kind, targets, findings, passing) {
  * @returns {string}
  */
 function provenanceLine(provenance) {
-  return (
-    `provenance  preset ${provenance.preset} (${provenance.presetSource})` +
+  const text =
+    `preset ${provenance.preset} (${provenance.presetSource})` +
     `  ·  quarantine ${provenance.quarantine}` +
-    `  ·  machine ${provenance.machine}`
+    `  ·  machine ${provenance.machine}`;
+  // `provenance` is one character wider than the nine-character gutter the other labels use, so it
+  // keeps its own two spaces and its continuations hang under them.
+  const gutter = 'provenance  ';
+
+  // The one header line that can outgrow the width bound: wrapped in the gutter, never left to the
+  // terminal to fold mid-word.
+  return wrap(text, WIDTH - gutter.length).map((line, index) =>
+    index === 0 ? gutter + line : ' '.repeat(gutter.length) + line,
   );
 }
 
@@ -317,6 +328,49 @@ function passingIds(passing) {
   lines.push(`${current})`);
   return lines;
 }
+
+/**
+ * The honesty line (record 0003, S6, 10.3). A policy that leaves catalog rules unrun says how many
+ * rules it does run and names the ones it does not, in catalog order and by the label a human reads.
+ * `off` prints nothing at all (9.2), so a `PASS` under a reduced preset would otherwise claim a
+ * coverage it does not have.
+ *
+ * It is one helper because two commands print it — the report and `start` — and a second copy of the
+ * sentence would drift from the first. It is human output only: the JSON document of 10.2 is
+ * unchanged, and a run that disables nothing prints no line at all.
+ *
+ * @param {{ active?: string[], catalog?: Array<{ id: string, label?: string }> }} [options]
+ * @returns {string[]} the lines to print, or `[]` when nothing is disabled
+ */
+/**
+ * The rule ids the effective policy turned `off`. `--only` and `--ignore` narrow a run without
+ * changing a severity, so they are not policy coverage and never reach the honesty line (S6).
+ * @param {{ severities?: Record<string, string> }} policy
+ * @returns {string[]}
+ */
+export function offByPolicy(policy) {
+  return Object.entries(policy?.severities ?? {})
+    .filter(([, severity]) => severity === 'off')
+    .map(([id]) => id);
+}
+
+export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
+  const disabled = new Set(off);
+  const missing = catalog.filter((rule) => disabled.has(rule.id));
+  if (missing.length === 0) return [];
+
+  // The labels come from the same catalog the renderer already builds its label map from (S3, S4), so
+  // the line names a rule exactly as a finding does.
+  const names = missing.map((rule) => rule.label ?? rule.id).join(", ");
+  const running = catalog.length - missing.length;
+  const text = `${running} of ${catalog.length} rules; off by policy: ${names}`;
+  const gutter = "not run".padEnd(LABEL_WIDTH);
+
+  return wrap(text, HONESTY_WIDTH - LABEL_WIDTH).map((line, index) =>
+    index === 0 ? gutter + line : " ".repeat(LABEL_WIDTH) + line,
+  );
+}
+
 
 /**
  * The one rule a reader should open next: the highest-severity failing finding, ties broken by the
@@ -373,10 +427,12 @@ function nextBlock({ summary, findings }, catalog) {
 
 /**
  * @param {object} report the object built by `buildReport`
- * @param {{ color?: boolean, verbose?: boolean }} [options]
+ * @param {{ color?: boolean, verbose?: boolean, active?: string[] }} [options] `active` is the
+ *   policy's active rule list; pass it and a reduced policy states what it did not run, leave it out
+ *   and the rendering is exactly what it was before the honesty line existed
  * @returns {string}
  */
-export function renderHuman(report, { color = false, verbose = false } = {}) {
+export function renderHuman(report, { color = false, verbose = false, off } = {}) {
   const targets = report.targets ?? [];
   const findings = report.findings ?? [];
   // A passing finding is never printed as a finding: the header counted it, and a repository that is
@@ -389,11 +445,12 @@ export function renderHuman(report, { color = false, verbose = false } = {}) {
   const lines = [
     `${report.tool.name} scan  ·  preset ${report.policy.preset}  ·  scope ${report.scope}`,
   ];
-  if (report.provenance) lines.push(provenanceLine(report.provenance));
+  if (report.provenance) lines.push(...provenanceLine(report.provenance));
   lines.push(summaryLine(report.summary));
   lines.push(
     `${'verdict'.padEnd(LABEL_WIDTH)}${paint(verdict, verdict === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${report.policy.failOn})`,
   );
+  if (off !== undefined) lines.push(...notRunLines({ off, catalog: defaultCatalog }));
   lines.push(SEPARATOR, '');
 
   for (const kind of TARGET_ORDER) {
