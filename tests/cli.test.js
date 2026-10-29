@@ -59,6 +59,31 @@ function capture() {
   };
 }
 
+/**
+ * Walks a rendered scan and returns the heading line of every failure whose block carries no action.
+ * One block is a symbol line, its continuation lines, and stops at the next symbol line: the arrow
+ * must appear inside it, wherever the message wrapped to (S1). A skip (`–`) is not a failure and may
+ * honestly carry no action.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function findingsWithoutActions(text) {
+  const lines = text.split('\n');
+  const starts = [];
+  lines.forEach((line, index) => {
+    if (/^ {2}[✖⚠ℹ–] {2}/.test(line)) starts.push(index);
+  });
+
+  const broken = [];
+  starts.forEach((start, position) => {
+    if (!/^ {2}[✖⚠ℹ] {2}/.test(lines[start])) return;
+    const end = position + 1 < starts.length ? starts[position + 1] : lines.length;
+    const block = lines.slice(start, end);
+    if (!block.some((line) => /^ {5}→ \S/.test(line))) broken.push(lines[start]);
+  });
+  return broken;
+}
+
 function io(cwd, options = {}) {
   const { catalog: rules, ...collectorOptions } = options;
   const streams = {
@@ -177,24 +202,20 @@ test('every failure in the human report prints the action that fixes it', async 
   const code = await run(['scan', '--scope', 'repo'], streams);
 
   assert.equal(code, 1);
-  const lines = streams.stdout.text.split('\n');
-  const failures = lines
-    .map((line, index) => ({ line, next: lines[index + 1] ?? '' }))
-    .filter((entry) => /^ {2}[✖⚠ℹ] /.test(entry.line));
+  const failures = findingsWithoutActions(streams.stdout.text);
 
-  assert.ok(failures.length > 0, 'the empty repository reports at least one failure');
-  for (const { line, next } of failures) {
-    assert.match(next, /^ {2,}→ \S/, `no remediation under ${JSON.stringify(line)}`);
-  }
+  assert.ok(streams.stdout.text.includes('✖'), 'the empty repository reports at least one failure');
+  assert.deepEqual(failures, [], 'every failure carries the action that fixes it');
   assert.match(
     streams.stdout.text,
-    /✖ lockfile-committed {2,}pnpm-lock\.yaml {2,}pnpm-lock\.yaml is missing[^\n]*\n {2,}→ pnpm install\n/,
+    /✖ {2}Lockfile {2}· {2}pnpm-lock\.yaml\n(?: {5}[^\n]*\n)+ {5}→ pnpm install\n/,
     'the missing lockfile names the human step',
   );
 });
 
 test('every failure in a golden fixture prints the action that fixes it', async () => {
   const failures = [];
+  const rendered = [];
 
   for (const fixture of FIXTURES) {
     const stdout = capture();
@@ -208,23 +229,21 @@ test('every failure in a golden fixture prints the action that fixes it', async 
     });
 
     assert.equal(stderr.text, '', `the scan of ${fixture.name} wrote to stderr`);
-    const lines = stdout.text.split('\n');
-    lines.forEach((line, index) => {
-      if (!/^ {2}[✖⚠ℹ] /.test(line)) return;
-      failures.push({ fixture: fixture.name, line, next: lines[index + 1] ?? '' });
-    });
+    for (const line of findingsWithoutActions(stdout.text)) {
+      failures.push(`${fixture.name}: ${line.trim()}`);
+    }
+    rendered.push(stdout.text);
   }
 
-  assert.ok(failures.length > 0, 'no fixture reports a failure');
-  for (const { fixture, line, next } of failures) {
-    assert.match(next, /^ {2,}→ \S/, `${fixture}: no remediation under ${JSON.stringify(line)}`);
-  }
+  assert.deepEqual(failures, [], 'every fixture failure carries the action that fixes it');
 
   // The guard must keep reaching the two rules whose remediation is an edit, not a command, so a
   // future fixture change cannot make it silently vacuous.
-  const reported = new Set(failures.map(({ line }) => line.trim().split(/\s+/)[1]));
-  for (const id of ['env-not-tracked', 'no-bot-auto-merge']) {
-    assert.ok(reported.has(id), `no fixture failure reached ${id}`);
+  for (const label of ['Environment files', 'Bot auto-merge']) {
+    assert.ok(
+      rendered.some((text) => text.includes(label)),
+      `no fixture reached ${label}`,
+    );
   }
 });
 

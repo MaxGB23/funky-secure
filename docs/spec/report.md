@@ -81,11 +81,49 @@ and `policy.failOn` records `none`.
 
 ### 10.3 Human output
 
-Grouped by target, one line per finding, remediation indented under it, and a summary that
-distinguishes pass / fail / skip. Passing rules are rolled up into a single `passing` line that names
-them, never one line each (10.1); skipped rules keep their own line, with the reason. Color is emitted
-only when `stdout` is a TTY and `NO_COLOR` is unset; the plain text is valid on its own
-(Appendix D.1).
+One header block, then one block per target, then the `next` block below. The header is the title
+line, the `provenance` line, `summary`, `verdict`, then a separator of 90 `─`. `summary` and
+`verdict` keep the names and the nine-character gutter they have always had; only their position
+moved, so a reader or a script that greps either label reads the counts before the evidence and is
+not broken by the move.
+
+A finding is at most three lines, and no finding shares a line with another finding or with a rule
+id:
+
+```
+  ✖  Sensitive files  ·  .gitignore
+     .env, .env.local, .env.production, secrets.pem, server.key, .npmrc are not ignored by git
+     → funky-secure init --apply
+```
+
+The heading carries the severity symbol, the rule's short human `label` and the location — `path`, or
+`path:line` when one line is the subject; the message is indented five columns and wraps with a
+hanging indent; the action is `→ <command>` at the same five columns, and every `fail` finding
+carries one (4.6). A block's heading is the target kind in upper case: `REPO-ROOT`,
+`IMPORTER <path>`, `CI`, `MACHINE`.
+
+The rule id is not shown to a human by default. It is a public identifier (6.2) and a name for the
+tool, so it stays in the JSON document (10.2), in `--help`, in `explain` and in `scan --verbose`
+(11.1). The label is a second field of the same catalog entry (13.1), so the catalog stays the only
+source and no second list of names exists to drift.
+
+A target with nothing to report is one line: `CI   all 5 rules pass`. Passing rules are counted in
+`summary` and never printed one line each (10.1); `--verbose` restores their ids in a single
+`passing` line.
+
+Skips collapse by target. Two or more skipped rules in one target print one `–` line naming the
+labels that were not verified and the command that expands them, `funky-secure scan --verbose`,
+instead of one block per skip. A target with exactly one skipped rule prints that rule's own block,
+symbol `–`: one reason and its verifying command fit in three lines, and a human should not have to
+pass a flag to read them. Neither shape changes the JSON document.
+
+No rendered line exceeds 96 columns. Messages and actions wrap, never truncate. The single exception
+is a machine path — the store and the executable of the `MACHINE` block, whose absolute form is the
+fact (10.1) — shortened in the middle with `…`, because its length is not ours to bound and a fixed
+cut point keeps the rendering deterministic. `--verbose` prints it whole and the JSON keeps it whole.
+
+Color is emitted only when `stdout` is a TTY and `NO_COLOR` is unset; the plain text is valid on its
+own (Appendix D.1).
 
 Immediately after the title line, one `provenance` line states the preset and its source, whether the
 repository declares the quarantine key, and whether the machine was excluded — the same facts as the
@@ -93,7 +131,9 @@ JSON field of 10.2, in one line, never a claim about where an effective value ca
 
 A skipped rule states what was not verified and the command that verifies it, not only the contract
 that excluded it: `--scope repo` omitting the machine is a fact a CI reader has to be able to act on
-(7.2).
+(7.2). When the skips of a target are collapsed — two or more of them — that sentence and its command
+live behind `funky-secure scan --verbose`, which the collapsed line names; the obligation moves, it is
+not dropped.
 
 A human `scan` ends by naming the next command, not only the verdict. After `summary` and `verdict`, one
 `next` block uses the same label gutter and says exactly one of three things: when at least one failing
@@ -105,6 +145,9 @@ its file, line and action. When the block names `init`, a second line names one 
 order, so the two runs over the same state produce the same bytes. The block is human output only: the
 JSON document of 10.2 does not gain a field for it, because a reader that wants the plan asks for the
 plan (10.5, 11.2.1).
+
+The JSON document of 10.2 is the contract; the human text above is presentation. A minor release may
+change that presentation, as long as the report remains valid on its own.
 
 ### 10.4 Exit codes
 

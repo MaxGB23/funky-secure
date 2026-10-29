@@ -40,6 +40,7 @@ function isEnvironmentFile(path) {
 export default {
   id: 'env-not-tracked',
   title: 'No environment file is committed',
+  label: 'Environment files',
   scope: ['repo'],
   targets: ['repo-root'],
   friction: 0,

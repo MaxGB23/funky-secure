@@ -19,6 +19,7 @@ function finding(status, code, message, evidence, remediation = { kind: 'none' }
 export default {
   id: 'lockfile-committed',
   title: 'pnpm-lock.yaml is present, tracked and not ignored',
+  label: 'Lockfile',
   scope: ['repo'],
   targets: ['repo-root'],
   friction: 0,

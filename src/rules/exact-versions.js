@@ -256,6 +256,7 @@ function floatingRemediation({ type, dependency, version }) {
 export default {
   id: 'exact-versions',
   title: 'Dependency specifiers are exact',
+  label: 'Dependency ranges',
   scope: ['repo'],
   targets: ['importer'],
   friction: 2,

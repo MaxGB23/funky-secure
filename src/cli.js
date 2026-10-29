@@ -50,6 +50,7 @@ export const FLAGS = Object.freeze([
   { name: '--ignore', key: 'ignore', commands: ['scan'], list: true, values: null },
   { name: '--strict-probes', key: 'strictProbes', commands: ['scan'], boolean: true },
   { name: '--with-timestamp', key: 'withTimestamp', commands: ['scan'], boolean: true },
+  { name: '--verbose', key: 'verbose', commands: ['scan'], boolean: true },
   { name: '--apply', key: 'apply', commands: ['init', 'migrate'], boolean: true },
   { name: '--allow-dirty', key: 'allowDirty', commands: ['init', 'migrate'], boolean: true },
   { name: '--from', key: 'from', commands: ['migrate'], values: ['npm', 'yarn', 'auto'] },

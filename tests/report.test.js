@@ -269,7 +269,7 @@ test('renders one provenance line right after the title, and omits it when nothi
     lines[1],
     'provenance  preset strict (--preset)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
   );
-  assert.equal(lines[2], '');
+  assert.match(lines[2], /^summary  /, 'the counts follow the provenance line');
 
   const bare = renderHuman(buildReport({ scope: 'repo', policy, catalog, tool, findings: [] }));
   assert.equal(bare.includes('provenance'), false);
@@ -444,15 +444,103 @@ test('adds no field to the json document for the next block', () => {
   assert.equal(nextBlock(report).length, 2, 'the human report does carry the block');
 });
 
-test('keeps summary and verdict in their gutter, with the next block last', () => {
+test('keeps summary and verdict in their gutter at the top, with the next block last', () => {
   const lines = renderedLines(reportWith([AUTO_QUARANTINE], 'warn'));
   const summaryAt = lines.findIndex((line) => line.startsWith('summary'));
 
   assert.equal(lines[summaryAt].slice(0, 9), 'summary  ');
   assert.equal(lines[summaryAt + 1].slice(0, 9), 'verdict  ');
-  assert.equal(lines[summaryAt + 2].slice(0, 9), NEXT);
+  assert.ok(summaryAt <= 3, 'summary and verdict belong to the header, before any target');
+  assert.equal(lines[summaryAt + 2], '─'.repeat(90), 'a rule separates the header from the findings');
   assert.equal(
     lines.at(-1),
     `${CONTINUATION}funky-secure explain quarantine   what this rule wants, and why`,
   );
+});
+
+/// The shape of a finding (S1-S8): heading, message, action; label instead of id; at most 96 columns.
+
+function blockOf(report, symbol) {
+  const lines = renderedLines(report);
+  const start = lines.findIndex((line) => line.startsWith(`  ${symbol}`));
+  return start === -1 ? [] : lines.slice(start, start + 4);
+}
+
+const LONG = finding({
+  rule: 'sensitive-ignored',
+  severity: 'error',
+  path: 'M:/.pnpm-store/v3/files/00/' + 'a'.repeat(90),
+  message:
+    '.env, .env.local, .env.production, secrets.pem, server.key and .npmrc are not ignored by git',
+  remediation: { kind: 'auto', command: 'funky-secure init --apply' },
+});
+
+test('a finding is a heading, a message and an action, and names its label instead of its id', () => {
+  const [head, first, second, third] = blockOf(reportWith([LONG]), '✖');
+
+  assert.match(head, /^ {2}✖ {2}Sensitive files {2}· {2}M:\//, 'the heading names the label and the file');
+  assert.equal(head.includes('sensitive-ignored'), false, 'the id is not part of the heading');
+  assert.match(first, /^ {5}\.env, \.env\.local/, 'the message hangs from the symbol column');
+  assert.equal([second, third].includes('     → funky-secure init --apply'), true, 'the action closes the block');
+});
+
+test('no rendered line exceeds 96 columns, even with a long machine path', () => {
+  const report = buildReport({
+    scope: 'all',
+    policy,
+    catalog: ruleCatalog,
+    tool,
+    targets: [
+      { kind: 'machine', detail: `pnpm 12.3.4 (C:\\Users\\someone\\AppData\\Local\\pnpm\\pnpm.exe)  ·  store ${'M:\\' + 'x'.repeat(80)}` },
+      { kind: 'repo-root', path: '.' },
+    ],
+    findings: [LONG],
+  });
+
+  for (const line of renderedLines(report)) {
+    assert.ok(line.length <= 96, `line is ${line.length} columns: ${line}`);
+  }
+});
+
+test('a clean target is one line, and never lists its rules', () => {
+  const lines = renderedLines(reportWith([finding({ rule: 'alpha', status: 'pass' })]));
+
+  assert.ok(lines.includes('REPO-ROOT   all 1 rule pass'), `missing the clean target line in ${lines.join('|')}`);
+});
+
+test('a single skipped rule keeps its own block; two or more collapse into one line', () => {
+  const one = renderedLines(
+    reportWith([finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' })]),
+  );
+  assert.ok(one.some((line) => line.startsWith('  –  Quarantine')), 'a single skip names itself');
+  assert.ok(one.includes('     not verified'), 'a single skip states what was not verified');
+
+  const many = renderedLines(
+    reportWith([
+      finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' }),
+      finding({ rule: 'exact-versions', status: 'skip', path: null, message: 'not verified either' }),
+    ]),
+  );
+  const collapsed = many.find((line) => line.includes('not verified:'));
+  assert.equal(collapsed, '  –  2 rules not verified: Quarantine, Dependency ranges');
+  assert.match(many[many.indexOf(collapsed) + 1], /^ {5}→ funky-secure scan --verbose/, 'the collapse says how to expand');
+  assert.equal(many.some((line) => line.includes('not verified either')), false, 'the reasons moved behind --verbose');
+});
+
+test('--verbose restores the ids, the skip reasons and the passing rules', () => {
+  const report = reportWith([
+    finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' }),
+    finding({ rule: 'exact-versions', status: 'skip', path: null, message: 'not verified either' }),
+    finding({ rule: 'alpha', status: 'pass' }),
+  ]);
+  const text = renderHuman(report, { verbose: true });
+
+  assert.ok(text.includes('·  quarantine'), 'the skipped rule id is visible');
+  assert.ok(text.includes('not verified either'), 'the skipped rule reason is visible');
+  assert.match(text, /^passing  1 rules \(alpha\)$/m, 'the passing rules are named again');
+});
+
+test('renders the same bytes on every run over the same state', () => {
+  const report = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE, LONG]);
+  assert.equal(renderHuman(report, { verbose: true }), renderHuman(report, { verbose: true }));
 });

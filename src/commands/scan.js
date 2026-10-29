@@ -20,6 +20,7 @@ export async function run({
   ignore,
   strictProbes = false,
   withTimestamp = false,
+  verbose = false,
   catalog = defaultCatalog,
   collector,
 }) {
@@ -40,7 +41,7 @@ export async function run({
   const text =
     format === 'json'
       ? renderJson(report, withTimestamp ? { timestamp: new Date().toISOString() } : {})
-      : renderHuman(report, { color });
+      : renderHuman(report, { color, verbose });
 
   stdout.write(text);
   return report.summary.verdict === 'fail' ? 1 : 0;

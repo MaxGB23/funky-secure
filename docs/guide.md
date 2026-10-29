@@ -26,23 +26,43 @@ One report has these parts, in this order:
 ```text
 funky-secure scan  ·  preset baseline  ·  scope repo
 provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded
-
-repo-root
-  – package-manager-pin  package.json    skipped: the machine is out of scope, so the declared packageManager pin was not compared with the pnpm that answers; run funky-secure scan --scope all to verify it
-  ✖ lockfile-committed   pnpm-lock.yaml  pnpm-lock.yaml is missing from the repository root; installs are not reproducible without it
-                                         → pnpm install
-  – quarantine           skipped: pnpm config list --json was unavailable
-
-importer  package.json
-  ⚠ exact-versions  package.json:4  left-pad@^1.3.0 is a floating range
-                                    → pnpm install --lockfile-only && funky-secure scan --only exact-versions
-
-passing  3 rules (foreign-lockfile, actions-pinned-sha, no-bot-auto-merge)   ·   8 skipped
-
-summary  1 error · 1 warning · 0 info · 3 passing · 8 skipped
+summary  2 errors · 0 warnings · 0 info · 4 passing · 6 skipped
 verdict  FAIL (threshold: error)
-next     manual: each finding names the file, its line, and the action
+──────────────────────────────────────────────────────────────────────────────────────────
+
+REPO-ROOT
+  ✖  Lockfile  ·  pnpm-lock.yaml
+     pnpm-lock.yaml is missing from the repository root; installs are not reproducible
+     without it
+     → pnpm install
+
+  ✖  Sensitive files  ·  .gitignore
+     .env, .env.local, .env.production, secrets.pem, server.key, .npmrc are not ignored by
+     git
+     → funky-secure init --apply
+
+  –  2 rules not verified: Package manager, Quarantine
+     → funky-secure scan --verbose, each names what was not verified and how to verify it
+
+CI
+  –  3 rules not verified: CI install flags, pull_request_target, Workflow permissions
+     → funky-secure scan --verbose, each names what was not verified and how to verify it
+
+next     funky-secure init  plan the 1 fix it can make (nothing is written)
+         funky-secure explain lockfile-committed   what this rule wants, and why
 ```
+
+The first four lines are the answer, in the order you want it: the title, where the policy came
+from, the counts, the verdict. Everything below the separator is evidence, and `next` is the last
+line.
+
+**A finding answers three questions on its own.** The heading names *what* is wrong, in words rather
+than in a rule id (`Lockfile`, `Sensitive files`), and *where* it was measured — `pnpm-lock.yaml`, or
+`package.json:4` when one line is the subject. The sentence under it says what the tool found. The
+`→` line under that is *what to do about it*: a command you can copy, or the file and step to edit.
+You never have to open the rule catalog to act, and the rule id is deliberately absent —
+`funky-secure scan --verbose` adds it under each finding, says why each skipped rule was skipped,
+lists the passing rules by name, and stops shortening machine paths.
 
 **The symbols.** Four, and nothing else:
 
@@ -75,8 +95,11 @@ file, its line and the action. The block is human output only — `--format json
 violation, `2` the tool could not answer. If you are reading the output yourself, the `verdict` line
 already said it.
 
-A block heading is where the finding was measured: `repo-root` for the repository, `importer` for a
-`package.json`, `ci` for workflows, `machine` for the pnpm that answers on this computer.
+A block heading is where the finding was measured, in upper case: `REPO-ROOT` for the repository,
+`IMPORTER <path>` for a `package.json`, `CI` for workflows, `MACHINE` for the pnpm that answers on
+this computer. A target with nothing to report is a single line, `CI   all 5 rules pass`, and a
+target with more than one skipped rule is a single line naming their labels plus the flag that
+expands them.
 
 ## The three commands you actually need
 
@@ -103,7 +126,7 @@ the contract: commands, flags and rule ids, generated from the same table the pa
 
 ## If you see this, do this
 
-| You see | It means | Do |
+| Rule (`explain <id>`) | It means | Do |
 |---|---|---|
 | `package-manager-pin` | `package.json` does not pin the pnpm that actually answers | `funky-secure init --apply` writes it; or `corepack use pnpm@<version>` |
 | `lockfile-committed` | no `pnpm-lock.yaml` in the repository, or it is ignored | `pnpm install`, then commit the lockfile |

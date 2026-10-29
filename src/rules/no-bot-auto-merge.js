@@ -107,6 +107,7 @@ function checksOutHead(step) {
 export default {
   id: 'no-bot-auto-merge',
   title: 'No dependency update is merged automatically',
+  label: 'Bot auto-merge',
   scope: ['repo'],
   targets: ['ci'],
   friction: 0,

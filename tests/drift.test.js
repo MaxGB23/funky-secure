@@ -36,6 +36,20 @@ test('every docs/rules page declares a rule id the catalog contains', () => {
   }
 });
 
+test('every catalog rule carries its own short human label', () => {
+  const seen = new Map();
+
+  for (const rule of catalog) {
+    assert.equal(typeof rule.label, 'string', `${rule.id} carries no label`);
+    const label = rule.label.trim();
+    assert.equal(label, rule.label, `${rule.id} label has stray whitespace`);
+    assert.ok(label.length > 0 && label.length <= 28, `${rule.id} label is ${label.length} chars`);
+    assert.doesNotMatch(label, /[🌀-🫿☀-➿]/u, `${rule.id} label carries an emoji`);
+    assert.equal(seen.has(label), false, `"${label}" is used by ${seen.get(label)} and ${rule.id}`);
+    seen.set(label, rule.id);
+  }
+});
+
 test('help output contains every catalog rule id and every parsed flag', () => {
   const help = renderHelp({ catalog });
 
@@ -62,6 +76,38 @@ test('docs/architecture.md mentions only src paths that exist', () => {
   assert.ok(mentioned.length > 0, 'architecture.md lists no src modules');
   for (const path of mentioned) {
     assert.ok(existsSync(join(ROOT, path)), `architecture.md mentions missing ${path}`);
+  }
+});
+
+/// The command flows (RFC 13.4): `docs/architecture.md` draws one flow per command, and `COMMANDS`
+/// is the list `src/cli.js` dispatches, so a command cannot gain or lose its diagram silently.
+
+test('docs/architecture.md draws a mermaid flow for every command', () => {
+  const text = readFileSync(join(ROOT, 'docs', 'architecture.md'), 'utf8');
+  const start = text.search(/^## Command flows$/m);
+  assert.notEqual(start, -1, 'docs/architecture.md has no "## Command flows" section');
+
+  // The section runs to the next level-two heading, so a flow outside it does not count.
+  const after = text.slice(start);
+  const next = after.slice(1).search(/^## /m);
+  const section = next === -1 ? after : after.slice(0, next + 1);
+
+  for (const command of COMMANDS) {
+    const heading = new RegExp(`^### \`${command.name}\`$`, 'm');
+    const matched = heading.exec(section);
+    assert.ok(
+      matched,
+      `docs/architecture.md has no "### \`${command.name}\`" heading under "## Command flows"`,
+    );
+
+    const body = section.slice(matched.index + matched[0].length);
+    const end = body.search(/^#{2,3} /m);
+    const subsection = end === -1 ? body : body.slice(0, end);
+    assert.match(
+      subsection,
+      /^```mermaid$/m,
+      `the "### \`${command.name}\`" flow carries no mermaid block`,
+    );
   }
 });
 
@@ -133,6 +179,42 @@ test('docs/decisions.md exists and records every decision the RFC number', () =>
 
 const RECORD = join(ROOT, 'rfcs', '0001-funky-secure-v1', 'rfc.md');
 
+/**
+ * The index table as a map from file name to its row. The prose and the amendments table both cite
+ * files, so the row must be recognised by its shape — number, topic, local `.md` link — and not by
+ * looking up a name inside a regular expression.
+ * @param {string} index
+ * @returns {Map<string, { section: number, path: string }>}
+ */
+function specRows(index) {
+  const rows = new Map();
+
+  for (const line of index.split('\n')) {
+    const row = line.match(/^\| (\d+) \| [^|]*\| \[`([^`]+\.md)`\]\(([^)]+)\) \|$/);
+    if (row !== null) rows.set(row[2], { section: Number(row[1]), path: row[3] });
+  }
+
+  return rows;
+}
+
+/**
+ * The amendments table: section number to the record that replaced its contract. A section that is
+ * amended leaves the verbatim comparison, because the spec becomes the authority for its new text.
+ * @param {string} index
+ * @returns {Map<number, { number: string, path: string }>}
+ */
+function amendmentsIn(index) {
+  const amendments = new Map();
+  const table = index.split('## Amendments')[1];
+  if (table === undefined) return amendments;
+
+  for (const line of table.split('\n')) {
+    const row = line.match(/^\| (\d+) \| \[`([^`]+)`\]\(([^)]+)\) \|/);
+    if (row !== null) amendments.set(Number(row[1]), { number: row[2], path: row[3] });
+  }
+  return amendments;
+}
+
 function recordSections() {
   const text = readFileSync(RECORD, 'utf8');
   return [...text.matchAll(/^## (\d+)\. /gm)].map((match) => Number(match[1]));
@@ -166,6 +248,8 @@ test('docs/spec/README.md maps every section of the record to the file that carr
 test('every file docs/spec/README.md points at exists, and no section body was reworded', () => {
   const index = readFileSync(join(ROOT, 'docs', 'spec', 'README.md'), 'utf8');
   const record = readFileSync(RECORD, 'utf8');
+  const amended = amendmentsIn(index);
+  const rows = specRows(index);
 
   // Only the table's own targets are local files; the prose cites the record, which lives elsewhere.
   const targets = [...index.matchAll(/\[`([^`/]*\.md)`\]/g)].map((match) => match[1]);
@@ -179,6 +263,24 @@ test('every file docs/spec/README.md points at exists, and no section body was r
     const text = readFileSync(path, 'utf8');
     const body = text.slice(text.indexOf('\n## ') + 1).trimEnd();
     assert.ok(body.startsWith('## '), `${target} carries no section of the record`);
+
+    // A section a later record amended is the authority now, so it is no longer compared with the
+    // frozen record — but the amendment must name a record that exists and is not still a draft,
+    // and the file must keep the section heading, or its number stops resolving.
+    const section = rows.get(target)?.section ?? null;
+    const amendment = section === null ? null : amended.get(section);
+    if (amendment !== null && amendment !== undefined) {
+      const recordPath = join(ROOT, 'docs', 'spec', amendment.path);
+      assert.ok(existsSync(recordPath), `${target} is amended by a record that is not there`);
+      assert.match(
+        readFileSync(recordPath, 'utf8'),
+        /\| \*\*Status\*\* \| `(accepted|implemented|closed)`/,
+        `${target} is amended by a record that is still a draft`,
+      );
+      assert.match(body, new RegExp(`^## ${section}\\. `), `${target} lost its section number`);
+      continue;
+    }
+
     assert.ok(record.includes(body), `${target} no longer matches the record verbatim`);
   }
 });

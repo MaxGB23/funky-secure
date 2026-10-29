@@ -6,6 +6,8 @@ command is defined by the contract in [`spec/report.md`](spec/report.md) and
 `rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11. This page is the operating manual, not a
 second specification.
 
+The flow of each command is drawn in [`architecture.md`](architecture.md#command-flows).
+
 ```text
 funky-secure <command> [options]
 funky-secure --help
@@ -23,6 +25,7 @@ release (RFC 13.1, 13.3).
 funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
                   [--format human|json] [--fail-on error|warn|info|none]
                   [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
+                  [--verbose]
 ```
 
 Read-only audit. It resolves targets, runs the active rules and renders one report. Defaults are
@@ -35,21 +38,149 @@ or `baseline`.
   refuse a green build that measured nothing.
 - `--with-timestamp` adds `generatedAt` to the JSON document. It is the only non-deterministic field
   and is excluded from golden tests by construction.
+- `--verbose` restores what the default human report leaves out: every rule id, the ids of the
+  passing rules, the reason and the verifying command of each skipped rule, and the machine block's
+  full binary path. The JSON document is byte-identical with and without it (RFC 11.1).
 
 #### Human output
 
-A human report groups the findings by target, rolls the passing rules into one line, and ends with
-`summary`, `verdict` and a `next` block (RFC 10.3). `next` occupies the same nine-character label
-gutter as the two lines above it, and a continuation line is indented to match:
+A human report is presentation, not contract: the JSON document below is the contract, and this text
+may change in a minor release as long as it remains valid on its own (RFC 10.3). It is written to be
+read without the rule catalog, and it answers three questions in the order a reader asks them — what
+is wrong, in which file, and what command fixes it.
+
+The header is the title line, the `provenance` line, `summary`, `verdict`, then a separator of 90
+`─`. Both labels keep their names and their nine-character gutter, so a script that greps `summary`
+or `verdict` still lands on them; only their position moved, from the bottom of the report to the top.
+Then one block per target, and the `next` block last:
 
 ```text
-summary  2 errors · 0 warnings · 0 info · 5 passing · 5 skipped
+funky-secure scan  ·  preset baseline  ·  scope repo
+provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+summary  2 errors · 0 warnings · 0 info · 4 passing · 6 skipped
 verdict  FAIL (threshold: error)
+──────────────────────────────────────────────────────────────────────────────────────────
+
+REPO-ROOT
+  ✖  Lockfile  ·  pnpm-lock.yaml
+     pnpm-lock.yaml is missing from the repository root; installs are not reproducible
+     without it
+     → pnpm install
+
+  ✖  Sensitive files  ·  .gitignore
+     .env, .env.local, .env.production, secrets.pem, server.key, .npmrc are not ignored by
+     git
+     → funky-secure init --apply
+
+  –  2 rules not verified: Package manager, Quarantine
+     → funky-secure scan --verbose, each names what was not verified and how to verify it
+
+CI
+  –  3 rules not verified: CI install flags, pull_request_target, Workflow permissions
+     → funky-secure scan --verbose, each names what was not verified and how to verify it
+
 next     funky-secure init  plan the 1 fix it can make (nothing is written)
          funky-secure explain lockfile-committed   what this rule wants, and why
 ```
 
-The block names exactly one command, and it has one of three shapes, decided by the report alone:
+- **One finding is three lines.** The heading carries the severity symbol, the rule's short label from
+  the catalog (`Lockfile`, `Sensitive files`) and the location, `path` or `path:line`. The message
+  hangs five columns in and wraps with a hanging indent. The last line is the action,
+  `→ <command>`, at the same five columns. No finding shares its line with another finding or with a
+  rule id.
+- **The rule id is not printed.** It names a rule for the tool, not a finding for a person: it stays
+  in the JSON document, in `--help`, in `explain`, and in `scan --verbose`.
+- **The label comes from the catalog**, beside the rule's `title`, so there is no second list to keep
+  in sync. `title` stays where a rule is explained (`--help`, `explain`) because it is a statement
+  about the repository, and a heading needs the subject of the finding instead.
+- **The target kind is the heading of its block**: `REPO-ROOT`, `IMPORTER <path>`, `CI`, `MACHINE`.
+- **A clean target is one line.** `CI   all 5 rules pass`, never one line per rule: the passes are
+  counted in `summary`. A repository at policy, from a different run:
+
+```text
+funky-secure scan  ·  preset strict  ·  scope repo
+provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+summary  0 errors · 0 warnings · 0 info · 8 passing · 4 skipped
+verdict  PASS (threshold: error)
+──────────────────────────────────────────────────────────────────────────────────────────
+
+REPO-ROOT
+  –  4 rules not verified: Package manager, Quarantine, Environment files, Sensitive files
+     → funky-secure scan --verbose, each names what was not verified and how to verify it
+
+CI   all 5 rules pass
+
+next     nothing to do: everything at or above the policy passes
+```
+
+- **Skips collapse by target.** Two or more skipped rules print one `–` line naming the labels that
+  were not verified and the command that expands them; the JSON is untouched. Exactly one skipped
+  rule keeps its own block — symbol `–`, the reason, and the command that verifies it — because a
+  single reason costs three lines and no flag.
+- **No rendered line exceeds 96 columns.** Messages and actions wrap, never truncate. The one value
+  shortened is a machine path — the executable in the `MACHINE` block, and the store when it does not
+  fit — cut in the middle with `…` as in `C:\Users\…\pnpm.exe`, because its length is not ours to
+  bound and a fixed cut point stays deterministic. `--verbose` prints it whole, and the JSON keeps
+  it whole.
+- **`--verbose` is the escape hatch.** It restores the rule id under each finding (`     ·  <id>`),
+  the reason and the verifying command of every skipped rule instead of the collapsed line, the ids
+  of the passing rules in one `passing` line, and the machine block's paths unshortened. It changes
+  no count, no ordering and no JSON byte (RFC 11.1). The same run as the capture above with it on:
+
+```text
+funky-secure scan  ·  preset baseline  ·  scope repo
+provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+summary  2 errors · 0 warnings · 0 info · 4 passing · 6 skipped
+verdict  FAIL (threshold: error)
+──────────────────────────────────────────────────────────────────────────────────────────
+
+REPO-ROOT
+  ✖  Lockfile  ·  pnpm-lock.yaml
+     pnpm-lock.yaml is missing from the repository root; installs are not reproducible
+     without it
+     → pnpm install
+     ·  lockfile-committed
+
+  ✖  Sensitive files  ·  .gitignore
+     .env, .env.local, .env.production, secrets.pem, server.key, .npmrc are not ignored by
+     git
+     → funky-secure init --apply
+     ·  sensitive-ignored
+
+
+  –  Package manager  ·  package.json
+     skipped: the machine is out of scope, so the declared packageManager pin was not
+     compared with the pnpm that answers; run funky-secure scan --scope all to verify it
+     ·  package-manager-pin
+
+  –  Quarantine
+     skipped: the quarantine was not verified because the machine configuration is out of
+     scope; run funky-secure scan --scope all to verify the release-age gate
+     ·  quarantine
+
+CI
+
+  –  CI install flags
+     skipped: there is no workflow and no root .npmrc, so no CI install fact exists
+     ·  ci-no-safety-overrides
+
+  –  pull_request_target
+     skipped: there is no .github/workflows directory, so no workflow can declare a trigger
+     ·  pull-request-target
+
+  –  Workflow permissions
+     skipped: there is no .github/workflows directory, so no workflow can declare
+     permissions
+     ·  workflow-permissions
+
+passing  4 rules (foreign-lockfile, env-not-tracked, actions-pinned-sha, no-bot-auto-merge)
+
+next     funky-secure init  plan the 1 fix it can make (nothing is written)
+         funky-secure explain lockfile-committed   what this rule wants, and why
+```
+
+**The `next` block** names exactly one command, and it has one of three shapes, decided by the report
+alone:
 
 - at least one failing finding carries an `auto` remediation: `funky-secure init`, the number of
   fixes it can plan, and the fact that nothing is written yet, followed by one
@@ -60,8 +191,9 @@ The block names exactly one command, and it has one of three shapes, decided by 
   and the action`.
 
 The block is human output only: the JSON document of RFC 10.2 gains no field for it, because a
-reader that wants the plan runs `init` for it. Since it carries no path, timestamp or machine value,
-two runs over the same state print the same bytes.
+reader that wants the plan runs `init` for it. The rule it names is an id, never a label, because it
+is an argument to `explain` and ids are the names a command accepts (RFC 11.4). Since the block
+carries no path, timestamp or machine value, two runs over the same state print the same bytes.
 
 ### `init`
 
@@ -149,6 +281,7 @@ accept it is a usage error, never a silently ignored argument. Enumerated values
 | `--ignore` | `scan` | comma-separated rule ids | never run these rules; repeats accumulate |
 | `--strict-probes` | `scan` | boolean | unavailable required probe becomes `error` |
 | `--with-timestamp` | `scan` | boolean | add `generatedAt` to the JSON report |
+| `--verbose` | `scan` | boolean | show rule ids, per-rule skip reasons and the machine binary path |
 | `--apply` | `init`, `migrate` | boolean | perform the write plan instead of only printing it |
 | `--allow-dirty` | `init`, `migrate` | boolean | allow writing over uncommitted target files |
 | `--from` | `migrate` | `npm`, `yarn`, `auto` | declared origin; default `auto` |

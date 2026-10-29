@@ -158,6 +158,7 @@ function npmrcFinding(entry) {
 export default {
   id: 'ci-no-safety-overrides',
   title: 'CI does not disable the frozen lockfile or re-enable lifecycle scripts',
+  label: 'CI install flags',
   scope: ['repo'],
   targets: ['ci'],
   friction: 1,
