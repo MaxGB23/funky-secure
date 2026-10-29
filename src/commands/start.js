@@ -18,8 +18,11 @@
  */
 
 import { derivePlan } from '../lib/plan.js';
+import { statusPorcelain } from '../lib/git.js';
+import { relative } from 'node:path';
 import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
+import { createCollector } from '../lib/probes.js';
 import { collectScan } from '../lib/scan.js';
 import { FOREIGN_LOCKFILES } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
@@ -28,6 +31,18 @@ import { catalog as defaultCatalog } from '../rules/index.js';
 const START_PRESET = 'starter';
 /** The step that always closes the path, and the preset it names. */
 const SCAN_STEP = `funky-secure scan --preset ${START_PRESET}`;
+
+/**
+ * The commit step, printed before the block is written over an uncommitted tree.
+ *
+ * `init --apply` refuses to write over uncommitted changes — a security tool does not mix its edits
+ * with a stranger's — and every freshly generated project is in exactly that state. `start` used to
+ * tell the reader to run `init --apply` first, so the canonical first-run path could not be completed
+ * by running its own steps. The commit is what makes the next step possible; the message is
+ * deliberately dull, because it belongs to the repository and not to this tool.
+ */
+const COMMIT_MESSAGE = 'chore: baseline before funky-secure';
+const COMMIT_STEP = `git add -A && git commit -m "${COMMIT_MESSAGE}"`;
 
 /**
  * Two lines of cause, printed on every run. The order is the whole point of the command: without
@@ -65,7 +80,7 @@ function foreignLockfiles(repo) {
  * @param {{ repo: object | null, writes: number }} state
  * @returns {string[]}
  */
-function pendingSteps({ repo, writes }) {
+function pendingSteps({ repo, writes, uncommitted = false }) {
   const present = Array.isArray(repo?.present) ? repo.present : [];
   const foreign = foreignLockfiles(repo);
   const steps = [];
@@ -74,6 +89,8 @@ function pendingSteps({ repo, writes }) {
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
     steps.push('pnpm init');
   }
+  // The block can only be written over a committed tree, so the commit is a step and not a footnote.
+  if (writes > 0 && uncommitted) steps.push(COMMIT_STEP);
   // The block first, then one resolve under it, then the foreign lockfile: `migrate --apply` refuses to
   // remove the only lockfile, so it needs the `pnpm-lock.yaml` the install writes, and the install has
   // to read a block that already exists.
@@ -92,6 +109,30 @@ function pendingSteps({ repo, writes }) {
   }
 
   return steps;
+}
+
+/**
+ * Whether the plan's own targets carry uncommitted work, which is the state `init --apply` refuses.
+ *
+ * The same probe `applyPlan` runs, over the same paths, so `start` cannot promise a step the next
+ * command will refuse: a failed `git status` is not dirty, because this is guidance and not a gate.
+ *
+ * @param {{ plan: Array<object>, ctx: object, collector: object }} options
+ * @returns {Promise<boolean>}
+ */
+async function hasUncommitted({ plan, ctx, collector }) {
+  const root = ctx?.repo?.root;
+  if (typeof root !== 'string' || root === '') return false;
+  const cwd = typeof ctx?.cwd === 'string' && ctx.cwd !== '' ? ctx.cwd : root;
+  // The same spelling `applyPlan` uses: the plan carries absolute paths, and `git status` is asked for
+  // repository-relative ones.
+  const paths = plan
+    .map((item) => (typeof item.path === 'string' ? relative(cwd, item.path) : null))
+    .filter((path) => path !== null);
+  if (paths.length === 0) return false;
+  const dirty = await statusPorcelain(collector, paths);
+  if (dirty === null) return false;
+  return dirty.some((entry) => paths.includes(entry.slice(3)));
 }
 
 /**
@@ -143,16 +184,21 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     collector,
   });
 
-  // The same plan `init` derives, read for one number: the writes that are still waiting.
-  const writes = derivePlan({ ctx, policy, catalog, report }).filter(
+  // The same plan `init` derives: one number for the steps, and the paths whose state decides whether
+  // the write would land over uncommitted work.
+  const plan = derivePlan({ ctx, policy, catalog, report }).filter(
     (item) => item.state === 'would-write',
-  ).length;
+  );
+  const writes = plan.length;
+  // A real run has no injected collector: `start` now asks git one question, so it needs the probe.
+  const probe = collector ?? createCollector();
+  const uncommitted = writes > 0 && (await hasUncommitted({ plan, ctx, collector: probe }));
 
   // The honesty line describes the preset this command recommends, not the repository's own policy:
   // S4's last step runs `scan --preset starter`, so that is the coverage the reader will get.
   const starter = resolvePolicy({ catalog, presetFromFlag: START_PRESET, failOn: 'none' });
 
-  const pending = pendingSteps({ repo: ctx.repo, writes });
+  const pending = pendingSteps({ repo: ctx.repo, writes, uncommitted });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
   stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending, migrate }));
   return 0;

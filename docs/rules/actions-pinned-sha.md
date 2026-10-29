@@ -37,7 +37,7 @@ version; the reference, not the comment, is what runs.
 Manual, with the exact shape printed:
 
 ```yaml
-uses: owner/repo@<sha> # vX.Y.Z
+uses: actions/checkout@<sha> # v4.1.7
 ```
 
 The tool does not resolve the SHA. Resolving it is `gh api repos/owner/repo/git/refs/tags/vX.Y.Z`,

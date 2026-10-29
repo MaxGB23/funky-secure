@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import {
   cpSync,
   mkdirSync,
@@ -103,7 +104,17 @@ function fakeCollector({ dir, inGit = true }) {
       if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return ok('main\n');
       if (args[0] === 'ls-files') return ok(tracked.map((path) => `${path}\0`).join(''));
       if (args[0] === 'check-ignore') return ok(ignoredFromGitignore(root, options.input));
-      if (args[0] === 'status') return ok('');
+      if (args[0] === 'status') {
+        // The working-tree state is the fixture's own: the double answers what real git would answer
+        // for the files the test placed, because a hard-coded "clean" would hide the case where the
+        // block cannot be written over the tree.
+        try {
+          const stdout = execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+          return ok(stdout);
+        } catch {
+          return refuse;
+        }
+      }
       return refuse;
     },
     pnpmVersion: async () => ({ ok: false, reason: 'not-on-path', installations: [] }),
@@ -167,7 +178,7 @@ function stepNumbers(text) {
  * @param {string} dir
  * @param {{ lockfile: string }} options the lockfile the generating manager wrote
  */
-function generatedBy(dir, { lockfile }) {
+function generatedBy(dir, { lockfile, committed = true }) {
   const manifest = {
     name: 'app',
     private: true,
@@ -178,9 +189,19 @@ function generatedBy(dir, { lockfile }) {
   mkdirSync(join(dir, 'app'), { recursive: true });
   writeFileSync(join(dir, 'app', 'page.jsx'), 'export default function Page() {\n  return null;\n}\n');
   writeFileSync(join(dir, lockfile), '');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  if (committed) {
+    execFileSync('git', ['add', '-A'], { cwd: dir });
+    execFileSync(
+      'git',
+      ['-c', 'user.email=82458865+MaxGB23@users.noreply.github.com', '-c', 'user.name=MaxGB23', 'commit', '-qm', 'generated'],
+      { cwd: dir },
+    );
+  }
 }
 
 const SCAN_STEP = 'funky-secure scan --preset starter';
+const BASELINE_COMMIT = 'chore: baseline before funky-secure';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
 test('an empty directory is five steps, numbered from one', async (t) => {
@@ -314,6 +335,35 @@ test('an npm-generated project installs once, and the gate exists before that in
   );
   assert.equal(stdout.includes(ADD_STEP), false, 'a migration is not the place to add a dependency');
   assert.equal(whyBlock(stdout).length, 3, 'why this order grows by one line, never two');
+});
+
+test('an uncommitted repository is told to commit before it is told to apply', async (t) => {
+  // Remediation conformance sweep, the worst of the three: the canonical first-run path could not be
+  // completed. `start` printed `init --apply` as step 1, and `init --apply` refuses to write over
+  // uncommitted changes — which is the state of every freshly generated project, where nothing has been
+  // committed yet. The sequence has to name the commit, or its first step cannot run.
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'pnpm-lock.yaml', committed: false });
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    `  1  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    `  3  ${SCAN_STEP}`,
+  ]);
+  assert.ok(
+    stdout.indexOf('git commit') < stdout.indexOf('init --apply'),
+    'the tree is committed before the block is written over it',
+  );
+});
+
+test('a committed repository is not told to commit', async (t) => {
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'pnpm-lock.yaml' });
+  const { stdout } = await start(dir);
+
+  assert.equal(stdout.includes('git commit'), false, 'a clean tree needs no commit step');
 });
 
 test('a pnpm-generated project is told neither to migrate nor to add', async (t) => {

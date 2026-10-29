@@ -39,7 +39,8 @@ locked and every runner resolves its own tree. Severity is `error` in both prese
 
 ## Remediation
 
-- `lockfile-untracked` — `manual`: `git add pnpm-lock.yaml`.
+- `lockfile-untracked` — `manual`: `git add pnpm-lock.yaml`, and `git add -f pnpm-lock.yaml` when an
+  ignore rule also matches it, because a plain `git add` cannot stage an ignored path.
 - `lockfile-ignored` — `manual`: `git check-ignore -v pnpm-lock.yaml` names the file, line and
   pattern of the ignore source; the fix is removing that rule, or re-adding the file explicitly.
 - `lockfile-missing` — `manual`: `pnpm install` resolves the manifest and writes the lockfile. It is

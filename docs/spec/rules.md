@@ -53,7 +53,10 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
 - **Detection:** `pnpm-lock.yaml` exists at the repo root; `git ls-files --error-unmatch` succeeds;
   `git check-ignore` does not match it. Outside git, only existence is checked and the finding says
   so. A lockfile present but not tracked is the failure mode that produces non-reproducible CI.
-- **Remediation:** `git add pnpm-lock.yaml` (manual).
+- **Remediation:** `git add pnpm-lock.yaml` (manual), and `git add -f pnpm-lock.yaml` when an ignore
+  rule also matches the untracked file: a plain `git add` exits 1 with "The following paths are ignored"
+  in exactly the state this rule reports most often. Once the file is tracked, a matching ignore rule is
+  reported on its own with `git check-ignore -v pnpm-lock.yaml` to find its source.
 - **Note:** the rule deliberately does not check the lockfile's `lockfileVersion` against the
   installed pnpm; that check belongs to pnpm itself on install, and duplicating it would create a
   second, staler source of truth (4.1).
@@ -188,10 +191,12 @@ deviation is recorded here and in section 9.1.
   local `./path` actions. Accept `owner/repo@<40 hex>`. Flag `@v1`/`@main`/`@<7 hex>`. Treat
   `docker://image:tag` as a finding and `docker://image@sha256:...` as a pass. A file the reader cannot
   parse yields `skip: unparseable-workflow` for that file.
-- **Remediation:** manual, with the exact shape printed:
-  `uses: owner/repo@<sha> # vX.Y.Z`, and a pointer to the rule doc explaining how to resolve the SHA
-  (`gh api repos/owner/repo/git/refs/tags/vX.Y.Z`) — the tool does not resolve it, because that is a
-  network call (4.9).
+- **Remediation:** manual, printed concretely from what the finding already knows — the action and the
+  ref that moves — as `uses: <action>@<sha> # <ref>` (`uses: actions/checkout@<sha> # v4.1.7`), or
+  `uses: docker://<image>@sha256:<64 hex> # <tag>` for a container tag. A generic `owner/repo`
+  placeholder makes the reader retype both facts, and `<sha>` alone does not say what precedes the
+  `@`. The tool still does not resolve the SHA, because that is a network call (4.9); the rule doc
+  explains how to (`gh api repos/owner/repo/git/refs/tags/v4.1.7`).
 - **Evidence:** `file:line`, the raw reference, the offending form.
 
 #### R9 — `no-bot-auto-merge` · friction 0 · sev `error`/`error` · fix `none`

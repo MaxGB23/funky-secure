@@ -65,13 +65,20 @@ export default {
     }
 
     if (tracked === false) {
+      // An untracked lockfile that an ignore rule also matches is the state this rule fires on most,
+      // and `git add` fails there with "The following paths are ignored" (measured: exit 1). The
+      // command has to run in the state the finding describes.
       return [
         finding(
           'fail',
           'lockfile-untracked',
-          `${LOCKFILE} is present but not tracked by git; CI resolves a different dependency tree on every install`,
+          ignored === true
+            ? `${LOCKFILE} is present but not tracked by git, and an ignore rule matches it; CI resolves a different dependency tree on every install`
+            : `${LOCKFILE} is present but not tracked by git; CI resolves a different dependency tree on every install`,
           evidence,
-          { kind: 'manual', command: 'git add pnpm-lock.yaml' },
+          ignored === true
+            ? { kind: 'manual', command: 'git add -f pnpm-lock.yaml' }
+            : { kind: 'manual', command: 'git add pnpm-lock.yaml' },
         ),
       ];
     }

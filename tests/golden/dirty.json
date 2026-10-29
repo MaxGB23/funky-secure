@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "tool": {
     "name": "funky-secure",
-    "version": "0.6.0"
+    "version": "0.6.1"
   },
   "scope": "all",
   "policy": {
@@ -144,7 +144,7 @@
       },
       "remediation": {
         "kind": "manual",
-        "command": "uses: owner/repo@<sha> # vX.Y.Z"
+        "command": "uses: actions/checkout@<sha> # v4"
       },
       "doc": "funky-secure explain actions-pinned-sha",
       "code": "unpinned-action"
