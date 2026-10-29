@@ -277,8 +277,10 @@ names an agent product.
 destination is never typed and never accepted as an argument: it is composed from a root and four fixed
 segments. Inside a worktree the root is the worktree root, so the file travels with the repository and
 is meant to be committed; outside one, or with `--user`, the root is the home directory and the file
-applies to every project on the machine. The command prints the destination it used and one line saying
-whether that copy travels with the repository or with the machine.
+applies to every project on the machine. The command reports in the narration voice of 10.3: a symbol, the fact, and the destination on one
+line, then one indented line saying whether that copy travels with the repository or with the machine.
+The symbols are the report's — `✓` for something done, `–` for nothing to do, `ℹ` for a decision that
+changed nothing — and no line repeats the command name as a prefix.
 
 The file carries the version it belongs to in its frontmatter, gated to equal the package version.
 **Bytes alone cannot answer the question**, because "different from what I ship" covers three

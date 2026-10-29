@@ -18,8 +18,12 @@ import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 
 import { UsageError } from '../lib/errors.js';
+import { SYMBOL } from '../lib/render-human.js';
 import { repoRoot } from '../lib/git.js';
 import { createCollector } from '../lib/probes.js';
+/** The report symbols, plus the tick a success needs and a finding never does. */
+const DONE = "✓";
+
 import {
   SHIPPED,
   destinationFor,
@@ -192,20 +196,25 @@ export async function run({
   const destination = destinationFor({ scope: user || root === null ? 'user' : 'project', root, home });
   const found = inspectInstallation({ destination, bytes, shippedVersion });
 
-  /** @param {string[]} lines */
-  const report = (lines) => {
-    for (const line of lines) stderr.write(`funky-secure skill: ${line}\n`);
+  /** Report one outcome: the symbol and the fact on the first line, the consequence under it. */
+  const report = (symbol, fact, detail) => {
+    stderr.write(`${symbol}  ${fact}
+`);
+    if (detail) stderr.write(`     ${detail}
+`);
     return 0;
   };
 
+  const suffix = shippedVersion === null ? '' : ` (${shippedVersion})`;
+
   if (found.state === 'identical') {
-    return report([`${found.display} already carries this exact version${shippedVersion ? ` (${shippedVersion})` : ''}`]);
+    return report(SYMBOL.skip, `Current  ·  ${found.display}${suffix}`, 'nothing to do: it already carries this exact version');
   }
 
   if (found.state === 'newer' && !force) {
     // A downgrade is not a routine repair: this binary has nothing better to offer than what is
     // installed, and only an explicit --force may take the newer copy away.
-    if (keep) return report([`kept ${found.display}, which is newer than this binary`]);
+    if (keep) return report(SYMBOL.info, `Kept  ·  ${found.display}`, 'it is newer than the version this binary ships');
     throw Object.assign(
       new Error(
         `refusing to replace ${found.display}: it is version ${found.installedVersion}, and this binary ships ${shippedVersion}`,
@@ -231,15 +240,16 @@ export async function run({
         { action: 'pass --force to replace it, or --keep to leave it as it is' },
       );
     }
-    if ((await answer()) !== true) return report([`kept ${found.display}`]);
+    if ((await answer()) !== true) return report(SYMBOL.info, `Kept  ·  ${found.display}`, 'the file was not changed');
   }
 
   writeInstallation(destination, bytes);
 
-  return report([
-    `installed ${destination.display}${shippedVersion ? ` (${shippedVersion})` : ''}`,
+  return report(
+    DONE,
+    `Installed  ·  ${destination.display}${suffix}`,
     destination.scope === 'project'
       ? 'commit it, so the repository carries the instructions its agents read'
       : 'it applies to every project on this machine',
-  ]);
+  );
 }

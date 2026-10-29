@@ -233,7 +233,7 @@ test('--install writes the project skill inside a repository, without a path arg
   const written = installedAt(join(root, '.agents', 'skills', 'funky-secure', 'SKILL.md'));
   assert.notEqual(written, null, 'nothing was written to the project destination');
   assert.equal(Buffer.compare(written, readFileSync(SHIPPED)), 0, 'the written file is not the shipped file');
-  assert.match(err, /installed \.agents\/skills\/funky-secure\/SKILL\.md/, 'the message does not say what it wrote');
+  assert.ok(err.startsWith('✓  Installed  ·  .agents/skills/funky-secure/SKILL.md'), 'the message does not say what it wrote');
   assert.match(err, /commit it/, 'the project install does not say the file travels with the repository');
   assert.equal(installedAt(join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md')), null, 'it also wrote the user file');
 });
@@ -248,7 +248,7 @@ test('--install outside a repository writes the user skill under the home direct
   const written = installedAt(join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md'));
   assert.notEqual(written, null, 'nothing was written to the user destination');
   assert.equal(Buffer.compare(written, readFileSync(SHIPPED)), 0, 'the written file is not the shipped file');
-  assert.match(err, /installed ~\/\.agents\/skills\/funky-secure\/SKILL\.md/, 'the message does not name the user destination');
+  assert.ok(err.startsWith('✓  Installed  ·  ~/.agents/skills/funky-secure/SKILL.md'), 'the message does not name the user destination');
   assert.equal(installedAt(join(cwd, '.agents', 'skills', 'funky-secure', 'SKILL.md')), null, 'it wrote into the working directory');
 });
 
@@ -336,7 +336,7 @@ test('--install --force downgrades on purpose, and --keep preserves the newer co
 
   const kept = await install(['skill', '--install', '--keep'], { cwd, home, stdin: { isTTY: false } });
   assert.equal(kept.code, 0, `--keep failed:\n${kept.err}`);
-  assert.match(kept.err, /newer than this binary/, 'the keep message does not say the copy is newer');
+  assert.match(kept.err, /newer than the version this binary ships/, 'the keep message does not say the copy is newer');
   assert.equal(readFileSync(path, 'utf8'), variant('9.0.0'), '--keep replaced the newer file');
 
   const forced = await install(['skill', '--install', '--force'], { cwd, home, stdin: { isTTY: false } });
@@ -367,7 +367,7 @@ test('--install --keep leaves a local edit as it is', async (t) => {
   const { code, err } = await install(['skill', '--install', '--keep'], { cwd, home, stdin: { isTTY: false } });
 
   assert.equal(code, 0);
-  assert.match(err, /kept ~\/\.agents\/skills\/funky-secure\/SKILL\.md/, 'the message does not say it kept the file');
+  assert.ok(err.startsWith('ℹ  Kept  ·  ~/.agents/skills/funky-secure/SKILL.md'), 'the message does not say it kept the file');
   assert.equal(readFileSync(path, 'utf8'), variant('0.4.0'), 'the installed file changed');
 });
 
@@ -381,7 +381,7 @@ test('--install asks before replacing, and the answer decides', async (t) => {
   const kept = await install(['skill', '--install'], { cwd, home, confirm: () => false });
   assert.equal(kept.code, 0);
   assert.equal(readFileSync(path, 'utf8'), variant('0.3.0'), 'a keep answer replaced the file anyway');
-  assert.match(kept.err, /kept /, 'a keep answer did not say the file was kept');
+  assert.match(kept.err, /^ℹ {2}Kept/m, 'a keep answer did not say the file was kept');
 
   const replaced = await install(['skill', '--install'], { cwd, home, confirm: () => true });
   assert.equal(replaced.code, 0);
@@ -410,7 +410,7 @@ test('--install reports the version it wrote', async (t) => {
 
   assert.equal(code, 0);
   const version = /^version:\s*(\S+)/m.exec(readFileSync(SHIPPED, 'utf8'))[1];
-  assert.match(err, new RegExp(`installed .* \\(${version.replaceAll('.', '\\.')}\\)`), 'the message does not name the version it wrote');
+  assert.ok(err.includes(` (${version})`), 'the message does not name the version it wrote');
 });
 
 test('--install refuses a symbolic link destination instead of writing through it', async (t) => {

@@ -514,8 +514,17 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-funky-secure skill: installed .agents/skills/funky-secure/SKILL.md (0.4.0)
-funky-secure skill: commit it, so the repository carries the instructions its agents read
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.4.0)
+     commit it, so the repository carries the instructions its agents read
+```
+
+Nothing to do is a different line from something done, and it uses the symbol the report already uses
+for "not run":
+
+```text
+$ funky-secure skill --install
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.4.0)
+     nothing to do: it already carries this exact version
 ```
 
 The file declares its version, so an install compares versions before bytes. That distinction is the
@@ -539,8 +548,8 @@ funky-secure: install the newer funky-secure to keep that version, or pass --for
 reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.4.0
 ```
 
-With a terminal the command asks instead. The menu is numbered because a number is unambiguous on
-any keyboard, each line states what the answer does, and the default is visible and safe:
+With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
+keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
 funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.4.0
@@ -552,19 +561,18 @@ funky-secure skill: replacing it discards whatever is there now
 funky-secure skill: choose 1 or 2 [1]:
 ```
 
-The answer is forgiving on purpose: `1`, `k` and `keep` keep; `2`, `o`, `overwrite`, `replace` and `yes`
-replace; an empty answer is the default, which keeps. Anything else is not guessed at — it is asked
-again, up to three times, and then the file is kept.
+The answer is forgiving on purpose: `1`, `k` and `keep` keep; `2`, `o`, `overwrite`, `replace`, `y` and
+`yes` replace; an empty answer is the default, which keeps. Anything else is not guessed at — it is
+asked again, up to three times, and then the file is kept.
 
-An identical file is not rewritten:
+Declining is reported, never silent:
 
 ```text
-$ funky-secure skill --install
-funky-secure skill: .agents/skills/funky-secure/SKILL.md already carries this exact version (0.4.0)
+$ funky-secure skill --install --keep
+ℹ  Kept  ·  .agents/skills/funky-secure/SKILL.md
+     the file was not changed
 ```
 
 `--force` replaces, `--keep` leaves it as it is, and `--user` chooses the home directory from inside a
 repository. Any of the three without `--install` is a usage error, and so is `--force` with `--keep`.
 The write is atomic and refuses a symbolic link destination, so a link is never written through.
-
-

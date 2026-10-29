@@ -19,7 +19,7 @@
 import { severityRank, TARGET_ORDER } from './report.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
-const SYMBOL = { error: '✖', warn: '⚠', info: 'ℹ', skip: '–' };
+export const SYMBOL = { error: '✖', warn: '⚠', info: 'ℹ', skip: '–' };
 const ANSI = {
   heading: '[1m',
   error: '\u001b[31m',

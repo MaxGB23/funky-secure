@@ -81,6 +81,22 @@ and `policy.failOn` records `none`.
 
 ### 10.3 Human output
 
+**Three voices, three jobs.** A command either produces a document about a subject, narrates what it
+just did, or fails — and each is read differently, so each is drawn differently:
+
+| Voice | Who | Shape |
+|---|---|---|
+| document | `scan` and `init` | header, findings, separator, `next` — described in this section |
+| narration | `start`, `skill`, and the steps of `migrate` | one symbol, the fact, the indented consequence; no separator, no verdict, no repeated command prefix |
+| failure | any command, exit `2` | `funky-secure: <action>` then `reason: <diagnosis>`, never decorated, because a script greps it |
+
+A narration line borrows the symbols and the five-space indent of a finding and nothing else. It is not
+a finding dressed up: `✓` marks something done, `–` something with nothing to do, `ℹ` a decision that
+changed nothing, and a report never uses `✓` because a report states facts rather than accomplishments.
+
+### 10.3 (original text follows)
+
+
 One header block, then one block per target, then the `next` block below. The header is the title
 line, the `provenance` line, `summary`, `verdict`, then a separator of 90 `─`. `summary` and
 `verdict` keep the names and the nine-character gutter they have always had; only their position
