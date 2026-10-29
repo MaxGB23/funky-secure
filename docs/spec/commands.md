@@ -160,14 +160,16 @@ is a literal `main`/`master` match, stated as a fallback in the refusal message.
 ### 11.4 `explain`
 
 ```
-funky-secure explain <rule-id>
+funky-secure explain [<rule-id>]
 funky-secure explain --list [--format json]
 ```
 
 Prints, for one rule: id, title, friction class, severity per preset, the question it answers, the
 detection in prose, the evidence shape, the remediation, what it deliberately does **not** do, and
 the path of its documentation. An unknown id is exit `2`: a mistyped rule id is a configuration bug,
-not a user error to be swallowed.
+not a user error to be swallowed. A missing rule id is not an error: with no id the command prints the
+same catalog `--list` prints, byte for byte, and exits `0`, and `--list` stays as the explicit
+synonym for that output.
 
 ### 11.5 Write-target validation contract (applies to `apply` in v0.2 too)
 
@@ -278,16 +280,32 @@ is meant to be committed; outside one, or with `--user`, the root is the home di
 applies to every project on the machine. The command prints the destination it used and one line saying
 whether that copy travels with the repository or with the machine.
 
-An install is decided in this order, and the order is the contract:
+The file carries the version it belongs to in its frontmatter, gated to equal the package version.
+**Bytes alone cannot answer the question**, because "different from what I ship" covers three
+situations that are three different decisions: an older copy waiting for an upgrade, a copy newer than
+this binary, and the same version edited by hand. So the comparison is version first, bytes second:
 
-| Installed file | Answer |
-|---|---|
-| absent | write, report `installed` |
-| byte-identical | write nothing, report that it already carries this exact version |
-| differs, `--keep` | write nothing, report that it kept it |
-| differs, `--force` | replace, report `installed` |
-| differs, no flag, stdin is a terminal | ask; an explicit overwrite replaces, any other answer keeps |
-| differs, no flag, stdin is not a terminal | exit `2`: nobody is there to answer, and guessing is not an option |
+| Installed file | State | Answer |
+|---|---|---|
+| absent | — | write, report `installed (version)` |
+| byte-identical | — | write nothing, report that it already carries this exact version |
+| no version line | `unversioned` | ask: where it came from cannot be told |
+| same version, different bytes | `edited` | ask: a human changed it, and replacing discards that |
+| older version | `older` | ask: replacing is the upgrade |
+| newer version | `newer` | **refused** unless `--force`; installing the newer funky-secure is the other answer |
+| `--keep` in any differing state | — | write nothing, report that it kept it |
+| `--force` in any differing state | — | replace, report `installed (version)` |
+| differing, no flag, stdin is a terminal | — | ask; an explicit overwrite replaces, any other answer keeps |
+| differing, no flag, stdin is not a terminal | — | exit `2`: nobody is there to answer, and guessing is not an option |
+
+A downgrade is never routine: this binary has nothing better than what is installed, so taking the
+newer copy away requires `--force` and `--keep` is accepted as an answer there too.
+
+With a terminal the question is a numbered menu: each option states what it does, the version it
+would install, and the default is `1`, which keeps — a decision that destroys something is never the
+answer to an empty line. The answer is read tolerantly (`1`, `k` and `keep` keep; `2`, `o`,
+`overwrite`, `replace`, `y` and `yes` replace), and a line the menu
+does not offer is asked again up to three times before the file is kept.
 
 The question states that replacing the file discards whatever was changed in it, and it is asked on
 stderr because stdout is never used for anything but the file.

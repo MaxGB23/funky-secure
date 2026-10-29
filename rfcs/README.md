@@ -12,6 +12,7 @@ document that changes without a new record.
 | [0003](0003-first-ten-minutes/rfc.md) | The first ten minutes | `accepted` | — | — | [`docs/spec/policy.md`](../docs/spec/policy.md) §9.1, [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0004](0004-agent-skill/rfc.md) | An agent skill | `accepted` | — | — | [`skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md) |
 | [0005](0005-skill-install/rfc.md) | Installing the skill | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.5 point 7, §11.8 |
+| [0006](0006-human-defaults/rfc.md) | Human defaults | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.4 |
 
 ## Layout
 
@@ -26,6 +27,8 @@ rfcs/
   0003-first-ten-minutes/
   0004-agent-skill/
   0005-skill-install/
+    rfc.md                     the record
+  0006-human-defaults/
     rfc.md                     the record
 ```
 

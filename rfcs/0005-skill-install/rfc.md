@@ -93,3 +93,60 @@ satisfied or a guard that silently allows what it was written to forbid.
   any other answer, or by no flag with no terminal (exit `2`).
 - A symbolic link destination is refused, and a failed write leaves no temporary file.
 - `--user`, `--force` and `--keep` without `--install` are usage errors, as is `--force` with `--keep`.
+
+## Amendment — 2026-10-29 (version before bytes)
+
+The first revision decided a replacement with one question: are the installed bytes the shipped bytes?
+That question cannot tell an old copy from a hand-edited one, and the three situations it collapses are
+three different decisions. An older copy is the upgrade the install exists for. A copy newer than this
+binary is a downgrade, and this binary has nothing better to offer than what is already there. The
+same version with different bytes is a local edit, which a routine command must not discard.
+
+So `skills/funky-secure/SKILL.md` declares `version:` in its frontmatter, and `tests/drift.test.js`
+fails when that value and the `version` of `package.json` disagree. The declaration lives in the file
+and not only in the manifest because the file is the artifact: a copy that travelled by hand still
+says which version it is, and a copy that declares nothing says exactly that.
+
+The comparison is version first, bytes second. `readSkillVersion` reads the version out of the bytes,
+`compareVersions` orders two dotted versions numerically and ignores a prerelease suffix, and
+`inspectInstallation` in `src/lib/skill-install.js` is a read that changes nothing and returns one of
+six states:
+
+| Installed file | State |
+|---|---|
+| nothing there | `absent` |
+| the shipped bytes, exactly | `identical` |
+| no frontmatter, or a frontmatter with no version line | `unversioned` |
+| the version this binary ships, different bytes | `edited` |
+| an earlier version | `older` |
+| a later version | `newer` |
+
+What each state answers:
+
+- `absent` is written, and the report is `installed (version)`.
+- `identical` is not rewritten, and the report names the version both copies share.
+- `older`, `edited` and `unversioned` ask. What a replacement discards is different in each case —
+  an edited copy is work a human did, an older copy is the upgrade the command exists for, and an
+  unversioned copy cannot be told apart from either — so the tool states the case it found before it
+  asks.
+- `newer` is refused unless `--force`, with `--keep` accepted as the answer that leaves it alone. A
+  downgrade is not a routine repair: the newer copy came from a newer funky-secure, so the answer is
+  to install the newer one, and taking the copy away is a decision a flag has to make.
+- Any differing state with no terminal and neither flag is exit `2`, with the action naming `--force`
+  and `--keep`.
+
+The message states which case it is asking about, and the captured runs read:
+
+```text
+funky-secure skill: ~/.agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.4.0
+funky-secure skill: ~/.agents/skills/funky-secure/SKILL.md carries local changes on version 0.4.0
+funky-secure skill: ~/.agents/skills/funky-secure/SKILL.md carries no version line, so where it came from cannot be told
+```
+
+A refused downgrade says so in its own words, because the answer is not a question:
+`refusing to replace …: it is version 9.0.0, and this binary ships 0.4.0`, with the action naming
+`--force` for the downgrade and the newer funky-secure for the other answer.
+
+The decision of this record is unchanged: one write outside the repository, asked for by name, bounded
+by a constant target, and never destructive on its own initiative. What changed is that the tool now
+knows what it would be destroying before it asks.
