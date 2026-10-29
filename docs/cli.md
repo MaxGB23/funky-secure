@@ -481,7 +481,11 @@ Prints the agent skill this package ships, `skills/funky-secure/SKILL.md`, byte 
 no header, no wrapper, no trailing note — so the redirect is the installation:
 
 ```sh
+# this project, committed with it
 npx funky-secure skill > .agents/skills/funky-secure/SKILL.md
+
+# or every project
+npx funky-secure skill > ~/.agents/skills/funky-secure/SKILL.md
 ```
 
 stderr carries the two lines that say where to put it, and nothing else:
