@@ -24,6 +24,9 @@ Where things live in this repository. Two axes, and each document belongs to exa
 
 ## Working rules
 
+- **A recommendation is not authorization.** "What do you recommend", a review, a comparison or a
+  problem statement is read-only: answer, then wait. Implement only when the change itself was asked
+  for.
 - A behaviour change starts in `docs/spec/`, in its own pull request. Behaviour the record never
   decided starts with the next numbered RFC under `rfcs/`, opened as `draft`.
 - The append-only Log of an `odd/tasks/` document is evidence: append, never rewrite.
