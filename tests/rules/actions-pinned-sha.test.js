@@ -105,9 +105,16 @@ test('fails a tag, a branch and a short SHA, each with its offending form', () =
     [7, 8, 9],
   );
   assert.equal(findings[0].path, '.github/workflows/ci.yml');
+  // Remediation conformance sweep: the template named "owner/repo" while the finding already knew
+  // which action and which ref it was talking about. A placeholder that discards the two facts in hand
+  // makes the reader copy them by hand, and <sha> alone does not say what to put before the @.
   assert.deepEqual(findings[0].remediation, {
     kind: 'manual',
-    command: 'uses: owner/repo@<sha> # vX.Y.Z',
+    command: 'uses: actions/checkout@<sha> # v4',
+  });
+  assert.deepEqual(findings[1].remediation, {
+    kind: 'manual',
+    command: 'uses: pnpm/action-setup@<sha> # main',
   });
 });
 
@@ -165,6 +172,11 @@ test('fails a mutable docker tag', () => {
   assert.equal(findings[0].code, 'mutable-docker-tag');
   assert.deepEqual(findings[0].evidence, { uses: 'docker://alpine:3.20', form: 'docker-tag' });
   assert.equal(findings[0].line, 7);
+  // The image keeps its scheme and its tag: a template that loses either cannot be pasted anywhere.
+  assert.deepEqual(findings[0].remediation, {
+    kind: 'manual',
+    command: 'uses: docker://alpine@sha256:<64 hex> # 3.20',
+  });
 });
 
 test('passes a docker digest and a local action', () => {

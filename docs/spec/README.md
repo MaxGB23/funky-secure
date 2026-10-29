@@ -73,6 +73,9 @@ number keeps resolving.
 | 10 | [`0008`](../../rfcs/0008-refusal-honesty/rfc.md) | 10.4: a fourth exit code, `3`, for a refusal — understood, refused, nothing written — so a policy decision never shares the code of a question the tool could not answer |
 | 10 | [`0008`](../../rfcs/0008-refusal-honesty/rfc.md) | 10.3: the verdict line carries the number of rules it did not verify, and stays byte-identical when that number is zero |
 | 11 | [`0009`](../../rfcs/0009-gate-before-resolve/rfc.md) | 11.7: the steps of `start` — the block first, then one install under it, then the removal, because `migrate --apply` needs the lockfile the install writes |
+| 8 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 8.2 R2: `git add -f` when an ignore rule also matches the untracked lockfile, because a plain `git add` cannot stage an ignored path |
+| 8 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 8.2 R8: the remediation is printed from the action and the ref the finding carries, not from a generic `owner/repo` template |
+| 11 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 11.7: the commit step, because `init --apply` refuses to write over an uncommitted tree |
 
 ## Changing the contract
 

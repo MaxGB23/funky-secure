@@ -13,8 +13,23 @@ const FULL_SHA = /^[0-9a-fA-F]{40}$/;
 const SHORT_SHA = /^[0-9a-fA-F]{7,39}$/;
 const DOCKER_DIGEST = /@sha256:[0-9a-fA-F]{64}$/;
 
-/** The exact shape the remediation prints; the tool never resolves the SHA (RFC 4.9). */
-const REMEDIATION = { kind: 'manual', command: 'uses: owner/repo@<sha> # vX.Y.Z' };
+/**
+ * The shape the remediation prints, built from what the finding already knows: the action and the ref
+ * that moves. The tool never resolves the SHA (RFC 4.9) — that would be a network call — but a template
+ * that says `owner/repo` makes the reader retype both facts, and <sha> alone does not say what goes
+ * before the `@`. Measured in a field report: the reader had to copy the action name out of the
+ * message by hand for every finding.
+ *
+ * @param {string} target the action (or image) the reference names
+ * @param {string} ref the tag or branch that moves, empty when the reference names none
+ * @returns {{ kind: string, command: string }}
+ */
+function remediationFor(target, ref) {
+  return {
+    kind: 'manual',
+    command: ref === '' ? `uses: ${target}@<sha>` : `uses: ${target}@<sha> # ${ref}`,
+  };
+}
 
 /**
  * @param {string} code
@@ -63,7 +78,10 @@ function unpinned(path, step) {
       line: step.line,
       message: `${uses} is a mutable container tag; reference the digest instead (docker://image@sha256:<64 hex>)`,
       evidence: { uses: raw, form: 'docker-tag' },
-      remediation: REMEDIATION,
+      remediation: {
+        kind: 'manual',
+        command: `uses: ${uses.slice(0, uses.lastIndexOf(':'))}@sha256:<64 hex> # ${uses.slice(uses.lastIndexOf(':') + 1)}`,
+      },
     };
   }
 
@@ -80,7 +98,7 @@ function unpinned(path, step) {
     line: step.line,
     message: `${uses} ${what}; pin the 40-character commit SHA so the workflow cannot change under you`,
     evidence: { uses: raw, form },
-    remediation: REMEDIATION,
+    remediation: remediationFor(at === -1 ? uses : uses.slice(0, at), ref),
   };
 }
 

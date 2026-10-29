@@ -94,6 +94,21 @@ test('a present but untracked lockfile fails with lockfile-untracked', () => {
   assert.deepEqual(finding.remediation, { kind: 'manual', command: 'git add pnpm-lock.yaml' });
 });
 
+test('an untracked lockfile that is also ignored is told to force the add, not to add', () => {
+  // Remediation conformance sweep: for a lockfile that is both untracked and ignored — the state of a
+  // repository that has just added "pnpm-lock.yaml" to its ignore file, which is the reason this rule
+  // fires hardest — the printed `git add pnpm-lock.yaml` fails:
+  //   "The following paths are ignored by one of your .gitignore files"
+  // and exits 1. The command has to be the one that runs in that state.
+  const [finding] = rule.detect(context({ tracked: false, ignored: true }));
+
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'lockfile-untracked');
+  assert.match(finding.message, /ignore rule matches it/, 'the message names the second condition');
+  assert.deepEqual(finding.evidence, { path: LOCKFILE, present: true, tracked: false, ignored: true });
+  assert.deepEqual(finding.remediation, { kind: 'manual', command: 'git add -f pnpm-lock.yaml' });
+});
+
 test('a present, tracked but ignored lockfile fails with lockfile-ignored', () => {
   const [finding] = rule.detect(context({ ignored: true }));
 
