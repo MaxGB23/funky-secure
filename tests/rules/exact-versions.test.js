@@ -150,10 +150,10 @@ importers:
   assert.deepEqual(
     floats.map((finding) => finding.remediation),
     [
-      { kind: 'manual', command: "pnpm pkg set 'dependencies.left-pad=1.3.0' && pnpm install" },
+      { kind: 'manual', command: `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install` },
       {
         kind: 'manual',
-        command: "pnpm pkg set 'devDependencies.@scope/tool=2.0.1' && pnpm install",
+        command: `pnpm pkg set 'devDependencies["@scope/tool"]=2.0.1' && pnpm install`,
       },
     ],
   );
@@ -161,6 +161,44 @@ importers:
     floats.map((finding) => finding.remediation.command.includes('--save-exact')),
     [false, false],
     'the measured no-op command is never printed',
+  );
+});
+
+test('the pnpm pkg path is bracketed, because a dot path cannot carry a scoped name', () => {
+  // Measured on pnpm 12.3.4: `pnpm pkg set 'devDependencies.@types/node=20.19.43'` exits non-zero with
+  // ERR_PNPM_PKG_INVALID_PROPERTY_PATH ("Unexpected token \"@\" in property path"), while
+  // `pnpm pkg set 'devDependencies["@types/node"]=20.19.43'` writes the exact version. Most of a modern
+  // dependency set is scoped, so the dot form was failing on the common case. The bracket form is used
+  // for unscoped names too: one form, one thing to remember.
+  const text = `{
+  "devDependencies": {
+    "@types/node": "^20.19.43"
+  }
+}`;
+  const lockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+`;
+  const [finding] = rule
+    .detect(
+      ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(
+    finding.remediation.command,
+    `pnpm pkg set 'devDependencies["@types/node"]=20.19.43' && pnpm install`,
+  );
+  assert.equal(
+    finding.remediation.command.includes('devDependencies.@'),
+    false,
+    'the dot form never reaches a scoped name',
   );
 });
 
@@ -462,7 +500,7 @@ importers:
 
   assert.equal(
     finding.remediation.command,
-    `pnpm pkg set 'dependencies.private-tarball=https://***@example.com/repo.tgz' && pnpm install`,
+    `pnpm pkg set 'dependencies["private-tarball"]=https://***@example.com/repo.tgz' && pnpm install`,
   );
   assert.ok(!JSON.stringify(finding).includes('ghp_secret'), 'no credential reaches the report');
 });

@@ -129,12 +129,17 @@ deviation is recorded here and in section 9.1.
 - **Severity:** `warn` in `baseline`, `error` in `strict` — the user's decision (Appendix A). A
   repository can also split it: `"exact-versions": { "dependencies": "error", "devDependencies": "warn" }`
   is **not** supported in v0.1; it is a v2 extension.
-- **Remediation:** `pnpm add --save-exact <pkg>@<version>` per package, which works whatever the
-  configuration surfaces are, or `pnpm config set save-exact true --location=project`, which writes
-  `saveExact: true` into `pnpm-workspace.yaml` — project config in pnpm 12 — and not into a project
-  `.npmrc`, which pnpm ignores for this class of setting (E8) — plus a re-add of the affected
-  packages (manual). No auto fix in v0.1: rewriting a `package.json` range without re-resolving is
-  how you desync a lockfile.
+- **Remediation:** `pnpm pkg set '<section>["<name>"]=<resolved version>' && pnpm install`, written one
+  command per finding, with the version the lockfile records (S4). The property path is **bracketed**:
+  `pnpm pkg set 'devDependencies.@types/node=1'` fails on pnpm 12.3.4 with
+  `ERR_PNPM_PKG_INVALID_PROPERTY_PATH`, because a dot path cannot carry an `@`, and scoped names are
+  most of a modern dependency set; the bracket form works unchanged for an unscoped name. `pnpm add
+  --save-exact <pkg>@<version>` is not the remediation: it exits 0 and keeps the declared range on
+  pnpm 12.3.4 (measured, I-20). The configuration surface is `pnpm config set save-exact true
+  --location=project`, which writes `saveExact: true` into `pnpm-workspace.yaml` — project config in
+  pnpm 12 — and not into a project `.npmrc`, which pnpm ignores for this class of setting (E8), and
+  it governs only the packages added after it. No auto fix in v0.1: rewriting a `package.json` range
+  without re-resolving is how you desync a lockfile.
 - **Evidence:** `file:line` of each specifier, the range, the resolved version.
 
 #### R6 — `env-not-tracked` · friction 0 · sev `error`/`error` · fix `none`

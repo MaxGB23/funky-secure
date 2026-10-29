@@ -66,6 +66,20 @@ test('an inherited 1440-minute default is non-strict and fails quarantine-not-st
   assert.deepEqual(finding.remediation, { kind: 'auto', command: 'funky-secure init --apply' });
 });
 
+test('the manual route names the file the value lands in, so it cannot read as an .npmrc edit', () => {
+  // Measured on pnpm 12.3.4: `pnpm config set minimum-release-age-strict true --location=project`
+  // writes pnpm-workspace.yaml and leaves no .npmrc behind. The specification already said so, and the
+  // message did not, which is how a reader concludes that the remediation writes the file
+  // sensitive-ignored requires them to ignore.
+  assert.match(rule.remediation, /pnpm-workspace\.yaml/);
+  assert.doesNotMatch(
+    rule.remediation,
+    /--location=project\./,
+    'the location flag is followed by where it lands, never by a full stop',
+  );
+  assert.match(rule.remediation, /\.npmrc/);
+});
+
 test('a configured 4320-minute gate passes the strict preset floor', () => {
   const policy = resolvePolicy({ catalog: [rule], presetFromFlag: 'strict', major: 12 });
   const [finding] = rule.detect(ctx({ minimumReleaseAge: 4320 }), { policy });

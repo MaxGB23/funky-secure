@@ -161,7 +161,7 @@ the contract: commands, flags and rule ids, generated from the same table the pa
 | `lockfile-committed` | no `pnpm-lock.yaml` in the repository, or it is ignored | `pnpm install`, then commit the lockfile |
 | `foreign-lockfile` | another manager's lockfile still resolves a second dependency tree | `funky-secure migrate --apply` |
 | `quarantine` | new releases are auto-approved instead of waiting the policy age | `funky-secure init --apply` writes the gate |
-| `exact-versions` | a dependency uses a range, so an install can pick a different version | `pnpm pkg set '<section>.<name>=<version>' && pnpm install` |
+| `exact-versions` | a dependency uses a range, so an install can pick a different version | `pnpm pkg set '<section>["<name>"]=<version>' && pnpm install` |
 | `env-not-tracked` | an environment file is committed | `git rm --cached .env` — and rotate what it contained |
 | `sensitive-ignored` | `.env`, keys or `.npmrc` are not covered by `.gitignore` | `funky-secure init --apply` appends the block; `git rm --cached` anything already tracked |
 | `actions-pinned-sha` | a workflow uses `owner/repo@v4`, so the code can change under you | replace the tag with the 40-character commit SHA and a `# vX.Y.Z` comment |

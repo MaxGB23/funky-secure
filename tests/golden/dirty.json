@@ -124,7 +124,7 @@
       },
       "remediation": {
         "kind": "manual",
-        "command": "pnpm pkg set 'dependencies.left-pad=1.3.0' && pnpm install"
+        "command": "pnpm pkg set 'dependencies[\"left-pad\"]=1.3.0' && pnpm install"
       },
       "doc": "funky-secure explain exact-versions",
       "code": "floating-range"
