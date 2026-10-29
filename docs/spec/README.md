@@ -48,6 +48,8 @@ explains it.
 
 ## Amendments
 
+Where a change belongs, as opposed to which section carries what, is the [documentation map](../README.md).
+
 A section leaves the verbatim comparison the moment a later record replaces its contract: the record
 stays frozen, and this directory becomes the authority for the new text. One section may be amended
 more than once, by more than one record, so a row is an amendment and not a section: the rule the

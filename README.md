@@ -131,6 +131,7 @@ migrated, never required.
 - [Architecture](docs/architecture.md) — the four layers and the invariants behind the guarantees.
 - [Spec](docs/spec/README.md) — the normative contract: targets, rules, report, commands, exit codes.
 - [Agent skill](skills/README.md) — the instructions an agent loads before touching a repository. The binary prints it, so any runtime can be given it with `npx funky-secure skill > .agents/skills/funky-secure/SKILL.md`.
+- [Documentation map](docs/README.md) — where a change belongs.
 - [Decisions](docs/decisions.md) — the decision log, and the [RFC record](rfcs/README.md) it came from.
 
 ## 🛠️ Development
