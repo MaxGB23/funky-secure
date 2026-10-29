@@ -499,7 +499,11 @@ test('the question shows what each answer does, with keep as the visible default
     shippedVersion: SHIPPED_VERSION,
   });
 
-  assert.match(lines[0], /carries local changes on version 0\.5\.0/, 'the first line does not say what happened');
+  assert.match(
+    lines[0],
+    new RegExp(`carries local changes on version ${SHIPPED_VERSION.replaceAll('.', '\\.')}`),
+    'the first line does not say what happened',
+  );
   assert.match(lines[1], /discards whatever is there now/, 'the second line does not say what replacing costs');
   assert.ok(lines.includes('  1  keep it as it is, and change nothing\n'), 'the keep option is not offered in words');
   assert.ok(lines.includes(`  2  replace it with version ${SHIPPED_VERSION}\n`), 'the replace option does not name the version it installs');
