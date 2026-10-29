@@ -83,3 +83,29 @@ mechanism, which read a directory. The shipped tarball is what makes that fallba
 canonical path is `node_modules/funky-secure/skills/funky-secure/SKILL.md`.
 
 The decision itself is unchanged: judgement in the skill, surface in the binary.
+
+## Amendment — 2026-10-28 (distribution)
+
+The previous amendment made `pi install npm:funky-secure` the documented install, which tied the skill
+to one runtime: funky-secure is an ordinary npm CLI, not an agent extension, and npm has no
+convention for installing a skill. The alternative — a `postinstall` that wrote into a home directory
+— is the side effect this tool audits other packages for, and it is refused for the same reason.
+
+So the binary becomes the distribution channel. `funky-secure skill` prints
+`skills/funky-secure/SKILL.md` on stdout byte for byte, so `funky-secure skill >
+.agents/skills/funky-secure/SKILL.md` installs it with no runtime, no manifest and no install step;
+stderr carries two lines naming the project-local and the user-level destination, and no agent
+product. The command reads nothing about the repository and resolves the file against the installed
+module, so it answers the same bytes in any directory, repository or not. Its contract is spec 11.8.
+
+The tarball keeps the file, so copying stays possible: the installed
+`node_modules/funky-secure/skills/funky-secure/SKILL.md` is the source to copy from for a runtime that
+would rather read a path than run a redirect.
+
+The `pi` manifest stays, and the `pi-package` keyword is removed. The manifest is inert metadata for
+npm and merely lets one runtime find the directory it already reads; the keyword was gallery metadata
+that framed an ordinary CLI as an agent extension, and the documented path is the binary. Neither is
+required by the front door.
+
+The decision itself is unchanged: judgement in the skill, surface in the binary.
+

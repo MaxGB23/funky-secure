@@ -1,5 +1,5 @@
 /**
- * The command line: one argv parser, five commands, one exit-code contract (RFC 10.4, 11, 13).
+ * The command line: one argv parser, six commands, one exit-code contract (RFC 10.4, 11, 13).
  *
  * Nothing here reads the repository or runs a probe. `--help` renders the static contract from
  * `COMMANDS`, `FLAGS` and the catalog, so two machines always see the same text (13.3).
@@ -16,6 +16,7 @@ import { run as explain } from './commands/explain.js';
 import { run as init } from './commands/init.js';
 import { run as migrate } from './commands/migrate.js';
 import { run as scan } from './commands/scan.js';
+import { run as skill } from './commands/skill.js';
 import { run as start } from './commands/start.js';
 import { catalog as defaultCatalog } from './rules/index.js';
 
@@ -26,6 +27,7 @@ export const COMMANDS = Object.freeze([
   { name: 'init', summary: 'Print the write plan; --apply performs it.' },
   { name: 'migrate', summary: 'Print the five-step plan for leaving npm or yarn; --apply performs step 4.' },
   { name: 'explain', summary: 'Explain one rule in depth, or list the catalog with --list.' },
+  { name: 'skill', summary: 'Print the agent skill this package ships, on stdout, byte for byte.' },
 ]);
 
 /**
@@ -33,7 +35,12 @@ export const COMMANDS = Object.freeze([
  * is a usage error, never a silently ignored argument.
  */
 export const FLAGS = Object.freeze([
-  { name: '--help', key: 'help', commands: ['start', 'scan', 'init', 'migrate', 'explain'], boolean: true },
+  {
+    name: '--help',
+    key: 'help',
+    commands: ['start', 'scan', 'init', 'migrate', 'explain', 'skill'],
+    boolean: true,
+  },
   { name: '--scope', key: 'scope', commands: ['scan'], values: ['auto', 'repo', 'machine', 'all'] },
   { name: '--preset', key: 'preset', commands: ['scan', 'init'], values: ['baseline', 'strict', 'starter'] },
   {
@@ -104,7 +111,7 @@ function exitMessage(error) {
   return { action: INPUT_ACTION, reason };
 }
 
-const HANDLERS = { start, scan, init, migrate, explain };
+const HANDLERS = { start, scan, init, migrate, explain, skill };
 
 function defaultsFor(command) {
   const options = {};
@@ -303,7 +310,7 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
  * and no stack trace is ever written to stdout.
  *
  * @param {string[]} argv
- * @param {{ cwd?: string, env?: object, stdout?: object, stderr?: object, collector?: object, catalog?: Array<object> }} [io]
+ * @param {{ cwd?: string, env?: object, stdout?: object, stderr?: object, collector?: object, catalog?: Array<object>, skillPath?: string }} [io]
  * @returns {Promise<number>} exit code
  */
 export async function run(argv, io = {}) {
@@ -329,6 +336,7 @@ export async function run(argv, io = {}) {
       catalog,
       positionals,
       collector: io.collector,
+      skillPath: io.skillPath,
     });
   } catch (error) {
     const { action, reason } = exitMessage(error);

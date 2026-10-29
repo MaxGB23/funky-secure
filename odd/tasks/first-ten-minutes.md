@@ -86,3 +86,32 @@ stays the regression case. Amends S4 and S5; S1-S3 and S6-S9 stand.
   active set and the untouched `baseline`/`strict`, `tests/start.test.js` asserts both framework
   shapes end to end through the real CLI. Recorded in the RFC as `## Amendment — 2026-10-28`, because
   that record is still `accepted` and its branch is open.
+
+L11 (decision and amendment, 2026-10-28): the skill was distributed through `pi install
+npm:funky-secure`, which made one agent runtime the way to get it. funky-secure is an ordinary npm
+CLI, npm has no convention for installing a skill, and a `postinstall` writing into a home directory
+is the side effect this tool audits other packages for. The binary is the channel instead:
+`funky-secure skill` prints `skills/funky-secure/SKILL.md` on stdout byte for byte, so a redirect
+installs it for any runtime that reads a directory, and stderr carries two lines naming the
+project-local `.agents/skills/funky-secure/` and user-level `~/.agents/skills/funky-secure/`
+destinations and no agent product. The command is read-only, takes `--help` only, resolves the file
+against the installed module rather than `process.cwd()`, collects no repository fact, spawns no probe,
+and exits `2` with the usual two lines and an empty stdout when the shipped file cannot be read.
+
+- `package.json` drops the `pi-package` keyword, which was gallery metadata framing the package as an
+  agent extension, and keeps `"pi": { "skills": ["skills"] }`, which is inert for npm and lets Pi read
+  the directory it already reads. It is not the documented path.
+- Spec 11.8 is the new contract, and it states that record 0004 amends it. The amendment row in
+  `docs/spec/README.md` is not added here: that file is outside this change's surfaces, so the row
+  stays for the parent to add. `docs/spec/README.md` maps record sections, and 11.8 is a subsection of
+  section 11, which the table already lists as amended by records 0002 and 0003.
+- `skills/README.md`, `docs/cli.md`, `docs/architecture.md` and the README now lead with the binary and
+  keep the tarball copy as the alternative; the Pi paragraph is one sentence, clearly secondary.
+- Evidence: `node --test` passes 397/397 (389 on the base commit, plus the eight tests in
+  `tests/skill.test.js`); `node bin/funky-secure.js skill > /tmp/skill-out.md` diffs clean against
+  `skills/funky-secure/SKILL.md` at 4386 bytes on both sides and prints the two stderr lines; the
+  self-scan at `--fail-on warn` exits 0. The existing drift gates cover the new command without an
+  addition to `tests/drift.test.js`: the `docs/cli.md` command sections, the mermaid flow under
+  `## Command flows`, the README command check and the `--help` flag listing are all driven by
+  `COMMANDS` and `FLAGS`. A differential run of `scan`, `start`, `init`, `migrate`, `explain` and two
+  usage errors against the base copy shows one intended difference: `--help` gains the `skill` row.

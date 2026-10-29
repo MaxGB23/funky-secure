@@ -14,38 +14,30 @@ names a command that does not exist.
 
 ## Installing it
 
-The package carries its skill, so installing the package is installing the skill. An npm package with
-a `skills/` directory and the `pi` manifest of `package.json` is a Pi package:
+The binary is the distribution channel. The package carries its skill and a command prints it, so a
+redirect is the whole installation:
 
 ```sh
-pi install npm:funky-secure
+npx funky-secure skill > .agents/skills/funky-secure/SKILL.md
 ```
 
-That writes the declaration to Pi's settings, loads the skill on the next start, and `pi update`
-keeps it in step with the installed version. No copying. `pi remove npm:funky-secure` undoes it. Add
-`--local` to declare it in a project's `.pi/settings.json` instead, which is the version a team
-commits.
+That works with any runtime that reads a directory of skills: no install step, no package manifest of
+its own, no agent product named anywhere in the output. stdout is `SKILL.md` byte for byte, so the
+redirected file is valid as written; stderr carries two lines naming the project-local
+`.agents/skills/funky-secure/` destination and the user-level `~/.agents/skills/funky-secure/` one, and
+nothing else. npm has no convention for installing a skill, which is why nothing here claims one and
+nothing writes into a home directory on your behalf.
 
-Other agent runtimes have no package mechanism, so they read a directory. The skill is in the tarball,
-which makes the installed path the place to copy from:
+The file also ships in the tarball, which is the source to copy from if you prefer copying:
+`node_modules/funky-secure/skills/funky-secure/SKILL.md`. For a bare checkout of this repository the
+same file is `./skills/funky-secure/SKILL.md`. A copy is a copy: rerun it after upgrading.
 
-```powershell
-# Windows, after npm install funky-secure
-Copy-Item -Recurse -Force .
-ode_modulesunky-secureskillsunky-secure "$HOME.agentsskillsunky-secure"
-```
+For Pi specifically, the package declares `pi.skills`, so `pi install npm:funky-secure` also works and
+keeps the installed skill in step through `pi update`; that manifest is inert metadata for npm and is
+not the documented path.
 
-```sh
-# POSIX
-mkdir -p ~/.agents/skills
-cp -r node_modules/funky-secure/skills/funky-secure ~/.agents/skills/
-```
-
-For a bare checkout of this repository, the same copy works against `./skills/funky-secure`. A copy is
-a copy: rerun it after upgrading.
-
-Whichever route, a running session needs `/reload` to notice it, and `/skill:funky-secure` invokes it
-by name when a model does not reach for it on its own.
+Whichever route, a session that is already running notices it only after a restart or a reload, and
+most runtimes can be asked to load one skill by name. Nothing here assumes which.
 
 ## Changing it
 

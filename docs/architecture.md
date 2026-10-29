@@ -141,6 +141,24 @@ No repository read and no probe: the only refusals are argv parsing and the cata
 missing id, two ids, `--list` together with an id, or an id the catalog lacks, all exit `2` (11.4).
 Nothing after the lookup can fail.
 
+### `skill`
+
+```mermaid
+flowchart TD
+  a["argv and the help flag"] -->|"any other flag or argument"| z["exit 2 usage error"]
+  a --> b["resolve the file from the module url"]
+  b --> c["read the shipped skill"]
+  c -->|"missing or unreadable"| y["exit 2, stdout stays empty"]
+  c --> d["write the bytes to stdout"]
+  d --> e["write the two destination lines to stderr"]
+  e --> f["exit 0"]
+```
+
+It reads no repository fact and runs no rule: the file is resolved against the module, so the working
+directory cannot move it, and the command answers the same bytes inside a repository, outside one and
+in a directory that is not a repository at all (11.8). stdout is the file and stderr is the hint, which
+is why the failure branch writes nothing to stdout — a redirect would save a partial file.
+
 ### The verdict
 
 ```mermaid
@@ -200,6 +218,7 @@ not.
 | `src/commands/init.js` | `init`: same collection, derived plan, `--apply` |
 | `src/commands/migrate.js` | `migrate`: the five-step RFC 11.3 plan, step-4 refusals |
 | `src/commands/explain.js` | `explain`: one rule in depth, or the catalog list |
+| `src/commands/skill.js` | `skill`: the shipped skill on stdout, the destinations on stderr (RFC 11.8) |
 | `src/lib/config.js` | config discovery and validation (RFC 9) |
 | `src/lib/engine.js` | runs the active catalog over the context and normalizes findings |
 | `src/lib/errors.js` | `ConfigError` and `UsageError`, the exit-2 vocabulary |

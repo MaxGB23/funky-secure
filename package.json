@@ -32,8 +32,7 @@
     "lockfile",
     "quarantine",
     "actions",
-    "security",
-    "pi-package"
+    "security"
   ],
   "packageManager": "pnpm@12.3.4",
   "pi": {
