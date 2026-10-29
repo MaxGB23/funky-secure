@@ -47,7 +47,7 @@ export default {
   evidence:
     'effective value, inherited or configured, effective strictness, the preset floor, and the minimumReleaseAgeExclude entries (count and values).',
   remediation:
-    'funky-secure init --apply writes minimumReleaseAgeStrict: true (and the 4320 floor under --preset strict), plus savePrefix: \'\' so a later pnpm add cannot save a caret. Manual: pnpm config set minimum-release-age-strict true --location=project. The hotfix escape hatch is minimumReleaseAgeExclude.',
+    'funky-secure init --apply writes minimumReleaseAgeStrict: true (and the 4320 floor under --preset strict), plus savePrefix: \'\' so a later pnpm add cannot save a caret. Manual: pnpm config set minimum-release-age-strict true --location=project, which in pnpm 12 writes pnpm-workspace.yaml and never a .npmrc — a hand-written .npmrc value is ignored (E8), and .npmrc is where sensitive-ignored requires tokens to stay. The hotfix escape hatch is minimumReleaseAgeExclude.',
   limits:
     'The effective listing merges global, workspace and environment configuration and cannot attribute a value to its source (E2), so the report never claims one. A hand-written .npmrc value is silently ignored by pnpm and cannot be detected here (E8). An unavailable version leaves the active major unknown and the 11/12 line default is used.',
   docs: DOC,

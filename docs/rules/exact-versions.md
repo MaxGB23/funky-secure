@@ -78,7 +78,7 @@ keeps the specifier the package already declares and exits 0, so the range survi
 comes back. The command that works is
 
 ```sh
-pnpm pkg set 'dependencies.<name>=<version>' && pnpm install
+pnpm pkg set 'devDependencies["<name>"]=<version>' && pnpm install
 ```
 
 with the section of the entry (`dependencies`, `devDependencies`, `optionalDependencies` or

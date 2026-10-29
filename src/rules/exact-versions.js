@@ -237,6 +237,11 @@ function recordedVersion(lock, name, type) {
  * no-op on pnpm 12.3.4 — pnpm keeps the range the package already declares — so the command that
  * works is `pnpm pkg set` with the resolved version the lockfile records, followed by `pnpm install`.
  *
+ * The property path is bracketed, not dotted: `pnpm pkg set 'devDependencies.@types/node=1'` fails on
+ * pnpm 12.3.4 with ERR_PNPM_PKG_INVALID_PROPERTY_PATH, because `@` is not a token a dot path can carry,
+ * and scoped names are most of a modern dependency set. The bracket form works unchanged for an
+ * unscoped name, so there is one form and one thing to remember.
+ *
  * With no recorded version the tool invents nothing (RFC 4.9): the remediation is the resolve step
  * plus the scan, which then prints the exact pin for that repository.
  *
@@ -250,7 +255,10 @@ function floatingRemediation({ type, dependency, version }) {
       command: 'pnpm install --lockfile-only && funky-secure scan --only exact-versions',
     };
   }
-  return { kind: 'manual', command: `pnpm pkg set '${type}.${dependency}=${version}' && pnpm install` };
+  return {
+    kind: 'manual',
+    command: `pnpm pkg set '${type}["${dependency}"]=${version}' && pnpm install`,
+  };
 }
 
 export default {

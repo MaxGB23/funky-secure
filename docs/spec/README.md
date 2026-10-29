@@ -68,6 +68,8 @@ number keeps resolving.
 | 11 | [`0004`](../../rfcs/0004-agent-skill/rfc.md) | 11.8: the `skill` command — the shipped file on stdout, the destination hint on stderr, and no repository fact read |
 | 11 | [`0005`](../../rfcs/0005-skill-install/rfc.md) | 11.8: `--install`, `--user`, `--force`, `--keep` and the question asked before a replacement; 11.5 point 7 and 11.6: the one write outside the repository |
 | 11 | [`0006`](../../rfcs/0006-human-defaults/rfc.md) | 11.4: a missing rule id is not an error — the bare `explain` prints the catalog, and `--list` is the explicit synonym with identical output |
+| 8 | [`0007`](../../rfcs/0007-remediation-routes/rfc.md) | 8.2 R5: the pin is `pnpm pkg set` with a bracketed property path, because a dot path cannot carry a scoped name, and `pnpm add --save-exact` is not the remediation on pnpm 12.3.4 |
+| 8 | [`0007`](../../rfcs/0007-remediation-routes/rfc.md) | 8.2 R4: the manual quarantine route names the file the value lands in — `pnpm-workspace.yaml`, never an `.npmrc` |
 
 ## Changing the contract
 
