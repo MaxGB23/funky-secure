@@ -26,7 +26,7 @@ export const COMMANDS = Object.freeze([
   { name: 'scan', summary: 'Read-only audit: report findings and the verdict. Exits 0, 1 or 2.' },
   { name: 'init', summary: 'Print the write plan; --apply performs it.' },
   { name: 'migrate', summary: 'Print the five-step plan for leaving npm or yarn; --apply performs step 4.' },
-  { name: 'explain', summary: 'Explain one rule in depth, or list the catalog with --list.' },
+  { name: 'explain', summary: 'Explain one rule in depth; with no rule id it prints the catalog.' },
   {
     name: 'skill',
     summary: 'Print the agent skill this package ships on stdout, byte for byte, or install it with --install.',

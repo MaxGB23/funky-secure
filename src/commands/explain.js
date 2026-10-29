@@ -121,10 +121,11 @@ export async function run({
   }
 
   if (positionals.length === 0) {
-    throw usage(
-      'explain needs a rule id (or --list)',
-      'pass a rule id, or --list to see the catalog',
-    );
+    // No argument is not a mistake to punish: a human who types `explain` alone is asking what there
+    // is to explain. `--list` stays as the explicit synonym, and an agent that wants a guarantee still
+    // gets one, because the answer is the same catalog `explain --list` prints.
+    stdout.write(format === 'json' ? jsonDocument(catalog.map(ruleDocument)) : renderList(catalog));
+    return 0;
   }
   if (positionals.length > 1) {
     throw usage(

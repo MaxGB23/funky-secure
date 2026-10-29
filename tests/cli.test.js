@@ -143,7 +143,6 @@ test('bad usage exits 2 with the action first, the reason labelled, and nothing 
     [['scan', '--format', 'xml'], 'xml'],
     [['init', '--fail-on', 'warn'], '--fail-on'],
     [['migrate', '--format', 'json'], '--format'],
-    [['explain'], 'rule id'],
     [['explain', 'one', 'two'], 'one'],
     [['explain', '--list', 'ghost'], '--list'],
     [['init', '--apply=true'], '--apply'],
@@ -329,6 +328,20 @@ test('scan human output shows the verdict', async (t) => {
 
   assert.equal(code, 0);
   assert.ok(streams.stdout.text.includes('verdict  PASS'));
+});
+
+test('explain with no argument prints the catalogue, the same bytes --list prints', async (t) => {
+  const bare = io(process.cwd());
+  const listed = io(process.cwd());
+
+  const bareCode = await run(['explain'], bare);
+  const listedCode = await run(['explain', '--list'], listed);
+
+  assert.equal(bareCode, 0, 'a bare explain failed');
+  assert.equal(bare.stderr.text, '', 'a bare explain wrote to stderr');
+  assert.ok(bare.stdout.text.length > 0, 'a bare explain printed nothing');
+  assert.equal(listedCode, 0);
+  assert.equal(bare.stdout.text, listed.stdout.text, 'the bare form and --list disagree');
 });
 
 test('explain with an unknown rule id exits 2 and names the id', async (t) => {
