@@ -24,6 +24,8 @@ import { join } from 'node:path';
 import { run } from '../src/cli.js';
 
 const SHIPPED = join(import.meta.dirname, '..', 'skills', 'funky-secure', 'SKILL.md');
+/** The version the shipped skill declares, read from the file the tests compare against. */
+const SHIPPED_VERSION = /^version:\s*(\S+)/m.exec(readFileSync(SHIPPED, 'utf8'))[1];
 
 /** @param {import('node:test').TestContext} t */
 function scratch(t) {
@@ -303,13 +305,13 @@ test('--install names the same version with different bytes as local changes', a
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, variant('0.4.0'));
+  writeFileSync(path, variant(SHIPPED_VERSION));
 
   const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
 
   assert.equal(code, 2);
-  assert.match(err, /local changes on version 0\.4\.0/, 'an edited file is not described as local changes');
-  assert.equal(readFileSync(path, 'utf8'), variant('0.4.0'), 'the edited file was replaced');
+  assert.match(err, new RegExp(`local changes on version ${SHIPPED_VERSION.replaceAll('.', '\\.')}`), 'an edited file is not described as local changes');
+  assert.equal(readFileSync(path, 'utf8'), variant(SHIPPED_VERSION), 'the edited file was replaced');
 });
 
 test('--install refuses to downgrade a newer installed copy, even with a terminal', async (t) => {
@@ -349,7 +351,7 @@ test('--install --force replaces a local edit without asking', async (t) => {
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, variant('0.4.0'));
+  writeFileSync(path, variant(SHIPPED_VERSION));
 
   const { code, err } = await install(['skill', '--install', '--force'], { cwd, home, stdin: { isTTY: false } });
 
@@ -362,13 +364,13 @@ test('--install --keep leaves a local edit as it is', async (t) => {
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, variant('0.4.0'));
+  writeFileSync(path, variant(SHIPPED_VERSION));
 
   const { code, err } = await install(['skill', '--install', '--keep'], { cwd, home, stdin: { isTTY: false } });
 
   assert.equal(code, 0);
   assert.ok(err.startsWith('ℹ  Kept  ·  ~/.agents/skills/funky-secure/SKILL.md'), 'the message does not say it kept the file');
-  assert.equal(readFileSync(path, 'utf8'), variant('0.4.0'), 'the installed file changed');
+  assert.equal(readFileSync(path, 'utf8'), variant(SHIPPED_VERSION), 'the installed file changed');
 });
 
 test('--install asks before replacing, and the answer decides', async (t) => {
@@ -493,14 +495,14 @@ test('the question shows what each answer does, with keep as the visible default
   const lines = questionLines({
     state: 'edited',
     display: '.agents/skills/funky-secure/SKILL.md',
-    installedVersion: '0.4.0',
-    shippedVersion: '0.4.0',
+    installedVersion: SHIPPED_VERSION,
+    shippedVersion: SHIPPED_VERSION,
   });
 
-  assert.match(lines[0], /carries local changes on version 0\.4\.0/, 'the first line does not say what happened');
+  assert.match(lines[0], /carries local changes on version 0\.5\.0/, 'the first line does not say what happened');
   assert.match(lines[1], /discards whatever is there now/, 'the second line does not say what replacing costs');
   assert.ok(lines.includes('  1  keep it as it is, and change nothing\n'), 'the keep option is not offered in words');
-  assert.ok(lines.includes('  2  replace it with version 0.4.0\n'), 'the replace option does not name the version it installs');
+  assert.ok(lines.includes(`  2  replace it with version ${SHIPPED_VERSION}\n`), 'the replace option does not name the version it installs');
   assert.ok(lines.includes('\n'), 'the question has no blank line between facts and menu');
   assert.equal(lines.filter((line) => line.startsWith('funky-secure skill: ')).length, 2, 'the menu carries the command prefix');
 });
