@@ -26,10 +26,10 @@ S9. No rule changes behaviour, no probe is added, no dependency appears. `start`
 
 | ID | Spec | Work | Commit |
 |---|---|---|---|
-| T1 | S5, S6, S7 | `starter` in the policy, the honesty line in the human renderer, tests for both | pending |
-| T2 | S2, S3, S4 | `src/commands/start.js`, the `COMMANDS` entry, help, tests for every state of the path | pending |
-| T3 | S8 | Spec 9.1, 10.3, 11.7, amendment rows, cli/guide/architecture/README, RFC 0003, decision rows | pending |
-| T4 | all | Suite, self-scan, goldens zero diff, review | pending |
+| T1 | S5, S6, S7 | `starter` in the policy, the honesty line in the human renderer, tests for both | `988c577` |
+| T2 | S2, S3, S4 | `src/commands/start.js`, the `COMMANDS` entry, help, tests for every state of the path | `88b6a71` |
+| T3 | S8 | Spec 9.1, 10.3, 11.7, amendment rows, cli/guide/architecture/README, RFC 0003, decision rows | `88b6a71` |
+| T4 | all | Suite, self-scan, goldens zero diff, review | this commit |
 
 ## Log
 
@@ -44,3 +44,19 @@ L4 (decision, parent): `start` does not write, even though "que lo configure" in
 L5 (decision, parent): the starter set is the five rules the owner named plus the pin, which is what makes "use pnpm" enforceable. `env-not-tracked` is deliberately left `off` and named in the honesty line: it reports an environment file already tracked, which is a day-two repair; `sensitive-ignored` is the day-zero half, and both are visible in the same line.
 
 L6 (decision, parent): the honesty line is human output only. The JSON document of 10.2 is frozen in this record, and a machine reader already has `policy.preset`; a coverage field would be a separate record with its own consumers.
+
+L7 (measurement, parent): the probe writes. `pnpm --version` creates `pnpm-lock.yaml` when the
+repository declares `packageManager` and has no lockfile; isolated in three scratch directories, and
+`pnpm config list --json` alone does not do it, nor does either probe without the pin. The tool s own
+code writes nothing, but its probe chain contradicts "never installs, never writes" in exactly the
+window this feature lives in. It also makes step 4 disappear on the second `start` run. Not fixed
+here: changing the closed probe list (12.1) and the version-ambiguity semantics (12.2) is its own
+record. Note for that record: `pnpm config list --json` already reports `userAgent`, which carries the
+version, and is the value the ambiguity check compares against.
+
+L8 (correction, parent): the honesty line shipped counting `policy.active`, which also fires for
+`--only` and `--ignore` and called a selection "off by policy". It now counts the rules whose
+severity is `off`, through `offByPolicy(policy)`, so narrowing a run claims no coverage.
+
+L9 (evidence): 385/385 tests and the self-scan at exit 0 on the final tree; 376/376 on `988c577` in a
+clean worktree, so the first slice stands alone. Goldens show zero diff against `main`.
