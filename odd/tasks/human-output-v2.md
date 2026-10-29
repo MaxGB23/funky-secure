@@ -64,3 +64,20 @@ own message (`src/rules/no-bot-auto-merge.js:200`), so one hazard in one workflo
 findings under two different labels, and the summary counts it twice. With labels now visible the
 duplication is obvious in a way the ids hid. It needs a rule-semantics decision and its own record;
 nothing in this branch changes it.
+
+L9 (decision, parent): the flow diagrams live in `docs/architecture.md`, not in a new file: spec
+13.4 fixes the documentation set and already describes that file as carrying "the data flow". A new
+document would have meant amending section 13 for no gain.
+
+L10 (finding, worker): `--strict-probes` is documented as exit 2 in spec 11.1 and 10.4, `docs/cli.md`
+and `docs/concept.md`, but the code turns the skip into a `status: error` finding, which fails the
+verdict and returns exit 1 (`src/lib/engine.js:65`, `src/lib/report.js` `decideVerdict`). One side is
+wrong and it is a product decision, not a typo. Not changed here; it needs its own record. The scan
+diagram therefore draws refusals only where they actually exist.
+
+L11 (finding, worker): the `## Invariants` bullet claims `init --apply` and `migrate --apply` share
+"the same three refusals"; `applyPlan` implements two and the branch and HEAD refusals live only in
+`migrate` step 4. The init diagram claims only the working-tree check, which is what the code does.
+
+L12 (de-risk, parent): one Mermaid edge label quoted `--list`; rewritten as `the list flag` because a
+double hyphen inside a label is not worth the renderer risk.

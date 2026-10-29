@@ -79,6 +79,38 @@ test('docs/architecture.md mentions only src paths that exist', () => {
   }
 });
 
+/// The command flows (RFC 13.4): `docs/architecture.md` draws one flow per command, and `COMMANDS`
+/// is the list `src/cli.js` dispatches, so a command cannot gain or lose its diagram silently.
+
+test('docs/architecture.md draws a mermaid flow for every command', () => {
+  const text = readFileSync(join(ROOT, 'docs', 'architecture.md'), 'utf8');
+  const start = text.search(/^## Command flows$/m);
+  assert.notEqual(start, -1, 'docs/architecture.md has no "## Command flows" section');
+
+  // The section runs to the next level-two heading, so a flow outside it does not count.
+  const after = text.slice(start);
+  const next = after.slice(1).search(/^## /m);
+  const section = next === -1 ? after : after.slice(0, next + 1);
+
+  for (const command of COMMANDS) {
+    const heading = new RegExp(`^### \`${command.name}\`$`, 'm');
+    const matched = heading.exec(section);
+    assert.ok(
+      matched,
+      `docs/architecture.md has no "### \`${command.name}\`" heading under "## Command flows"`,
+    );
+
+    const body = section.slice(matched.index + matched[0].length);
+    const end = body.search(/^#{2,3} /m);
+    const subsection = end === -1 ? body : body.slice(0, end);
+    assert.match(
+      subsection,
+      /^```mermaid$/m,
+      `the "### \`${command.name}\`" flow carries no mermaid block`,
+    );
+  }
+});
+
 /// The README is a rendering of the catalog too (RFC 13.4, F4): the drift gate keeps it honest.
 
 const README = readFileSync(join(ROOT, 'README.md'), 'utf8');

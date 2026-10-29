@@ -6,6 +6,8 @@ command is defined by the contract in [`spec/report.md`](spec/report.md) and
 `rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11. This page is the operating manual, not a
 second specification.
 
+The flow of each command is drawn in [`architecture.md`](architecture.md#command-flows).
+
 ```text
 funky-secure <command> [options]
 funky-secure --help

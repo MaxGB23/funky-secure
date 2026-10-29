@@ -37,6 +37,111 @@ A command never talks to a rule directly. `scan` resolves targets, resolves poli
 and renders the result. `init` runs the same collection once and derives a plan from the same
 report, which is why the plan and the report cannot describe different repositories.
 
+## Command flows
+
+Each command is one path through the pipeline above. These diagrams are per command and stop at the
+step where it can refuse; the module-level view stays in `## Data flow`.
+
+### `scan`
+
+```mermaid
+flowchart TD
+  a["argv and flags"] -->|"unknown flag or value"| z["exit 2"]
+  a --> b["resolve targets"]
+  b --> c["resolve policy"]
+  c -->|"malformed config"| z
+  c --> d["run the active rules"]
+  d --> e["build the report once"]
+  e --> f["decide the verdict"]
+  f -->|"human"| g["render the human report"]
+  f -->|"json"| h["render the JSON document"]
+  g --> i["exit 0 or 1"]
+  h --> i
+```
+
+Parsing the argv and resolving the policy are the only two steps that can stop it, both at exit `2`
+(10.4); every later step produces a report, and the verdict it decides is the exit code (11.1).
+`--verbose` and `--with-timestamp` change a rendering, never a step (10.2, 10.3).
+
+### `init`
+
+```mermaid
+flowchart TD
+  a["argv and flags"] --> b["one scan at scope all and fail-on none"]
+  b --> c["the rules derive plan items"]
+  c -->|"preset strict"| d["the strict preset adds its own config write"]
+  c -->|"preset baseline"| e["render the plan"]
+  d --> e
+  e -->|"plan only"| f["exit 0"]
+  e -->|"apply with nothing to write"| f
+  e -->|"apply"| g["check the working tree"]
+  g -->|"dirty target or git cannot answer"| z["exit 2 refusal, nothing written"]
+  g --> h["write each item after its digest matches"]
+  h --> i["exit 0"]
+```
+
+The decisive stop is the working-tree check immediately before the first write: a target with
+uncommitted changes, or a `git status` that cannot answer, refuses at exit `2` and writes nothing
+(11.2 safety rules, 11.5 point 4). Printing a plan never reaches it.
+
+### `migrate`
+
+```mermaid
+flowchart LR
+  a["1 evidence"] --> b["2 report-only keys"]
+  b --> c["3 human step"]
+  c --> d["4 removal gate"]
+  d --> e["5 ci follow-up"]
+  d -->|"pnpm-lock.yaml absent"| z["exit 2 refusal"]
+  d -->|"tree dirty or default branch or detached HEAD"| z
+  d -->|"all preconditions hold"| r["remove the foreign lockfiles"]
+  r --> s["step 4 complete"]
+```
+
+Outside a git worktree it refuses before printing anything, because step 4 needs a tree and a branch.
+The gate is step 4 alone, and it re-checks the pnpm lockfile, the tree, the branch and `HEAD`
+immediately before the first removal (11.3, 11.5 point 4).
+
+### `explain`
+
+```mermaid
+flowchart TD
+  a["argv and flags"] -->|"the list flag"| b["read the catalog"]
+  a -->|"one rule id"| c["find the rule in the catalog"]
+  a -->|"no id or two ids"| z["exit 2 usage error"]
+  b --> d["render the list"]
+  c -->|"id not in the catalog"| z
+  c --> e["render one rule"]
+  d --> f["exit 0"]
+  e --> f
+```
+
+No repository read and no probe: the only refusals are argv parsing and the catalog lookup — a
+missing id, two ids, `--list` together with an id, or an id the catalog lacks, all exit `2` (11.4).
+Nothing after the lookup can fail.
+
+### The verdict
+
+```mermaid
+flowchart TD
+  a["one finding"] -->|"status pass"| b["counted in summary pass"]
+  a -->|"status skip"| c["counted in summary skip"]
+  a -->|"status fail"| d["severity against the fail-on threshold"]
+  a -->|"status error"| d
+  d -->|"at or above the threshold"| e["verdict fail"]
+  d -->|"below the threshold"| f["verdict pass"]
+  b --> f
+  c --> f
+  e --> g["exit 1"]
+  f --> h["exit 0"]
+  k["a run that could not answer"] -->|"before a verdict exists"| l["exit 2"]
+```
+
+The verdict is computed once, in the report layer, from effective severities and `--fail-on` (10.5);
+`--fail-on none` is a pass by construction. A `pass` and a `skip` are counted in `summary` and never
+reach the comparison, so neither can fail a run (10.1, 10.4). Exit `2` is not a verdict: it is the
+fail-closed code for a run that could not answer.
+
 ## Invariants
 
 - **A rule never performs I/O.** It receives a resolved context; when a fact it needs is absent it
