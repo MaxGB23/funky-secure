@@ -77,10 +77,20 @@ installing pnpm is one of the steps it is about to print. Once pnpm is there, br
 same way as the dependencies it audits — `pnpm dlx funky-secure@0.5.0` — and in CI pin it in your
 lockfile instead, as [`docs/guide.md`](docs/guide.md) shows.
 
+`pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the auditor needs
+nothing but Node, and installing a package manager is your decision rather than a side effect of an
+audit.
+
+None of this changes what the audit covers. The twelve rules read the repository and its workflows —
+the lockfile, the ranges, the committed ignore rules, the pinned actions, the merge path, the
+permissions — so a project that already uses pnpm gets **fewer findings because there is nothing to
+migrate, not a shorter check**. `start` drops only the steps that do not apply.
+
 In a new repository, `funky-secure start` is the first command: it prints the steps that still apply,
-in the order that makes them work, and writes nothing itself — `init --apply` stays the only writer inside the repository. It
-ends by pointing the first scan at `--preset starter`, the five rules a project needs on day zero,
-and states which rules that preset leaves `off` instead of claiming a coverage it does not have.
+in the order that makes them work, and writes nothing itself — `init --apply` stays the only writer
+inside the repository. It ends by pointing the first scan at `--preset starter`, the six rules a
+project needs on day zero, and states which rules that preset leaves `off` instead of claiming a
+coverage it does not have.
 
 `init` also ends with the steps it will not take for you, in order: `pnpm install` when there is no
 lockfile, `funky-secure migrate --apply` when another manager's lockfile is still around, and `git add`
