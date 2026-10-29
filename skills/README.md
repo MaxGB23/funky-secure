@@ -14,12 +14,17 @@ names a command that does not exist.
 
 ## Installing it
 
-The binary is the distribution channel. The package carries its skill and a command prints it, so a
-redirect is the whole installation:
+The binary is the distribution channel. The package carries its skill, and one flag installs it —
+no path, no redirect, no install step of its own:
 
 ```sh
-npx funky-secure skill > .agents/skills/funky-secure/SKILL.md
+npx funky-secure skill --install
 ```
+
+Inside a repository it writes `.agents/skills/funky-secure/SKILL.md` there, so the file travels with
+the repository and should be committed; outside one — or with `--user` — it writes the same path under
+your home directory, for every project. `npx funky-secure skill` still prints the file byte for byte if
+you would rather redirect it yourself.
 
 That works with any runtime that reads a directory of skills: no install step, no package manifest of
 its own, no agent product named anywhere in the output. stdout is `SKILL.md` byte for byte, so the
@@ -35,6 +40,9 @@ same file is `./skills/funky-secure/SKILL.md`. A copy is a copy: rerun it after 
 For Pi specifically, the package declares `pi.skills`, so `pi install npm:funky-secure` also works and
 keeps the installed skill in step through `pi update`; that manifest is inert metadata for npm and is
 not the documented path.
+
+Upgrading is the same command: an identical file is left alone, and a file that differs is replaced only
+after it asks, or when `--force` says so. `--keep` leaves an edited copy in place.
 
 Whichever route, a session that is already running notices it only after a restart or a reload, and
 most runtimes can be asked to load one skill by name. Nothing here assumes which.

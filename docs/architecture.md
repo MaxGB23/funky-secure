@@ -137,9 +137,9 @@ flowchart TD
   e --> f
 ```
 
-No repository read and no probe: the only refusals are argv parsing and the catalog lookup — a
-missing id, two ids, `--list` together with an id, or an id the catalog lacks, all exit `2` (11.4).
-Nothing after the lookup can fail.
+No repository read and no probe: the only refusals are argv parsing and the catalog lookup — two ids,
+`--list` together with an id, or an id the catalog lacks, all exit `2` (11.4). A missing id is not a
+refusal: it prints the catalog, the same bytes `--list` prints. Nothing after the lookup can fail.
 
 ### `skill`
 

@@ -13,13 +13,16 @@ a plan you read first, and never pretends a policy it cannot verify.
   answer is a pure function of local files and local probes.
 - **Not stateful.** There is no cache directory, no database, no `.funky/`, no daemon. Two runs on
   the same state produce the same bytes.
-- **Not a writer, except when asked.** Nothing is written outside `init --apply`, and `init --apply`
-  writes only the closed, printed target list — never the manager-owned settings the RFC excludes.
+- **Not a writer, except when asked.** Nothing is written outside `init --apply`, `migrate` and
+  `skill --install`, and each writes only what its own contract names: `init --apply` the closed,
+  printed target list and never the manager-owned settings the RFC excludes; `migrate` the foreign
+  lockfile it was told to remove; `skill --install` the one file an agent reads, and only when the flag
+  asks for it.
 
 ## What it writes, and when
 
-`scan` writes nothing at all. Two commands can write, and both print the exact change before it
-happens. `init --apply` performs the writes below, in this order. Each one is a fix for a finding the
+`scan` writes nothing at all. The commands that can write print the exact change before it happens,
+and every one of them is the only thing that happens: no side effect, no background repair. `init --apply` performs the writes below, in this order. Each one is a fix for a finding the
 same run reported, and each one is planned from the repository's own files — never from the effective
 configuration the machine happens to satisfy, so the same repository state produces the same plan on
 any laptop:

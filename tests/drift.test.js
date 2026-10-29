@@ -168,6 +168,14 @@ test('the package description carries no rule count that can drift', () => {
   assert.doesNotMatch(manifest.description, /\bnine\b|\bten\b|\beleven\b|\btwelve\b|\d+ (stateless )?rules/i);
 });
 
+test('the shipped skill declares the version of this package', () => {
+  const text = readFileSync(join(ROOT, 'skills', 'funky-secure', 'SKILL.md'), 'utf8');
+  const declared = /^version:[ \t]*(\S+)/m.exec(text);
+  assert.ok(declared, 'skills/funky-secure/SKILL.md declares no version, so an installed copy cannot be compared');
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(declared[1], manifest.version, 'the skill version and the package version disagree');
+});
+
 test('the shipped skill names only commands the CLI dispatches', () => {
   const path = join(ROOT, 'skills', 'funky-secure', 'SKILL.md');
   assert.ok(existsSync(path), 'skills/funky-secure/SKILL.md is missing');

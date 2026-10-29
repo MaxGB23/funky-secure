@@ -341,15 +341,31 @@ for `migrate`; its output is always the human plan.
 ### `explain`
 
 ```text
-funky-secure explain <rule-id> [--format human|json]
+funky-secure explain [<rule-id>] [--format human|json]
 funky-secure explain --list [--format human|json]
 ```
 
 `explain <id>` prints the rule id and title, its friction and baseline/strict severities, and its
 `question`, `detection`, `evidence`, `remediation`, `limits` and `docs` fields. A field the rule
 module does not declare prints `(not documented)`. `--list` prints one line per catalog rule,
-`id  baseline/strict  title`. An unknown id, a missing id, two ids, or `--list` together with an id
-is a usage error (exit `2`).
+`id  baseline/strict  title`.
+
+A missing rule id is not an error. `explain` with no id prints the same catalog `--list` prints,
+byte for byte, and exits `0`; `--list` stays as the explicit synonym, including under `--format json`,
+where both routes print the same document. The catalog is what the command is for, and a human who
+types the command alone is asking for it:
+
+```text
+$ funky-secure explain | head -6
+package-manager-pin     error/error  package.json declares the pnpm that answers
+lockfile-committed      error/error  pnpm-lock.yaml is present, tracked and not ignored
+foreign-lockfile        warn/warn  No other package manager shapes this repository
+quarantine              warn/error  Quarantine is a gate, not an approval list
+exact-versions          warn/error  Dependency specifiers are exact
+env-not-tracked         error/error  No environment file is committed
+```
+
+An unknown id, two ids, or `--list` together with an id is a usage error (exit `2`).
 
 ## Flags
 
@@ -474,31 +490,89 @@ on stdout, where the plan was printed.
 ### `skill`
 
 ```text
-funky-secure skill [--help]
+funky-secure skill [--install [--user] [--force | --keep]] [--help]
 ```
 
 Prints the agent skill this package ships, `skills/funky-secure/SKILL.md`, byte for byte on stdout —
-no header, no wrapper, no trailing note — so the redirect is the installation:
-
-```sh
-# this project, committed with it
-npx funky-secure skill > .agents/skills/funky-secure/SKILL.md
-
-# or every project
-npx funky-secure skill > ~/.agents/skills/funky-secure/SKILL.md
-```
-
-stderr carries the two lines that say where to put it, and nothing else:
+no header, no wrapper, no trailing note — so `npx funky-secure skill > …/SKILL.md` still produces that
+file itself. stderr says that `--install` exists and names the two destinations:
 
 ```text
-funky-secure skill: write it to .agents/skills/funky-secure/SKILL.md in this project
-funky-secure skill: or to ~/.agents/skills/funky-secure/SKILL.md for every project
+funky-secure skill: install it with funky-secure skill --install
+funky-secure skill: .agents/skills/funky-secure/SKILL.md in this project, ~/.agents/skills/funky-secure/SKILL.md for every project
 ```
 
-Neither line names an agent product: the command is the distribution channel for any runtime that
-reads a skill directory, and npm has no convention for installing one. The file is resolved relative
-to the installed module, never from the working directory, so it works inside a repository, outside
-one, and in a directory that is not a repository at all — it reads nothing about the repository, runs
-no rule and spawns no probe. `--help` is the only flag it accepts; any other flag, and any trailing
-argument, is a usage error (exit `2`). A shipped file that cannot be read is exit `2` with the usual
-two-line message and an empty stdout, never a partial file a redirect would save.
+That path needs no install step, no agent product and no repository: the file is resolved relative to
+the installed module, never from the working directory. An agent can read its own contract from the
+version it is running.
+
+#### `--install`
+
+Writes the same bytes to `.agents/skills/funky-secure/SKILL.md`, and **no path is ever typed or
+accepted**. Inside a worktree the destination is the worktree root, so the file travels with the
+repository; outside one, or with `--user`, it is the home directory.
+
+```text
+$ funky-secure skill --install
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.4.0)
+     commit it, so the repository carries the instructions its agents read
+```
+
+Nothing to do is a different line from something done, and it uses the symbol the report already uses
+for "not run":
+
+```text
+$ funky-secure skill --install
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.4.0)
+     nothing to do: it already carries this exact version
+```
+
+The file declares its version, so an install compares versions before bytes. That distinction is the
+whole point: "the bytes differ" is three different situations.
+
+```text
+$ funky-secure skill --install < /dev/null          # an older copy is an upgrade
+funky-secure: pass --force to replace it, or --keep to leave it as it is
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.4.0 and stdin is not a terminal
+```
+
+```text
+$ funky-secure skill --install < /dev/null          # same version, edited by hand
+funky-secure: pass --force to replace it, or --keep to leave it as it is
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.4.0 and stdin is not a terminal
+```
+
+```text
+$ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
+funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.4.0
+```
+
+With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
+keyboard, each line states what the answer does, and the default is visible and safe:
+
+```text
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.4.0
+funky-secure skill: replacing it discards whatever is there now
+
+  1  keep it as it is, and change nothing
+  2  replace it with version 0.4.0
+
+funky-secure skill: choose 1 or 2 [1]:
+```
+
+The answer is forgiving on purpose: `1`, `k` and `keep` keep; `2`, `o`, `overwrite`, `replace`, `y` and
+`yes` replace; an empty answer is the default, which keeps. Anything else is not guessed at — it is
+asked again, up to three times, and then the file is kept.
+
+Declining is reported, never silent:
+
+```text
+$ funky-secure skill --install --keep
+ℹ  Kept  ·  .agents/skills/funky-secure/SKILL.md
+     the file was not changed
+```
+
+`--force` replaces, `--keep` leaves it as it is, and `--user` chooses the home directory from inside a
+repository. Any of the three without `--install` is a usage error, and so is `--force` with `--keep`.
+The write is atomic and refuses a symbolic link destination, so a link is never written through.

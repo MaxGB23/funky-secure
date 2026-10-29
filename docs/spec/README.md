@@ -48,6 +48,8 @@ explains it.
 
 ## Amendments
 
+Where a change belongs, as opposed to which section carries what, is the [documentation map](../README.md).
+
 A section leaves the verbatim comparison the moment a later record replaces its contract: the record
 stays frozen, and this directory becomes the authority for the new text. One section may be amended
 more than once, by more than one record, so a row is an amendment and not a section: the rule the
@@ -60,9 +62,12 @@ number keeps resolving.
 | 9 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 9.1: the `starter` preset, the six rules it keeps and the six it turns `off`, and the quarantine floor it keeps |
 | 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | the human report: three-line findings, header order, labels instead of ids, `--verbose`, the 96-column bound |
 | 10 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the `not run` line, so a reduced preset states the coverage it does not have |
+| 10 | [`0006`](../../rfcs/0006-human-defaults/rfc.md) | 10.3: the four shapes — document, narration, numbered plan, table — the question each answers, what they share, and what a narration line may borrow from a finding |
 | 11 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | `scan --verbose` in the synopsis, and its contract as human presentation that changes no JSON byte |
 | 11 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 11.1 and 11.2: `--preset starter` in both synopses; 11.7: the `start` command |
 | 11 | [`0004`](../../rfcs/0004-agent-skill/rfc.md) | 11.8: the `skill` command — the shipped file on stdout, the destination hint on stderr, and no repository fact read |
+| 11 | [`0005`](../../rfcs/0005-skill-install/rfc.md) | 11.8: `--install`, `--user`, `--force`, `--keep` and the question asked before a replacement; 11.5 point 7 and 11.6: the one write outside the repository |
+| 11 | [`0006`](../../rfcs/0006-human-defaults/rfc.md) | 11.4: a missing rule id is not an error — the bare `explain` prints the catalog, and `--list` is the explicit synonym with identical output |
 
 ## Changing the contract
 

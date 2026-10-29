@@ -149,7 +149,8 @@ installs, resolves or reaches the network) and `git add` of what it just wrote.
 `migrate` is the way out of npm. It prints five steps and performs only the removal of the foreign
 lockfile, and only after a `pnpm-lock.yaml` exists and you are not on the default branch.
 
-`explain <rule-id>` prints one rule in depth, and `explain --list` prints the catalog. `--help` prints
+`explain <rule-id>` prints one rule in depth, and `explain` with no rule prints the catalog — `--list`
+is the explicit way to ask for the same bytes. `--help` prints
 the contract: commands, flags and rule ids, generated from the same table the parser uses.
 
 ## If you see this, do this

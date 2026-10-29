@@ -160,18 +160,22 @@ is a literal `main`/`master` match, stated as a fallback in the refusal message.
 ### 11.4 `explain`
 
 ```
-funky-secure explain <rule-id>
+funky-secure explain [<rule-id>]
 funky-secure explain --list [--format json]
 ```
 
 Prints, for one rule: id, title, friction class, severity per preset, the question it answers, the
 detection in prose, the evidence shape, the remediation, what it deliberately does **not** do, and
 the path of its documentation. An unknown id is exit `2`: a mistyped rule id is a configuration bug,
-not a user error to be swallowed.
+not a user error to be swallowed. A missing rule id is not an error: with no id the command prints the
+same catalog `--list` prints, byte for byte, and exits `0`, and `--list` stays as the explicit
+synonym for that output.
 
 ### 11.5 Write-target validation contract (applies to `apply` in v0.2 too)
 
-Every write path in this product, present and future, obeys:
+Every write path in this product, present and future, obeys the first six points below. The seventh
+governs the single exception: `skill --install`, which writes one file outside the repository
+(record 0005).
 
 1. **The target comes from a closed catalog**, never from user input, an environment variable, or a
    string built from the repository. `--apply` chooses *whether* to write, never *where*.
@@ -185,6 +189,12 @@ Every write path in this product, present and future, obeys:
 6. **Read-only machine facts are still facts:** the store path, cache path, global bin dir and
    global dir are read from the effective configuration and printed as evidence (`--scope machine`),
    never created, never repaired.
+7. **The one write outside the repository** is `skill --install`, and it is bounded by points 1, 3
+   and 4 rather than by point 2: the target is the constant `.agents/skills/funky-secure/SKILL.md`
+   under either the worktree root or the home directory, so there is no user input to traverse with;
+   no path argument exists, and a path argument is a usage error. The write is refused when the
+   destination is a symbolic link, and it is atomic — a temporary file in the same directory renamed
+   over the target, removed when the write fails. It never reads a machine fact and never writes one.
 
 The purpose is the one the author named: when `apply` exists, it must be impossible for a bug or a
 prompt-injected instruction to redirect a write to an arbitrary path such as the user's store.
@@ -193,7 +203,10 @@ prompt-injected instruction to redirect a write to an arbitrary path such as the
 
 No command runs an install, a build, a lifecycle script, a network request, a git write command
 (`add`, `commit`, `checkout`), or a package-manager write command on the machine. No command modifies
-`funky-ai`, `funky-cli`, or any file outside the current repository root.
+`funky-ai`, `funky-cli`, or any file outside the current repository root, with one exception that has
+to be asked for: `skill --install` writes its own skill file under the worktree root or the home
+directory (11.5 point 7, 11.8). Nothing else leaves the repository, and no command writes into a
+home directory as a side effect of running.
 
 ### 11.7 `start`
 
@@ -248,30 +261,69 @@ Exit: `0` in every state, including a repository already past the start; `2` for
 ### 11.8 `skill`
 
 ```
-funky-secure skill [--help]
+funky-secure skill [--install [--user] [--force | --keep]] [--help]
 ```
 
-Read-only, always, and it answers one question — *what does an agent need to know before it touches
-this repository* — with the file this package ships rather than with prose it renders. stdout carries
-the bytes of `skills/funky-secure/SKILL.md` exactly as published: no header, no wrapper, no trailing
-note, so `funky-secure skill > .agents/skills/funky-secure/SKILL.md` produces that file itself. stderr
-carries the two lines that say where to put it, the project-local `.agents/skills/funky-secure/` and
-the user-level `~/.agents/skills/funky-secure/`. Neither line names an agent product: the command is
-the distribution channel for any runtime that reads a skill directory, and the hint is a hint rather
-than a second copy of the file.
+Read-only unless asked to install, and it answers one question — *what does an agent need to know
+before it touches this repository* — with the file this package ships rather than with prose it
+renders.
 
-It reads nothing about the repository: no rule runs, no probe is spawned and no fact is collected, and
-the file is resolved relative to the installed module rather than from the working directory, so the
-same bytes are printed inside a repository, outside one, and from a directory that is not a repository
-at all.
+**Without `--install`** stdout carries the bytes of `skills/funky-secure/SKILL.md` exactly as
+published: no header, no wrapper, no trailing note, so `funky-secure skill > …/SKILL.md` produces that
+file itself. stderr carries two lines: that `--install` exists, and the two destinations. Neither line
+names an agent product.
 
-`--help` is the only flag it accepts and it takes no positional argument; any other argument is a
-usage error. It exits `0` whenever the file is printed, and `2` for a usage error and for a shipped
-file that cannot be read — in which case stdout stays empty and the usual two-line message names the
-fix, because an empty or partial file would be saved by the very redirect it is meant for.
+**With `--install`** the same bytes are written to `.agents/skills/funky-secure/SKILL.md`, and the
+destination is never typed and never accepted as an argument: it is composed from a root and four fixed
+segments. Inside a worktree the root is the worktree root, so the file travels with the repository and
+is meant to be committed; outside one, or with `--user`, the root is the home directory and the file
+applies to every project on the machine. The command reports in the narration voice of 10.3: a symbol, the fact, and the destination on one
+line, then one indented line saying whether that copy travels with the repository or with the machine.
+The symbols are the report's — `✓` for something done, `–` for nothing to do, `ℹ` for a decision that
+changed nothing — and no line repeats the command name as a prefix.
 
-This section is amended by record 0004, whose distribution amendment makes the binary the documented
-channel; the installed file remains the source to copy from at
-`node_modules/funky-secure/skills/funky-secure/SKILL.md`.
+The file carries the version it belongs to in its frontmatter, gated to equal the package version.
+**Bytes alone cannot answer the question**, because "different from what I ship" covers three
+situations that are three different decisions: an older copy waiting for an upgrade, a copy newer than
+this binary, and the same version edited by hand. So the comparison is version first, bytes second:
 
----
+| Installed file | State | Answer |
+|---|---|---|
+| absent | — | write, report `installed (version)` |
+| byte-identical | — | write nothing, report that it already carries this exact version |
+| no version line | `unversioned` | ask: where it came from cannot be told |
+| same version, different bytes | `edited` | ask: a human changed it, and replacing discards that |
+| older version | `older` | ask: replacing is the upgrade |
+| newer version | `newer` | **refused** unless `--force`; installing the newer funky-secure is the other answer |
+| `--keep` in any differing state | — | write nothing, report that it kept it |
+| `--force` in any differing state | — | replace, report `installed (version)` |
+| differing, no flag, stdin is a terminal | — | ask; an explicit overwrite replaces, any other answer keeps |
+| differing, no flag, stdin is not a terminal | — | exit `2`: nobody is there to answer, and guessing is not an option |
+
+A downgrade is never routine: this binary has nothing better than what is installed, so taking the
+newer copy away requires `--force` and `--keep` is accepted as an answer there too.
+
+With a terminal the question is a numbered menu: each option states what it does, the version it
+would install, and the default is `1`, which keeps — a decision that destroys something is never the
+answer to an empty line. The answer is read tolerantly (`1`, `k` and `keep` keep; `2`, `o`,
+`overwrite`, `replace`, `y` and `yes` replace), and a line the menu
+does not offer is asked again up to three times before the file is kept.
+
+The question states that replacing the file discards whatever was changed in it, and it is asked on
+stderr because stdout is never used for anything but the file.
+
+`--user`, `--force` and `--keep` are usage errors without `--install`; `--force` with `--keep` is a
+usage error. `--install` with a positional argument is a usage error: there is no destination to pass.
+
+It reads nothing about the repository except the worktree root, and only when `--install` needs it. For
+the print path no rule runs, no probe is spawned and no fact is collected, and the file is resolved
+relative to the installed module rather than from the working directory, so the same bytes are printed
+inside a repository, outside one, and from a directory that is not a repository at all.
+
+`--help` prints the help. It exits `0` whenever the file is printed or the outcome is reported, and
+`2` for a usage error, for a shipped file that cannot be read — stdout stays empty, because an empty or
+partial file would be saved by the very redirect it is meant for — and for a write that failed, in
+which case the message names the path and the temporary file is removed rather than left behind.
+
+This section is amended by records 0004 and 0005.
+
