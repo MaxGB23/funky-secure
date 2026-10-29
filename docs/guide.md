@@ -132,8 +132,10 @@ workspace block has to exist before the install that reads it, and a lockfile ca
 first dependency. From an empty directory that is `git init`, `pnpm init`,
 `funky-secure init --apply`, `pnpm add <your first dependency>`, and `funky-secure scan --preset
 starter` last. A project a framework generator produced is the case the order turns on: while another
-manager's lockfile is still there it names `funky-secure migrate` first, before `init --apply`, and it
-does not name the first add at all, because adding now would write a second lockfile beside the npm
+manager's lockfile is still there it names `init --apply` first, then one `pnpm install` under the
+block that was just written, then `funky-secure migrate --apply` — the removal needs the
+`pnpm-lock.yaml` the install creates, and the install needs the block that governs it to exist first.
+It does not name the first add at all, because adding now would write a second lockfile beside the npm
 one. It writes nothing itself — `init --apply` is still the only writer — and it exits `0` in every
 state, because it is advice and not a gate.
 

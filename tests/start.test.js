@@ -285,27 +285,34 @@ test('both closing blocks always print: why this order, and what the starter doe
   );
 });
 
-test('an npm-generated project is told to migrate before it is told to apply', async (t) => {
+test('an npm-generated project installs once, and the gate exists before that install', async (t) => {
+  // Field report F1: the old order was migrate then init --apply, while migrate prints a human
+  // `pnpm install` as its third step and refuses to remove the foreign lockfile until pnpm-lock.yaml
+  // exists. So the first resolve of the migration happened before the block that governs it — in every
+  // repository arriving from npm or yarn, and never in greenfield. The block has to exist before the
+  // install that reads it, and migrate can only run after the install it depends on, so the order is
+  // init --apply, install, migrate.
   const dir = scratch(t);
   generatedBy(dir, { lockfile: 'package-lock.json' });
   const { code, stdout } = await start(dir);
 
   assert.equal(code, 0, 'a second package manager is guidance, not a refusal');
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure migrate',
-    '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  3  ${SCAN_STEP}`,
+    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  2  pnpm install',
+    '  3  funky-secure migrate --apply',
+    `  4  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3], 'the numbering stays continuous');
-  assert.equal(
-    stdout.includes(ADD_STEP),
-    false,
-    'adding a dependency now would write a second lockfile beside package-lock.json',
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4], 'the numbering stays continuous');
+  assert.ok(
+    stdout.indexOf('init --apply') < stdout.indexOf('pnpm install'),
+    'the gate is written before the resolve that reads it',
   );
   assert.ok(
-    stdout.indexOf('funky-secure migrate') < stdout.indexOf('init --apply'),
-    'the posture is written once the repository has one package manager',
+    stdout.indexOf('pnpm install') < stdout.indexOf('migrate'),
+    'migrate needs pnpm-lock.yaml, and pnpm-lock.yaml is what the install writes',
   );
+  assert.equal(stdout.includes(ADD_STEP), false, 'a migration is not the place to add a dependency');
   assert.equal(whyBlock(stdout).length, 3, 'why this order grows by one line, never two');
 });
 
