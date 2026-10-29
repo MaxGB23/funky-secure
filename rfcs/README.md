@@ -10,6 +10,7 @@ document that changes without a new record.
 | [0001](0001-funky-secure-v1/rfc.md) | funky-secure as a supply-chain auditor and initializer | `implemented` | — | — | [`docs/spec/`](../docs/spec/README.md) |
 | [0002](0002-human-output-v2/rfc.md) | Human output v2 | `accepted` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.1 |
 | [0003](0003-first-ten-minutes/rfc.md) | The first ten minutes | `accepted` | — | — | [`docs/spec/policy.md`](../docs/spec/policy.md) §9.1, [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
+| [0004](0004-agent-skill/rfc.md) | An agent skill | `accepted` | — | — | [`skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md) |
 
 ## Layout
 
@@ -22,6 +23,7 @@ rfcs/
   0002-human-output-v2/
     rfc.md                     the record
   0003-first-ten-minutes/
+  0004-agent-skill/
     rfc.md                     the record
 ```
 
