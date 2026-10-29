@@ -115,3 +115,6 @@ and exits `2` with the usual two lines and an empty stdout when the shipped file
   `## Command flows`, the README command check and the `--help` flag listing are all driven by
   `COMMANDS` and `FLAGS`. A differential run of `scan`, `start`, `init`, `migrate`, `explain` and two
   usage errors against the base copy shows one intended difference: `--help` gains the `skill` row.
+
+L12 | 2026-10-29 | The owner rejected the redirect as friction ("no me gusta especificar rutas") and authorised one write outside the repository, on the condition that replacing an installed copy asks first. `skill --install` now writes the shipped bytes to `.agents/skills/funky-secure/SKILL.md` under the worktree root (project, committed) or the home directory (user, `--user` forces it). No path is accepted; a positional is a usage error. A differing file is replaced only after an explicit answer — `--force` and `--keep` are that answer in advance, and neither with no terminal is exit 2. Identical is never rewritten; the write is atomic; a symlink destination is refused. Evidence: 20 tests in tests/skill.test.js (one skipped on Windows, which cannot create a symlink without a privilege), 409 total, self-scan exit 0. Contract: 11.8 rewritten, 11.5 point 7 and 11.6 amended, record 0005, decisions I-35.
+

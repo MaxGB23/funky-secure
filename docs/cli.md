@@ -474,31 +474,60 @@ on stdout, where the plan was printed.
 ### `skill`
 
 ```text
-funky-secure skill [--help]
+funky-secure skill [--install [--user] [--force | --keep]] [--help]
 ```
 
 Prints the agent skill this package ships, `skills/funky-secure/SKILL.md`, byte for byte on stdout —
-no header, no wrapper, no trailing note — so the redirect is the installation:
-
-```sh
-# this project, committed with it
-npx funky-secure skill > .agents/skills/funky-secure/SKILL.md
-
-# or every project
-npx funky-secure skill > ~/.agents/skills/funky-secure/SKILL.md
-```
-
-stderr carries the two lines that say where to put it, and nothing else:
+no header, no wrapper, no trailing note — so `npx funky-secure skill > …/SKILL.md` still produces that
+file itself. stderr says that `--install` exists and names the two destinations:
 
 ```text
-funky-secure skill: write it to .agents/skills/funky-secure/SKILL.md in this project
-funky-secure skill: or to ~/.agents/skills/funky-secure/SKILL.md for every project
+funky-secure skill: install it with funky-secure skill --install
+funky-secure skill: .agents/skills/funky-secure/SKILL.md in this project, ~/.agents/skills/funky-secure/SKILL.md for every project
 ```
 
-Neither line names an agent product: the command is the distribution channel for any runtime that
-reads a skill directory, and npm has no convention for installing one. The file is resolved relative
-to the installed module, never from the working directory, so it works inside a repository, outside
-one, and in a directory that is not a repository at all — it reads nothing about the repository, runs
-no rule and spawns no probe. `--help` is the only flag it accepts; any other flag, and any trailing
-argument, is a usage error (exit `2`). A shipped file that cannot be read is exit `2` with the usual
-two-line message and an empty stdout, never a partial file a redirect would save.
+That path needs no install step, no agent product and no repository: the file is resolved relative to
+the installed module, never from the working directory. An agent can read its own contract from the
+version it is running.
+
+#### `--install`
+
+Writes the same bytes to `.agents/skills/funky-secure/SKILL.md`, and **no path is ever typed or
+accepted**. Inside a worktree the destination is the worktree root, so the file travels with the
+repository; outside one, or with `--user`, it is the home directory.
+
+```text
+$ funky-secure skill --install
+funky-secure skill: installed .agents/skills/funky-secure/SKILL.md
+funky-secure skill: commit it, so the repository carries the instructions its agents read
+```
+
+Replacing an installed copy is a question, because the file may carry local edits:
+
+```text
+funky-secure skill: .agents/skills/funky-secure/SKILL.md differs from the skill this version ships
+funky-secure skill: replacing it discards whatever was changed there
+funky-secure skill: replace it? [k]eep / [o]verwrite:
+```
+
+An identical file is not rewritten:
+
+```text
+$ funky-secure skill --install
+funky-secure skill: .agents/skills/funky-secure/SKILL.md already carries this exact version
+```
+
+With no terminal there is nobody to ask, so the answer comes from a flag — and with neither flag the
+command stops instead of guessing:
+
+```text
+$ funky-secure skill --install < /dev/null
+funky-secure: pass --force to replace it, or --keep to leave it as it is
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: it differs from the shipped skill and stdin is not a terminal
+```
+
+`--force` replaces, `--keep` leaves it as it is, and `--user` chooses the home directory from inside a
+repository. Any of the three without `--install` is a usage error, and so is `--force` with `--keep`.
+The write is atomic and refuses a symbolic link destination, so a link is never written through.
+
+

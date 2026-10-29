@@ -63,6 +63,7 @@ number keeps resolving.
 | 11 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | `scan --verbose` in the synopsis, and its contract as human presentation that changes no JSON byte |
 | 11 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 11.1 and 11.2: `--preset starter` in both synopses; 11.7: the `start` command |
 | 11 | [`0004`](../../rfcs/0004-agent-skill/rfc.md) | 11.8: the `skill` command — the shipped file on stdout, the destination hint on stderr, and no repository fact read |
+| 11 | [`0005`](../../rfcs/0005-skill-install/rfc.md) | 11.8: `--install`, `--user`, `--force`, `--keep` and the question asked before a replacement; 11.5 point 7 and 11.6: the one write outside the repository |
 
 ## Changing the contract
 

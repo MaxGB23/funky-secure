@@ -73,7 +73,7 @@ npx funky-secure init --apply   # perform exactly that plan
 ```
 
 In a new repository, `funky-secure start` is the first command: it prints the steps that still apply,
-in the order that makes them work, and it writes nothing — `init --apply` stays the only writer. It
+in the order that makes them work, and writes nothing itself — `init --apply` stays the only writer inside the repository. It
 ends by pointing the first scan at `--preset starter`, the five rules a project needs on day zero,
 and states which rules that preset leaves `off` instead of claiming a coverage it does not have.
 
@@ -113,8 +113,8 @@ This tool is part of the supply chain it audits, so it carries nothing it does n
 - **No network, no install, no resolution, no lifecycle script.** It runs a closed list of read-only
   probes and answers from what it read.
 - **Writes only what it printed.** The six declared changes, across four files, each with its path
-  and digest; the machine stays read-only: your pnpm configuration, store and global settings are
-  never written.
+  and digest; your pnpm configuration, store and global settings are never written. One command
+  writes outside the repository — `skill --install` places the agent skill, and only when asked.
 - **Deterministic.** Same repository state, same bytes. `--with-timestamp` is the only exception, and
   it is opt-in.
 

@@ -8,8 +8,9 @@ description: Bootstrap or audit a pnpm repository's supply-chain posture. Use wh
 A CLI that reads a pnpm repository and says whether its supply-chain posture matches a policy. It
 never installs, never edits your machine, and never rewrites a dependency tree.
 
-`start` is read-only guidance. `init --apply` is the only command that writes, and only inside the
-repository. Everything else reports.
+`start` is read-only guidance. Inside the repository `init --apply` is the only writer. Outside it,
+`skill --install` places this file where an agent runtime reads it, and only when asked. Everything
+else reports.
 
 ## Discover the surface, never recall it
 

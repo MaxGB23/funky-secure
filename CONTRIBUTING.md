@@ -28,7 +28,9 @@ These are not style preferences. A pull request that breaks one is not merged, h
    `probeUnavailable`; it never becomes a `pass`.
 4. **Every write goes through the guard.** A planned write passes `planItem` →
    `validateWriteTarget` (RFC 11.5) before touching disk. A refused guard becomes a `conflict` in the
-   report, never a write and never a silent skip.
+   report, never a write and never a silent skip. The single exception is `skill --install` (11.5
+   point 7, record 0005): one constant target outside the repository, no path input, refused on a
+   symbolic link, replaced only after an explicit answer. Adding a second one is an RFC, not a patch.
 5. **The catalog is the single source of truth.** A rule's `id`, severity, friction and `docs` path
    live in `src/rules/index.js` and are rendered into `--help`, `explain` and `docs/rules/<id>.md`.
    The drift gate fails when they disagree; never edit a rendered page by hand without the catalog.

@@ -26,8 +26,9 @@ Where things live in this repository. Two axes, and each document belongs to exa
 - A behaviour change starts in `docs/spec/`, in its own pull request. Behaviour the record never
   decided starts with the next numbered RFC under `rfcs/`, opened as `draft`.
 - The append-only Log of an `odd/tasks/` document is evidence: append, never rewrite.
-- Zero runtime and zero dev dependencies, no network, no machine writes; every write goes through
-  `validateWriteTarget`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full hard rules.
+- Zero runtime and zero dev dependencies, no network, no machine writes as a side effect; every write
+  inside the repository goes through `validateWriteTarget`, and the one write outside it is
+  `skill --install` (11.5 point 7). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full hard rules.
 - CLI output carries symbols (`✖ ⚠ ℹ ✓ –`), never emoji: double-width glyphs break alignment and
   determinism. Color only on a TTY.
 - The JSON report is the machine contract; the human text is presentation and may change.

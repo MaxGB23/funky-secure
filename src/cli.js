@@ -27,7 +27,10 @@ export const COMMANDS = Object.freeze([
   { name: 'init', summary: 'Print the write plan; --apply performs it.' },
   { name: 'migrate', summary: 'Print the five-step plan for leaving npm or yarn; --apply performs step 4.' },
   { name: 'explain', summary: 'Explain one rule in depth, or list the catalog with --list.' },
-  { name: 'skill', summary: 'Print the agent skill this package ships, on stdout, byte for byte.' },
+  {
+    name: 'skill',
+    summary: 'Print the agent skill this package ships on stdout, byte for byte, or install it with --install.',
+  },
 ]);
 
 /**
@@ -64,6 +67,10 @@ export const FLAGS = Object.freeze([
   { name: '--allow-dirty', key: 'allowDirty', commands: ['init', 'migrate'], boolean: true },
   { name: '--from', key: 'from', commands: ['migrate'], values: ['npm', 'yarn', 'auto'] },
   { name: '--list', key: 'list', commands: ['explain'], boolean: true },
+  { name: '--install', key: 'install', commands: ['skill'], boolean: true },
+  { name: '--user', key: 'user', commands: ['skill'], boolean: true },
+  { name: '--force', key: 'force', commands: ['skill'], boolean: true },
+  { name: '--keep', key: 'keep', commands: ['skill'], boolean: true },
 ]);
 
 const DEFAULT_VALUES = Object.freeze({
@@ -310,7 +317,7 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
  * and no stack trace is ever written to stdout.
  *
  * @param {string[]} argv
- * @param {{ cwd?: string, env?: object, stdout?: object, stderr?: object, collector?: object, catalog?: Array<object>, skillPath?: string }} [io]
+ * @param {{ cwd?: string, env?: object, stdout?: object, stderr?: object, stdin?: object, collector?: object, catalog?: Array<object>, skillPath?: string, home?: string, confirm?: () => boolean }} [io]
  * @returns {Promise<number>} exit code
  */
 export async function run(argv, io = {}) {
@@ -337,6 +344,9 @@ export async function run(argv, io = {}) {
       positionals,
       collector: io.collector,
       skillPath: io.skillPath,
+      home: io.home,
+      stdin: io.stdin,
+      confirm: io.confirm,
     });
   } catch (error) {
     const { action, reason } = exitMessage(error);
