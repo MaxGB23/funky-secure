@@ -417,12 +417,12 @@ test('migrate prints the five RFC steps in order from the repository facts', asy
   assert.ok(streams.stdout.text.includes('pnpm install'));
 });
 
-test('migrate refuses outside git with exit 2', async (t) => {
+test('migrate refuses outside git with exit 3, because it decided not to act', async (t) => {
   const dir = scratch(t);
   const streams = io(dir);
   const code = await run(['migrate'], streams);
 
-  assert.equal(code, 2);
+  assert.equal(code, 3, 'understood and refused, not unanswerable');
   assert.ok(streams.stderr.text.includes('git'));
 });
 
@@ -434,7 +434,7 @@ test('migrate --apply refuses when the pnpm lockfile is absent', async (t) => {
   const streams = io(dir, { root: dir });
   const code = await run(['migrate', '--apply'], streams);
 
-  assert.equal(code, 2);
+  assert.equal(code, 3, 'a precondition refusal is not an unanswerable question');
   assert.ok(streams.stderr.text.includes('pnpm-lock.yaml'));
 });
 

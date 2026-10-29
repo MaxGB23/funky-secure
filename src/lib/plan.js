@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, relative } from 'node:path';
 
-import { ConfigError } from './errors.js';
+import { RefusalError } from './errors.js';
 import { statusPorcelain } from './git.js';
 import { FOREIGN_LOCKFILES } from './targets.js';
 
@@ -168,14 +168,15 @@ export function renderPlanHuman({ command, preset, plan, refused = [], apply = f
 /**
  * A refusal that leads with the action (S5): `cli.run` prints `action` first and the diagnosis after
  * a `reason:` label, so the diagnosis stays the error message.
+ *
+ * A refusal is a decision, not a failure to answer: it exits 3 (RFC 10.4), while a question the tool
+ * could not resolve exits 2. The write path only ever refuses.
  * @param {string} action what the human must do first
  * @param {string} message the internal diagnosis
- * @returns {ConfigError}
+ * @returns {RefusalError}
  */
 function refusal(action, message) {
-  const error = new ConfigError(message);
-  error.action = action;
-  return error;
+  return new RefusalError(message, action);
 }
 
 /**

@@ -14,6 +14,7 @@ document that changes without a new record.
 | [0005](0005-skill-install/rfc.md) | Installing the skill | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.5 point 7, §11.8 |
 | [0006](0006-human-defaults/rfc.md) | Human defaults | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.4 |
 | [0007](0007-remediation-routes/rfc.md) | Remediation routes | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5, §8.2 R4 |
+| [0008](0008-refusal-honesty/rfc.md) | Refusal and verification honesty | `implemented` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.4, §10.3 |
 
 ## Layout
 

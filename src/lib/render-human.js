@@ -307,6 +307,31 @@ function summaryLine(summary) {
 }
 
 /**
+ * The verdict, with the number of rules it did not verify (RFC 10.3, S12).
+ *
+ * `PASS` alone was read as "checked": a repository scanned with `--scope repo` printed a pass while
+ * two rules were unverified, and the skip lines that say so sit below the verdict, where a reader or
+ * a CI log that greps this line never looks. The count moves into the word; the listing stays where it
+ * is, so the header states the coverage and the body states the reason.
+ *
+ * A verdict with nothing unverified is byte-identical to what it always was: the count appears only
+ * when it is not zero, and a scan that verified everything is not asked to say so twice.
+ *
+ * @param {{ verdict: string, skip: number }} summary
+ * @param {string} failOn the threshold the verdict was decided against
+ * @param {boolean} color
+ * @returns {string}
+ */
+function verdictLine(summary, failOn, color) {
+  const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
+  const unverified = summary.skip > 0 ? ` · ${plural(summary.skip, 'rule', 'rules')} not verified` : '';
+  return (
+    `${'verdict'.padEnd(LABEL_WIDTH)}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)}` +
+    ` (threshold: ${failOn}${unverified})`
+  );
+}
+
+/**
  * The rule ids of the passing rules, for `--verbose` only: the default report counts them (S6).
  * @param {Array<object>} passing
  * @returns {string[]}
@@ -447,9 +472,7 @@ export function renderHuman(report, { color = false, verbose = false, off } = {}
   ];
   if (report.provenance) lines.push(...provenanceLine(report.provenance));
   lines.push(summaryLine(report.summary));
-  lines.push(
-    `${'verdict'.padEnd(LABEL_WIDTH)}${paint(verdict, verdict === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${report.policy.failOn})`,
-  );
+  lines.push(verdictLine(report.summary, report.policy.failOn, color));
   if (off !== undefined) lines.push(...notRunLines({ off, catalog: defaultCatalog }));
   lines.push(SEPARATOR, '');
 

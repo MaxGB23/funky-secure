@@ -9,7 +9,7 @@
 import { lstat, rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
-import { ConfigError } from '../lib/errors.js';
+import { ConfigError, RefusalError } from '../lib/errors.js';
 import { defaultBranch, statusPorcelain } from '../lib/git.js';
 import { validateWriteTarget } from '../lib/paths.js';
 import { collectScan } from '../lib/scan.js';
@@ -51,11 +51,26 @@ const TARGET_REFUSALS = Object.freeze({
 /**
  * A refusal that leads with the action (S5). `cli.run` prints `action` on the first line and the
  * diagnosis after a `reason:` label, so the diagnosis stays the error message.
+ *
+ * The distinction this file has to make: a refusal (exit 3) is a decision about a situation the tool
+ * understood — the branch is the default one, the tree is dirty, the only lockfile would be deleted.
+ * An unanswered question (exit 2) is a situation it could not read, and `unanswered` below names those.
+ * @param {string} action what the human must do first
+ * @param {string} message the internal diagnosis
+ * @returns {RefusalError}
+ */
+function refusal(action, message) {
+  return new RefusalError(message, action);
+}
+
+/**
+ * The other half of the same distinction: the tool asked git and git did not answer, so there was no
+ * situation to decide about and nothing was refused (exit 2).
  * @param {string} action what the human must do first
  * @param {string} message the internal diagnosis
  * @returns {ConfigError}
  */
-function refusal(action, message) {
+function unanswered(action, message) {
   const error = new ConfigError(message);
   error.action = action;
   return error;
@@ -137,7 +152,7 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
     const paths = foreign.map((name) => relative(cwd, join(root, name)));
     const dirty = await statusPorcelain(collector, paths);
     if (dirty === null) {
-      throw refusal(
+      throw unanswered(
         'pass --allow-dirty, or fix git so git status answers, then re-run',
         `refusing to remove ${names}: git could not report the working tree status (git status --porcelain -z failed)`,
       );
@@ -152,7 +167,7 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
   }
 
   if (branch === null) {
-    throw refusal(
+    throw unanswered(
       'check out a feature branch and re-run migrate --apply',
       `refusing to remove ${names}: git could not resolve the current branch (git rev-parse --abbrev-ref HEAD failed)`,
     );

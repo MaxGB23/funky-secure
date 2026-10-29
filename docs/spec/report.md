@@ -207,10 +207,15 @@ change that presentation, as long as the report remains valid on its own.
 |---|---|
 | `0` | No finding at or above `--fail-on`. Skips and infos do not fail. |
 | `1` | At least one policy violation at or above `--fail-on`. |
-| `2` | The tool could not answer: bad usage, unreadable input, malformed config, unavailable required probe under `--strict-probes`. Never used for a policy violation. |
+| `2` | The tool could not answer: bad usage, unreadable input, malformed config, unavailable required probe under `--strict-probes`. Never used for a policy violation, and never used for a refusal. |
+| `3` | The tool understood the situation and refused to act: the branch is the default one, the target is dirty, the foreign lockfile is the only one. Nothing was written. |
 
-`2` is the fail-closed code. A CI job that only distinguishes zero from non-zero still behaves
-correctly, and a job that cares can tell the two apart without parsing text.
+`2` is the fail-closed code and `3` is the refusal: an exit code names exactly one thing, so a script
+or an agent can tell a decision from a crash without parsing text. A refusal is a policy outcome, which
+is why it cannot share the code the specification reserves for a question the tool could not answer; it
+is not a `1` either, because no finding crossed the threshold and nothing about the repository was
+judged. A CI job that only distinguishes zero from non-zero still behaves correctly, and a job that
+cares can tell all four apart.
 
 Exit codes are a machine contract, not a user interface. Every message a human reads — usage error,
 config error, refusal, tool failure — leads with the action and puts the internal diagnosis after a
