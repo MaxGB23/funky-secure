@@ -72,6 +72,11 @@ npx funky-secure init           # the plan, with paths and digests; writes nothi
 npx funky-secure init --apply   # perform exactly that plan
 ```
 
+`npx` is deliberate and it is the only place it appears: the quick start cannot assume pnpm, because
+installing pnpm is one of the steps it is about to print. Once pnpm is there, bring the auditor the
+same way as the dependencies it audits — `pnpm dlx funky-secure@0.5.0` — and in CI pin it in your
+lockfile instead, as [`docs/guide.md`](docs/guide.md) shows.
+
 In a new repository, `funky-secure start` is the first command: it prints the steps that still apply,
 in the order that makes them work, and writes nothing itself — `init --apply` stays the only writer inside the repository. It
 ends by pointing the first scan at `--preset starter`, the five rules a project needs on day zero,
@@ -130,7 +135,7 @@ migrated, never required.
 - [Concept](docs/concept.md) — what the product is and what it refuses to be.
 - [Architecture](docs/architecture.md) — the four layers and the invariants behind the guarantees.
 - [Spec](docs/spec/README.md) — the normative contract: targets, rules, report, commands, exit codes.
-- [Agent skill](skills/README.md) — the instructions an agent loads before touching a repository. The binary prints it, so any runtime can be given it with `npx funky-secure skill > .agents/skills/funky-secure/SKILL.md`.
+- [Agent skill](skills/README.md) — the instructions an agent loads before touching a repository. The binary prints it, so any runtime can be given it with `pnpm dlx funky-secure skill > .agents/skills/funky-secure/SKILL.md`.
 - [Documentation map](docs/README.md) — where a change belongs.
 - [Decisions](docs/decisions.md) — the decision log, and the [RFC record](rfcs/README.md) it came from.
 

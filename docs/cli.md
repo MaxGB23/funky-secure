@@ -494,7 +494,7 @@ funky-secure skill [--install [--user] [--force | --keep]] [--help]
 ```
 
 Prints the agent skill this package ships, `skills/funky-secure/SKILL.md`, byte for byte on stdout —
-no header, no wrapper, no trailing note — so `npx funky-secure skill > …/SKILL.md` still produces that
+no header, no wrapper, no trailing note — so `pnpm dlx funky-secure skill --install`, or a redirect, still produces that
 file itself. stderr says that `--install` exists and names the two destinations:
 
 ```text

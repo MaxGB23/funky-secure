@@ -209,11 +209,19 @@ for `init` and `migrate` go with their digests, and the write ledger of `--apply
 stdout stays parseable. `--with-timestamp` adds `generatedAt` and is the only non-deterministic field.
 Two runs over the same state produce the same bytes.
 
-**In CI.** The gate is one step:
+**In CI.** Pin the gate, so it cannot change without a change in your diff:
+
+```sh
+pnpm add -D funky-secure@0.5.0 --save-exact
+```
 
 ```yaml
-      - run: npx funky-secure scan --scope repo --fail-on warn --strict-probes
+      - run: pnpm exec funky-secure scan --scope repo --fail-on warn --strict-probes
 ```
+
+A gate fetched at every run — `npx funky-secure` with no version — measures whatever npm published that
+morning, which is the defect this tool reports in other projects' workflows. A `devDependencies` pin
+puts the version in the lockfile, in the diff and in the review.
 
 **Why it never installs, never resolves and never writes your machine.** Because a tool that audits a
 supply chain is part of one. It reads files and runs a closed list of read-only probes; the only
