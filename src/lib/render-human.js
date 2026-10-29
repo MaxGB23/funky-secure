@@ -21,6 +21,7 @@ import { catalog as defaultCatalog } from '../rules/index.js';
 
 const SYMBOL = { error: '✖', warn: '⚠', info: 'ℹ', skip: '–' };
 const ANSI = {
+  heading: '[1m',
   error: '\u001b[31m',
   warn: '\u001b[33m',
   info: '\u001b[36m',
@@ -205,7 +206,7 @@ function blockName(block) {
  * @returns {string[]}
  */
 function renderBlock(block, options) {
-  const name = blockName(block);
+  const name = paint(blockName(block), 'heading', options.color);
   const failing = block.findings;
 
   if (failing.length === 0 && block.skipped.length === 0) {
@@ -213,7 +214,7 @@ function renderBlock(block, options) {
     if (block.passing.length === 0 && block.facts.length === 0) return [];
     if (block.passing.length === 0) return [name, ...facts];
     const count = plural(block.passing.length, 'rule', 'rules');
-    return [`${name}   all ${count} pass`, ...facts];
+    return [name, `${INDENT}all ${count} pass`, ...facts];
   }
 
   const lines = [name, ...block.facts.flatMap((fact) => renderFact(fact, options.verbose))];
@@ -281,10 +282,18 @@ function blocksFor(kind, targets, findings, passing) {
  * @returns {string}
  */
 function provenanceLine(provenance) {
-  return (
-    `provenance  preset ${provenance.preset} (${provenance.presetSource})` +
+  const text =
+    `preset ${provenance.preset} (${provenance.presetSource})` +
     `  ·  quarantine ${provenance.quarantine}` +
-    `  ·  machine ${provenance.machine}`
+    `  ·  machine ${provenance.machine}`;
+  // `provenance` is one character wider than the nine-character gutter the other labels use, so it
+  // keeps its own two spaces and its continuations hang under them.
+  const gutter = 'provenance  ';
+
+  // The one header line that can outgrow the width bound: wrapped in the gutter, never left to the
+  // terminal to fold mid-word.
+  return wrap(text, WIDTH - gutter.length).map((line, index) =>
+    index === 0 ? gutter + line : ' '.repeat(gutter.length) + line,
   );
 }
 
@@ -436,7 +445,7 @@ export function renderHuman(report, { color = false, verbose = false, off } = {}
   const lines = [
     `${report.tool.name} scan  ·  preset ${report.policy.preset}  ·  scope ${report.scope}`,
   ];
-  if (report.provenance) lines.push(provenanceLine(report.provenance));
+  if (report.provenance) lines.push(...provenanceLine(report.provenance));
   lines.push(summaryLine(report.summary));
   lines.push(
     `${'verdict'.padEnd(LABEL_WIDTH)}${paint(verdict, verdict === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${report.policy.failOn})`,

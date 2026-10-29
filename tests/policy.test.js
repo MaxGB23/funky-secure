@@ -116,13 +116,15 @@ test('ranks severities so the verdict can compare them', () => {
   assert.deepEqual(['off', 'info', 'warn', 'error'].map(severityRank), [0, 1, 2, 3]);
 });
 
-/// The `starter` preset (record 0003, S5): exactly five rules at their `baseline` severity, the other
-/// seven `off`, resolvable from the flag and from the config file, and `baseline`/`strict` untouched.
+/// The `starter` preset (record 0003, S5 and L10): exactly six rules at their `baseline` severity, the
+/// other six `off`, resolvable from the flag and from the config file, and `baseline`/`strict`
+/// untouched.
 
-/** The five the record names, in catalog order — the order the report prints them in. */
+/** The six the record names, in catalog order — the order the report prints them in. */
 const STARTER_ACTIVE = [
   'package-manager-pin',
   'lockfile-committed',
+  'foreign-lockfile',
   'quarantine',
   'exact-versions',
   'sensitive-ignored',
@@ -146,12 +148,11 @@ test('starter resolves from --preset and from the config file', () => {
   );
 });
 
-test('starter runs exactly five rules and turns the other seven off', () => {
+test('starter runs exactly six rules and turns the other six off', () => {
   const policy = resolve({ presetFromFlag: 'starter' });
 
-  assert.deepEqual(policy.active, STARTER_ACTIVE, 'the five the record names, in catalog order');
+  assert.deepEqual(policy.active, STARTER_ACTIVE, 'the six the record names, in catalog order');
   assert.deepEqual(disabled(policy), [
-    'foreign-lockfile',
     'env-not-tracked',
     'actions-pinned-sha',
     'no-bot-auto-merge',
@@ -162,7 +163,7 @@ test('starter runs exactly five rules and turns the other seven off', () => {
   assert.equal(policy.active.length + disabled(policy).length, CATALOG_IDS.length);
 });
 
-test('starter takes each of its five rules from that rule baseline severity', () => {
+test('starter takes each of its six rules from that rule baseline severity', () => {
   const policy = resolve({ presetFromFlag: 'starter' });
 
   for (const rule of ruleCatalog) {
@@ -171,6 +172,21 @@ test('starter takes each of its five rules from that rule baseline severity', ()
   }
   assert.equal(policy.severities['exact-versions'], 'warn', 'a baseline warn stays a warn');
   assert.equal(policy.severities.quarantine, 'warn', 'starter is a reduced baseline, not a second strict');
+});
+
+test('starter keeps the foreign lockfile, at the warn baseline already gives it', () => {
+  const policy = resolve({ presetFromFlag: 'starter' });
+
+  assert.equal(
+    policy.severities['foreign-lockfile'],
+    'warn',
+    'the one rule that names a second package manager runs under starter, and gently',
+  );
+  assert.equal(
+    policy.severities['foreign-lockfile'],
+    resolve({ presetFromFlag: 'baseline' }).severities['foreign-lockfile'],
+    'starter adds the rule, it does not change the severity baseline declares for it',
+  );
 });
 
 test('baseline and strict keep every rule and every declared severity', () => {
@@ -194,7 +210,13 @@ test('the config still overrides a starter severity, and off is still off', () =
   const silenced = resolve({ presetFromFlag: 'starter', config: { rules: { quarantine: 'off' } } });
 
   assert.equal(promoted.severities.quarantine, 'error');
-  assert.deepEqual(silenced.active, ['package-manager-pin', 'lockfile-committed', 'exact-versions', 'sensitive-ignored']);
+  assert.deepEqual(silenced.active, [
+    'package-manager-pin',
+    'lockfile-committed',
+    'foreign-lockfile',
+    'exact-versions',
+    'sensitive-ignored',
+  ]);
 });
 
 test('starter keeps the manager default quarantine, never the strict floor', () => {

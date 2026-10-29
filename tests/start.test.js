@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -131,6 +140,46 @@ function stepLines(text) {
   return text.split('\n').filter((line) => /^ {2}\d+ {2}\S/.test(line));
 }
 
+/** The indented lines of the `why this order` block, and nothing after it. */
+function whyBlock(text) {
+  const lines = text.split('\n');
+  const at = lines.indexOf('why this order');
+  if (at === -1) return [];
+
+  const block = [];
+  for (const line of lines.slice(at + 1)) {
+    if (!line.startsWith('  ') || line.trim() === '') break;
+    block.push(line);
+  }
+  return block;
+}
+
+/** The printed step numbers, in order: the numbering has to be continuous, with no gaps. */
+function stepNumbers(text) {
+  return stepLines(text).map((line) => Number(line.trim().split(/\s+/)[0]));
+}
+
+/**
+ * A repository shaped like the one a framework generator leaves behind (record 0003, L10): a manifest
+ * carrying ranges, an app directory, a `.gitignore`, and the lockfile of the manager that generated
+ * it. Nothing else — no managed block, no workspace file, no commit of the ignore rules.
+ *
+ * @param {string} dir
+ * @param {{ lockfile: string }} options the lockfile the generating manager wrote
+ */
+function generatedBy(dir, { lockfile }) {
+  const manifest = {
+    name: 'app',
+    private: true,
+    dependencies: { next: '^15.5.4', react: '^19.2.0', 'react-dom': '^19.2.0' },
+  };
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n.next\n');
+  mkdirSync(join(dir, 'app'), { recursive: true });
+  writeFileSync(join(dir, 'app', 'page.jsx'), 'export default function Page() {\n  return null;\n}\n');
+  writeFileSync(join(dir, lockfile), '');
+}
+
 const SCAN_STEP = 'funky-secure scan --preset starter';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
@@ -230,10 +279,50 @@ test('both closing blocks always print: why this order, and what the starter doe
   }
   assert.equal(
     sentence.map((line) => line.slice(9)).join(' '),
-    '5 of 12 rules; off by policy: Foreign lockfile, Environment files, Pinned actions, ' +
-      'Bot auto-merge, CI install flags, pull_request_target, Workflow permissions',
+    '6 of 12 rules; off by policy: Environment files, Pinned actions, Bot auto-merge, ' +
+      'CI install flags, pull_request_target, Workflow permissions',
     'the same honesty content the report renders',
   );
+});
+
+test('an npm-generated project is told to migrate before it is told to apply', async (t) => {
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'package-lock.json' });
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0, 'a second package manager is guidance, not a refusal');
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure migrate',
+    '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    `  3  ${SCAN_STEP}`,
+  ]);
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3], 'the numbering stays continuous');
+  assert.equal(
+    stdout.includes(ADD_STEP),
+    false,
+    'adding a dependency now would write a second lockfile beside package-lock.json',
+  );
+  assert.ok(
+    stdout.indexOf('funky-secure migrate') < stdout.indexOf('init --apply'),
+    'the posture is written once the repository has one package manager',
+  );
+  assert.equal(whyBlock(stdout).length, 3, 'why this order grows by one line, never two');
+});
+
+test('a pnpm-generated project is told neither to migrate nor to add', async (t) => {
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'pnpm-lock.yaml' });
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    `  2  ${SCAN_STEP}`,
+  ]);
+  assert.deepEqual(stepNumbers(stdout), [1, 2], 'the numbering stays continuous');
+  assert.equal(stdout.includes('funky-secure migrate'), false, 'no foreign lockfile to leave behind');
+  assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile the generator wrote is the one to keep');
+  assert.equal(whyBlock(stdout).length, 2, 'no migration means no extra reason');
 });
 
 test('renders the same bytes twice over the same state, in every state', async (t) => {

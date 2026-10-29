@@ -266,18 +266,21 @@ test('renders one provenance line right after the title, and omits it when nothi
 
   assert.equal(lines[0], 'funky-secure scan  ·  preset strict  ·  scope repo');
   assert.equal(
-    lines[1],
-    'provenance  preset strict (--preset)  ·  quarantine not verified (machine excluded)  ·  machine excluded',
+    `${lines[1]}\n${lines[2]}`,
+    'provenance  preset strict (--preset)  ·  quarantine not verified (machine excluded)  ·  machine\n' +
+      '            excluded',
+    'the provenance wraps in its own gutter rather than letting the terminal fold it',
   );
-  assert.match(lines[2], /^summary  /, 'the counts follow the provenance line');
+  assert.match(lines[3], /^summary  /, 'the counts follow the provenance line');
 
   const bare = renderHuman(buildReport({ scope: 'repo', policy, catalog, tool, findings: [] }));
   assert.equal(bare.includes('provenance'), false);
 });
 
 test('names the config file and the default as the preset source, and never a project value', () => {
-  const render = (provenance) =>
-    renderHuman(
+  // The provenance line wraps now, so the assertion reads the block with its continuations joined.
+  const render = (provenance) => {
+    const text = renderHuman(
       buildReport({
         scope: 'all',
         policy: { ...policy, preset: 'strict' },
@@ -286,7 +289,16 @@ test('names the config file and the default as the preset source, and never a pr
         findings: [],
         provenance,
       }),
-    ).split('\n')[1];
+    );
+    const lines = text.split('\n');
+    const at = lines.findIndex((line) => line.startsWith('provenance'));
+    const collected = [lines[at]];
+    for (const line of lines.slice(at + 1)) {
+      if (!line.startsWith('            ')) break;
+      collected.push(line.trim());
+    }
+    return collected.join(' ');
+  };
 
   assert.equal(
     render({ ...PROVENANCE, presetSource: 'funky-secure.config.json', machine: 'included', quarantine: 'declared in pnpm-workspace.yaml' }),
@@ -505,7 +517,9 @@ test('no rendered line exceeds 96 columns, even with a long machine path', () =>
 test('a clean target is one line, and never lists its rules', () => {
   const lines = renderedLines(reportWith([finding({ rule: 'alpha', status: 'pass' })]));
 
-  assert.ok(lines.includes('REPO-ROOT   all 1 rule pass'), `missing the clean target line in ${lines.join('|')}`);
+  const heading = lines.indexOf('REPO-ROOT');
+  assert.ok(heading !== -1, `missing the clean target heading in ${lines.join('|')}`);
+  assert.equal(lines[heading + 1], '     all 1 rule pass', 'the count hangs from the finding indent');
 });
 
 test('a single skipped rule keeps its own block; two or more collapse into one line', () => {
@@ -557,19 +571,19 @@ const NOT_RUN_INDENT = ' '.repeat(NOT_RUN.length);
 /** The five the starter preset runs. */
 const STARTER_ACTIVE = [
   'package-manager-pin',
+  'foreign-lockfile',
   'lockfile-committed',
   'quarantine',
   'exact-versions',
   'sensitive-ignored',
 ];
-/** The seven the starter preset turns off, by the id the policy carries. */
+/** The six the starter preset turns off, by the id the policy carries. */
 const STARTER_OFF = ruleCatalog
   .map((rule) => rule.id)
   .filter((id) => !STARTER_ACTIVE.includes(id));
 
-/** The same seven, by the label a human reads, in catalog order. */
+/** The same six, by the label a human reads, in catalog order. */
 const DISABLED_LABELS = [
-  'Foreign lockfile',
   'Environment files',
   'Pinned actions',
   'Bot auto-merge',
@@ -611,7 +625,7 @@ test('states how many rules a reduced policy runs and names the ones it does not
   const sentence = block.map((line) => line.slice(NOT_RUN.length)).join(' ');
   assert.equal(
     sentence,
-    `5 of 12 rules; off by policy: ${DISABLED_LABELS.join(', ')}`,
+    `6 of 12 rules; off by policy: ${DISABLED_LABELS.join(', ')}`,
     'the count is the active rules against the catalog, and the names are the labels in catalog order',
   );
 

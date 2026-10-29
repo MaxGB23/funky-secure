@@ -31,10 +31,14 @@ export const QUARANTINE_FIRST_GATED_MAJOR = 11;
  * never a second catalog — every rule keeps its own `severity` object. A preset that is not a key here
  * takes each rule's own severity for that preset.
  *
- * `starter` is the day-zero preset (record 0003, S5): it runs exactly these five at their `baseline`
- * severity and turns every other catalog rule `off`, so it is a reduced `baseline`, never a second
- * `strict`. Adding a rule to the catalog therefore leaves it `off` under `starter` until this list
+ * `starter` is the day-zero preset (record 0003, S5 and L10): it runs exactly these six at their
+ * `baseline` severity and turns every other catalog rule `off`, so it is a reduced `baseline`, never a
+ * second `strict`. Adding a rule to the catalog therefore leaves it `off` under `starter` until this list
  * says otherwise, which is the safe direction for a preset that claims to check less.
+ *
+ * `foreign-lockfile` belongs to the day-zero set (L10): a repository a framework generator produced
+ * starts with someone else's lockfile, and it is the one rule that names a second package manager. It
+ * keeps the `warn` of `baseline`, so including it keeps the preset gentle.
  *
  * @type {Readonly<Record<string, { atBaseline: readonly string[], otherwise: string }>>}
  */
@@ -43,6 +47,7 @@ export const PRESET_SEVERITY = Object.freeze({
     atBaseline: Object.freeze([
       'package-manager-pin',
       'lockfile-committed',
+      'foreign-lockfile',
       'quarantine',
       'exact-versions',
       'sensitive-ignored',

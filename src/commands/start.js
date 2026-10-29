@@ -8,13 +8,19 @@
  *
  * The path is ordered by cause (S4) and only the steps that still apply are printed: a block has to
  * exist before the install that reads it, and a lockfile can only exist after the first add. A
- * repository past the start is told so in one line instead of being handed a stale checklist.
+ * repository another manager generated is the exception, and it is read from the presence list the
+ * collector already resolved (L10): `migrate` comes before the block, because the posture is written
+ * once the repository has one package manager, and the first add is not asked for, because adding now
+ * would write a second lockfile. A `pnpm-lock.yaml` that appears during the migration is the
+ * migration's business, not this step's. A repository past the start is told so in one line instead of
+ * being handed a stale checklist.
  */
 
 import { derivePlan } from '../lib/plan.js';
 import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { collectScan } from '../lib/scan.js';
+import { FOREIGN_LOCKFILES } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
 /** The preset this command recommends (S5): the last step names it, and the honesty line states it. */
@@ -30,13 +36,28 @@ const WHY_ORDER = [
   'the workspace block has to exist before the install that reads it, and a lockfile can',
   'only exist after the first add',
 ];
+/** The one line a foreign lockfile adds to `why this order` (L10): one short sentence, never a block. */
+const WHY_MIGRATE_FIRST =
+  'migrate comes first, because two lockfiles resolve two dependency trees';
 
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
 /**
- * Steps 1 to 4 of S4, in cause order, and only the ones that still apply. Every fact is one the
+ * The lockfiles another package manager produced, read from the presence list the collector already
+ * resolved (L10). No probe is added: the fact is the one `foreign-lockfile` reports from.
+ *
+ * @param {object | null} repo
+ * @returns {string[]}
+ */
+function foreignLockfiles(repo) {
+  const present = Array.isArray(repo?.present) ? repo.present : [];
+  return present.filter((name) => FOREIGN_LOCKFILES.includes(name));
+}
+
+/**
+ * The steps of S4, in cause order, and only the ones that still apply. Every fact is one the
  * collector already resolved — the repository facts and the plan — so `start` measures nothing of its
  * own and cannot contradict the report about the same repository (S3).
  *
@@ -45,27 +66,33 @@ function plural(count, singular, pluralForm) {
  */
 function pendingSteps({ repo, writes }) {
   const present = Array.isArray(repo?.present) ? repo.present : [];
+  const foreign = foreignLockfiles(repo);
   const steps = [];
 
   if (repo?.inGit !== true) steps.push('git init');
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
     steps.push('pnpm init');
   }
+  // Before the block, not after: the posture is written once the repository has one package manager.
+  if (foreign.length > 0) steps.push('funky-secure migrate');
   if (writes > 0) {
     steps.push(
       `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')} (nothing is written)`,
     );
   }
-  if (!present.includes('pnpm-lock.yaml')) steps.push('pnpm add <your first dependency>');
+  // Never asked for while another manager's lockfile is present: the add would write a second one.
+  if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
+    steps.push('pnpm add <your first dependency>');
+  }
 
   return steps;
 }
 
 /**
- * @param {{ off: string[], catalog: Array<object>, pending: string[] }} options
+ * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean }} options
  * @returns {string}
  */
-function renderStart({ off, catalog, pending }) {
+function renderStart({ off, catalog, pending, migrate }) {
   const lines = ['funky-secure start  ·  guidance, nothing is written', ''];
 
   if (pending.length === 0) {
@@ -78,6 +105,7 @@ function renderStart({ off, catalog, pending }) {
 
     // `why this order` explains an order, so it is printed only when there is one to explain.
     lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
+    if (migrate) lines.push(`  ${WHY_MIGRATE_FIRST}`);
   }
 
   // The same sentence the report prints (S6), from the same helper, so the two cannot disagree about
@@ -119,6 +147,7 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
   const starter = resolvePolicy({ catalog, presetFromFlag: START_PRESET, failOn: 'none' });
 
   const pending = pendingSteps({ repo: ctx.repo, writes });
-  stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending }));
+  const migrate = foreignLockfiles(ctx.repo).length > 0;
+  stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending, migrate }));
   return 0;
 }
