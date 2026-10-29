@@ -69,3 +69,17 @@ silently, and adding a flag never invalidates the skill at all.
 - `package.json` ships `skills/`, and the release guard still sees a coherent `files` list.
 - The skill states the start order, the `remediation.kind` table, the exit codes, the scope split and
   the prohibitions; nothing in it restates the contract.
+
+## Amendment — 2026-10-28
+
+The first revision said the skill is installed by copying, on the belief that Pi had no package
+command. It does: an npm package with a `skills/` directory and the `pi` manifest is a Pi package, and
+`pi install npm:funky-secure` declares it in Pi's settings, loads it on the next start and keeps it in
+step through `pi update`.
+
+So `package.json` gains `"pi": { "skills": ["skills"] }` and the `pi-package` keyword, and the copy
+instruction is demoted to what it actually is: the fallback for agent runtimes that have no package
+mechanism, which read a directory. The shipped tarball is what makes that fallback possible — the
+canonical path is `node_modules/funky-secure/skills/funky-secure/SKILL.md`.
+
+The decision itself is unchanged: judgement in the skill, surface in the binary.

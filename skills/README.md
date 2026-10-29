@@ -14,23 +14,38 @@ names a command that does not exist.
 
 ## Installing it
 
-Pi discovers skills in `~/.agents/skills/` (every project) and `.agents/skills/` (this repository from
-its root down). There is no install command: place the directory and restart Pi, or run `/reload` in a
-live session. `/skill:funky-secure` invokes it explicitly when a model does not pick it up on its own.
+The package carries its skill, so installing the package is installing the skill. An npm package with
+a `skills/` directory and the `pi` manifest of `package.json` is a Pi package:
 
-From this repository, one line for the current user copes the source of truth into the global
-location. Run it again after pulling changes; it overwrites.
+```sh
+pi install npm:funky-secure
+```
+
+That writes the declaration to Pi's settings, loads the skill on the next start, and `pi update`
+keeps it in step with the installed version. No copying. `pi remove npm:funky-secure` undoes it. Add
+`--local` to declare it in a project's `.pi/settings.json` instead, which is the version a team
+commits.
+
+Other agent runtimes have no package mechanism, so they read a directory. The skill is in the tarball,
+which makes the installed path the place to copy from:
 
 ```powershell
-Copy-Item -Recurse -Force .\skills\funky-secure "$HOME\.agents\skills\funky-secure"
+# Windows, after npm install funky-secure
+Copy-Item -Recurse -Force .
+ode_modulesunky-secureskillsunky-secure "$HOME.agentsskillsunky-secure"
 ```
 
 ```sh
-mkdir -p ~/.agents/skills && cp -r skills/funky-secure ~/.agents/skills/
+# POSIX
+mkdir -p ~/.agents/skills
+cp -r node_modules/funky-secure/skills/funky-secure ~/.agents/skills/
 ```
 
-To keep it per-project instead, copy the same directory to `.agents/skills/funky-secure` in that
-repository and commit it, so the whole team gets it.
+For a bare checkout of this repository, the same copy works against `./skills/funky-secure`. A copy is
+a copy: rerun it after upgrading.
+
+Whichever route, a running session needs `/reload` to notice it, and `/skill:funky-secure` invokes it
+by name when a model does not reach for it on its own.
 
 ## Changing it
 

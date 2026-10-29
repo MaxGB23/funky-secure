@@ -129,7 +129,7 @@ migrated, never required.
 - [Concept](docs/concept.md) — what the product is and what it refuses to be.
 - [Architecture](docs/architecture.md) — the four layers and the invariants behind the guarantees.
 - [Spec](docs/spec/README.md) — the normative contract: targets, rules, report, commands, exit codes.
-- [Agent skill](skills/README.md) — the instructions an agent loads before touching a repository.
+- [Agent skill](skills/README.md) — the instructions an agent loads before touching a repository. The package ships it: `pi install npm:funky-secure`.
 - [Decisions](docs/decisions.md) — the decision log, and the [RFC record](rfcs/README.md) it came from.
 
 ## 🛠️ Development
