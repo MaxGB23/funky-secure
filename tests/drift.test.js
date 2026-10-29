@@ -69,6 +69,18 @@ test('every flag parsed by the CLI appears in docs/cli.md', () => {
   }
 });
 
+test('every command the CLI dispatches has its own section in docs/cli.md', () => {
+  const text = readFileSync(join(ROOT, 'docs', 'cli.md'), 'utf8');
+
+  for (const command of COMMANDS) {
+    assert.match(
+      text,
+      new RegExp(`^### \`${command.name}\`$`, 'm'),
+      `docs/cli.md has no "### \`${command.name}\`" section`,
+    );
+  }
+});
+
 test('docs/architecture.md mentions only src paths that exist', () => {
   const text = readFileSync(join(ROOT, 'docs', 'architecture.md'), 'utf8');
   const mentioned = [...text.matchAll(/src\/[A-Za-z0-9_./-]+\.js/g)].map((match) => match[0]);
@@ -198,10 +210,13 @@ function specRows(index) {
 }
 
 /**
- * The amendments table: section number to the record that replaced its contract. A section that is
- * amended leaves the verbatim comparison, because the spec becomes the authority for its new text.
+ * The amendments table: section number to every record that replaced part of its contract. A section
+ * may be amended more than once — record 0002 rewrote the human report and record 0003 added a line to
+ * it — so the value is a list, and every named record is verified instead of only the last row. A
+ * section with at least one amendment leaves the verbatim comparison, because the spec becomes the
+ * authority for its new text.
  * @param {string} index
- * @returns {Map<number, { number: string, path: string }>}
+ * @returns {Map<number, Array<{ number: string, path: string }>>}
  */
 function amendmentsIn(index) {
   const amendments = new Map();
@@ -210,8 +225,14 @@ function amendmentsIn(index) {
 
   for (const line of table.split('\n')) {
     const row = line.match(/^\| (\d+) \| \[`([^`]+)`\]\(([^)]+)\) \|/);
-    if (row !== null) amendments.set(Number(row[1]), { number: row[2], path: row[3] });
+    if (row === null) continue;
+
+    const section = Number(row[1]);
+    const records = amendments.get(section) ?? [];
+    records.push({ number: row[2], path: row[3] });
+    amendments.set(section, records);
   }
+
   return amendments;
 }
 
@@ -265,18 +286,24 @@ test('every file docs/spec/README.md points at exists, and no section body was r
     assert.ok(body.startsWith('## '), `${target} carries no section of the record`);
 
     // A section a later record amended is the authority now, so it is no longer compared with the
-    // frozen record — but the amendment must name a record that exists and is not still a draft,
-    // and the file must keep the section heading, or its number stops resolving.
+    // frozen record — but every record the table names must exist and must not still be a draft, and
+    // the file must keep the section heading, or its number stops resolving. A section may carry more
+    // than one amendment, and dropping every row but the last would verify only the newest record.
     const section = rows.get(target)?.section ?? null;
-    const amendment = section === null ? null : amended.get(section);
-    if (amendment !== null && amendment !== undefined) {
-      const recordPath = join(ROOT, 'docs', 'spec', amendment.path);
-      assert.ok(existsSync(recordPath), `${target} is amended by a record that is not there`);
-      assert.match(
-        readFileSync(recordPath, 'utf8'),
-        /\| \*\*Status\*\* \| `(accepted|implemented|closed)`/,
-        `${target} is amended by a record that is still a draft`,
-      );
+    const amendments = section === null ? [] : (amended.get(section) ?? []);
+    if (amendments.length > 0) {
+      for (const amendment of amendments) {
+        const recordPath = join(ROOT, 'docs', 'spec', amendment.path);
+        assert.ok(
+          existsSync(recordPath),
+          `${target} is amended by ${amendment.number}, and that record is not there`,
+        );
+        assert.match(
+          readFileSync(recordPath, 'utf8'),
+          /\| \*\*Status\*\* \| `(accepted|implemented|closed)`/,
+          `${target} is amended by ${amendment.number}, which is still a draft`,
+        );
+      }
       assert.match(body, new RegExp(`^## ${section}\\. `), `${target} lost its section number`);
       continue;
     }

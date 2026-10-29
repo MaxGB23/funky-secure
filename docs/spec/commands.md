@@ -9,7 +9,7 @@
 ### 11.1 `scan`
 
 ```
-funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
+funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict|starter]
                   [--format human|json] [--fail-on error|warn|info|none]
                   [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
                   [--verbose]
@@ -28,7 +28,7 @@ funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict]
 ### 11.2 `init`
 
 ```
-funky-secure init [--preset baseline|strict] [--apply] [--allow-dirty] [--format human|json]
+funky-secure init [--preset baseline|strict|starter] [--apply] [--allow-dirty] [--format human|json]
 ```
 
 Default is a **plan**: it runs the same scan, derives the writes the policy and the repository's own
@@ -194,5 +194,47 @@ prompt-injected instruction to redirect a write to an arbitrary path such as the
 No command runs an install, a build, a lifecycle script, a network request, a git write command
 (`add`, `commit`, `checkout`), or a package-manager write command on the machine. No command modifies
 `funky-ai`, `funky-cli`, or any file outside the current repository root.
+
+### 11.7 `start`
+
+```
+funky-secure start [--help]
+```
+
+Read-only, always: it creates no file, modifies none, installs nothing and touches nothing on the
+machine, in any scope. It answers one question — *what do I run first, in this order* — for a
+repository that has nothing yet. It is guidance, not a gate: it exits `0` whether or not the
+repository is at policy, and `2` only for a usage error (10.4). `--help` is the only flag it accepts;
+there is no `--format`, because its output is prose and has no document, and no `--preset`, because
+the preset it recommends is named in the answer itself.
+
+It derives everything from the same collection and the same write plan that `scan` and `init` use
+(11.1, 11.2): the repository facts the collector already resolved, and the `would-write` items of the
+plan `init` derives from the same report. It measures no fact of its own, so it cannot contradict the
+report about the same repository.
+
+The steps are ordered by cause and only the ones that still apply are printed, numbered from `1`:
+
+| # | Step | Printed when |
+|---|---|---|
+| 1 | `git init` | the directory is not a git repository |
+| 2 | `pnpm init` | there is no `package.json` |
+| 3 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
+| 4 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml`, which cannot exist before the first add |
+| 5 | `funky-secure scan --preset starter` | always, and last |
+
+The order is the contract: the managed block has to exist before the install that reads it, because
+`savePrefix: ''` and `minimumReleaseAge` only act on an install that happens after `init --apply`
+wrote them (11.2), and a lockfile can only exist after the first add. The numbering follows the
+printed steps, so a repository that is missing only the lockfile starts at `1` rather than at `4`.
+A repository whose steps all apply prints the numbered list; one that has taken all of them prints one
+line saying it is past the start and naming `scan`, never a stale checklist.
+
+The list is followed by `why this order` — the two-line reason above — and then, when the recommended
+preset disables rules, by the same `not run` block the report carries (10.3). That block describes
+`starter` (9.1), the preset step 5 runs, and it is produced by the same helper as the report's, so
+the two cannot disagree about what the recommended preset leaves unrun.
+
+Exit: `0` in every state, including a repository already past the start; `2` for a usage error only.
 
 ---

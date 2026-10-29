@@ -87,6 +87,28 @@ line, the `provenance` line, `summary`, `verdict`, then a separator of 90 `─`.
 moved, so a reader or a script that greps either label reads the counts before the evidence and is
 not broken by the move.
 
+When the effective policy sets at least one rule `off`, the header gains exactly one `not run` line
+between `verdict` and the separator, in the same nine-character gutter:
+
+```
+not run  5 of 12 rules; off by policy: Foreign lockfile, Environment files, Pinned
+         actions, Bot auto-merge, CI install flags, pull_request_target, Workflow
+         permissions
+```
+
+The two numbers are how many catalog rules still run and how many the catalog has. A rule at `off`
+does not run, is not counted and prints nothing (9.2), so the line states the coverage the verdict
+actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The labels
+are in catalog order (8.2, 13.1) and are the same labels a finding heading carries, so the line names
+the rules exactly as the rest of the report would. The text wraps at 86 columns with every
+continuation indented to the gutter — ten columns narrower than the rest of the report, because this
+is a set the reader scans against the catalog rather than a sentence to be read. A policy that
+disables nothing prints no such line, and its header is exactly what it was. Narrowing one run with
+`--only` or `--ignore` never prints it: those flags choose what to look at in this run and do not
+claim the policy checks less, so a coverage a flag made shorter is not a policy statement. The line is
+human output only; the JSON document of 10.2 gains no field for it, because a machine reader already
+has `policy.preset` and the counts that preset produced.
+
 A finding is at most three lines, and no finding shares a line with another finding or with a rule
 id:
 
@@ -117,10 +139,11 @@ instead of one block per skip. A target with exactly one skipped rule prints tha
 symbol `–`: one reason and its verifying command fit in three lines, and a human should not have to
 pass a flag to read them. Neither shape changes the JSON document.
 
-No rendered line exceeds 96 columns. Messages and actions wrap, never truncate. The single exception
-is a machine path — the store and the executable of the `MACHINE` block, whose absolute form is the
-fact (10.1) — shortened in the middle with `…`, because its length is not ours to bound and a fixed
-cut point keeps the rendering deterministic. `--verbose` prints it whole and the JSON keeps it whole.
+No rendered line exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
+86. Messages and actions wrap, never truncate. The single exception is a machine path — the store and
+the executable of the `MACHINE` block, whose absolute form is the fact (10.1) — shortened in the middle
+with `…`, because its length is not ours to bound and a fixed cut point keeps the rendering
+deterministic. `--verbose` prints it whole and the JSON keeps it whole.
 
 Color is emitted only when `stdout` is a TTY and `NO_COLOR` is unset; the plain text is valid on its
 own (Appendix D.1).

@@ -42,6 +42,27 @@ report, which is why the plan and the report cannot describe different repositor
 Each command is one path through the pipeline above. These diagrams are per command and stop at the
 step where it can refuse; the module-level view stays in `## Data flow`.
 
+### `start`
+
+```mermaid
+flowchart TD
+  a["argv and the help flag"] -->|"any other flag"| z["exit 2 usage error"]
+  a --> b["one scan at scope all and fail-on none"]
+  b --> c["the repository facts it already resolved"]
+  b --> d["the same plan init derives"]
+  c --> e["keep the steps that still apply"]
+  d --> e
+  e -->|"no step applies"| f["the repository is past the start"]
+  e -->|"at least one step"| g["number them in cause order"]
+  f --> h["why this order"]
+  g --> h
+  h --> i["the not run line of the starter preset"]
+  i --> j["exit 0"]
+```
+
+It reads the same collection and the same plan as `init`, so it cannot describe a repository the report
+does not (11.7). It never writes: no step reaches the write path in any state.
+
 ### `scan`
 
 ```mermaid
@@ -174,6 +195,7 @@ not.
 | Module | Responsibility |
 |---|---|
 | `src/cli.js` | argv parsing, flag applicability, command dispatch, `--help`, exit-code mapping |
+| `src/commands/start.js` | `start`: the ordered path of RFC 11.7, read from the same collection and plan |
 | `src/commands/scan.js` | `scan`: one collection, one rendering |
 | `src/commands/init.js` | `init`: same collection, derived plan, `--apply` |
 | `src/commands/migrate.js` | `migrate`: the five-step RFC 11.3 plan, step-4 refusals |
