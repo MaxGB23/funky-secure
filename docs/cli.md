@@ -32,9 +32,10 @@ entry point for a repository that has nothing yet. It prints the steps that stil
 guidance, not a gate. `--help` is the only flag it accepts; a `--preset` on `start` is a usage error
 (exit `2`), because the preset it recommends is named in the answer.
 
-The steps are `git init`, `pnpm init`, `funky-secure migrate`, `funky-secure init --apply` with the
-number of writes it is holding, `pnpm add <your first dependency>`, and `funky-secure scan --preset
-starter` last. Each one prints only while its condition holds: a repository that already has a
+The steps are `git init`, `pnpm init`, `funky-secure init --apply` with the number of writes it is
+holding, `pnpm install` and `funky-secure migrate --apply` when another manager's lockfile is still
+there, `pnpm add <your first dependency>` when it is not, and `funky-secure scan --preset starter`
+last. Each one prints only while its condition holds: a repository that already has a
 manifest, a lockfile and a commit, but no managed block, is told to run `init --apply` and then
 `scan`, numbered from `1`. An empty directory, from a real run:
 
@@ -65,23 +66,24 @@ the migration is the migration's business, not this step's. A repository of the 
 ```text
 funky-secure start  ·  guidance, nothing is written
 
-  1  funky-secure migrate
-  2  funky-secure init --apply  plan the 3 writes (nothing is written)
-  3  funky-secure scan --preset starter
+  1  funky-secure init --apply  plan the 3 writes (nothing is written)
+  2  pnpm install
+  3  funky-secure migrate --apply
+  4  funky-secure scan --preset starter
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
   only exist after the first add
-  migrate comes first, because two lockfiles resolve two dependency trees
+  migrate comes after the install, because the install is what writes the lockfile it keeps
 
 not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions
 ```
 
 `why this order` is the reason the sequence is not a list: the managed block has to exist before the
-install that reads it, a lockfile can only exist after the first add, and a migration leads when a
-second package manager is still there. The `not run` block is the same line the report prints (RFC
-10.3), describing `starter` — the preset step 6 runs — so the reader knows what the recommended
+install that reads it, a lockfile can only exist after the first add, and a migration puts the block
+first because the install it needs has to read one. The `not run` block is the same line the report prints (RFC
+10.3), describing `starter` — the preset the last step runs — so the reader knows what the recommended
 preset does not check before running it. A repository past the start is told so in one line in place
 of the list, `the repository is past the start; the next step is funky-secure scan --preset starter`,
 never handed a stale checklist; `why this order` and the `not run` block follow either way, because

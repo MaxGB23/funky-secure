@@ -72,6 +72,7 @@ number keeps resolving.
 | 8 | [`0007`](../../rfcs/0007-remediation-routes/rfc.md) | 8.2 R4: the manual quarantine route names the file the value lands in — `pnpm-workspace.yaml`, never an `.npmrc` |
 | 10 | [`0008`](../../rfcs/0008-refusal-honesty/rfc.md) | 10.4: a fourth exit code, `3`, for a refusal — understood, refused, nothing written — so a policy decision never shares the code of a question the tool could not answer |
 | 10 | [`0008`](../../rfcs/0008-refusal-honesty/rfc.md) | 10.3: the verdict line carries the number of rules it did not verify, and stays byte-identical when that number is zero |
+| 11 | [`0009`](../../rfcs/0009-gate-before-resolve/rfc.md) | 11.7: the steps of `start` — the block first, then one install under it, then the removal, because `migrate --apply` needs the lockfile the install writes |
 
 ## Changing the contract
 

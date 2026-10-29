@@ -8,12 +8,13 @@
  *
  * The path is ordered by cause (S4) and only the steps that still apply are printed: a block has to
  * exist before the install that reads it, and a lockfile can only exist after the first add. A
- * repository another manager generated is the exception, and it is read from the presence list the
- * collector already resolved (L10): `migrate` comes before the block, because the posture is written
- * once the repository has one package manager, and the first add is not asked for, because adding now
- * would write a second lockfile. A `pnpm-lock.yaml` that appears during the migration is the
- * migration's business, not this step's. A repository past the start is told so in one line instead of
- * being handed a stale checklist.
+ * repository another manager generated is read from the presence list the collector already resolved
+ * (L10): the block is written **first**, then the human resolves once under it, then the foreign
+ * lockfile goes, because `migrate --apply` refuses to remove the only lockfile and `pnpm-lock.yaml` is
+ * what the install writes. The old order — migrate before the block — was structurally unable to
+ * honour that: the first resolve of every migration happened before the policy that governs it.
+ * A `pnpm-lock.yaml` that appears during the migration is the migration's business, not this step's. A
+ * repository past the start is told so in one line instead of being handed a stale checklist.
  */
 
 import { derivePlan } from '../lib/plan.js';
@@ -37,8 +38,8 @@ const WHY_ORDER = [
   'only exist after the first add',
 ];
 /** The one line a foreign lockfile adds to `why this order` (L10): one short sentence, never a block. */
-const WHY_MIGRATE_FIRST =
-  'migrate comes first, because two lockfiles resolve two dependency trees';
+const WHY_MIGRATE_AFTER =
+  'migrate comes after the install, because the install is what writes the lockfile it keeps';
 
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
@@ -73,12 +74,17 @@ function pendingSteps({ repo, writes }) {
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
     steps.push('pnpm init');
   }
-  // Before the block, not after: the posture is written once the repository has one package manager.
-  if (foreign.length > 0) steps.push('funky-secure migrate');
+  // The block first, then one resolve under it, then the foreign lockfile: `migrate --apply` refuses to
+  // remove the only lockfile, so it needs the `pnpm-lock.yaml` the install writes, and the install has
+  // to read a block that already exists.
   if (writes > 0) {
     steps.push(
       `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')} (nothing is written)`,
     );
+  }
+  if (foreign.length > 0) {
+    steps.push('pnpm install');
+    steps.push('funky-secure migrate --apply');
   }
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
@@ -105,7 +111,7 @@ function renderStart({ off, catalog, pending, migrate }) {
 
     // `why this order` explains an order, so it is printed only when there is one to explain.
     lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
-    if (migrate) lines.push(`  ${WHY_MIGRATE_FIRST}`);
+    if (migrate) lines.push(`  ${WHY_MIGRATE_AFTER}`);
   }
 
   // The same sentence the report prints (S6), from the same helper, so the two cannot disagree about

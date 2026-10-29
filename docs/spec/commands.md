@@ -232,10 +232,17 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 |---|---|---|
 | 1 | `git init` | the directory is not a git repository |
 | 2 | `pnpm init` | there is no `package.json` |
-| 3 | `funky-secure migrate` | a lockfile another package manager produced is present, and before step 4 |
-| 4 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
-| 5 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
-| 6 | `funky-secure scan --preset starter` | always, and last |
+| 3 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
+| 4 | `pnpm install` | a lockfile another package manager produced is present: the migration resolves once, under the block step 3 wrote |
+| 5 | `funky-secure migrate --apply` | the same condition, after step 4: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted |
+| 6 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
+| 7 | `funky-secure scan --preset starter` | always, and last |
+
+The order is the cause order and not a preference: a managed block has to exist before the install that
+reads it, and `migrate --apply` refuses to remove a foreign lockfile while `pnpm-lock.yaml` is absent.
+The earlier order — `migrate` before the block — could not honour the first rule in any repository
+arriving from npm or yarn: the first resolve happened before the policy that governs it. Steps 4 and 5
+therefore run in that order, and step 3 is asked for before them.
 
 The order is the contract: the managed block has to exist before the install that reads it, because
 `savePrefix: ''` and `minimumReleaseAge` only act on an install that happens after `init --apply`
