@@ -1,16 +1,16 @@
 /**
- * Installing the shipped skill (record 0005, 11.8): the one write this tool performs outside the
- * repository.
+ * Installing the shipped skill (records 0004, 0005; 11.5 point 7 and 11.8): the one write this tool
+ * performs outside the repository.
  *
- * The destination is a constant, composed from a root and four fixed segments — `.agents`, `skills`,
- * `funky-secure`, `SKILL.md`. No path is ever accepted from the command line, so there is no input to
- * traverse with: `assertDestination` re-checks the composition immediately before the write instead of
- * validating a user string, and `paths.validateWriteTarget` keeps its repository-only job untouched.
+ * Bytes alone cannot answer the question the human is really asking. "Different from what I ship"
+ * covers three situations that deserve three different answers — an older copy waiting for an upgrade,
+ * a newer copy than this binary, and the same version edited by hand — so the file carries the version
+ * it belongs to, and the comparison is version first, bytes second.
  *
- * Two rules carry over from the repository writers (RFC 4.3): a target is never replaced without an
- * answer, and an identical file is not rewritten at all. "Replaced without an answer" is why `--force`
- * and `--keep` exist — not as a convenience, but because a run with no terminal has nobody to ask, and
- * guessing on the human's behalf is the failure this command refuses to make.
+ * The destination is a constant: a root plus four fixed segments (`.agents`, `skills`, `funky-secure`,
+ * `SKILL.md`). No path is ever accepted from the command line, so there is no input to traverse with.
+ * `assertDestination` re-checks the composition immediately before the write instead of validating a
+ * user string, and `paths.validateWriteTarget` keeps its repository-only job untouched.
  */
 
 import {
@@ -45,6 +45,40 @@ function failure(message, action) {
 }
 
 /**
+ * The version the file declares in its frontmatter, or null when it declares none.
+ *
+ * The value is read from the bytes rather than from `package.json` so a copy that travelled by hand
+ * still says what it is: the file is the artifact, and it has to describe itself.
+ *
+ * @param {Buffer} bytes
+ * @returns {string | null}
+ */
+export function readSkillVersion(bytes) {
+  const text = bytes.toString('utf8');
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/.exec(text);
+  if (frontmatter === null) return null;
+  const declared = /^version:[ \t]*(\S+)/m.exec(frontmatter[1]);
+  return declared === null ? null : declared[1];
+}
+
+/**
+ * Orders two dotted versions numerically, ignoring any prerelease suffix.
+ * @param {string} left
+ * @param {string} right
+ * @returns {-1 | 0 | 1} -1 when `left` is older
+ */
+export function compareVersions(left, right) {
+  const parts = (value) => String(value).split('-')[0].split('.').map((part) => Number.parseInt(part, 10) || 0);
+  const a = parts(left);
+  const b = parts(right);
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    const difference = (a[index] ?? 0) - (b[index] ?? 0);
+    if (difference !== 0) return difference < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
  * Where `--install` writes. `project` is the repository that owns the session; `user` is the machine's
  * home. The root is resolved by the caller — never by an argument — and `display` is the portable form
  * the message prints, so no absolute machine path reaches the prose.
@@ -67,8 +101,8 @@ export function destinationFor({ scope, root = null, home = homedir() }) {
 
 /**
  * Re-checks that a composed path still ends in the four fixed segments. This is not input validation:
- * it is a self-check on the composition, and it runs on every call because a destination that drifts
- * is a destination that writes somewhere nobody reviewed.
+ * it is a self-check on the composition, and it runs before every write because a destination that
+ * drifts is a destination that writes somewhere nobody reviewed.
  *
  * @param {string} path
  * @returns {string} the same path
@@ -82,11 +116,58 @@ export function assertDestination(path) {
 }
 
 /**
- * @param {string} path
+ * What is installed, without changing anything.
+ *
+ * | state | meaning |
+ * |---|---|
+ * | `absent` | nothing there yet |
+ * | `identical` | the shipped bytes, exactly |
+ * | `edited` | the same version, different bytes: a human changed it |
+ * | `older` | an earlier version: replacement is an upgrade |
+ * | `newer` | a later version than this binary ships: replacement is a downgrade |
+ * | `unversioned` | no version line, so its origin cannot be told |
+ *
+ * @param {{ destination: { path: string, display: string }, bytes: Buffer, shippedVersion: string | null }} input
+ * @returns {{ state: 'absent' | 'identical' | 'edited' | 'older' | 'newer' | 'unversioned', installedVersion: string | null, shippedVersion: string | null, path: string, display: string }}
+ */
+export function inspectInstallation({ destination, bytes, shippedVersion }) {
+  const { path, display } = destination;
+  assertDestination(path);
+
+  if (!existsSync(path)) return { state: 'absent', installedVersion: null, shippedVersion, path, display };
+  if (lstatSync(path).isSymbolicLink()) {
+    throw failure(
+      `refusing to write ${display}: it is a symbolic link`,
+      'remove the link and run the command again, or install with --user',
+    );
+  }
+
+  const installed = readFileSync(path);
+  if (Buffer.compare(installed, bytes) === 0) {
+    return { state: 'identical', installedVersion: readSkillVersion(installed), shippedVersion, path, display };
+  }
+
+  const installedVersion = readSkillVersion(installed);
+  if (installedVersion === null || shippedVersion === null) {
+    return { state: 'unversioned', installedVersion, shippedVersion, path, display };
+  }
+  const order = compareVersions(installedVersion, shippedVersion);
+  if (order < 0) return { state: 'older', installedVersion, shippedVersion, path, display };
+  if (order > 0) return { state: 'newer', installedVersion, shippedVersion, path, display };
+  return { state: 'edited', installedVersion, shippedVersion, path, display };
+}
+
+/**
+ * Writes the shipped bytes over the destination. Atomic by construction: a temporary file in the same
+ * directory, renamed over the target, removed when the write fails — a half-written skill would be read
+ * as an installation.
+ *
+ * @param {{ path: string }} destination
  * @param {Buffer} bytes
  * @returns {void}
  */
-function writeAtomically(path, bytes) {
+export function writeInstallation({ path }, bytes) {
+  assertDestination(path);
   const directory = dirname(path);
   const temporary = join(directory, `.${process.pid}.SKILL.md.tmp`);
   mkdirSync(directory, { recursive: true });
@@ -94,66 +175,14 @@ function writeAtomically(path, bytes) {
     writeFileSync(temporary, bytes);
     renameSync(temporary, path);
   } catch (error) {
-    // A half-written file would be read as an installation, so the temporary is removed and the
-    // failure surfaces as exit 2 with the action that fixes it.
     try {
       if (existsSync(temporary)) unlinkSync(temporary);
     } catch {
-      /* the write already failed; the leftover is named by the path the message prints */
+      /* the write already failed; the message names the path that could not be written */
     }
     throw failure(
       `cannot write ${path} (${error.code ?? error.message})`,
       'check the directory permissions, then run the command again',
     );
   }
-}
-
-/**
- * Installs the shipped bytes, asking before anything is replaced.
- *
- * Outcomes, in the order they are decided:
- *
- * - `unchanged` — the installed file is byte-identical; nothing is written and no question is asked.
- * - `kept` — the human answered keep, or passed `--keep`; the installed bytes stay untouched.
- * - `installed` — absent, or replaced through `--force` or a human answer.
- *
- * `confirm` is `null` when there is no terminal to ask. A differing file with no terminal and no flag
- * is exit 2, never a silent overwrite and never a silent skip.
- *
- * @param {object} input
- * @param {{ path: string, display: string }} input.destination
- * @param {Buffer} input.bytes
- * @param {boolean} [input.force]
- * @param {boolean} [input.keep]
- * @param {(() => boolean | Promise<boolean>) | null} [input.confirm]
- * @returns {Promise<{ outcome: 'installed' | 'unchanged' | 'kept', path: string, display: string }>}
- */
-export async function installSkill({ destination, bytes, force = false, keep = false, confirm = null }) {
-  const { path, display } = destination;
-  assertDestination(path);
-
-  let installed = null;
-  if (existsSync(path)) {
-    if (lstatSync(path).isSymbolicLink()) {
-      throw failure(
-        `refusing to write ${display}: it is a symbolic link`,
-        'remove the link and run the command again, or install with --user',
-      );
-    }
-    installed = readFileSync(path);
-    if (Buffer.compare(installed, bytes) === 0) return { outcome: 'unchanged', path, display };
-    if (keep) return { outcome: 'kept', path, display };
-    if (!force) {
-      if (confirm === null) {
-        throw failure(
-          `cannot ask whether to replace ${display}: it differs from the shipped skill and stdin is not a terminal`,
-          'pass --force to replace it, or --keep to leave it as it is',
-        );
-      }
-      if ((await confirm()) !== true) return { outcome: 'kept', path, display };
-    }
-  }
-
-  writeAtomically(path, bytes);
-  return { outcome: 'installed', path, display };
 }

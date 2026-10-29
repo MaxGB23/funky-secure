@@ -276,12 +276,17 @@ test('--install leaves an identical installation alone and says so', async (t) =
   assert.doesNotMatch(second.err, /installed /, 'the second install claimed to write');
 });
 
-test('--install refuses to replace a differing skill when no terminal can ask', async (t) => {
+/** A skill file that declares a version and differs from the shipped one in its body. */
+function variant(version, body = 'edited by the human') {
+  return `---\nname: funky-secure\nversion: ${version}\ndescription: what this project needs to know.\n---\n\n# funky-secure\n\n${body}\n`;
+}
+
+test('--install refuses to replace an older installed copy when no terminal can ask', async (t) => {
   const cwd = scratch(t);
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, 'edited by the human\n');
+  writeFileSync(path, variant('0.3.0'));
 
   const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
 
@@ -289,15 +294,62 @@ test('--install refuses to replace a differing skill when no terminal can ask', 
   assert.match(err, /^funky-secure: /, 'the first line does not carry the action');
   assert.match(err, /--force/, 'the action does not name --force');
   assert.match(err, /--keep/, 'the action does not name --keep');
-  assert.equal(readFileSync(path, 'utf8'), 'edited by the human\n', 'the installed file was replaced anyway');
+  assert.match(err, /0\.3\.0/, 'the diagnosis does not name the installed version');
+  assert.equal(readFileSync(path, 'utf8'), variant('0.3.0'), 'the installed file was replaced anyway');
 });
 
-test('--install --force replaces a differing skill without asking', async (t) => {
+test('--install names the same version with different bytes as local changes', async (t) => {
   const cwd = scratch(t);
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, 'edited by the human\n');
+  writeFileSync(path, variant('0.4.0'));
+
+  const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
+
+  assert.equal(code, 2);
+  assert.match(err, /local changes on version 0\.4\.0/, 'an edited file is not described as local changes');
+  assert.equal(readFileSync(path, 'utf8'), variant('0.4.0'), 'the edited file was replaced');
+});
+
+test('--install refuses to downgrade a newer installed copy, even with a terminal', async (t) => {
+  const cwd = scratch(t);
+  const home = join(scratch(t), 'home');
+  await install(['skill', '--install'], { cwd, home });
+  const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
+  writeFileSync(path, variant('9.0.0'));
+
+  const { code, err } = await install(['skill', '--install'], { cwd, home, confirm: () => true });
+
+  assert.equal(code, 2, 'a downgrade was performed without --force');
+  assert.match(err, /9\.0\.0/, 'the diagnosis does not name the newer version');
+  assert.match(err, /--force to downgrade/, 'the action does not name the downgrade');
+  assert.equal(readFileSync(path, 'utf8'), variant('9.0.0'), 'the newer file was replaced');
+});
+
+test('--install --force downgrades on purpose, and --keep preserves the newer copy', async (t) => {
+  const cwd = scratch(t);
+  const home = join(scratch(t), 'home');
+  await install(['skill', '--install'], { cwd, home });
+  const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
+  writeFileSync(path, variant('9.0.0'));
+
+  const kept = await install(['skill', '--install', '--keep'], { cwd, home, stdin: { isTTY: false } });
+  assert.equal(kept.code, 0, `--keep failed:\n${kept.err}`);
+  assert.match(kept.err, /newer than this binary/, 'the keep message does not say the copy is newer');
+  assert.equal(readFileSync(path, 'utf8'), variant('9.0.0'), '--keep replaced the newer file');
+
+  const forced = await install(['skill', '--install', '--force'], { cwd, home, stdin: { isTTY: false } });
+  assert.equal(forced.code, 0, `--force failed:\n${forced.err}`);
+  assert.equal(Buffer.compare(readFileSync(path), readFileSync(SHIPPED)), 0, '--force did not downgrade');
+});
+
+test('--install --force replaces a local edit without asking', async (t) => {
+  const cwd = scratch(t);
+  const home = join(scratch(t), 'home');
+  await install(['skill', '--install'], { cwd, home });
+  const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
+  writeFileSync(path, variant('0.4.0'));
 
   const { code, err } = await install(['skill', '--install', '--force'], { cwd, home, stdin: { isTTY: false } });
 
@@ -305,18 +357,18 @@ test('--install --force replaces a differing skill without asking', async (t) =>
   assert.equal(Buffer.compare(readFileSync(path), readFileSync(SHIPPED)), 0, 'the file was not replaced by the shipped version');
 });
 
-test('--install --keep leaves a differing skill as it is', async (t) => {
+test('--install --keep leaves a local edit as it is', async (t) => {
   const cwd = scratch(t);
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, 'edited by the human\n');
+  writeFileSync(path, variant('0.4.0'));
 
   const { code, err } = await install(['skill', '--install', '--keep'], { cwd, home, stdin: { isTTY: false } });
 
   assert.equal(code, 0);
   assert.match(err, /kept ~\/\.agents\/skills\/funky-secure\/SKILL\.md/, 'the message does not say it kept the file');
-  assert.equal(readFileSync(path, 'utf8'), 'edited by the human\n', 'the installed file changed');
+  assert.equal(readFileSync(path, 'utf8'), variant('0.4.0'), 'the installed file changed');
 });
 
 test('--install asks before replacing, and the answer decides', async (t) => {
@@ -324,16 +376,41 @@ test('--install asks before replacing, and the answer decides', async (t) => {
   const home = join(scratch(t), 'home');
   await install(['skill', '--install'], { cwd, home });
   const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
-  writeFileSync(path, 'edited by the human\n');
+  writeFileSync(path, variant('0.3.0'));
 
   const kept = await install(['skill', '--install'], { cwd, home, confirm: () => false });
   assert.equal(kept.code, 0);
-  assert.equal(readFileSync(path, 'utf8'), 'edited by the human\n', 'a keep answer replaced the file anyway');
+  assert.equal(readFileSync(path, 'utf8'), variant('0.3.0'), 'a keep answer replaced the file anyway');
   assert.match(kept.err, /kept /, 'a keep answer did not say the file was kept');
 
   const replaced = await install(['skill', '--install'], { cwd, home, confirm: () => true });
   assert.equal(replaced.code, 0);
   assert.equal(Buffer.compare(readFileSync(path), readFileSync(SHIPPED)), 0, 'an overwrite answer did not replace the file');
+});
+
+test('--install treats a copy with no version line as untraceable, and asks', async (t) => {
+  const cwd = scratch(t);
+  const home = join(scratch(t), 'home');
+  await install(['skill', '--install'], { cwd, home });
+  const path = join(home, '.agents', 'skills', 'funky-secure', 'SKILL.md');
+  writeFileSync(path, 'no frontmatter at all\n');
+
+  const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
+
+  assert.equal(code, 2);
+  assert.match(err, /carries no version line/, 'an unversioned copy is not described as untraceable');
+  assert.equal(readFileSync(path, 'utf8'), 'no frontmatter at all\n', 'the unversioned file was replaced');
+});
+
+test('--install reports the version it wrote', async (t) => {
+  const cwd = scratch(t);
+  const home = join(scratch(t), 'home');
+
+  const { code, err } = await install(['skill', '--install'], { cwd, home });
+
+  assert.equal(code, 0);
+  const version = /^version:\s*(\S+)/m.exec(readFileSync(SHIPPED, 'utf8'))[1];
+  assert.match(err, new RegExp(`installed .* \\(${version.replaceAll('.', '\\.')}\\)`), 'the message does not name the version it wrote');
 });
 
 test('--install refuses a symbolic link destination instead of writing through it', async (t) => {
@@ -394,4 +471,36 @@ test('--install still rejects a path argument', async (t) => {
   assert.equal(code, 2, 'a path argument was accepted');
   assert.equal(text, '', 'a usage error wrote to stdout');
   assert.match(err, /somewhere\.md/, 'the diagnosis does not name the argument');
+});
+
+test('the answer parser accepts the menu, the words and the empty default, and rejects the rest', async () => {
+  const { parseAnswer } = await import('../src/commands/skill.js');
+
+  for (const keep of ['', ' ', '1', 'k', 'K', 'keep', 'KEEP']) {
+    assert.equal(parseAnswer(keep), false, `"${keep}" should keep the file`);
+  }
+  for (const replace of ['2', 'o', 'O', 'overwrite', 'Overwrite', 'replace', 'y', 'yes']) {
+    assert.equal(parseAnswer(replace), true, `"${replace}" should replace the file`);
+  }
+  for (const unknown of ['3', 'maybe', 'n', 'no', 'x']) {
+    assert.equal(parseAnswer(unknown), null, `"${unknown}" is not an answer the menu offers`);
+  }
+});
+
+test('the question shows what each answer does, with keep as the visible default', async () => {
+  const { questionLines } = await import('../src/commands/skill.js');
+
+  const lines = questionLines({
+    state: 'edited',
+    display: '.agents/skills/funky-secure/SKILL.md',
+    installedVersion: '0.4.0',
+    shippedVersion: '0.4.0',
+  });
+
+  assert.match(lines[0], /carries local changes on version 0\.4\.0/, 'the first line does not say what happened');
+  assert.match(lines[1], /discards whatever is there now/, 'the second line does not say what replacing costs');
+  assert.ok(lines.includes('  1  keep it as it is, and change nothing\n'), 'the keep option is not offered in words');
+  assert.ok(lines.includes('  2  replace it with version 0.4.0\n'), 'the replace option does not name the version it installs');
+  assert.ok(lines.includes('\n'), 'the question has no blank line between facts and menu');
+  assert.equal(lines.filter((line) => line.startsWith('funky-secure skill: ')).length, 2, 'the menu carries the command prefix');
 });

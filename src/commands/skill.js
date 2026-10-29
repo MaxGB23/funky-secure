@@ -1,17 +1,17 @@
 /**
- * `skill` (record 0004, 11.8, amended by 0005): the agent skill this package ships.
+ * `skill` (records 0004, 0005; 11.5 point 7 and 11.8): the agent skill this package ships.
  *
  * Two answers from one command, because they are the same fact:
  *
  * - with no flag, the file on stdout, byte for byte, so `funky-secure skill > …` still produces a
  *   valid file and an agent can read its own contract from the version it is running;
- * - with `--install`, the file written to the skill directory that this context owns, and a message
- *   that says where. No path is typed and none is accepted: the destination is composed, never parsed.
- *   Replacing an installed copy is a question, and with no terminal to ask it is exit 2 rather than a
- *   guess.
+ * - with `--install`, the file written to the skill directory this context owns, and a message that
+ *   says where. No path is typed and none is accepted: the destination is composed, never parsed.
  *
- * Nothing about the repository is read except the worktree root, and only when `--install` needs it:
- * no rule runs and no probe is spawned for the print path, which is why it works in any directory.
+ * Replacing an installed copy is decided by what is installed, not by "the bytes differ". The file
+ * carries its version, so an older copy is an upgrade, a newer one is a downgrade this binary refuses
+ * to perform by default, and the same version with different bytes is a local edit that must not be
+ * discarded by a routine command. The question states which of the three it is asking about.
  */
 
 import { readFileSync } from 'node:fs';
@@ -20,7 +20,13 @@ import { createInterface } from 'node:readline/promises';
 import { UsageError } from '../lib/errors.js';
 import { repoRoot } from '../lib/git.js';
 import { createCollector } from '../lib/probes.js';
-import { SHIPPED, destinationFor, installSkill } from '../lib/skill-install.js';
+import {
+  SHIPPED,
+  destinationFor,
+  inspectInstallation,
+  readSkillVersion,
+  writeInstallation,
+} from '../lib/skill-install.js';
 
 /** The hint for the print path, on stderr because stdout is the file. */
 const DESTINATIONS = Object.freeze([
@@ -29,21 +35,87 @@ const DESTINATIONS = Object.freeze([
 ]);
 
 /**
- * The question, asked only when a differing file is already installed and neither flag answered it.
- * Any answer that is not an explicit overwrite keeps what is there: the safe reading of "I did not
- * mean that".
+ * What the question says about the copy that is already there. The three states are not the same
+ * decision, so they are not the same sentence.
+ * @param {{ state: string, display: string, installedVersion: string | null, shippedVersion: string | null }} found
+ * @returns {string}
+ */
+function differenceSentence({ state, display, installedVersion, shippedVersion }) {
+  if (state === 'newer') {
+    return `${display} is version ${installedVersion}, newer than the ${shippedVersion} this binary ships`;
+  }
+  if (state === 'older') {
+    return `${display} is version ${installedVersion}; this binary ships ${shippedVersion}`;
+  }
+  if (state === 'edited') {
+    return `${display} carries local changes on version ${installedVersion}`;
+  }
+  return `${display} carries no version line, so where it came from cannot be told`;
+}
+
+/**
+ * Reads one answer. The menu is numbered because a number is unambiguous on any keyboard and in any
+ * language, and the words are accepted because a human who types them should not be corrected. An
+ * empty answer is the default, and the default keeps: a decision that destroys something is never the
+ * answer to pressing Enter.
  *
- * @param {{ display: string, stdin: object, stdout: object, stderr: object }} input
+ * @param {string} answer
+ * @returns {boolean | null} true to replace, false to keep, null when the answer is not one of them
+ */
+export function parseAnswer(answer) {
+  const normalised = String(answer ?? '').trim().toLowerCase();
+  if (normalised === '') return false;
+  if (['1', 'k', 'keep'].includes(normalised)) return false;
+  if (['2', 'o', 'overwrite', 'replace', 'y', 'yes'].includes(normalised)) return true;
+  return null;
+}
+
+/**
+ * The question, asked only when replacing is a decision a flag has not already made.
+ *
+ * Three lines of facts, then a numbered menu whose default is stated, then the prompt. Any answer that
+ * is not an explicit replacement keeps what is there — the safe reading of "I did not mean that" —
+ * and an answer the menu does not offer is asked again rather than guessed at, up to three times.
+ *
+ * @param {{ found: object, stdin: object, stdout: object, stderr: object }} input
  * @returns {Promise<boolean>} true to replace
  */
-async function askToReplace({ display, stdin, stdout, stderr }) {
-  stderr.write(`funky-secure skill: ${display} differs from the skill this version ships\n`);
-  stderr.write('funky-secure skill: replacing it discards whatever was changed there\n');
-  stderr.write('funky-secure skill: replace it? [k]eep / [o]verwrite: ');
+/** The prompt, written last so the menu is the line the answer goes under. */
+const QUESTION = 'funky-secure skill: choose 1 or 2 [1]: ';
+
+/**
+ * The question as lines, in the order a human reads them: what happened, what each answer does, and
+ * then the prompt. Blank lines carry no prefix, because a prefixed empty line reads like a mistake.
+ *
+ * @param {{ state: string, display: string, installedVersion: string | null, shippedVersion: string | null }} found
+ * @returns {string[]}
+ */
+export function questionLines(found) {
+  const version = found.shippedVersion === null ? 'the version this binary ships' : `version ${found.shippedVersion}`;
+  return [
+    `funky-secure skill: ${differenceSentence(found)}\n`,
+    'funky-secure skill: replacing it discards whatever is there now\n',
+    '\n',
+    '  1  keep it as it is, and change nothing\n',
+    `  2  replace it with ${version}\n`,
+    '\n',
+  ];
+}
+
+async function askToReplace({ found, stdin, stdout, stderr }) {
+  for (const line of questionLines(found)) stderr.write(line);
+  stderr.write(QUESTION);
+
   const reader = createInterface({ input: stdin, output: stdout, terminal: false });
   try {
-    const answer = (await reader.question('')).trim().toLowerCase();
-    return answer === 'o' || answer === 'overwrite';
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const answer = await reader.question('');
+      const decided = parseAnswer(answer);
+      if (decided !== null) return decided;
+      stderr.write(`funky-secure skill: "${answer.trim()}" is not one of the answers; anything else keeps the file\n`);
+    }
+    stderr.write('funky-secure skill: keeping the file, since no answer was recognised\n');
+    return false;
   } finally {
     reader.close();
   }
@@ -114,32 +186,60 @@ export async function run({
     return 0;
   }
 
+  const shippedVersion = readSkillVersion(bytes);
   const probes = collector ?? createCollector({ cwd, env });
   const root = user ? null : await repoRoot(probes);
   const destination = destinationFor({ scope: user || root === null ? 'user' : 'project', root, home });
+  const found = inspectInstallation({ destination, bytes, shippedVersion });
 
-  // The question needs a terminal on stdin; with no terminal the answer must come from a flag, and
-  // `installSkill` fails closed when neither arrived.
-  const answer = typeof confirm === 'undefined'
-    ? stdin?.isTTY
-      ? () => askToReplace({ display: destination.display, stdin, stdout, stderr })
-      : null
-    : confirm;
+  /** @param {string[]} lines */
+  const report = (lines) => {
+    for (const line of lines) stderr.write(`funky-secure skill: ${line}\n`);
+    return 0;
+  };
 
-  const resolved = await installSkill({ destination, bytes, force, keep, confirm: answer });
-  const lines = [];
-  if (resolved.outcome === 'installed') {
-    lines.push(`funky-secure skill: installed ${resolved.display}`);
-    lines.push(
-      destination.scope === 'project'
-        ? 'funky-secure skill: commit it, so the repository carries the instructions its agents read'
-        : 'funky-secure skill: it applies to every project on this machine',
-    );
-  } else if (resolved.outcome === 'unchanged') {
-    lines.push(`funky-secure skill: ${resolved.display} already carries this exact version`);
-  } else {
-    lines.push(`funky-secure skill: kept ${resolved.display} as it is`);
+  if (found.state === 'identical') {
+    return report([`${found.display} already carries this exact version${shippedVersion ? ` (${shippedVersion})` : ''}`]);
   }
-  for (const line of lines) stderr.write(`${line}\n`);
-  return 0;
+
+  if (found.state === 'newer' && !force) {
+    // A downgrade is not a routine repair: this binary has nothing better to offer than what is
+    // installed, and only an explicit --force may take the newer copy away.
+    if (keep) return report([`kept ${found.display}, which is newer than this binary`]);
+    throw Object.assign(
+      new Error(
+        `refusing to replace ${found.display}: it is version ${found.installedVersion}, and this binary ships ${shippedVersion}`,
+      ),
+      { action: 'install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill' },
+    );
+  }
+
+  // Only an existing file needs a decision: a fresh destination has nothing to discard.
+  if (found.state !== 'absent') {
+    const decided = keep ? false : force ? true : null;
+    const answer = decided === null
+      ? typeof confirm === 'undefined'
+        ? stdin?.isTTY
+          ? () => askToReplace({ found, stdin, stdout, stderr })
+          : null
+        : confirm
+      : () => decided;
+
+    if (answer === null) {
+      throw Object.assign(
+        new Error(`cannot ask whether to replace ${found.display}: ${differenceSentence(found)} and stdin is not a terminal`),
+        { action: 'pass --force to replace it, or --keep to leave it as it is' },
+      );
+    }
+    if ((await answer()) !== true) return report([`kept ${found.display}`]);
+  }
+
+  writeInstallation(destination, bytes);
+
+  return report([
+    `installed ${destination.display}${shippedVersion ? ` (${shippedVersion})` : ''}`,
+    destination.scope === 'project'
+      ? 'commit it, so the repository carries the instructions its agents read'
+      : 'it applies to every project on this machine',
+  ]);
 }
