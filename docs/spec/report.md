@@ -81,18 +81,31 @@ and `policy.failOn` records `none`.
 
 ### 10.3 Human output
 
-**Three voices, three jobs.** A command either produces a document about a subject, narrates what it
-just did, or fails — and each is read differently, so each is drawn differently:
+**Four shapes, four questions.** Human output is not one template with optional parts: each shape
+answers a different question, and using another shape's scaffolding is how a two-line confirmation
+ends up wearing a header and a verdict. A command either produces a document about a subject,
+narrates what it just did, prints a plan to follow in order, or prints a table to look something up.
 
-| Voice | Who | Shape |
-|---|---|---|
-| document | `scan` and `init` | header, findings, separator, `next` — described in this section |
-| narration | `start`, `skill`, and the steps of `migrate` | one symbol, the fact, the indented consequence; no separator, no verdict, no repeated command prefix |
-| failure | any command, exit `2` | `funky-secure: <action>` then `reason: <diagnosis>`, never decorated, because a script greps it |
+| Shape | Question | Who | Structure |
+|---|---|---|---|
+| document | *what is true about this target* | \`scan\`, \`init\` | header, findings, 90-\`─\` separator, \`next\` — the rest of this section |
+| narration | *what just happened* | \`skill\` | one symbol, the fact, the destination; one indented consequence line; no separator, no verdict, no command prefix repeated |
+| numbered plan | *what do I do, in what order* | \`start\`, the steps of \`migrate\` | a \`funky-secure <command>  ·  <subtitle>\` line, then numbered steps; \`migrate\` carries evidence columns under each step, \`start\` stays flat because its steps are commands |
+| table | *what exists* | \`explain --list\` | aligned columns, one row per rule, no judgement and no summary |
 
-A narration line borrows the symbols and the five-space indent of a finding and nothing else. It is not
-a finding dressed up: `✓` marks something done, `–` something with nothing to do, `ℹ` a decision that
-changed nothing, and a report never uses `✓` because a report states facts rather than accomplishments.
+Order is the reason the plan is not a narration: a symbol cannot carry sequence, and a plan whose
+steps can be read out of order is not a plan. A table is not a document: it lists, and listing is not
+reporting.
+
+**Shared across all four:** the symbols \`✖ ⚠ ℹ ✓ –\` and no others, \`·\` as the field separator, a
+96-column ceiling, colour only on a TTY, and no emoji. A narration line borrows the symbols and the
+five-space indent of a finding and nothing else — \`✓\` marks something done, \`–\` something with nothing
+to do, \`ℹ\` a decision that changed nothing, and a document never uses \`✓\`, because a document states
+facts rather than accomplishments.
+
+**Failure is the fifth shape but not a shape of the report:** exit \`2\` writes
+\`funky-secure: <action>\` then \`reason: <diagnosis>\` and nothing else, never decorated, because a script
+greps those two prefixes and a human reads them first.
 
 ### 10.3 (original text follows)
 
