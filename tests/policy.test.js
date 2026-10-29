@@ -10,6 +10,7 @@ import {
   resolvePolicy,
   severityRank,
 } from '../src/lib/policy.js';
+import { catalog as ruleCatalog } from '../src/rules/index.js';
 
 const catalog = [
   { id: 'pin', severity: { baseline: 'error', strict: 'error' } },
@@ -18,7 +19,7 @@ const catalog = [
 ];
 
 test('exposes the closed vocabularies of the policy model', () => {
-  assert.deepEqual(PRESETS, ['baseline', 'strict']);
+  assert.deepEqual(PRESETS, ['baseline', 'strict', 'starter']);
   assert.deepEqual(RULE_SEVERITIES, ['off', 'info', 'warn', 'error']);
   assert.deepEqual(FAIL_ON_VALUES, ['error', 'warn', 'info', 'none']);
 });
@@ -113,4 +114,95 @@ test('carries the resolved quarantine floor into the policy', () => {
 
 test('ranks severities so the verdict can compare them', () => {
   assert.deepEqual(['off', 'info', 'warn', 'error'].map(severityRank), [0, 1, 2, 3]);
+});
+
+/// The `starter` preset (record 0003, S5): exactly five rules at their `baseline` severity, the other
+/// seven `off`, resolvable from the flag and from the config file, and `baseline`/`strict` untouched.
+
+/** The five the record names, in catalog order — the order the report prints them in. */
+const STARTER_ACTIVE = [
+  'package-manager-pin',
+  'lockfile-committed',
+  'quarantine',
+  'exact-versions',
+  'sensitive-ignored',
+];
+const CATALOG_IDS = ruleCatalog.map((rule) => rule.id);
+
+const resolve = (options) => resolvePolicy({ catalog: ruleCatalog, failOn: 'error', ...options });
+
+/** The ids the resolved policy leaves `off`, in catalog order. */
+function disabled(policy) {
+  return CATALOG_IDS.filter((id) => policy.severities[id] === 'off');
+}
+
+test('starter resolves from --preset and from the config file', () => {
+  assert.equal(resolve({ presetFromFlag: 'starter' }).preset, 'starter');
+  assert.equal(resolve({ config: { preset: 'starter' } }).preset, 'starter');
+  assert.equal(
+    resolve({ presetFromFlag: 'baseline', config: { preset: 'starter' } }).preset,
+    'baseline',
+    'the flag still wins over the config',
+  );
+});
+
+test('starter runs exactly five rules and turns the other seven off', () => {
+  const policy = resolve({ presetFromFlag: 'starter' });
+
+  assert.deepEqual(policy.active, STARTER_ACTIVE, 'the five the record names, in catalog order');
+  assert.deepEqual(disabled(policy), [
+    'foreign-lockfile',
+    'env-not-tracked',
+    'actions-pinned-sha',
+    'no-bot-auto-merge',
+    'ci-no-safety-overrides',
+    'pull-request-target',
+    'workflow-permissions',
+  ]);
+  assert.equal(policy.active.length + disabled(policy).length, CATALOG_IDS.length);
+});
+
+test('starter takes each of its five rules from that rule baseline severity', () => {
+  const policy = resolve({ presetFromFlag: 'starter' });
+
+  for (const rule of ruleCatalog) {
+    const expected = STARTER_ACTIVE.includes(rule.id) ? rule.severity.baseline : 'off';
+    assert.equal(policy.severities[rule.id], expected, `${rule.id} is ${policy.severities[rule.id]}`);
+  }
+  assert.equal(policy.severities['exact-versions'], 'warn', 'a baseline warn stays a warn');
+  assert.equal(policy.severities.quarantine, 'warn', 'starter is a reduced baseline, not a second strict');
+});
+
+test('baseline and strict keep every rule and every declared severity', () => {
+  for (const preset of ['baseline', 'strict']) {
+    const policy = resolve({ presetFromFlag: preset });
+
+    assert.deepEqual(policy.active, CATALOG_IDS, `${preset} runs every catalog rule`);
+    assert.deepEqual(disabled(policy), [], `${preset} turns nothing off`);
+    for (const rule of ruleCatalog) {
+      assert.equal(
+        policy.severities[rule.id],
+        rule.severity[preset],
+        `${preset} gives ${rule.id} its own declared severity`,
+      );
+    }
+  }
+});
+
+test('the config still overrides a starter severity, and off is still off', () => {
+  const promoted = resolve({ presetFromFlag: 'starter', config: { rules: { quarantine: 'error' } } });
+  const silenced = resolve({ presetFromFlag: 'starter', config: { rules: { quarantine: 'off' } } });
+
+  assert.equal(promoted.severities.quarantine, 'error');
+  assert.deepEqual(silenced.active, ['package-manager-pin', 'lockfile-committed', 'exact-versions', 'sensitive-ignored']);
+});
+
+test('starter keeps the manager default quarantine, never the strict floor', () => {
+  assert.equal(quarantineFloor({ preset: 'starter' }), 1440);
+  assert.equal(quarantineFloor({ preset: 'starter', major: 12 }), 1440);
+  assert.equal(quarantineFloor({ preset: 'starter', major: 9 }), 0, 'the pre-11 default is still 0');
+  assert.equal(quarantineFloor({ preset: 'starter', override: 720 }), 720);
+  assert.equal(resolve({ presetFromFlag: 'starter' }).quarantineMinutes, 1440);
+  assert.equal(resolve({ presetFromFlag: 'baseline' }).quarantineMinutes, 1440);
+  assert.equal(resolve({ presetFromFlag: 'strict' }).quarantineMinutes, 4320);
 });
