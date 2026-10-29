@@ -200,7 +200,16 @@ test('a repository past the start says so in one line and names the scan', async
     1,
     'exactly one line says where the repository is',
   );
-  assert.match(stdout, /^the repository is past the start; the next step is funky-secure scan$/m);
+  assert.match(
+    stdout,
+    /^the repository is past the start; the next step is funky-secure scan --preset starter$/m,
+    'the line names the same preset the path ends with',
+  );
+  assert.equal(
+    stdout.includes('why this order'),
+    false,
+    'no order to explain means no order printed',
+  );
 });
 
 test('both closing blocks always print: why this order, and what the starter does not run', async (t) => {

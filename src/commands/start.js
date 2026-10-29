@@ -69,15 +69,16 @@ function renderStart({ off, catalog, pending }) {
   const lines = ['funky-secure start  ·  guidance, nothing is written', ''];
 
   if (pending.length === 0) {
-    lines.push('the repository is past the start; the next step is funky-secure scan');
+    lines.push(`the repository is past the start; the next step is ${SCAN_STEP}`);
   } else {
     // The steps are numbered as printed, so a repository missing only the lockfile starts at 1.
     for (const [index, step] of [...pending, SCAN_STEP].entries()) {
       lines.push(`  ${index + 1}  ${step}`);
     }
-  }
 
-  lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
+    // `why this order` explains an order, so it is printed only when there is one to explain.
+    lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
+  }
 
   // The same sentence the report prints (S6), from the same helper, so the two cannot disagree about
   // what the starter preset left unrun.
