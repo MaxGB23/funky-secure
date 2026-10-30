@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | `draft` — the tool reads `devEngines.packageManager` and never writes it, so the one field npm enforces is absent from the repositories it initializes. |
+| **Status** | `accepted` — agreed 2026-10-30, after the measurement reversed the owner's own proposal for `onFail`. |
 | **Revision** | 1 |
 | **Present contract** | [`docs/spec/commands.md`](../../docs/spec/commands.md) §11.2 (writer W3 writes `packageManager` and nothing else) and [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R1 (as amended by 0020). |
 | **Supersedes** | nothing. It adds a field to a write that exists, and narrows a skip 0020 introduced. |

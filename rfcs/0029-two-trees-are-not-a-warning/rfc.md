@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | `draft` — the rule's message says CI breaks and its severity says nothing is wrong. |
+| **Status** | `accepted` — agreed 2026-10-30; coexistence becomes `error` and the standalone case stays `warn`. |
 | **Revision** | 1 |
 | **Present contract** | [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R3 and [`docs/spec/policy.md`](../../docs/spec/policy.md) §9.1, both of which fix `warn` in every preset. |
 | **Supersedes** | nothing. It narrows a declared deviation from 0001 §4.2, without reopening the goal it defends. |

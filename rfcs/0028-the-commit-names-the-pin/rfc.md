@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | `draft` — the closing commit of `start` stages the pin under a message that names only the lockfile. |
+| **Status** | `accepted` — agreed 2026-10-30; the pin gets a commit of its own before any code moves. |
 | **Revision** | 1 |
 | **Present contract** | [`docs/spec/commands.md`](../../docs/spec/commands.md) §11.7, row 12: `git add pnpm-lock.yaml [package.json] [<the removed lockfile>] && git commit -m "<message>"`. |
 | **Supersedes** | nothing. It amends 0016 and 0018 in one place: which commit carries the pin. |
