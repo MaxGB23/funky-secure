@@ -102,6 +102,7 @@ number keeps resolving.
 | 11 | [`0026`](../../rfcs/0026-a-catalogue-is-not-a-version/rfc.md) | 11.3: step 5 cites the workflow and composite-action lines, not the workflow lines alone |
 | 8 | [`0027`](../../rfcs/0027-the-adversary-comes-in/rfc.md) | 8.2 R1: a manifest that exists and cannot be interpreted is a failure, not a skip, and a declaration that names pnpm with no version is its own failure code |
 | 8 | [`0027`](../../rfcs/0027-the-adversary-comes-in/rfc.md) | 8.2 R5: an unsupported lockfile shape names `pnpm-lock.yaml` and keeps its line, a document cut inside a block is a refused shape, and a `packages:` entry outside the root is refused and reported |
+| 11.7 | [`0028`](../../rfcs/0028-the-commit-names-the-pin/rfc.md) | 11.7: the pin gets a commit of its own after the resolve that re-syncs the lockfile, and the closing commit stages no manifest |
 
 ## Changing the contract
 

@@ -141,8 +141,10 @@ manager's lockfile is still there it names `init --apply` first, then one `pnpm 
 block that was just written, then `funky-secure migrate --apply` — the removal needs the
 `pnpm-lock.yaml` the install creates, and the install needs the block that governs it to exist first.
 It does not name the first add at all, because adding now would write a second lockfile beside the npm
-one. It writes nothing itself — `init --apply` is still the only writer — and it exits `0` in every
-state, because it is advice and not a gate.
+one. Where the manifest still carries a range it names `pin --apply` and, right after the resolve that
+follows it, the commit that carries the pin, so a reader who stops between the two is not left with a
+dirty tree nothing explains. It writes nothing itself — `init --apply` is still the only writer — and
+it exits `0` in every state, because it is advice and not a gate.
 
 `scan` is the product. `init` exists because a diagnosis you cannot act on is half useful: it runs the
 same scan and turns the fixable findings into writes — the package-manager pin, the quarantine gate,
