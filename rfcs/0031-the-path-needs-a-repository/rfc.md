@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | `accepted` — the path stops where the plan cannot be measured, and asks again. |
+| **Status** | `implemented` — outside a repository the path creates it and asks again. |
 | **Revision** | 1 |
 | **Present contract** | none. [`docs/spec/commands.md`](../../docs/spec/commands.md) §11.7 prints `git init` as step 1 and never says what the rest of the path means in a directory that step has not yet run in. |
 | **Supersedes** | nothing. It amends 0015 in the one place 0015 did not reach: a directory that is not a repository yet. |
