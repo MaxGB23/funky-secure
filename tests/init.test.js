@@ -174,8 +174,23 @@ function blockCount(text) {
   return (text.match(/funky-secure:begin/g) ?? []).length;
 }
 
+/**
+ * The `at-policy` fixture carries the pin and nothing else, which stopped being "at policy" the day the
+ * plan started writing the guard beside an existing pin (0030). The guard belongs in that fixture; it
+ * lives here because `tests/fixtures/` is outside this task's surfaces.
+ * @param {string} dir
+ * @returns {string}
+ */
+function withGuard(dir) {
+  const path = join(dir, 'package.json');
+  const json = JSON.parse(readFileSync(path, 'utf8'));
+  json.devEngines = { packageManager: { name: 'pnpm', version: '12.3.4' } };
+  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
+  return dir;
+}
+
 test('a repository already at policy plans nothing and --apply writes nothing', async (t) => {
-  const dir = scratch(t, 'at-policy');
+  const dir = withGuard(scratch(t, 'at-policy'));
   const before = snapshot(dir);
   const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
 
@@ -192,7 +207,7 @@ test('a repository already at policy plans nothing and --apply writes nothing', 
 });
 
 test('the JSON plan document of a repository at policy is empty (previous behavior preserved)', async (t) => {
-  const dir = scratch(t, 'at-policy');
+  const dir = withGuard(scratch(t, 'at-policy'));
   const before = snapshot(dir);
 
   const preview = runner(dir, {
@@ -469,6 +484,53 @@ test('a pin the plan cannot establish writes no guard, and package.json keeps it
   assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), text, 'the file stays byte-identical');
 });
 
+test('a manifest that already declares the pin plans the guard alone and --apply writes it (W3b)', async (t) => {
+  // The measured defect: `init --format json` over a repository pinned by an earlier release and
+  // carrying no `devEngines` printed no `package.json` item at all, so the guard would have shipped
+  // covering only repositories with no pin.
+  const dir = scratch(t);
+  const text = '{\n  "name": "pinned",\n  "packageManager": "pnpm@12.3.4"\n}\n';
+  writeFileSync(join(dir, 'package.json'), text);
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const pins = JSON.parse(preview.stdout.text).plan.filter((item) => item.target === 'package.json');
+  assert.deepEqual(
+    pins.map((item) => [item.operation, item.state]),
+    [['set devEngines.packageManager', 'would-write']],
+    'one item, the guard: the declared pin is never rewritten',
+  );
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+  assert.equal(writeCount(applied.stdout.text), 3, 'the guard, the block and .gitignore');
+
+  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.deepEqual(json.devEngines.packageManager, { name: 'pnpm', version: '12.3.4' });
+  assert.equal(json.packageManager, 'pnpm@12.3.4');
+  assert.equal(Object.hasOwn(json.devEngines.packageManager, 'onFail'), false);
+});
+
+test('a manifest carrying both declarations plans no package.json item at all (W3b)', async (t) => {
+  const dir = scratch(t);
+  const text =
+    '{\n  "name": "pinned-and-guarded",\n  "packageManager": "pnpm@12.3.4",\n  "devEngines": {\n    "packageManager": {\n      "name": "pnpm",\n      "version": "12.3.4"\n    }\n  }\n}\n';
+  writeFileSync(join(dir, 'package.json'), text);
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const pins = JSON.parse(preview.stdout.text).plan.filter((item) => item.target === 'package.json');
+  assert.deepEqual(pins, [], 'nothing to write and nothing to report means no item');
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+  assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), text, 'the file keeps its bytes');
+});
+
 test('a repository on another manager is a skip: the plan never replaces its manager', async (t) => {
   const dir = scratch(t, 'pinned-conflict');
   const before = readFileSync(join(dir, 'package.json'), 'utf8');
@@ -711,7 +773,7 @@ test('next steps names pnpm install first when the repository has no pnpm-lock.y
 
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  pnpm install\n  git add pnpm-workspace.yaml .gitignore\n',
+      'next steps\n  pnpm install\n  git add package.json pnpm-workspace.yaml .gitignore\n',
     ),
     preview.stdout.text,
   );
@@ -728,7 +790,7 @@ test('next steps names the migrate command when a foreign lockfile coexists with
 
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  funky-secure migrate --apply\n  git add pnpm-workspace.yaml .gitignore\n',
+      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n',
     ),
     preview.stdout.text,
   );
@@ -747,7 +809,7 @@ test('the migrate step carries no --from, so a yarn lockfile is not forced throu
   // otherwise. Naming `--from npm` here would force the wrong step (RFC 11.2.2, 11.3).
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  funky-secure migrate --apply\n  git add pnpm-workspace.yaml .gitignore\n',
+      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n',
     ),
     preview.stdout.text,
   );
@@ -755,7 +817,7 @@ test('the migrate step carries no --from, so a yarn lockfile is not forced throu
 });
 
 test('a plan with no human step prints no next steps heading (S3)', async (t) => {
-  const dir = scratch(t, 'at-policy');
+  const dir = withGuard(scratch(t, 'at-policy'));
 
   const preview = runner(dir, {
     tracked: ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'],

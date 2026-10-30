@@ -286,7 +286,15 @@ test('plan() writes the missing pin and the guard beside it, and leaves a passin
     'the guard carries the pin its sibling writes, so applying both leaves one consistent file',
   );
 
-  const passing = context();
+  // A passing pin is never rewritten: the plan leaves `packageManager` alone. The guard beside it is
+  // the other half of the write (0030), so a manifest that already carries both plans nothing at all.
+  const passing = context({
+    version: '12.3.4',
+    packageJson: manifest({
+      packageManager: 'pnpm@12.3.4',
+      devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+    }),
+  });
   passing.repo.root = dir;
   assert.deepEqual(rule.plan(passing, { report: reportFor(null) }), []);
 });
@@ -303,6 +311,60 @@ test('plan() reports a conflicting pin as a conflict item and writes no guard', 
   assert.match(items[0].reason, /npm@10/);
   assert.equal(items[0].content, null);
   assert.equal(items[0].digest, null);
+});
+
+test('plan() writes the guard alone when the manifest already carries the pin (W3b)', (t) => {
+  // The repository this feature exists for: pinned by an earlier release, no guard, where an accidental
+  // `npm install` is stopped by nothing. The pin is not rewritten — so there is no pin item — and the
+  // guard carries the version that declaration establishes, never the machine's second opinion.
+  const dir = scratch(t);
+  const ctx = context({ version: '12.3.4', packageManager: 'pnpm@12.3.4' });
+  ctx.repo.root = dir;
+
+  const items = rule.plan(ctx, { report: reportFor(null) });
+
+  assert.equal(items.length, 1, 'exactly one item, and it is the guard');
+  const [guard] = items;
+  assert.equal(guard.target, 'package.json');
+  assert.equal(guard.operation, 'set devEngines.packageManager');
+  assert.equal(guard.state, 'would-write');
+  assert.ok(guard.path.startsWith(dir));
+  assert.deepEqual(JSON.parse(guard.content).devEngines.packageManager, {
+    name: 'pnpm',
+    version: '12.3.4',
+  });
+  assert.equal(JSON.parse(guard.content).packageManager, 'pnpm@12.3.4', 'the declared pin is kept');
+});
+
+test('plan() writes the guard at the declared version, not the machine version (W3b)', (t) => {
+  const dir = scratch(t);
+  const ctx = context({ version: '12.3.4', packageManager: 'pnpm@12.16.0' });
+  ctx.repo.root = dir;
+
+  const items = rule.plan(ctx, { report: reportFor(null) });
+
+  assert.deepEqual(
+    items.map((item) => [item.operation, item.state]),
+    [['set devEngines.packageManager', 'would-write']],
+    'a pin this rule passes is not rewritten, so only the guard is planned',
+  );
+  assert.equal(
+    JSON.parse(items[0].content).devEngines.packageManager.version,
+    '12.16.0',
+    'the version the manifest ends up declaring, never the answering one',
+  );
+});
+
+test('plan() plans no package.json item when both declarations are already there (W3b)', (t) => {
+  const dir = scratch(t);
+  const json = {
+    packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+  };
+  const ctx = context({ version: '12.3.4', packageJson: manifest(json) });
+  ctx.repo.root = dir;
+
+  assert.deepEqual(rule.plan(ctx, { report: reportFor(null) }), [], 'nothing to write, so no item');
 });
 
 test('plan() does nothing when no pnpm answered', (t) => {

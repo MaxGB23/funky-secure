@@ -285,10 +285,10 @@ export default {
   },
 
   /**
-   * RFC 8.2 fix `auto` (W3), with the guard beside it (W3b): declare the missing pin, or report the
-   * conflicting one as a conflict and leave it alone. The finding comes from the same report the run
-   * renders, so the plan cannot describe a different repository than the scan. The guard carries the
-   * version the pin establishes, and a pin that is a conflict plans none (0030).
+   * RFC 8.2 fix `auto`: the guard the manifest does not declare (W3b), and the missing pin (W3) when the
+   * rule failed. The finding comes from the same report the run renders, so the plan cannot describe a
+   * different repository than the scan. The guard carries the version the pin establishes — the one W3
+   * writes, or the one the manifest already declares — and a plan whose pin is a conflict plans none.
    *
    * @param {object} ctx resolved context
    * @param {{ report?: object }} [options]
@@ -300,7 +300,7 @@ export default {
     if (version === null) return [];
 
     const declared = declaredPin(ctx);
-    const failed =
+    const failing =
       report === undefined
         ? readablePackageJson(ctx) && declared !== `pnpm@${version}`
         : findingsOf(report, this.id).some(
@@ -308,8 +308,7 @@ export default {
               finding.status === 'fail' &&
               (finding.code === 'pin-missing' || finding.code === 'pin-conflict'),
           );
-    if (!failed) return [];
 
-    return planPackageManagerWrites(ctx, { version });
+    return planPackageManagerWrites(ctx, { version, pinFailing: failing });
   },
 };

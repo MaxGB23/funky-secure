@@ -566,47 +566,91 @@ export function writeDevEnginesPackageManager({ packageJsonText = null, version 
 }
 
 /**
+ * The version a declared pin establishes, or `null` when the declaration is not a versioned pnpm.
+ *
+ * This reads the manifest, never the machine: the guard the plan writes must carry the version the
+ * manifest ends up declaring, and a `packageManager` the tool keeps is a second opinion if its version
+ * is replaced with whatever pnpm answered (RFC 0030, 11.2).
+ * @param {object | null} json the parsed manifest
+ * @returns {string | null}
+ */
+function declaredPinVersion(json) {
+  const value = json?.packageManager;
+  if (typeof value !== 'string') return null;
+  const match = /^pnpm@(\d+\.\d+\.\d+\S*)$/.exec(value);
+  return match === null ? null : match[1];
+}
+
+/**
  * W3 and W3b, in the order the plan prints them: the pin, then the guard beside it.
  *
  * Two plan items over one file on purpose — the plan is the only place a human sees what will be
  * written, so a writer that reports one path and changes two keys is the defect 0019 and 0027 both
- * name. The guard's input is the pin's own bytes when the pin writes, so applying both items leaves
- * one file carrying both keys instead of the second overwriting the first.
+ * name. The guard's input is the pin's own bytes when the pin writes, so applying both items leaves one
+ * file carrying both keys instead of the second overwriting the first.
  *
- * A pin that is a conflict establishes no version, so no guard is planned: the two fields can never
- * end up disagreeing (RFC 0030).
+ * **The guard is planned whenever the manifest declares no `devEngines.packageManager` and a versioned
+ * pnpm pin is established**, whichever of the two established it (0030):
+ *
+ * - the pin is written by this plan, so the guard rides on the pin's bytes and carries its version;
+ * - the manifest already declares the pin and this plan keeps it, so the guard rides on the manifest's
+ *   own bytes and carries the version that declaration names — never the answering one;
+ * - the pin is a conflict, so nothing establishes a version and no guard is planned. The two
+ *   declarations are then never written disagreeing.
+ *
+ * Nothing is emitted for a file this plan would not touch: a repository carrying both declarations gets
+ * no `package.json` item at all.
  *
  * @param {object} ctx
- * @param {{ version?: string | null }} [options]
+ * @param {{ version?: string | null, pinFailing?: boolean }} [options] `version` is what the pin writes
+ *   when `pinFailing`, and `pinFailing` is the rule's own verdict on the declaration
  * @returns {Array<object>} plan items
  */
-export function planPackageManagerWrites(ctx, { version = null } = {}) {
+export function planPackageManagerWrites(ctx, { version = null, pinFailing = false } = {}) {
   const packageJsonText = ctx?.repo?.files?.packageJson?.text ?? null;
-  const pin = writePackageManagerPin({ packageJsonText, version });
-  const items = [
-    planTarget(ctx, {
+  const packageJson = ctx?.repo?.files?.packageJson?.json ?? null;
+  const items = [];
+
+  let guardInput = packageJsonText;
+  let established = null;
+
+  if (pinFailing) {
+    const pin = writePackageManagerPin({ packageJsonText, version });
+    const pinItem = planTarget(ctx, {
       relative: PACKAGE_JSON_RELATIVE,
       operation: 'set packageManager',
       result: pin,
-    }),
-  ];
+    });
+    items.push(pinItem);
 
-  // A conflict — the writer's or the write-target guard's — is the whole answer: nothing establishes
-  // the version the guard would carry.
-  if (items[0].state === 'conflict') return items;
+    // A conflict — the writer's or the write-target guard's — is the whole answer: nothing establishes
+    // the version the guard would carry.
+    if (pinItem.state === 'conflict') return items;
+
+    established = version;
+    if (pin.ok === true && pin.state === 'would-write') guardInput = pin.content;
+  } else {
+    // The declaration this plan keeps is the one that establishes the version.
+    established = declaredPinVersion(packageJson);
+    if (established === null) return items;
+  }
+
+  if (typeof established !== 'string' || established === '') return items;
 
   const guard = writeDevEnginesPackageManager({
-    packageJsonText: pin.ok && pin.state === 'would-write' ? pin.content : packageJsonText,
-    version,
+    packageJsonText: guardInput,
+    version: established,
   });
-  items.push(
-    planTarget(ctx, {
-      relative: PACKAGE_JSON_RELATIVE,
-      operation: 'set devEngines.packageManager',
-      result: guard,
-    }),
-  );
+  const guardItem = planTarget(ctx, {
+    relative: PACKAGE_JSON_RELATIVE,
+    operation: 'set devEngines.packageManager',
+    result: guard,
+  });
 
+  // Already at policy with nothing else over this file: no item, because this plan would not touch it.
+  if (items.length === 0 && guardItem.state === 'would-skip') return items;
+
+  items.push(guardItem);
   return items;
 }
 
@@ -746,9 +790,10 @@ export function planStrictConfig(ctx, { configText = null, existingPath = null }
  * a context and a report. Conditions follow RFC 11.2 and 11.2.1 — W1a when this repository's managed
  * block does not declare the gate, whatever the machine applies, W1b when the preset is `strict`, W1c
  * when the block does not carry `savePrefix: ''`, W2 when `sensitive-ignored` failed, W3 and W3b when
- * `package-manager-pin` failed (a conflicting pin becomes a conflict item and plans no guard), W4 when
- * the preset is `strict`. Without a report the rule-driven writes (W2, W3, W3b) are not planned: no
- * finding, no fix.
+ * `package-manager-pin` failed (a conflicting pin becomes a conflict item and plans no guard), W3b alone
+ * when the pin passes and the manifest declares no guard, and W4 when the preset is `strict`. Without a
+ * report the rule-driven writes (W2, W3) are not planned: no finding, no fix; the guard follows the pin
+ * itself, which the manifest already declares.
  *
  * @param {object} ctx
  * @param {{ policy?: object, severity?: object, report?: object, configText?: string | null, configPath?: string | null }} [options]
@@ -803,11 +848,15 @@ export function planFor(
       finding.status === 'fail' &&
       (finding.code === 'pin-missing' || finding.code === 'pin-conflict'),
   );
-  if (pinFailed) {
-    items.push(
-      ...planPackageManagerWrites(ctx, { version: ctx.machine?.version ?? null }),
-    );
-  }
+  // W3 and W3b: the pin when the rule failed, and the guard beside it whenever a versioned pnpm pin is
+  // established and the manifest declares none — a pin-by-pin decision, so a failing and a passing pin
+  // are two inputs to one derivation instead of two conditions in two places.
+  items.push(
+    ...planPackageManagerWrites(ctx, {
+      version: ctx.machine?.version ?? null,
+      pinFailing: pinFailed,
+    }),
+  );
 
   // W4: the strict preset persists itself.
   if (preset === 'strict') {

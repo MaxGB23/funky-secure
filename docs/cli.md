@@ -354,7 +354,7 @@ happens.
 | W1c | `pnpm-workspace.yaml` | `savePrefix: ''` in the same block: stops a later `pnpm add` from saving a caret (D-18) |
 | W2 | `.gitignore` | the managed block with the entries `sensitive-ignored` requires: `.env`, `.env.*`, `!.env*.example`, `*.pem`, `*.key`, `node_modules/`, and `.npmrc` unless the repository tracks a root `.npmrc` without a token |
 | W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing |
-| W3b | `package.json` | `devEngines.packageManager: { "name": "pnpm", "version": "<the version W3 writes>" }`, and never `onFail`: npm treats the absent value as `error`, pnpm's default is its own version switch, and any explicit value is a regression for one of the two managers (0030). Its own plan item beside W3, so the plan reports it separately; every other key of `devEngines` and of the manifest is preserved, a field whose `name` and `version` already match is already at policy (whatever its `onFail` says, which is never rewritten), and a field that differs or cannot be interpreted is a `conflict` |
+| W3b | `package.json` | `devEngines.packageManager: { "name": "pnpm", "version": "<the version the pin establishes>" }`, and never `onFail`: npm treats the absent value as `error`, pnpm's default is its own version switch, and any explicit value is a regression for one of the two managers (0030). Written whenever a versioned pnpm pin is established and the manifest declares no guard — whether the pin is the one W3 writes in this plan or the one the manifest already declares — as its own plan item beside W3, so the plan reports it separately. Every other key of `devEngines` and of the manifest is preserved; a field whose `name` and `version` already match is already at policy (whatever its `onFail` says, which is never rewritten), and a field that differs or cannot be interpreted is a `conflict` |
 | W4 | `funky-secure.config.json` | `{ "preset": "strict" }` so CI agrees with the run; `--preset strict` only |
 
 It refuses — exit `3`, naming the file or the reason, and writing nothing:
@@ -373,8 +373,11 @@ you can read. A second `--apply` over the same state performs zero writes.
 
 W3 and W3b are two items over one file on purpose. The plan is the only place a human sees what will
 be written before it is, so a writer that reports one path and changes two keys would hide half of
-its own edit. The guard's version is the one the pin establishes, never a second opinion: a plan whose
-pin is a conflict establishes no version and plans no guard, so the two fields can never disagree.
+its own edit. The guard's version is the one the pin establishes, never a second opinion — the version
+the manifest ends up declaring, which is the pin the plan writes when it writes one and the pin the
+manifest already carries when it does not. A plan whose pin is a conflict establishes no version and
+plans no guard, so the two declarations can never be written disagreeing with each other; and a
+repository that already carries both gets no `package.json` item at all.
 
 ### `pin`
 
