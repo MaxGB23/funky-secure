@@ -368,3 +368,20 @@ export function parseLockfile(text) {
     };
   }
 }
+
+/**
+ * The version an importer's lockfile entry records for one dependency, or null when it records none.
+ *
+ * Shared with `funky-secure pin`, which writes exactly this value: a command that pins must read the
+ * same fact the rule reports, or it would pin to something the report never mentioned (RFC 4.9).
+ *
+ * @param {object | null | undefined} lock one importer from `parseLockfile`
+ * @param {string} name the dependency
+ * @param {string} type the dependency section
+ * @returns {string | null}
+ */
+export function recordedVersion(lock, name, type) {
+  const record = lock?.[type]?.[name];
+  if (!record || typeof record.version !== 'string' || record.version === '') return null;
+  return record.version;
+}

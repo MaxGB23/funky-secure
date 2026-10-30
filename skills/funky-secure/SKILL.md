@@ -1,6 +1,6 @@
 ---
 name: funky-secure
-version: 0.6.1
+version: 0.7.0
 description: Bootstrap or audit a pnpm repository's supply-chain posture. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
 ---
 
@@ -9,7 +9,8 @@ description: Bootstrap or audit a pnpm repository's supply-chain posture. Use wh
 A CLI that reads a pnpm repository and says whether its supply-chain posture matches a policy. It
 never installs, never edits your machine, and never rewrites a dependency tree.
 
-`start` is read-only guidance. Inside the repository `init --apply` is the only writer. Outside it,
+`start` is read-only guidance. Inside the repository `init --apply` and `pin --apply` are the writers,
+and each writes only when it is asked. Outside it,
 `skill --install` places this file where an agent runtime reads it, and only when asked. Everything
 else reports.
 
@@ -36,12 +37,14 @@ It prints the applicable steps in order, and the order is the contract:
 
 1. `git init` — when the directory is not a repository.
 2. `pnpm init` — when there is no manifest.
-3. `funky-secure migrate` — when another manager's lockfile is still present.
+3. A commit — when the files it will touch carry uncommitted work, because the writer refuses to write
+   over a tree whose state is not recorded.
 4. `funky-secure init --apply` — the pin, the release-age gate, the ignore block.
-5. `pnpm add <first dependency>` — when there is no lockfile yet.
-6. `funky-secure scan --preset starter` — the reduced audit.
+5. `pnpm install` and `funky-secure migrate --apply` — when another manager's lockfile is still present.
+6. `pnpm add <first dependency>` — when there is no lockfile yet.
+7. `funky-secure scan --preset starter` — the reduced audit.
 
-**Never install before step 4 has run.** `savePrefix: ''` and `minimumReleaseAge` only act on an
+**Never install before the block exists.** `savePrefix: ''` and `minimumReleaseAge` only act on an
 install that happens after the managed block exists. Installing first is how a project acquires
 caret ranges and an ungoverned resolution on day one.
 
@@ -64,7 +67,13 @@ Read `summary.verdict` first, then `findings`. Each finding carries `rule`, `sev
 | `none` | Report only; there is no fix. |
 
 Exit codes are part of the contract: `0` clean at the threshold, `1` a policy violation, `2` the tool
-could not answer. `2` is never a pass.
+could not answer, `3` the tool understood the situation and refused to act, writing nothing. Neither
+`2` nor `3` is a pass, and `3` names the action that lifts it: do that, then re-run.
+
+Ranges that already exist are a second debt, and it has its own verb: `funky-secure pin` prints the
+plan, `funky-secure pin --apply` performs it, and the plan ends with the install that re-records the
+lockfile. The gate in `pnpm-workspace.yaml` governs the dependencies you add next; it does not touch
+the ones already there.
 
 `--scope repo` is what a CI gate reads; `--scope all` adds the machine (the pnpm that answers here and
 its configuration). Use `--scope repo` in CI, `--scope all` when diagnosing locally.
@@ -87,6 +96,8 @@ These are the ways a "fix" makes a repository worse. None of them is a valid res
   A committed secret stays committed; rotation is the only remedy.
 - **Do not resolve a `conflict`.** A conflict means the tool refused to overwrite a file that says
   something else. Stop and ask the human.
+- **Do not run a writer because it looked like the next step.** `init --apply` and `pin --apply` are
+  run because the human asked for that change, not because a plan printed it. A plan is an offer.
 
 ## Closing a task
 

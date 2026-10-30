@@ -105,6 +105,29 @@ The decisive stop is the working-tree check immediately before the first write: 
 uncommitted changes, or a `git status` that cannot answer, refuses at exit `2` and writes nothing
 (11.2 safety rules, 11.5 point 4). Printing a plan never reaches it.
 
+### `pin`
+
+```mermaid
+flowchart TD
+  a["argv and the help flag"] -->|"any other flag outside its list"| z["exit 2 usage error"]
+  a --> b["collect the same facts scan reads"]
+  b --> c["read package.json and pnpm-lock.yaml"]
+  c -->|"nothing floats"| n["nothing to apply, exit 0"]
+  c --> d["pin each floating specifier to its recorded version"]
+  d -->|"no recorded version"| m["name it as not pinned"]
+  d --> e["print the plan with the specifier list"]
+  e -->|"no --apply"| f["exit 0, nothing written"]
+  e --> g["apply: one item per file"]
+  g -->|"uncommitted target"| r["exit 3 refusal, nothing written"]
+  g --> h["write the manifest"]
+```
+
+One write per file, because a plan item carries the whole rewritten content: two items for one
+`package.json` would leave only the last one's change. The version comes from `pnpm-lock.yaml` and from
+nowhere else (4.9), so a specifier with no recorded resolution is named as not pinned instead of being
+guessed. The command never installs, so it ends by naming the `pnpm install --lockfile-only` that
+re-records the lockfile it just desynced by design (11.6).
+
 ### `migrate`
 
 ```mermaid

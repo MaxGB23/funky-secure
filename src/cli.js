@@ -15,6 +15,7 @@ import { TOOL } from './lib/tool.js';
 import { run as explain } from './commands/explain.js';
 import { run as init } from './commands/init.js';
 import { run as migrate } from './commands/migrate.js';
+import { run as pin } from './commands/pin.js';
 import { run as scan } from './commands/scan.js';
 import { run as skill } from './commands/skill.js';
 import { run as start } from './commands/start.js';
@@ -25,6 +26,10 @@ export const COMMANDS = Object.freeze([
   { name: 'start', summary: 'Print the ordered steps from an empty directory to a first scan. Read-only, exits 0.' },
   { name: 'scan', summary: 'Read-only audit: report findings and the verdict. Exits 0, 1 or 2.' },
   { name: 'init', summary: 'Print the write plan; --apply performs it.' },
+  {
+    name: 'pin',
+    summary: 'Pin floating specifiers to the versions pnpm-lock.yaml records; --apply writes them.',
+  },
   { name: 'migrate', summary: 'Print the five-step plan for leaving npm or yarn; --apply performs step 4.' },
   { name: 'explain', summary: 'Explain one rule in depth; with no rule id it prints the catalog.' },
   {
@@ -41,7 +46,7 @@ export const FLAGS = Object.freeze([
   {
     name: '--help',
     key: 'help',
-    commands: ['start', 'scan', 'init', 'migrate', 'explain', 'skill'],
+    commands: ['start', 'scan', 'init', 'pin', 'migrate', 'explain', 'skill'],
     boolean: true,
   },
   { name: '--scope', key: 'scope', commands: ['scan'], values: ['auto', 'repo', 'machine', 'all'] },
@@ -49,7 +54,7 @@ export const FLAGS = Object.freeze([
   {
     name: '--format',
     key: 'format',
-    commands: ['scan', 'init', 'explain'],
+    commands: ['scan', 'init', 'pin', 'explain'],
     values: ['human', 'json'],
   },
   {
@@ -63,8 +68,8 @@ export const FLAGS = Object.freeze([
   { name: '--strict-probes', key: 'strictProbes', commands: ['scan'], boolean: true },
   { name: '--with-timestamp', key: 'withTimestamp', commands: ['scan'], boolean: true },
   { name: '--verbose', key: 'verbose', commands: ['scan'], boolean: true },
-  { name: '--apply', key: 'apply', commands: ['init', 'migrate'], boolean: true },
-  { name: '--allow-dirty', key: 'allowDirty', commands: ['init', 'migrate'], boolean: true },
+  { name: '--apply', key: 'apply', commands: ['init', 'pin', 'migrate'], boolean: true },
+  { name: '--allow-dirty', key: 'allowDirty', commands: ['init', 'pin', 'migrate'], boolean: true },
   { name: '--from', key: 'from', commands: ['migrate'], values: ['npm', 'yarn', 'auto'] },
   { name: '--list', key: 'list', commands: ['explain'], boolean: true },
   { name: '--install', key: 'install', commands: ['skill'], boolean: true },
@@ -118,7 +123,7 @@ function exitMessage(error) {
   return { action: INPUT_ACTION, reason };
 }
 
-const HANDLERS = { start, scan, init, migrate, explain, skill };
+const HANDLERS = { start, scan, init, pin, migrate, explain, skill };
 
 function defaultsFor(command) {
   const options = {};

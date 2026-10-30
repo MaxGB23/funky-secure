@@ -336,3 +336,31 @@ which case the message names the path and the temporary file is removed rather t
 
 This section is amended by records 0004 and 0005.
 
+
+### 11.9 `pin`
+
+```
+funky-secure pin [--format human|json] [--apply] [--allow-dirty]
+```
+
+The complement of 8.2 R5: it writes the version `pnpm-lock.yaml` already records for each specifier
+that floats, so the install resolves to the tree it resolved to when the lockfile was made, without a
+human retyping `pnpm pkg set` once per finding. The version comes from the lockfile or is not written:
+a floating range with no recorded resolution is listed as not pinned, with the reason, and never
+guessed (4.9).
+
+Without `--apply` it prints the plan — the manifest, the count, and the line list of each specifier
+with the range it leaves and the version it takes — and exits `0`. With `--apply` it performs exactly
+that plan, one write per file, because a plan item carries the whole rewritten manifest: indentation,
+key order and line endings survive and only the specifiers change.
+
+Three limits are part of the contract. It writes the repository-root `package.json` only; a workspace
+importer is named as not pinned, with its count, because reading another manifest would need a probe
+this command alone would use. It never runs an install (11.6), so the plan ends by naming the
+`pnpm install --lockfile-only` that re-records the `specifier` field the write desynced on purpose. It
+keeps no allowlist: a specifier edited back to a range is reported by the next scan like any other, and
+a per-package exception is the user's decision in the diff (8.2 R5).
+
+It refuses — exit `3`, nothing written — on uncommitted changes to the target, unless `--allow-dirty`
+is passed, and it is idempotent: a second `--apply` over the same state performs zero writes. With
+`--format json` stdout carries the plan document and nothing else; the ledger of writes goes to stderr.

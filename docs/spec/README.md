@@ -76,6 +76,7 @@ number keeps resolving.
 | 8 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 8.2 R2: `git add -f` when an ignore rule also matches the untracked lockfile, because a plain `git add` cannot stage an ignored path |
 | 8 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 8.2 R8: the remediation is printed from the action and the ref the finding carries, not from a generic `owner/repo` template |
 | 11 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 11.7: the commit step, because `init --apply` refuses to write over an uncommitted tree |
+| 11 | [`0011`](../../rfcs/0011-pin-command/rfc.md) | 11.9: the `pin` command — the plan, the write, the three limits and the exit codes |
 
 ## Changing the contract
 
