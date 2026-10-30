@@ -38,24 +38,21 @@ there, `funky-secure pin --apply` with the resolve that re-syncs the lockfile an
 carries its rewrite of the manifest when the repository still has a range, `pnpm add <your first
 dependency>` when it is not, and `funky-secure scan --preset starter` last. Each one prints only while
 its condition holds: a repository that already has a manifest, a lockfile and a commit, but no managed
-block, is told to run `init --apply` and then `scan`, numbered from `1`. An empty directory, from a
-real run:
+block, is told to run `init --apply` and then `scan`, numbered from `1`.
+
+A directory that is not a repository yet is the exception, and it is deliberate: the write plan is
+derived from facts only a repository can answer — the ignore rule asks `git check-ignore` and skips
+outside one, and the clean-tree question has no git to ask — so the first run prints only the steps that
+create the state, and ends by asking again. An empty directory, from a real run:
 
 ```text
 funky-secure start  ·  guidance, nothing is written
 
   1  git init
   2  pnpm init
-  3  funky-secure init --apply  plan the 1 write (nothing is written)
-  4  git add pnpm-workspace.yaml && git commit -m "chore: apply funky-secure"
-  5  pnpm add <your first dependency>
-  6  git add pnpm-lock.yaml && git commit -m "chore: track the lockfile"
-  7  funky-secure scan --preset starter
+  3  funky-secure start
 
-why this order
-  the workspace block has to exist before the install that reads it, and a lockfile can
-  only exist after the first add
-  a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run
+  the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git
 
 not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions
