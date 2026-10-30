@@ -117,7 +117,7 @@ export function buildReport({
     summary[finding.severity] += 1;
   }
 
-  summary.verdict = decideVerdict(normalized, policy.failOn);
+  summary.verdict = decideVerdict(normalized, policy.failOn, policy.requireVerified === true);
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -127,6 +127,7 @@ export function buildReport({
       preset: policy.preset,
       quarantineMinutes: policy.quarantineMinutes,
       failOn: policy.failOn,
+      requireVerified: policy.requireVerified === true,
     },
     provenance: provenance === null ? null : toNfc(provenance),
     targets: targets.map((target) => toNfc(target)),
@@ -139,8 +140,12 @@ export function buildReport({
  * A finding fails the run when it sits at or above the threshold. Skips and passes never do;
  * `none` is the pure-reporting mode and is always a pass (RFC 10.5).
  */
-function decideVerdict(findings, failOn) {
+function decideVerdict(findings, failOn, requireVerified = false) {
   if (failOn === 'none') return 'pass';
+  // 0023: with `--require-verified` the coverage is part of the gate, so an unverified rule fails the
+  // run. The verdict says `fail` because a machine that reads the JSON must reach the same conclusion
+  // as a CI that reads only the exit code; a verdict of `pass` beside exit 1 is two answers.
+  if (requireVerified && findings.some((finding) => finding.status === 'skip')) return 'fail';
   const threshold = severityRank(failOn);
   for (const finding of findings) {
     if (finding.status !== 'fail' && finding.status !== 'error') continue;

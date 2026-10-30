@@ -29,6 +29,7 @@ document that changes without a new record.
 | [0020](0020-self-managed-pin/rfc.md) | A pin the project manages is not a conflict | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1 |
 | [0021](0021-the-step-matches-the-manager/rfc.md) | The printed step matches the manager | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2.2, §11.3, §11.7 |
 | [0022](0022-the-output-tells-the-truth/rfc.md) | The output tells the truth | `implemented` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3; [`docs/spec/scope.md`](../docs/spec/scope.md) §8.2 R7 |
+| [0023](0023-the-gate-can-refuse-an-unknown/rfc.md) | The gate can refuse an unknown | `implemented` | — | — | [`docs/cli.md`](../docs/cli.md) §scan |
 
 ## Layout
 

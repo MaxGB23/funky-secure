@@ -7,6 +7,8 @@ import { join } from 'node:path';
 
 import { FLAGS, parseArgs, renderHelp, run } from '../src/cli.js';
 import { BEGIN, END } from '../src/lib/managed-block.js';
+
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 import { catalog } from '../src/rules/index.js';
 import { FIXTURES, buildFixtureCollector } from '../scripts/gen-golden.js';
 
@@ -417,10 +419,12 @@ test('migrate prints the five RFC steps in order from the repository facts', asy
   assert.ok(streams.stdout.text.includes('pnpm import'));
 });
 
-test('a skip is named in human output, not only counted (0022)', async (t) => {
-  // The verdict said "1 rule not verified" and the reader could not learn which rule or why: the
-  // renderer hardcoded an empty `skipped` array on the path that groups findings without a path, so a
-  // lockfile the tool refuses to read disappeared from the human report entirely.
+/**
+ * A repository whose lockfile declares `catalogs`: `exact-versions` cannot read it, so it skips.
+ * @param {object} t
+ * @returns {string}
+ */
+function catalogsRepo(t) {
   const dir = scratch(t);
   writeFileSync(join(dir, 'package.json'), '{"dependencies":{"react":"18.3.1"}}');
   writeFileSync(
@@ -442,6 +446,14 @@ test('a skip is named in human output, not only counted (0022)', async (t) => {
       '',
     ].join('\n'),
   );
+  return dir;
+}
+
+test('a skip is named in human output, not only counted (0022)', async (t) => {
+  // The verdict said "1 rule not verified" and the reader could not learn which rule or why: the
+  // renderer hardcoded an empty `skipped` array on the path that groups findings without a path, so a
+  // lockfile the tool refuses to read disappeared from the human report entirely.
+  const dir = catalogsRepo(t);
 
   const streams = io(dir, { root: dir });
   const code = await run(['scan', '--scope', 'all', '--only', 'exact-versions'], streams);
@@ -449,6 +461,63 @@ test('a skip is named in human output, not only counted (0022)', async (t) => {
   assert.equal(code, 0, 'an unverified rule does not fail the gate');
   assert.match(streams.stdout.text, /1 rule not verified/);
   assert.match(streams.stdout.text, /exact-versions/, 'the verdict names the rule it could not verify');
+});
+
+test('--version answers from the shipped manifest (0023)', async () => {
+  // The only way a user who installed the tarball can ask which build they have.
+  const streams = io(process.cwd());
+  const code = await run(['--version'], streams);
+
+  assert.equal(code, 0);
+  assert.equal(streams.stdout.text.trim(), packageJson.version);
+});
+
+test('--require-verified turns an unverified rule into a failing verdict (0023)', async (t) => {
+  // A green gate is a claim about coverage, and a skip is the one finding that claims nothing while
+  // still ending the run at 0. The opt-in moves the coverage into the verdict itself rather than only
+  // changing the exit code, so a CI log that reads the line and a machine that reads the JSON agree.
+  const dir = catalogsRepo(t);
+
+  const streams = io(dir, { root: dir });
+  const code = await run(
+    ['scan', '--scope', 'all', '--only', 'exact-versions', '--require-verified', '--format', 'json'],
+    streams,
+  );
+
+  const report = JSON.parse(streams.stdout.text);
+  assert.equal(code, 1, 'the run fails when a rule could not be verified');
+  assert.equal(report.summary.verdict, 'fail', 'the verdict says so, not only the exit code');
+  assert.equal(report.policy.requireVerified, true, 'the policy records the flag that decided it');
+  assert.equal(report.summary.skip, 1);
+});
+
+test('--require-verified is a no-op when every rule was verified (0023)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{"dependencies":{"react":"18.3.1"}}');
+  writeFileSync(
+    join(dir, 'pnpm-lock.yaml'),
+    [
+      "lockfileVersion: '9.0'",
+      '',
+      'importers:',
+      '',
+      '  .:',
+      '    dependencies:',
+      '      react:',
+      '        specifier: 18.3.1',
+      '        version: 18.3.1',
+      '',
+    ].join('\n'),
+  );
+
+  const streams = io(dir, { root: dir });
+  const code = await run(
+    ['scan', '--scope', 'repo', '--only', 'exact-versions', '--require-verified'],
+    streams,
+  );
+
+  assert.equal(code, 0, 'nothing unverified means nothing to refuse');
+  assert.match(streams.stdout.text, /PASS/);
 });
 
 test('migrate refuses outside git with exit 3, because it decided not to act', async (t) => {

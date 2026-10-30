@@ -63,6 +63,7 @@ export const FLAGS = Object.freeze([
     commands: ['scan'],
     values: ['error', 'warn', 'info', 'none'],
   },
+  { name: '--require-verified', key: 'requireVerified', commands: ['scan'], boolean: true },
   { name: '--only', key: 'only', commands: ['scan'], list: true, values: null },
   { name: '--ignore', key: 'ignore', commands: ['scan'], list: true, values: null },
   { name: '--strict-probes', key: 'strictProbes', commands: ['scan'], boolean: true },
@@ -311,6 +312,8 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
   lines.push(
     '',
     'exit codes: 0 nothing at or above --fail-on · 1 a policy violation · 2 the tool could not answer',
+    `${TOOL.name} --version prints the installed version and exits 0.`,
+    'exit code 3 means the command refused to act: nothing was written and nothing was decided by chance.',
     '            3 the tool understood and refused, writing nothing',
     '',
   );
@@ -335,6 +338,13 @@ export async function run(argv, io = {}) {
   const catalog = io.catalog ?? defaultCatalog;
 
   try {
+    // The one question a package has to answer about itself. A user who installed the tarball has no
+    // CLI command to ask, and `--help` prints the whole surface (RFC 0023).
+    if (argv.includes('--version')) {
+      stdout.write(`${TOOL.version}\n`);
+      return 0;
+    }
+
     const { command, options, positionals } = parseArgs(argv);
     if (command === null || options.help === true) {
       stdout.write(renderHelp({ catalog }));
