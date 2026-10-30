@@ -113,6 +113,34 @@ test('another manager fails with pin-conflict', () => {
   assert.deepEqual(finding.remediation, { kind: 'manual', command: 'corepack use pnpm@12.3.4' });
 });
 
+test('a pin the project manages itself is a skip, not a conflict (0020)', () => {
+  // pnpm 12 with devEngines.packageManager answers with the version the project declares, not the
+  // one on PATH: from its own directory it reported 12.16.0 while the binary answering was 12.3.4.
+  // The version probe now runs outside the repository (0019), so it sees the PATH binary and used to
+  // report a conflict whose remediation told the user to downgrade the project.
+  const json = {
+    packageManager: 'pnpm@12.16.0',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.16.0', onFail: 'download' } },
+  };
+  const [finding] = rule.detect(
+    context({
+      version: '12.3.4',
+      packageJson: { path: 'C:/repo/package.json', text: JSON.stringify(json), json, error: null },
+    }),
+  );
+
+  assert.equal(finding.status, 'skip', 'the PATH binary says nothing about a self-managed pin');
+  assert.equal(finding.code, 'self-managed-pin');
+  assert.equal(finding.remediation.kind, 'none', 'and it must never suggest a downgrade');
+});
+
+test('a pnpm pin without a self-managing devEngines entry is still a conflict', () => {
+  const [finding] = rule.detect(context({ version: '12.3.4', packageManager: 'pnpm@12.16.0' }));
+
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'pin-conflict');
+});
+
 test('another pnpm version fails with pin-conflict', () => {
   const [finding] = rule.detect(context({ packageManager: 'pnpm@11.0.0' }));
 

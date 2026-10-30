@@ -47,6 +47,10 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
 - **False positives:** repositories deliberately on another manager. That is not a false positive; it
   is the finding. The override is `off`, and the report says so.
 
+
+A pin the project manages itself (`devEngines.packageManager`, which pnpm 12 writes on `pnpm init`)
+that differs from the answering binary is `skip` with `self-managed-pin`: the probe runs outside the
+repository (7.3, 0019), and the pnpm that answers there describes the machine, not that project (0020).
 #### R2 — `lockfile-committed` · friction 0 · sev `error`/`error` · fix `none`
 
 - **Question:** is the lockfile present, tracked, and not ignored?

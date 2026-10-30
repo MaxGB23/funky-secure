@@ -17,6 +17,7 @@ Reads `packageManager` from the root `package.json` and compares it with the ver
 | `packageManager` equals `pnpm@<observed version>` | `pass` | — |
 | `packageManager` is absent | `fail` | `pin-missing` |
 | `packageManager` names npm, yarn, bun, or another pnpm version | `fail` | `pin-conflict` |
+| `packageManager` differs but the project manages its own pnpm (`devEngines.packageManager`) | `skip` | `self-managed-pin` |
 | `pnpm --version` did not answer | `skip` | `no-pnpm` |
 | Machine facts are out of scope (`--scope repo`) | `skip` | `no-pnpm` |
 | The root `package.json` is missing or malformed | `skip` | `no-package-json` |
@@ -44,6 +45,9 @@ The executable path is evidence, not message text: a report body never carries a
   `packageManager` to `"pnpm@<observed version>"`. The message names that exact value.
 - `pin-conflict` — `manual`: `corepack use pnpm@<observed version>`. A value that exists and differs
   is never overwritten (RFC 4.3); the plan reports it as a conflict instead.
+- `self-managed-pin` — `none`: pnpm 12 with `devEngines.packageManager` answers with the version the
+  project declares, not the one on `PATH`. The probe runs outside the repository (0019), so a
+  difference here is not evidence that the pin is wrong, and the rule never recommends a downgrade.
 - `no-pnpm`, `no-package-json` — `none`: the rule cannot answer, so it does not recommend a write.
   A scope-contract skip is not a missing fact: it still names the command that answers the question
   (`funky-secure scan --scope all`), inside the message.
