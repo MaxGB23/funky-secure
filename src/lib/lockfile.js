@@ -182,15 +182,29 @@ function mapEntries(lines, context) {
  * @param {string} section
  * @param {number} line
  */
+/**
+ * Checks that an ignored top-level section is a map, and stops there.
+ *
+ * The property worth protecting is that the section can be skipped: the reader never looks inside it,
+ * so nothing it declares can change what an importer specifier resolves to. A sequence directly under
+ * the section would mean the reader is guessing at a layout it does not model, and that fails here.
+ *
+ * It does not recurse, and that is the correction record 0012 makes. Recursing demanded a map at every
+ * depth, which rejected legal lockfiles: `packages` carries `bundledDependencies` as a sequence (every
+ * `@next/swc-wasm-*` entry) and `snapshots` carries `transitivePeerDependencies` as one (vitest and
+ * its siblings). Three of seven real lockfiles on the author's machine were refused this way, each
+ * making every dependency comparison in that repository a skip — a valid YAML list inside an ignored
+ * section cannot lie about a specifier, so refusing it bought no soundness and cost the rule.
+ *
+ * @param {LockfileLine[]} children the section's body
+ * @param {string} section the top-level key, for the message
+ * @param {number} line the section's own line
+ */
 function validateIgnoredSection(children, section, line) {
   if (children.length === 0) return;
   const first = children[0];
-  if (first.text === '-' || first.text.startsWith('- ')) {
-    fail(`top-level "${section}" section is not a map (line ${first.no})`);
-  }
-  for (const entry of mapEntries(children, `"${section}" at line ${line}`)) {
-    validateIgnoredSection(children.slice(entry.start + 1, entry.end), section, entry.line);
-  }
+  if (first.text !== '-' && !first.text.startsWith('- ')) return;
+  fail(`top-level "${section}" section is not a map (line ${first.no})`);
 }
 
 /**

@@ -77,6 +77,7 @@ number keeps resolving.
 | 8 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 8.2 R8: the remediation is printed from the action and the ref the finding carries, not from a generic `owner/repo` template |
 | 11 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 11.7: the commit step, because `init --apply` refuses to write over an uncommitted tree |
 | 11 | [`0011`](../../rfcs/0011-pin-command/rfc.md) | 11.9: the `pin` command — the plan, the write, the three limits and the exit codes |
+| 11 | [`0012`](../../rfcs/0012-lockfile-lists/rfc.md) | 8.2 R5: ignored lockfile sections are checked at the first level, and a legal list inside one is not a refusal |
 
 ## Changing the contract
 
