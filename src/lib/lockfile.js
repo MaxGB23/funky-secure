@@ -397,5 +397,11 @@ export function parseLockfile(text) {
 export function recordedVersion(lock, name, type) {
   const record = lock?.[type]?.[name];
   if (!record || typeof record.version !== 'string' || record.version === '') return null;
-  return record.version;
+  // pnpm records a snapshot resolved with peers as `9.39.5(jiti@2.7.0)(supports-color@7.2.0)`. The
+  // parenthesised tail names the peer set that snapshot was built against; the version is what comes
+  // before the first paren. Returning the whole string wrote it into a manifest as a specifier no
+  // resolver accepts, and compared a bare specifier against it as a desync — one shared read, three
+  // wrong answers (0014).
+  const paren = record.version.indexOf('(');
+  return paren === -1 ? record.version : record.version.slice(0, paren);
 }

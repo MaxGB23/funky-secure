@@ -311,6 +311,7 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
   lines.push(
     '',
     'exit codes: 0 nothing at or above --fail-on · 1 a policy violation · 2 the tool could not answer',
+    '            3 the tool understood and refused, writing nothing',
     '',
   );
   return `${lines.join('\n')}\n`;
