@@ -81,6 +81,7 @@ number keeps resolving.
 | 10.4, 11.5, 11.9 | [`0013`](../../rfcs/0013-scenario-findings/rfc.md) | 10.4/11.5: a refusal that cannot ask is a refusal, not a failure; 11.9: the pin summary counts a manifest already at policy |
 | 8.2, 10.4 | [`0014`](../../rfcs/0014-peer-suffix/rfc.md) | 8.2 R5: the recorded version is the bare version, never the snapshot identity with its peer suffix; 10.4: `--help` names exit `3` |
 | 11.7 | [`0015`](../../rfcs/0015-followable-start/rfc.md) | 11.7: `start` prints the commit after its writes, the `pin` step, and the branch `migrate` requires |
+| 11.7 | [`0016`](../../rfcs/0016-close-the-loop/rfc.md) | 11.7: the writing commit names the paths it stages, and the path closes with a commit that tracks the lockfile |
 
 ## Changing the contract
 

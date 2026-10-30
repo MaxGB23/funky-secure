@@ -1,6 +1,6 @@
 ---
 name: funky-secure
-version: 0.8.0
+version: 0.8.1
 description: Bootstrap or audit a pnpm repository's supply-chain posture. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
 ---
 
@@ -38,12 +38,14 @@ It prints the applicable steps in order, and the order is the contract:
 1. `git init`, then `pnpm init` — when either is missing.
 2. A commit — only when the tree already carries uncommitted work, because the writer refuses it.
 3. `funky-secure init --apply` — the pin, the release-age gate, the ignore block.
-4. A commit — because step 3 just dirtied the tree, and the next writer refuses that.
+4. A commit naming the files that step wrote — because it just dirtied the tree, and the next writer
+   refuses that. It names them, so an untracked tool cache beside them stays out.
 5. `pnpm install` — when another manager's lockfile is still present.
 6. `funky-secure pin --apply` — when the manifest still carries ranges; the workspace block governs
    the dependencies added next, and nothing else clears the ones already there.
 7. `funky-secure migrate --apply` — on a feature branch: it refuses to remove a lockfile on `main`.
-8. `funky-secure scan --preset starter` — the reduced audit.
+8. A commit staging the lockfile — the last step reads a tracked one.
+9. `funky-secure scan --preset starter` — the reduced audit.
 
 **Never install before the block exists.** `savePrefix: ''` and `minimumReleaseAge` only act on an
 install that happens after the managed block exists. Installing first is how a project acquires

@@ -43,6 +43,10 @@ const SCAN_STEP = `funky-secure scan --preset ${START_PRESET}`;
  */
 const COMMIT_MESSAGE = 'chore: baseline before funky-secure';
 const COMMIT_STEP = `git add -A && git commit -m "${COMMIT_MESSAGE}"`;
+/** The commit that closes the writes: it names them, so an untracked cache beside them stays out. */
+const APPLY_MESSAGE = 'chore: apply funky-secure';
+/** The commit that puts the lockfile under version control, which is what the last scan reads. */
+const TRACK_MESSAGE = 'chore: track the lockfile';
 
 /**
  * Why the same step appears twice, and what each appearance is for.
@@ -95,10 +99,20 @@ function foreignLockfiles(repo) {
  * @param {{ repo: object | null, writes: number }} state
  * @returns {string[]}
  */
-function pendingSteps({ repo, writes, uncommitted = false, pins = 0 }) {
+function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [], trackLockfile = false }) {
   const present = Array.isArray(repo?.present) ? repo.present : [];
   const foreign = foreignLockfiles(repo);
   const steps = [];
+  const tracked = (paths ?? []).filter((path) => typeof path === 'string' && path !== '');
+  const commitWrites =
+    tracked.length > 0
+      ? `git add ${tracked.join(' ')} && git commit -m "${APPLY_MESSAGE}"`
+      : COMMIT_STEP;
+  // A commit that stages nothing is not a step. The lockfile needs one only when it will be new — the
+  // install above is about to write it — or when the report already says it is untracked.
+  const lockfileAtEnd = foreign.length > 0 || trackLockfile;
+  const trackFiles = ['pnpm-lock.yaml', ...(pins > 0 ? ['package.json'] : [])];
+  const trackStep = `git add ${trackFiles.join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
 
   if (repo?.inGit !== true) steps.push('git init');
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
@@ -113,8 +127,9 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0 }) {
     steps.push(
       `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')} (nothing is written)`,
     );
-    // `init --apply` leaves the manifest dirty, and `pin --apply` refuses that state.
-    steps.push(COMMIT_STEP);
+    // `init --apply` leaves the manifest dirty, and `pin --apply` refuses that state. The commit names
+    // the files the plan wrote, so an untracked tool cache beside them is not swept in.
+    steps.push(commitWrites);
   }
   if (foreign.length > 0) {
     steps.push('pnpm install');
@@ -135,6 +150,9 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0 }) {
       'funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
     );
   }
+  // The last scan reads a tracked lockfile. Whether one will exist is knowable here — the install above
+  // writes it, or it is already present — so the step is printed from a fact and not from a guess.
+  if (lockfileAtEnd) steps.push(trackStep);
 
   return steps;
 }
@@ -232,7 +250,19 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
   // S4's last step runs `scan --preset starter`, so that is the coverage the reader will get.
   const starter = resolvePolicy({ catalog, presetFromFlag: START_PRESET, failOn: 'none' });
 
-  const pending = pendingSteps({ repo: ctx.repo, writes, uncommitted, pins: floating });
+  const pending = pendingSteps({
+    repo: ctx.repo,
+    writes,
+    uncommitted,
+    pins: floating,
+    trackLockfile: (report.findings ?? []).some(
+      (finding) => finding.rule === 'lockfile-committed' && finding.status !== 'pass',
+    ),
+    // The plan's own targets, spelled the way git wants them: the same paths `applyPlan` writes.
+    paths: plan
+      .map((item) => (typeof item.path === 'string' ? relative(ctx.cwd ?? ctx.repo.root, item.path) : null))
+      .filter((path) => path !== null),
+  });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
   stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending, migrate }));
   return 0;
