@@ -15,7 +15,7 @@
 
 import { planTarget } from './writers.js';
 import { parseLockfile, recordedVersion } from './lockfile.js';
-import { DEPENDENCY_SECTIONS, isFloating } from './specifiers.js';
+import { DEPENDENCY_SECTIONS, isCatalogue, isFloating } from './specifiers.js';
 
 const PACKAGE_JSON = 'package.json';
 /** The importer `pnpm-lock.yaml` uses for the repository root. */
@@ -34,7 +34,7 @@ function detectIndent(text) {
  * @returns {{ pins: Array<{ section: string, name: string, from: string, to: string }>, exact: string[], unrecorded: string[], workspace: number, reason: string | null }}
  */
 export function collectPins({ packageJsonText = null, lockfileText = null } = {}) {
-  const empty = { pins: [], exact: [], unrecorded: [], workspace: 0, reason: null };
+  const empty = { pins: [], exact: [], catalogue: [], unrecorded: [], workspace: 0, reason: null };
   if (typeof packageJsonText !== 'string') {
     return { ...empty, reason: `${PACKAGE_JSON} could not be read` };
   }
@@ -53,6 +53,7 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
 
   const pins = [];
   const exact = [];
+  const catalogue = [];
   const unrecorded = [];
   for (const section of DEPENDENCY_SECTIONS) {
     const dependencies = manifest[section];
@@ -60,6 +61,12 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
       continue;
     }
     for (const [name, specifier] of Object.entries(dependencies)) {
+      if (isCatalogue(specifier)) {
+        // Neither floating nor exact: the version is the catalogue's. Counted separately so the plan
+        // can say it was left alone instead of calling it exact, which would be a different claim (0026).
+        catalogue.push(`${name} (${section})`);
+        continue;
+      }
       if (!isFloating(specifier)) {
         // Counted, not ignored: a second run that writes nothing must still say the manifest is at
         // policy, or its summary claims zero of both and reads as if nothing had been checked (0013).
@@ -76,7 +83,7 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
   }
 
   const workspace = Object.keys(parsed?.importers ?? {}).filter((key) => key !== ROOT_IMPORTER).length;
-  return { pins, exact, unrecorded, workspace, reason: null };
+  return { pins, exact, catalogue, unrecorded, workspace, reason: null };
 }
 
 /**
@@ -131,6 +138,13 @@ export function planPins({ ctx }) {
   const notes = [];
   for (const missing of collected.unrecorded) {
     notes.push(`${missing} floats and the lockfile records no version, so it is not pinned`);
+  }
+  if (collected.catalogue.length > 0) {
+    const count = collected.catalogue.length;
+    notes.push(
+      `${count} catalogue reference${count === 1 ? '' : 's'} left alone: the version lives in ` +
+        'pnpm-workspace.yaml, and pinning one here would delete the reference',
+    );
   }
   if (collected.workspace > 0) {
     notes.push(

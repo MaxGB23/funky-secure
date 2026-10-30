@@ -26,6 +26,11 @@ probe, no network, no `git ls-remote`. Zero unpinned references is a pass.
 A workflow the reader cannot parse yields one `skip: unparseable-workflow` for that file, and the
 rule never adds a pass on top of it: a malformed input is not a verified clean workflow.
 
+A composite action under `.github/actions/**` is read by the same reader, and skips with one of two
+codes: `not-an-action` when the file declares no top-level `runs:` block, so no step can be
+attributed, and `unparseable-action` when it declares one the reader cannot attribute. Neither is a
+pass: a file the tool could not read is not a file it verified.
+
 ## Evidence
 
 `file:line`, the raw reference exactly as written — quotes and trailing comment included — and the

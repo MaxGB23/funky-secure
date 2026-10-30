@@ -442,6 +442,32 @@ test('step 5 quotes a workflow line that still runs npm ci', async (t) => {
   );
 });
 
+test('step 5 suggests a composite action too, not only workflows', async (t) => {
+  // A composite action is CI the audit already reads (S11). A migration that only named workflows left
+  // the `npm ci` inside .github/actions/** uncited, so following the plan left one npm step behind.
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'package-lock.json': '{"lockfileVersion": 3}',
+    'pnpm-lock.yaml': 'lockfileVersion: 9\n',
+    '.github/actions/setup/action.yml': [
+      'name: setup',
+      'runs:',
+      '  using: composite',
+      '  steps:',
+      '    - run: npm ci',
+      '',
+    ].join('\n'),
+  });
+
+  const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(result.code, 0);
+  assert.match(
+    result.stdout,
+    /5\. ci follow-up \(suggestions only\)\n {3}\.github\/actions\/setup\/action\.yml:5 {2}- run: npm ci/,
+  );
+});
+
 test('step 5 suggests nothing when no workflow mentions npm or yarn', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,

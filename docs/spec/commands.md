@@ -155,7 +155,8 @@ Plan steps, printed in order:
    `yarn.lock` or `package-lock.json` and records the versions they pinned, which `pnpm install`
    discards by resolving from the manifest. This step is never executed by the tool (4.9).
 4. **Removal:** the foreign lockfile(s), only after `pnpm-lock.yaml` exists.
-5. **CI follow-up:** the workflow lines that need rewriting, quoted by `file:line`, as suggestions.
+5. **CI follow-up:** the workflow and composite-action lines that need rewriting, quoted by
+   `file:line`, as suggestions.
 
 `--apply` performs step 4 only. It refuses when `pnpm-lock.yaml` is absent (never delete the only
 lockfile), when the tree is dirty for those files, or when the current branch is the default branch.
@@ -376,7 +377,9 @@ importer is named as not pinned, with its count, because reading another manifes
 this command alone would use. It never runs an install (11.6), so the plan ends by naming the
 `pnpm install --lockfile-only` that re-records the `specifier` field the write desynced on purpose. It
 keeps no allowlist: a specifier edited back to a range is reported by the next scan like any other, and
-a per-package exception is the user's decision in the diff (8.2 R5).
+a per-package exception is the user's decision in the diff (8.2 R5). A `catalog:` or `catalog:<name>`
+reference is neither floating nor exact: the plan counts it as left alone, with the reason, and never
+writes a version over it, because the version belongs to the catalogue the reference names.
 
 It refuses — exit `3`, nothing written — on uncommitted changes to the target, unless `--allow-dirty`
 is passed, and it is idempotent: a second `--apply` over the same state performs zero writes, and that

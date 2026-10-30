@@ -98,6 +98,8 @@ number keeps resolving.
 | 10 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 10.4: the four exit codes restated — a refusal is `3` and only `2` is a question the tool could not answer |
 | 11 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 11.2, 11.3 and 11.8: a refusal is exit `3`, and 11.2's W2 names `!.env*.example` and `node_modules/` |
 | 12 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 12.5: the machine facts a rule does not carry are twelve rules' worth, not nine |
+| 8, 11 | [`0026`](../../rfcs/0026-a-catalogue-is-not-a-version/rfc.md) | 8.2 R5 and 11.9: a `catalog:` reference is neither floating nor exact — `pin` counts it as left alone and never writes a version over it |
+| 11 | [`0026`](../../rfcs/0026-a-catalogue-is-not-a-version/rfc.md) | 11.3: step 5 cites the workflow and composite-action lines, not the workflow lines alone |
 
 ## Changing the contract
 
