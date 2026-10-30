@@ -322,9 +322,14 @@ function summaryLine(summary) {
  * @param {boolean} color
  * @returns {string}
  */
-function verdictLine(summary, failOn, color) {
+function verdictLine(summary, failOn, color, unverifiedIds = []) {
   const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
-  const unverified = summary.skip > 0 ? ` · ${plural(summary.skip, 'rule', 'rules')} not verified` : '';
+  // The count alone left the reader unable to learn which rule it was: the refused-lockfile skip never
+  // reached the body either, so "1 rule not verified" was the whole story (0022). The ids ride the
+  // verdict, where a reader and a CI log both look.
+  const named = unverifiedIds.length > 0 ? `: ${unverifiedIds.join(', ')}` : '';
+  const unverified =
+    summary.skip > 0 ? ` · ${plural(summary.skip, 'rule', 'rules')} not verified${named}` : '';
   return (
     `${'verdict'.padEnd(LABEL_WIDTH)}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)}` +
     ` (threshold: ${failOn}${unverified})`
@@ -472,7 +477,12 @@ export function renderHuman(report, { color = false, verbose = false, off } = {}
   ];
   if (report.provenance) lines.push(...provenanceLine(report.provenance));
   lines.push(summaryLine(report.summary));
-  lines.push(verdictLine(report.summary, report.policy.failOn, color));
+  const unverifiedIds = [
+    ...new Set(
+      report.findings.filter((finding) => finding.status === 'skip').map((finding) => finding.rule),
+    ),
+  ];
+  lines.push(verdictLine(report.summary, report.policy.failOn, color, unverifiedIds));
   if (off !== undefined) lines.push(...notRunLines({ off, catalog: defaultCatalog }));
   lines.push(SEPARATOR, '');
 

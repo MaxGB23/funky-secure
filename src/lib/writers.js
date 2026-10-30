@@ -35,6 +35,10 @@ export const GITIGNORE_ENTRIES = Object.freeze([
   '!.env.test.example',
   '*.pem',
   '*.key',
+  // The install step of the path creates it, so ignoring it is the tool closing its own loop rather
+  // than a preference about the project: a generated repository ended with `?? node_modules/` and the
+  // path that promises a clean tree could not deliver one (0022). Nothing framework-specific is added.
+  'node_modules/',
 ]);
 
 const QUARANTINE_GATE_KEY = 'minimumReleaseAgeStrict';

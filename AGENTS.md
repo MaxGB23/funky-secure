@@ -17,6 +17,7 @@ Where things live in this repository. Two axes, and each document belongs to exa
 | `docs/delivery.md` | Contract for CI, pinning, release and provenance (record §17). |
 | `docs/rules/<id>.md` | The page a user reads about one rule; names the spec as normative. |
 | `docs/decisions.md` | Decision log, `D-n` product decisions and `I-n` implementation decisions. |
+| `docs/field-loop.md` | The method that finds what the tests cannot: delegate a fresh session per scenario, triage every claim against the code, pine the finding as a fixture. |
 | `rfcs/README.md` | RFC registry: number, title, status, `supersedes` / `superseded-by`. |
 | `rfcs/0001-funky-secure-v1/rfc.md` | Frozen record, revision 7. **Not edited.** Corrections are a dated `## Errata` append or the next record. |
 | `odd/tasks/<feature>.md` | Feature record: specs, tasks, and an append-only Log. |

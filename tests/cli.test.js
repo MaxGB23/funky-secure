@@ -417,6 +417,40 @@ test('migrate prints the five RFC steps in order from the repository facts', asy
   assert.ok(streams.stdout.text.includes('pnpm import'));
 });
 
+test('a skip is named in human output, not only counted (0022)', async (t) => {
+  // The verdict said "1 rule not verified" and the reader could not learn which rule or why: the
+  // renderer hardcoded an empty `skipped` array on the path that groups findings without a path, so a
+  // lockfile the tool refuses to read disappeared from the human report entirely.
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{"dependencies":{"react":"18.3.1"}}');
+  writeFileSync(
+    join(dir, 'pnpm-lock.yaml'),
+    [
+      "lockfileVersion: '9.0'",
+      '',
+      'catalogs:',
+      '  default:',
+      '    react: 18.3.1',
+      '',
+      'importers:',
+      '',
+      '  .:',
+      '    dependencies:',
+      '      react:',
+      '        specifier: 18.3.1',
+      '        version: 18.3.1',
+      '',
+    ].join('\n'),
+  );
+
+  const streams = io(dir, { root: dir });
+  const code = await run(['scan', '--scope', 'all', '--only', 'exact-versions'], streams);
+
+  assert.equal(code, 0, 'an unverified rule does not fail the gate');
+  assert.match(streams.stdout.text, /1 rule not verified/);
+  assert.match(streams.stdout.text, /exact-versions/, 'the verdict names the rule it could not verify');
+});
+
 test('migrate refuses outside git with exit 3, because it decided not to act', async (t) => {
   const dir = scratch(t);
   const streams = io(dir);

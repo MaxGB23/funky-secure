@@ -532,7 +532,7 @@ test('the verdict names what it did not verify, so PASS is never read as checked
   ]);
   const line = renderedLines(report).find((entry) => entry.startsWith('verdict'));
 
-  assert.equal(line, 'verdict  PASS (threshold: error · 2 rules not verified)');
+  assert.equal(line, 'verdict  PASS (threshold: error · 2 rules not verified: quarantine, exact-versions)');
   assert.ok(line.length <= 96, 'the verdict stays inside the column bound');
 });
 
@@ -546,7 +546,7 @@ test('the verdict says nothing extra when every rule was verified', () => {
 test('a single unverified rule is singular in the verdict', () => {
   const report = reportWith([finding({ rule: 'quarantine', status: 'skip', path: null, message: 'not verified' })]);
   const line = renderedLines(report).find((entry) => entry.startsWith('verdict'));
-  assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified)');
+  assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified: quarantine)');
 });
 
 test('a single skipped rule keeps its own block; two or more collapse into one line', () => {
@@ -562,7 +562,9 @@ test('a single skipped rule keeps its own block; two or more collapse into one l
       finding({ rule: 'exact-versions', status: 'skip', path: null, message: 'not verified either' }),
     ]),
   );
-  const collapsed = many.find((line) => line.includes('not verified:'));
+  const collapsed = many.find(
+    (line) => line.includes('not verified:') && line.trimStart().startsWith('–'),
+  );
   assert.equal(collapsed, '  –  2 rules not verified: Quarantine, Dependency ranges');
   assert.match(many[many.indexOf(collapsed) + 1], /^ {5}→ funky-secure scan --verbose/, 'the collapse says how to expand');
   assert.equal(many.some((line) => line.includes('not verified either')), false, 'the reasons moved behind --verbose');

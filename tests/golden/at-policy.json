@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "tool": {
     "name": "funky-secure",
-    "version": "0.8.6"
+    "version": "0.8.7"
   },
   "scope": "all",
   "policy": {
