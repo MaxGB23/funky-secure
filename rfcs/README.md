@@ -22,6 +22,7 @@ document that changes without a new record.
 | [0013](0013-scenario-findings/rfc.md) | What the scenarios found | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §10.4, §11.5, §11.9 |
 | [0014](0014-peer-suffix/rfc.md) | The version and its peer suffix | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5; [`docs/spec/commands.md`](../docs/spec/commands.md) §10.4 |
 | [0015](0015-followable-start/rfc.md) | The start that can be followed | `implemented` | — | [`0009`](0009-gate-before-resolve/rfc.md) | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
+| [0016](0016-close-the-loop/rfc.md) | Close the loop | `implemented` | — | [`0015`](0015-followable-start/rfc.md) | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 
 ## Layout
 

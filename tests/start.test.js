@@ -202,6 +202,8 @@ function generatedBy(dir, { lockfile, committed = true }) {
 
 const SCAN_STEP = 'funky-secure scan --preset starter';
 const BASELINE_COMMIT = 'chore: baseline before funky-secure';
+const APPLY_COMMIT = 'chore: apply funky-secure';
+const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
 test('an empty directory is six steps, numbered from one', async (t) => {
@@ -213,9 +215,10 @@ test('an empty directory is six steps, numbered from one', async (t) => {
     '  1  git init',
     '  2  pnpm init',
     '  3  funky-secure init --apply  plan the 1 write (nothing is written)',
-    `  4  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  4  git add pnpm-workspace.yaml && git commit -m "${APPLY_COMMIT}"`,
     `  5  ${ADD_STEP}`,
-    `  6  ${SCAN_STEP}`,
+    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  7  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes(dir), false, 'no absolute path reaches the steps');
 });
@@ -228,9 +231,10 @@ test('a repository without a manifest starts at pnpm init', async (t) => {
   assert.deepEqual(stepLines(stdout), [
     '  1  pnpm init',
     '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  3  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  4  ${ADD_STEP}`,
-    `  5  ${SCAN_STEP}`,
+    `  5  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  6  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes('git init'), false, 'it is already a repository');
 });
@@ -242,7 +246,7 @@ test('a repository with a plan to write names init --apply and how many writes',
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  2  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  3  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile is committed');
@@ -254,7 +258,11 @@ test('a repository missing only the lockfile starts at the first dependency', as
   const { code, stdout } = await start(dir);
 
   assert.equal(code, 0);
-  assert.deepEqual(stepLines(stdout), [`  1  ${ADD_STEP}`, `  2  ${SCAN_STEP}`]);
+  assert.deepEqual(stepLines(stdout), [
+    `  1  ${ADD_STEP}`,
+    `  2  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  3  ${SCAN_STEP}`,
+  ]);
   assert.equal(stdout.includes('init --apply'), false, 'nothing is left to write');
   assert.equal(stdout.includes('git init'), false);
   assert.equal(stdout.includes('pnpm init'), false);
@@ -323,13 +331,14 @@ test('an npm-generated project installs once, and the gate exists before that in
   assert.equal(code, 0, 'a second package manager is guidance, not a refusal');
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  2  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm install',
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  5  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
-    `  6  ${SCAN_STEP}`,
+    `  6  git add pnpm-lock.yaml package.json && git commit -m "${TRACK_COMMIT}"`,
+    `  7  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7], 'the numbering stays continuous');
   assert.ok(
     stdout.indexOf('init --apply') < stdout.indexOf('pnpm install'),
     'the gate is written before the resolve that reads it',
@@ -359,9 +368,10 @@ test('an uncommitted repository is told to commit before it is told to apply', a
   assert.deepEqual(stepLines(stdout), [
     `  1  git add -A && git commit -m "${BASELINE_COMMIT}"`,
     '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  3  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
-    `  5  ${SCAN_STEP}`,
+    `  5  git add pnpm-lock.yaml package.json && git commit -m "${TRACK_COMMIT}"`,
+    `  6  ${SCAN_STEP}`,
   ]);
   assert.ok(
     stdout.indexOf('git commit') < stdout.indexOf('init --apply'),
@@ -392,11 +402,12 @@ test('a pnpm-generated project is told neither to migrate nor to add', async (t)
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  2  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
-    `  4  ${SCAN_STEP}`,
+    `  4  git add pnpm-lock.yaml package.json && git commit -m "${TRACK_COMMIT}"`,
+    `  5  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5], 'the numbering stays continuous');
   assert.equal(stdout.includes('funky-secure migrate'), false, 'no foreign lockfile to leave behind');
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile the generator wrote is the one to keep');
   assert.equal(
