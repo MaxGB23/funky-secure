@@ -9,6 +9,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { join, relative as relativePath } from 'node:path';
 
 import { currentBranch, ignoredPaths, trackedFiles } from './git.js';
+import { validateWriteTarget } from './paths.js';
 
 export const TARGET_KINDS = ['machine', 'repo-root', 'importer', 'ci', 'editor'];
 
@@ -62,6 +63,41 @@ function parseJson(text) {
   }
 }
 
+/**
+ * What is wrong with a manifest this module could not interpret, or `null` when it read one (S4).
+ *
+ * The parse error was stored on the file record and read by nobody, so a truncated `package.json` or
+ * one that opens with a byte-order mark produced no finding at all: every rule that needed the
+ * manifest skipped, and the verdict was `pass`. The classification lives here, once, so the two rules
+ * that read a manifest cannot describe the same file two different ways.
+ *
+ * A byte-order mark is not "invalid JSON": it is a mark the file starts with, JSON.parse refuses it,
+ * and a reader told "not valid JSON" would go looking for a syntax error that is not there. It is
+ * said in its own words, first, before the parse error it caused is considered.
+ *
+ * @param {{ text?: string, json?: unknown, error?: string } | null | undefined} file a file record
+ * @returns {{ code: 'byte-order-mark' | 'invalid-json' | 'not-an-object', detail: string } | null}
+ *   `detail` is a phrase that follows the file name: `package.json ${detail}` reads as one sentence.
+ */
+export function manifestProblem(file) {
+  if (file === null || file === undefined) return null;
+  const text = typeof file.text === 'string' ? file.text : '';
+  if (text.startsWith('\uFEFF')) {
+    return {
+      code: 'byte-order-mark',
+      detail: 'starts with a byte-order mark (U+FEFF), which JSON does not allow',
+    };
+  }
+  if (typeof file.error === 'string' && file.error !== '') {
+    return { code: 'invalid-json', detail: `is not valid JSON (${file.error})` };
+  }
+  const json = file.json;
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) {
+    return { code: 'not-an-object', detail: 'does not contain a JSON object' };
+  }
+  return null;
+}
+
 async function exists(path) {
   try {
     await stat(path);
@@ -89,15 +125,45 @@ async function readTextFile(collector, path) {
 }
 
 /**
- * Single-level expansion of a `packages:` entry (RFC 7.1). A nested glob is reported, never
- * silently ignored.
- * @returns {{ dirs: string[], skipped: string[] }}
+ * Single-level expansion of a `packages:` entry (RFC 7.1). A nested glob is reported, never silently
+ * ignored, and an entry that leaves the repository root is refused before anything is read.
+ *
+ * The containment question is the one `paths.js` already answers for a write target, reused here
+ * instead of a second check that could disagree with it: a `packages:` entry of `..` was expanded as a
+ * plain path, so the scan read the parent manifest and reported `../package.json`, a file the
+ * repository does not contain (S3).
+ * @returns {{ dirs: string[], skipped: Array<{ entry: string, code: string, reason: string }> }}
  */
 async function expandEntry(root, entry) {
   const cleaned = entry.replace(/\/+$/, '');
+  // `unresolvable` is not a refusal: it means the parent directory does not exist, which is the
+  // ordinary empty case below. `not-relative` and `outside-root` are the two answers that say this
+  // entry would be read outside the repository, and both are refused under the name a reader sees.
+  const guard = validateWriteTarget({ root, relative: cleaned });
+  if (!guard.ok && (guard.reason === 'not-relative' || guard.reason === 'outside-root')) {
+    return {
+      dirs: [],
+      skipped: [
+        {
+          entry,
+          code: 'outside-root',
+          reason: 'resolves outside the repository root, so the entry is not expanded',
+        },
+      ],
+    };
+  }
   if (!cleaned.includes('*')) return { dirs: [cleaned], skipped: [] };
   if (cleaned.split('*').length - 1 > 1 || cleaned.slice(cleaned.indexOf('*')).includes('/')) {
-    return { dirs: [], skipped: [entry] };
+    return {
+      dirs: [],
+      skipped: [
+        {
+          entry,
+          code: 'unsupported-glob',
+          reason: 'a nested glob is not expanded, so its directories are not read',
+        },
+      ],
+    };
   }
 
   const [prefix, suffix] = cleaned.split('*');

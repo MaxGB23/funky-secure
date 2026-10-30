@@ -15,14 +15,32 @@ and the version on the machine's `PATH` is evidence rather than a verdict (0024)
 
 | State | Status | Code |
 |---|---|---|
+| The root `package.json` exists and cannot be interpreted | `fail` | `unparseable-package-json` |
 | `packageManager` names a versioned pnpm | `pass` | `pin-differs-from-machine` when the machine answers another version |
 | `packageManager` is absent | `fail` | `pin-missing` |
+| `packageManager` names pnpm and declares no version (`"pnpm"`, `"pnpm@"`) | `fail` | `pin-unversioned` |
 | `packageManager` names npm, yarn or bun | `skip` | `not-pnpm` |
 | `packageManager` names pnpm in a shape this rule cannot compare | `fail` | `pin-conflict` |
 | `packageManager` differs and the project manages its own pnpm (`devEngines.packageManager`) | `skip` | `self-managed-pin` |
 | `pnpm --version` did not answer | `skip` | `no-pnpm` |
 | Machine facts are out of scope (`--scope repo`) | `skip` | `no-pnpm` |
-| The root `package.json` is missing or malformed | `skip` | `no-package-json` |
+| The root `package.json` is missing | `skip` | `no-package-json` |
+
+**An unreadable manifest is a failure, not an absence.** A `package.json` that exists and cannot be
+interpreted — a byte-order mark, truncated JSON, a document that is not an object — fails with
+`unparseable-package-json`, and the message names the file and what is wrong with it:
+`package.json starts with a byte-order mark (U+FEFF), which JSON does not allow, so the packageManager pin cannot be read`.
+That check comes before every machine check, so no scope makes it a skip, and `--scope repo` cannot
+turn an unreadable manifest into a passing run. A byte-order mark is said in its own words because it
+is not a JSON syntax error, and a reader told "not valid JSON" would go looking for one that is not
+there.
+
+**A declaration that pins nothing fails.** `"packageManager": "pnpm"` names the manager and declares
+no version, which is the state `pin-missing` describes: there is no pin. It is never `not-pnpm` — a
+value that names pnpm is not evidence that the repository is on another manager, and saying so printed
+`package.json declares pnpm, so this repository is not on pnpm` — so it is its own failure,
+`pin-unversioned`. Its fix is manual only because `init --apply` never rewrites a declaration it
+finds; that is a property of the remediation, not of the verdict.
 
 An unverifiable pin is not a wrong pin, so an unavailable version probe is a skip rather than a
 failure; under `--strict-probes` the engine turns that skip into an error. A `--scope repo` scan
@@ -39,6 +57,10 @@ and friction is 0: the declaration is one line in a file every Node repository h
 - `observed` — the version `pnpm --version` reported, or `null` when it did not answer.
 - `executable` — the path of the binary that answered, or `null`.
 
+A manifest the rule could not interpret adds `problem` to that evidence: `byte-order-mark`,
+`invalid-json` or `not-an-object`, so the class of defect is in the report and not only in the
+sentence.
+
 The executable path is evidence, not message text: a report body never carries an absolute path.
 
 ## Remediation
@@ -50,6 +72,9 @@ The executable path is evidence, not message text: a report body never carries a
   difference belongs to the machine. Nothing to fix, nothing to run.
 - `not-pnpm` — `none`: the repository runs on another manager; the rules that need a pnpm repository
   already report the consequence.
+- `pin-unversioned` — `manual`: set `"packageManager": "pnpm@<observed version>"` in `package.json`,
+  and the message names that value, because "declare a version" is not an instruction without one.
+  This one is a hand edit: write W3 fills an absent declaration and never rewrites one it finds.
 - `pin-conflict` — `manual`: `corepack use pnpm@<observed version>`, only for a pnpm declaration this
   rule cannot compare. A value that exists and differs is never overwritten (RFC 4.3).
 - `self-managed-pin` — `none`: pnpm 12 with `devEngines.packageManager` answers with the version the
@@ -58,11 +83,20 @@ The executable path is evidence, not message text: a report body never carries a
 - `no-pnpm`, `no-package-json` — `none`: the rule cannot answer, so it does not recommend a write.
   A scope-contract skip is not a missing fact: it still names the command that answers the question
   (`funky-secure scan --scope all`), inside the message.
+- `unparseable-package-json` — `none`: nothing is written to a file this rule could not read, and
+  `plan()` refuses the same file for the same reason, so no plan item describes a write that cannot
+  happen.
 
 ## Limits
 
 The rule reads one field of one file. It deliberately does not read corepack state, does not resolve
 a version against a registry, does not inspect the lockfile and does not repair a conflicting pin.
+
+One failure is not about the pin: a manifest the rule cannot interpret is reported in its own words,
+whatever the scope, because no machine fact makes a file readable. Every other row above is reached
+only once a pnpm answered, so a `--scope repo` scan reports the out-of-scope `no-pnpm` skip instead;
+`funky-secure scan --scope all` is the run that classifies the declaration, including the
+`no-package-json` skip of a repository with no root manifest.
 
 A repository deliberately on another manager is a `skip`, not a finding: a remediation that replaces a
 deliberate manager with whatever the auditor's machine runs would be worse than the defect it came

@@ -374,6 +374,21 @@ export function writePackageManagerPin({ packageJsonText = null, version = null 
   }
 
   const target = `pnpm@${version}`;
+
+  // A value this writer cannot interpret is not a missing value (S1). `packageManager` is a string in
+  // every shape pnpm reads, so an object, an array, a number or `null` is something the user wrote and
+  // this write has no business replacing: treating it as absent turned
+  // `"packageManager": {"name":"pnpm","version":"10.0.0"}` into `"pnpm@12.3.4"` and exited 0. The
+  // reason names the field and what was found, like every other conflict here.
+  if (typeof json.packageManager !== 'undefined' && typeof json.packageManager !== 'string') {
+    return {
+      ok: false,
+      state: 'conflict',
+      reason: `${PACKAGE_JSON_RELATIVE} already declares packageManager as ${JSON.stringify(json.packageManager)}, which is not a string; it is not overwritten`,
+      key: 'packageManager',
+    };
+  }
+
   const declared =
     typeof json.packageManager === 'string' && json.packageManager !== ''
       ? json.packageManager

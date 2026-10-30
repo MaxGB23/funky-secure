@@ -374,6 +374,107 @@ test('an unsupported lockfile shape is a skip and never a guessed comparison', (
   );
 });
 
+test('a lockfile skip names the file a reader can open, and keeps the line (S6)', () => {
+  // `expected "key: value" at line 3` used to name no file: the skip carried no `path`, so a reader
+  // could not tell which document the reader refused.
+  const findings = rule.detect(
+    ctx({
+      importers: [importer('.', '{"dependencies":{"left-pad":"1.3.0"}}')],
+      lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters\n  .: {}\n" },
+    }),
+  );
+  const [skip] = findings.filter((finding) => finding.code === 'unsupported-lockfile-shape');
+
+  assert.equal(skip.path, 'pnpm-lock.yaml');
+  assert.equal(skip.message, 'skipped: expected "key: value" at line 3');
+  assert.match(skip.message, /line 3/, 'the line number stays, so the reader can open the file at it');
+});
+
+test('an importer that could not be parsed is named, never silently dropped (S4)', () => {
+  // One unparseable importer beside a readable one used to disappear: the generic "no importer
+  // package.json could be parsed" skip only fires when nothing was inspected at all.
+  const broken = {
+    path: '/repo/packages/api/package.json',
+    text: '{ "dependencies": {',
+    json: null,
+    error: 'Unexpected end of JSON input',
+    dir: 'packages/api',
+  };
+  const findings = rule.detect(
+    ctx({
+      importers: [importer('.', '{"dependencies":{"left-pad":"1.3.0"}}'), broken],
+      lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n" },
+    }),
+  );
+  const skips = findings.filter((finding) => finding.code === 'unparseable-package-json');
+
+  assert.equal(skips.length, 1);
+  assert.equal(skips[0].status, 'skip');
+  assert.equal(skips[0].path, 'packages/api/package.json');
+  assert.match(skips[0].message, /packages\/api\/package\.json is not valid JSON/);
+  assert.match(skips[0].message, /Unexpected end of JSON input/);
+});
+
+test('a byte-order mark is said in its own words here too (S4)', () => {
+  const bom = {
+    path: '/repo/package.json',
+    text: '\uFEFF{"dependencies":{"left-pad":"1.3.0"}}',
+    json: null,
+    error: "Unexpected token '\uFEFF'",
+    dir: '.',
+  };
+  const [skip] = rule.detect(
+    ctx({
+      importers: [bom],
+      lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n" },
+    }),
+  );
+
+  assert.equal(skip.code, 'unparseable-package-json');
+  assert.match(skip.message, /byte-order mark \(U\+FEFF\)/);
+  assert.doesNotMatch(skip.message, /not valid JSON/);
+});
+
+test('a packages entry refused for escaping the root is named in the report (S8)', () => {
+  // T3 refuses the entry and the importer disappears; an importer that disappears without a word is
+  // the same defect in a quieter form, so the refusal reaches the report as a skip.
+  const base = ctx({
+    importers: [importer('.', '{"name":"inner"}')],
+    lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n" },
+  });
+  base.repo.skippedGlobs = [
+    { entry: '..', code: 'outside-root', reason: 'resolves outside the repository root, so the entry is not expanded' },
+  ];
+
+  const [refused] = rule.detect(base);
+
+  assert.equal(refused.status, 'skip');
+  assert.equal(refused.code, 'workspace-entry-outside-root', 'the code says why');
+  assert.equal(refused.path, 'pnpm-workspace.yaml', 'the file that holds the entry');
+  assert.match(refused.message, /packages entry "\.\."/);
+  assert.match(refused.message, /outside the repository root/);
+  assert.deepEqual(refused.evidence, { entry: '..', reason: 'outside-root' });
+  assert.deepEqual(refused.remediation, { kind: 'none' });
+});
+
+test('a nested glob is not reported as a refused importer (S8 names the refusal)', () => {
+  // A nested glob, including a `!` negation such as shadcn-ui/ui's `!**/test/**`, is a documented
+  // limitation of the single-level expansion and not an entry the scan refused: saying its directories
+  // were not read would be false for a negation.
+  const base = ctx({
+    importers: [importer('.', '{"name":"inner"}')],
+    lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n" },
+  });
+  base.repo.skippedGlobs = [
+    { entry: 'apps/**', code: 'unsupported-glob', reason: 'a nested glob is not expanded, so its directories are not read' },
+  ];
+
+  assert.deepEqual(
+    rule.detect(base).filter((finding) => String(finding.code ?? '').startsWith('workspace-entry')),
+    [],
+  );
+});
+
 test('floating findings survive an unsupported lockfile and the comparison is one skip', () => {
   const findings = rule.detect(
     ctx({
@@ -446,8 +547,8 @@ test('an importer whose package.json did not parse is a skip, never a silent pas
 
   assert.deepEqual(
     findings.map((finding) => `${finding.status}:${finding.code}`),
-    ['skip:unreadable-package-json'],
-    'nothing was compared, so nothing may be claimed',
+    ['skip:unparseable-package-json'],
+    'nothing was compared, so nothing may be claimed, and the file that could not be read is named',
   );
 });
 
@@ -517,7 +618,8 @@ test('skips instead of passing when no package.json could be parsed', () => {
 
   assert.equal(findings.length, 1);
   assert.equal(findings[0].status, 'skip');
-  assert.equal(findings[0].code, 'unreadable-package-json');
+  assert.equal(findings[0].code, 'unparseable-package-json');
+  assert.equal(findings[0].path, 'package.json');
   assert.equal(findings[0].probeUnavailable, true);
 });
 

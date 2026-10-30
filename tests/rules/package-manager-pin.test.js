@@ -267,7 +267,7 @@ test('plan() does nothing when no pnpm answered', (t) => {
   assert.deepEqual(rule.plan(ctx, { report: reportFor('no-pnpm') }), []);
 });
 
-test('a malformed package.json is a skip, not a pass', () => {
+test('a malformed package.json is a finding the verdict names, not a pass (S4)', () => {
   const file = {
     path: 'C:/repo/package.json',
     text: '{',
@@ -277,6 +277,65 @@ test('a malformed package.json is a skip, not a pass', () => {
 
   const [finding] = rule.detect(context({ packageJson: file }));
 
-  assert.equal(finding.status, 'skip');
-  assert.equal(finding.code, 'no-package-json');
+  assert.equal(finding.status, 'fail', 'a repository the tool cannot read is not a passing repository');
+  assert.equal(finding.code, 'unparseable-package-json');
+  assert.equal(finding.path, 'package.json');
+  assert.match(finding.message, /package\.json is not valid JSON/);
+  assert.match(finding.message, /Unexpected end of JSON input/, 'the message says what is wrong');
+  assert.deepEqual(finding.remediation, { kind: 'none' }, 'nothing is written to a file that cannot be read');
+});
+
+test('an unreadable manifest fails even when the machine is out of scope (S4)', () => {
+  // The observed defect: `scan --scope repo` on a truncated package.json exited 0, because the only
+  // skip that mentioned it was "no importer package.json could be parsed". The machine scope has no
+  // say in whether the repository can be read, so this check comes before the machine checks.
+  const ctx = context({
+    packageJson: {
+      path: 'C:/repo/package.json',
+      text: '{ "name": "truncated"',
+      json: null,
+      error: 'Unexpected end of JSON input',
+    },
+  });
+  ctx.scope = 'repo';
+  ctx.machine = null;
+
+  const [finding] = rule.detect(ctx);
+
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'unparseable-package-json');
+});
+
+test('a byte-order mark is said in its own words, not as invalid JSON (S4)', () => {
+  const file = {
+    path: 'C:/repo/package.json',
+    text: '\uFEFF{ "name": "bom" }',
+    json: null,
+    error: "Unexpected token '\uFEFF', \"\uFEFF{ \"name\": \"bom\" }\" is not valid JSON",
+  };
+
+  const [finding] = rule.detect(context({ packageJson: file }));
+
+  assert.equal(finding.code, 'unparseable-package-json');
+  assert.match(finding.message, /byte-order mark \(U\+FEFF\)/);
+  assert.doesNotMatch(finding.message, /not valid JSON/, 'a byte-order mark is not invalid JSON');
+});
+
+test('a declaration that names pnpm and no version fails, and says what to write (S5)', () => {
+  // `"packageManager": "pnpm"` used to be classified as "not pnpm", printing "package.json declares
+  // pnpm, so this repository is not on pnpm". The field names the manager and declares no version: that
+  // is the state `pin-missing` describes — there is no pin — so it is a failure, not a skip. The fix is
+  // manual because `init --apply` never rewrites a declaration it finds, and the message names the value
+  // that would be verifiable, because "declare a version" is not an instruction without one.
+  const [finding] = rule.detect(context({ packageManager: 'pnpm' }));
+
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'pin-unversioned');
+  assert.equal(finding.path, 'package.json');
+  assert.match(finding.message, /declares packageManager "pnpm"/);
+  assert.match(finding.message, /no pin can be verified/);
+  assert.match(finding.message, /pnpm@12\.3\.4/, 'it names the declaration that would be verifiable');
+  assert.doesNotMatch(finding.message, /not on pnpm/, 'a value that names pnpm is not another manager');
+  assert.equal(finding.remediation.kind, 'manual');
+  assert.match(finding.remediation.command, /pnpm@12\.3\.4/);
 });

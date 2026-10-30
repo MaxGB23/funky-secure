@@ -241,6 +241,10 @@ test('the published version appears where a reader copies it, and nowhere older'
     for (const match of text.matchAll(/funky-secure@(\d+\.\d+\.\d+)/g)) {
       assert.equal(match[1], version, `${relative} installs funky-secure@${match[1]}, not @${version}`);
     }
+    // The decision log quotes other tools' manifests when it explains a defect — a `packageManager`
+    // object carrying another version is the evidence for a fix, not a claim about this package. The
+    // whole document is still checked for an install line, which cannot be anything but this package.
+    if (relative === 'docs/decisions.md') continue;
     for (const match of text.matchAll(/"version":\s*"(\d+\.\d+\.\d+)"/g)) {
       assert.equal(match[1], version, `${relative} shows a tool version of ${match[1]}, not ${version}`);
     }

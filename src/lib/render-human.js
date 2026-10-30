@@ -40,6 +40,23 @@ const INDENT = '     ';
 const ACTION = '     → ';
 /** The label column shared by `summary`, `verdict` and `next`, and by their continuation lines. */
 const LABEL_WIDTH = 9;
+
+/**
+ * The gutter a label and its value share (S2): the label padded to the nine-character column the short
+ * labels hold (`summary  `, `verdict  `, `next    `), and — when the label is as wide as that column or
+ * wider — the two spaces `provenance` always carried, so a wide label never runs into its own value.
+ *
+ * `head` is what a line starts with and `indent` is where its continuation lines hang, so a block hangs
+ * under the value instead of under the middle of the label. Every label goes through here: one
+ * formatting path, one column, and no `padEnd` that pads nothing — `not verified` is twelve characters,
+ * so padding it to nine left a run printing `not verified1 rule did not answer`.
+ * @param {string} label
+ * @returns {{ head: string, indent: string }}
+ */
+function gutter(label) {
+  const head = label.length >= LABEL_WIDTH ? `${label}  ` : label.padEnd(LABEL_WIDTH);
+  return { head, indent: ' '.repeat(head.length) };
+}
 /** The rule under the header, 90 columns so it does not compete with the text above it. */
 const SEPARATOR = '─'.repeat(90);
 /** The honesty line stops before the 96-column bound: it is a note, not a paragraph (10.3). */
@@ -286,21 +303,22 @@ function provenanceLine(provenance) {
     `preset ${provenance.preset} (${provenance.presetSource})` +
     `  ·  quarantine ${provenance.quarantine}` +
     `  ·  machine ${provenance.machine}`;
-  // `provenance` is one character wider than the nine-character gutter the other labels use, so it
-  // keeps its own two spaces and its continuations hang under them.
-  const gutter = 'provenance  ';
+  // `provenance` is wider than the nine-character column the other labels hold, so the shared gutter
+  // gives it its own two spaces and its continuations hang under them.
+  const { head, indent } = gutter('provenance');
 
   // The one header line that can outgrow the width bound: wrapped in the gutter, never left to the
   // terminal to fold mid-word.
-  return wrap(text, WIDTH - gutter.length).map((line, index) =>
-    index === 0 ? gutter + line : ' '.repeat(gutter.length) + line,
+  return wrap(text, WIDTH - head.length).map((line, index) =>
+    index === 0 ? head + line : indent + line,
   );
 }
 
 /** The counts line, unchanged in wording and gutter: only its position moved (S2). */
 function summaryLine(summary) {
+  const { head } = gutter('summary');
   return (
-    `${'summary'.padEnd(LABEL_WIDTH)}${plural(summary.error, 'error', 'errors')} · ` +
+    `${head}${plural(summary.error, 'error', 'errors')} · ` +
     `${plural(summary.warn, 'warning', 'warnings')} · ${summary.info} info · ` +
     `${summary.pass} passing · ${plural(summary.skip, 'skipped', 'skipped')}`
   );
@@ -338,14 +356,14 @@ function unverifiedLines(report, catalog, options, renderedSkips = new Set()) {
     if (entry !== undefined) entry.label = rule.label ?? rule.id;
   }
 
-  const indent = ' '.repeat(LABEL_WIDTH);
-  const lines = [`${'not verified'.padEnd(LABEL_WIDTH)}${plural(byRule.size, 'rule', 'rules')} did not answer`];
+  const { head, indent } = gutter('not verified');
+  const lines = [`${head}${plural(byRule.size, 'rule', 'rules')} did not answer`];
   for (const [rule, entry] of byRule) {
     const label = entry.label ?? rule;
     const reason = [...entry.messages].join(' · ');
     const scope = entry.paths.size > 0 ? ` (${plural(entry.paths.size, 'file', 'files')})` : '';
     lines.push(`${indent}–  ${label}${scope}`);
-    for (const line of wrap(reason, WIDTH - LABEL_WIDTH - 3)) {
+    for (const line of wrap(reason, WIDTH - indent.length - 3)) {
       lines.push(`${indent}   ${line}`);
     }
   }
@@ -370,8 +388,8 @@ function unverifiedLines(report, catalog, options, renderedSkips = new Set()) {
  */
 function verdictLine(summary, failOn, color, unverifiedIds = []) {
   const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
-  const gutter = 'verdict'.padEnd(LABEL_WIDTH);
-  const head = `${gutter}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${failOn}`;
+  const { head: label, indent } = gutter('verdict');
+  const head = `${label}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${failOn}`;
   if (summary.skip === 0) return `${head})`;
 
   const count = `${plural(summary.skip, 'rule', 'rules')} not verified`;
@@ -382,8 +400,7 @@ function verdictLine(summary, failOn, color, unverifiedIds = []) {
   // Naming the unverified rules made this line reach 207 columns on a repository with six of them, and
   // 10.3 bounds every rendered line at 96. The gutter continues, the sentence wraps, and the closing
   // parenthesis travels with the last id (0024).
-  const indent = ' '.repeat(LABEL_WIDTH);
-  const body = wrap(`${unverifiedIds.join(', ')})`, WIDTH - LABEL_WIDTH);
+  const body = wrap(`${unverifiedIds.join(', ')})`, WIDTH - indent.length);
   return [`${head} · ${count}:`, ...body.map((line) => indent + line)].join('\n');
 }
 
@@ -393,11 +410,9 @@ function verdictLine(summary, failOn, color, unverifiedIds = []) {
  * @returns {string[]}
  */
 function passingIds(passing) {
-  const head = `${'passing'.padEnd(LABEL_WIDTH)}${passing.length} rules (`;
-  const indent = ' '.repeat(LABEL_WIDTH);
+  const { head, indent } = gutter('passing');
   const lines = [];
-  let current = head;
-
+  let current = `${head}${passing.length} rules (`;
   passing.forEach((finding, index) => {
     const piece = (index === 0 ? '' : ', ') + finding.rule;
     if (current.length + piece.length > WIDTH && current !== head) {
@@ -445,10 +460,10 @@ export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
   const names = missing.map((rule) => rule.label ?? rule.id).join(", ");
   const running = catalog.length - missing.length;
   const text = `${running} of ${catalog.length} rules; off by policy: ${names}`;
-  const gutter = "not run".padEnd(LABEL_WIDTH);
+  const { head, indent } = gutter("not run");
 
-  return wrap(text, HONESTY_WIDTH - LABEL_WIDTH).map((line, index) =>
-    index === 0 ? gutter + line : " ".repeat(LABEL_WIDTH) + line,
+  return wrap(text, HONESTY_WIDTH - head.length).map((line, index) =>
+    index === 0 ? head + line : indent + line,
   );
 }
 
@@ -485,8 +500,7 @@ function ruleToRead(failing, catalog) {
  * @returns {string[]}
  */
 function nextBlock({ summary, findings }, catalog) {
-  const gutter = 'next'.padEnd(LABEL_WIDTH);
-  const indent = ' '.repeat(LABEL_WIDTH);
+  const { head, indent } = gutter('next');
   const failing = findings.filter(
     (finding) => finding.status !== 'pass' && finding.status !== 'skip',
   );
@@ -494,16 +508,16 @@ function nextBlock({ summary, findings }, catalog) {
 
   if (automatic.length > 0) {
     return [
-      `${gutter}funky-secure init  plan the ${plural(automatic.length, 'fix', 'fixes')} it can make (nothing is written)`,
+      `${head}funky-secure init  plan the ${plural(automatic.length, 'fix', 'fixes')} it can make (nothing is written)`,
       `${indent}funky-secure explain ${ruleToRead(failing, catalog)}   what this rule wants, and why`,
     ];
   }
 
   if (summary.verdict === 'pass') {
-    return [`${gutter}nothing to do: everything at or above the policy passes`];
+    return [`${head}nothing to do: everything at or above the policy passes`];
   }
 
-  return [`${gutter}manual: each finding names the file, its line, and the action`];
+  return [`${head}manual: each finding names the file, its line, and the action`];
 }
 
 /**

@@ -89,13 +89,41 @@ map, the `catalogs` map, and the `overrides` selectors. A shape outside that sub
 `lockfileVersion`, `patchedDependencies`, a catalogue entry that is not a `{ specifier, version }`
 map, a document that describes the root importer twice — is never compared: the rule reports the
 floating findings it did establish and adds one `skip: unsupported-lockfile-shape` for the
-comparison, naming the section it refused. With no lockfile at all it reports the same floating
-findings plus one `skip: no-lockfile`.
+comparison. That skip names `pnpm-lock.yaml` and keeps the line the reader stopped at
+(`skipped: expected "key: value" at line 3`), because a line number with no file is not something a
+reader can open. With no lockfile at all it reports the same floating findings plus one
+`skip: no-lockfile`.
+
+**A truncated lockfile is not a supported one.** The reader stops at the subset it needs, so a document
+cut inside a block used to parse as the part it managed to read. pnpm writes every flow collection on
+one line, so a `{` that outlives its line, and a key with no entry under it where the document ends,
+are truncations rather than shapes. Both are refused, in the reader's own words —
+`the document ends inside a block: "packages" at line 40 opens a map with no entry` and `the "{" opened at line 42 is never closed` — and the
+comparison becomes a `skip: unsupported-lockfile-shape` on `pnpm-lock.yaml` instead of a comparison
+against half a file.
+
+**A manifest the rule cannot interpret is named, one file at a time.** An importer whose
+`package.json` exists and cannot be parsed is its own `skip: unparseable-package-json`, naming that
+file and what is wrong with it — a byte-order mark in its own words, as in
+`skipped: packages/api/package.json is not valid JSON (Unexpected end of JSON input), so its specifiers were not compared against pnpm-lock.yaml` —
+instead of one global skip that says nothing about which importer is missing from the comparison. That
+importer's specifiers are not compared and every other importer's still are; the skip is an
+unavailable probe, so `--strict-probes` turns it into an error rather than accepting a slightly
+smaller comparison. A repository with no importer at all — no root `package.json` and no workspace
+package — reports one `skip: unreadable-package-json` instead of a pass (and `no-lockfile` when there
+is no lockfile either), because a clean claim about specifiers it never read would be a false
+negative.
+
+**A refused workspace entry is reported.** A `packages:` entry in `pnpm-workspace.yaml` that resolves
+outside the repository root is refused before any file under it is read, and the refusal reaches the
+report as `skip: workspace-entry-outside-root` on `pnpm-workspace.yaml`, naming the entry and why it
+was refused. The importer it would have produced disappears either way; without that line it would
+disappear without a word, which is the quieter form of a defect this repository already fixed once
+(0022, 0027). A nested glob or a `!` negation is **not** reported as a refusal: the single-level
+expansion is a documented limitation, and saying a negation's directories were not read would be false.
 
 A specifier can carry a secret: a private tarball URL such as `https://user:token@host/pkg.tgz`
-is echoed as `https://***@host/pkg.tgz`, so a scan never prints a credential. When no importer
-`package.json` could be parsed the rule reports one `skip: unreadable-package-json` instead of a
-pass, because a clean claim about specifiers it never read would be a false negative.
+is echoed as `https://***@host/pkg.tgz`, so a scan never prints a credential.
 
 No floating specifier and no desync is a pass.
 
@@ -170,6 +198,15 @@ desync is created, so the fix and the resolution must happen in one `pnpm` comma
   records under a second section is not reported as missing. Both are records the format made, and a
   finding against them would be a finding against pnpm.
 - An unsupported lockfile shape degrades to a skip; it never produces a comparison the reader cannot
-  justify. A future pnpm major that moves the shape therefore degrades instead of lying.
+  justify, and the skip names `pnpm-lock.yaml` so the line it reports can be opened. A future pnpm
+  major that moves the shape therefore degrades instead of lying.
+- A truncated lockfile is refused only where the cut leaves a trace: a key with no entry under it, or a
+  flow collection that does not close on its line. A cut at a line boundary that leaves every block it
+  opened closed is not detectable without inferring which sections a lockfile should have, and that
+  inference would refuse a valid lockfile whose section happens to be short, so it is not made: such a
+  document is compared as the document the reader read.
+- The workspace expander reads one level. An entry that resolves outside the repository root is refused
+  and reported; a nested glob or a `!` negation is neither expanded nor reported, so its directories
+  are simply not importers of this run.
 - The rule does not judge whether an exact version is *good* — only whether it is exact and whether
   the lockfile agrees with it.

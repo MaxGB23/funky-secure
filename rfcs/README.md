@@ -33,6 +33,7 @@ document that changes without a new record.
 | [0024](0024-the-contract-says-what-it-does/rfc.md) | The contract says what it does | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2, §8.3; [`docs/spec/report.md`](../docs/spec/report.md) §10.4; [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2, §11.3 |
 | [0025](0025-the-lockfile-forms/rfc.md) | The lockfile forms real repositories have | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
 | [0026](0026-a-catalogue-is-not-a-version/rfc.md) | A catalogue is not a version | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.3, §11.9; [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
+| [0027](0027-the-adversary-comes-in/rfc.md) | The adversary comes in | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1, R5 |
 
 ## Layout
 

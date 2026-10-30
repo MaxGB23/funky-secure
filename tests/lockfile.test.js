@@ -474,3 +474,53 @@ test('never throws on a truncated document and reports an unsupported shape', ()
     if (!partial.supported) assert.equal(partial.reason, 'unsupported-lockfile-shape');
   }
 });
+
+test('refuses a document that ends inside a block (S7)', () => {
+  // A truncated lockfile used to be accepted as supported: the reader stops at the importer subset it
+  // needs, and an ignored section is never modeled, so `packages:` with half its tail missing was
+  // invisible and the rule compared every specifier against an incomplete document.
+  const lines = fixture('lockfile/v9-workspace/pnpm-lock.yaml').split('\n');
+
+  const header = parseLockfile(lines.slice(0, 46).join('\n'));
+  assert.equal(header.supported, false, 'a section header with nothing under it is a truncation');
+  assert.equal(header.reason, 'unsupported-lockfile-shape');
+  assert.match(header.detail, /ends inside a block/);
+  assert.match(header.detail, /"packages"/);
+  assert.match(header.detail, /line 46/);
+
+  const entry = parseLockfile(lines.slice(0, 48).join('\n'));
+  assert.equal(entry.supported, false, 'a block that opens and never closes is a truncation');
+  assert.match(entry.detail, /ends inside a block/);
+  assert.match(entry.detail, /"left-pad@1\.3\.0"/);
+  assert.match(entry.detail, /line 48/);
+});
+
+test('refuses a flow collection a truncated document leaves open (S7)', () => {
+  const text = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .: {}',
+    '',
+    'packages:',
+    '',
+    '  left-pad@1.3.0:',
+    '    resolution: {integrity: sha512-XI5MPzVNApjAyhQzphX8BkmKsKUxD4LdyK24iZeQGinBN9yTQT3bFlCBy/aVx2HrNcqQGsdot8ghrjyrvMCoEA==',
+    '',
+  ].join('\n');
+
+  const result = parseLockfile(text);
+
+  assert.equal(result.supported, false);
+  assert.equal(result.reason, 'unsupported-lockfile-shape');
+  assert.match(result.detail, /never closed/);
+  assert.match(result.detail, /line 10/);
+});
+
+test('reads every fixture lockfile as supported, so refusing truncation refuses nothing else', () => {
+  for (const name of ['lockfile/v9', 'lockfile/v9-workspace', 'lockfile/unsupported-catalogs']) {
+    const result = parseLockfile(fixture(`${name}/pnpm-lock.yaml`));
+    assert.equal(result.supported, true, `${name} is a valid lockfile and must stay readable`);
+  }
+});

@@ -20,9 +20,11 @@
 
 import { parseLockfile, recordedVersion, overrideTouches } from '../lib/lockfile.js';
 import { isFloating } from '../lib/specifiers.js';
+import { manifestProblem } from '../lib/targets.js';
 
 const DOC = 'docs/rules/exact-versions.md';
 const WORKSPACE_YAML = 'pnpm-workspace.yaml';
+const LOCKFILE = 'pnpm-lock.yaml';
 const DEPENDENCY_TYPES = [
   'dependencies',
   'devDependencies',
@@ -293,7 +295,7 @@ export default {
   severity: { baseline: 'warn', strict: 'error' },
   question: 'Are dependency specifiers exact, and does the lockfile agree?',
   detection:
-    'Walk dependencies, devDependencies, optionalDependencies and peerDependencies of every importer. A specifier is floating when it starts with ^ ~ > < *, equals latest, contains an x/X version token, is a partial version, or is a git/tarball/URL specifier; exact means a literal version, npm:<pkg>@<version> or workspace:*. A catalog: or catalog:<name> specifier reads its range from the catalogue map pnpm-lock.yaml records: it is floating only when that entry holds a range, and the finding names pnpm-workspace.yaml, the file that holds it. Each floating specifier is one finding with its file:line. Every specifier is then compared with the lockfile record of the same dependency kind; a disagreement is one lockfile-desync finding, a record of another kind is not compared, and a specifier an override rewrote is never reported. An unsupported lockfile shape yields a skip, never a guessed comparison.',
+    'Walk dependencies, devDependencies, optionalDependencies and peerDependencies of every importer. A specifier is floating when it starts with ^ ~ > < *, equals latest, contains an x/X version token, is a partial version, or is a git/tarball/URL specifier; exact means a literal version, npm:<pkg>@<version> or workspace:*. A catalog: or catalog:<name> specifier reads its range from the catalogue map pnpm-lock.yaml records: it is floating only when that entry holds a range, and the finding names pnpm-workspace.yaml, the file that holds it. Each floating specifier is one finding with its file:line. Every specifier is then compared with the lockfile record of the same dependency kind; a disagreement is one lockfile-desync finding, a record of another kind is not compared, and a specifier an override rewrote is never reported. An unsupported lockfile shape yields a skip that names pnpm-lock.yaml, never a guessed comparison, and an importer whose package.json cannot be interpreted is its own skip naming that file and what is wrong with it. A pnpm-workspace.yaml entry refused for resolving outside the repository root is a skip naming the file and the entry, so an importer never disappears without a word.',
   evidence:
     '{ specifier, dependency, type } for a floating range (plus catalog for a catalogue range; resolved is null when the lockfile has no record), { specifier, resolved } for a desync.',
   remediation:
@@ -324,6 +326,7 @@ export default {
     const comparisons = [];
     const importers = Array.isArray(ctx.repo.importers) ? ctx.repo.importers : [];
     let inspected = 0;
+    let unreadable = 0;
 
     // The lockfile is read once, before the specifiers are walked, because the remediation of a
     // floating range names the version it records (S4). No lockfile and an unsupported shape are
@@ -346,6 +349,9 @@ export default {
         skip = {
           status: 'skip',
           code: 'unsupported-lockfile-shape',
+          // The detail ends in a line number (`expected "key: value" at line 3`), and a line number
+          // with no file is not something a reader can open (S6).
+          path: LOCKFILE,
           message: `skipped: ${read.detail}`,
           evidence: { reason: read.reason },
         };
@@ -353,9 +359,27 @@ export default {
     }
 
     for (const importer of importers) {
-      if (importer.json === null || typeof importer.json !== 'object') continue;
-      inspected += 1;
       const path = importerPath(importer);
+
+      // A manifest that exists and cannot be interpreted is not a manifest that was compared (S4):
+      // the rule says which file it could not read and what is wrong with it, instead of dropping the
+      // importer in silence. A byte-order mark is not "invalid JSON" and is said in its own words.
+      const problem = manifestProblem(importer);
+      if (problem !== null) {
+        unreadable += 1;
+        findings.push({
+          status: 'skip',
+          code: 'unparseable-package-json',
+          path,
+          message: `skipped: ${path} ${problem.detail}, so its specifiers were not compared against ${LOCKFILE}`,
+          evidence: { problem: problem.code },
+          remediation: { kind: 'none' },
+          probeUnavailable: true,
+        });
+        continue;
+      }
+
+      inspected += 1;
 
       for (const entry of collectSpecifiers(importer)) {
         if (typeof entry.specifier !== 'string') continue;
@@ -439,14 +463,36 @@ export default {
       }
     }
 
+    // An entry `pnpm-workspace.yaml` declares and this scan refused is a file the reader will not
+    // find in the report otherwise (S8): the importer it would have produced disappears, and an
+    // importer that disappears without a word is the same defect in a quieter form. The shape is the
+    // catalogue finding's — the file that holds the entry, then the entry — so there is one reporting
+    // path for what the workspace declares.
+    //
+    // Only the refusal is reported. A nested glob is a documented limitation of the single-level
+    // expansion, not a refused importer: `!**/test/**` is a negation, so saying its directories are
+    // not read would be false, and a real repository (shadcn-ui/ui) carries four of them.
+    const skippedGlobs = Array.isArray(ctx.repo.skippedGlobs) ? ctx.repo.skippedGlobs : [];
+    for (const skipped of skippedGlobs) {
+      if (skipped.code !== 'outside-root') continue;
+      findings.push({
+        status: 'skip',
+        code: `workspace-entry-${skipped.code}`,
+        path: WORKSPACE_YAML,
+        message: `skipped: the packages entry "${skipped.entry}" in ${WORKSPACE_YAML} was refused: ${skipped.reason}`,
+        evidence: { entry: skipped.entry, reason: skipped.code },
+        remediation: { kind: 'none' },
+      });
+    }
+
     if (skip !== null) findings.push(skip);
-    else if (inspected === 0) {
+    else if (inspected === 0 && unreadable === 0) {
       // Nothing was read, so nothing was compared: "every specifier is exact" would be a claim this
       // rule never checked (RFC 7.3: a missing fact is a skip, never a pass).
       findings.push({
         status: 'skip',
         code: 'unreadable-package-json',
-        message: `skipped: no importer package.json could be parsed, so no specifier was compared against pnpm-lock.yaml`,
+        message: `skipped: the repository collects no importer package.json, so no specifier was compared against pnpm-lock.yaml`,
         evidence: { importers: importers.length },
         remediation: { kind: 'none' },
         probeUnavailable: true,
