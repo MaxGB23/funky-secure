@@ -176,28 +176,41 @@ function stepNumbers(text) {
  * it. Nothing else — no managed block, no workspace file, no commit of the ignore rules.
  *
  * @param {string} dir
- * @param {{ lockfile: string }} options the lockfile the generating manager wrote
+ * @param {{ lockfile: string, ranges?: boolean, committed?: boolean }} options the lockfile the
+ *   generating manager wrote, and whether the manifest it wrote carries ranges
  */
-function generatedBy(dir, { lockfile, committed = true }) {
-  const manifest = {
-    name: 'app',
-    private: true,
-    dependencies: { next: '^15.5.4', react: '^19.2.0', 'react-dom': '^19.2.0' },
-  };
-  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+function generatedBy(dir, { lockfile, ranges = true, committed = true }) {
+  writeManifest(dir, ranges);
   writeFileSync(join(dir, '.gitignore'), 'node_modules\n.next\n');
   mkdirSync(join(dir, 'app'), { recursive: true });
   writeFileSync(join(dir, 'app', 'page.jsx'), 'export default function Page() {\n  return null;\n}\n');
   writeFileSync(join(dir, lockfile), '');
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
-  if (committed) {
-    execFileSync('git', ['add', '-A'], { cwd: dir });
-    execFileSync(
-      'git',
-      ['-c', 'user.email=82458865+MaxGB23@users.noreply.github.com', '-c', 'user.name=MaxGB23', 'commit', '-qm', 'generated'],
-      { cwd: dir },
-    );
-  }
+  if (committed) commitAll(dir, 'generated');
+}
+
+/**
+ * The manifest a framework generator writes, with the ranges it leaves behind — or the exact versions
+ * a repository that already pinned its ranges carries.
+ *
+ * @param {string} dir
+ * @param {boolean} ranges
+ */
+function writeManifest(dir, ranges) {
+  const carets = { next: '^15.5.4', react: '^19.2.0', 'react-dom': '^19.2.0' };
+  const exact = { next: '15.5.4', react: '19.2.0', 'react-dom': '19.2.0' };
+  const manifest = { name: 'app', private: true, dependencies: ranges ? carets : exact };
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+/** Records the working tree, so the next writer lands on a clean one. @param {string} dir */
+function commitAll(dir, message) {
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync(
+    'git',
+    ['-c', 'user.email=82458865+MaxGB23@users.noreply.github.com', '-c', 'user.name=MaxGB23', 'commit', '-qm', message],
+    { cwd: dir },
+  );
 }
 
 const SCAN_STEP = 'funky-secure scan --preset starter';
@@ -206,6 +219,7 @@ const SCAN_STEP = 'funky-secure scan --preset starter';
 const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
 const BASELINE_COMMIT = 'chore: baseline before funky-secure';
 const APPLY_COMMIT = 'chore: apply funky-secure';
+const PIN_COMMIT = 'chore: pin the ranges';
 const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
@@ -338,12 +352,28 @@ test('an npm-generated project installs once, and the gate exists before that in
     '  3  pnpm import',
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  5  pnpm install --lockfile-only',
-    `  6  git switch -c ${FEATURE_BRANCH}`,
-    '  7  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
-    `  8  git add pnpm-lock.yaml package.json package-lock.json && git commit -m "${TRACK_COMMIT}"`,
-    `  9  ${SCAN_STEP}`,
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git switch -c ${FEATURE_BRANCH}`,
+    '  8  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    `  9  git add pnpm-lock.yaml package-lock.json && git commit -m "${TRACK_COMMIT}"`,
+    `  10  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7, 8, 9], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'the numbering stays continuous');
+  // The pin's commit sits where its own state is produced: after the resolve that re-syncs the
+  // lockfile `pin` desyncs, and before the branch the migration needs (0028).
+  assert.ok(
+    stdout.indexOf('pnpm install --lockfile-only') < stdout.indexOf(PIN_COMMIT),
+    'the commit follows the resolve it covers',
+  );
+  assert.ok(
+    stdout.indexOf(PIN_COMMIT) < stdout.indexOf('git switch -c'),
+    'the tree is clean before the branch and the migration that follow',
+  );
+  assert.equal(
+    stdout.includes('git add pnpm-lock.yaml package.json'),
+    false,
+    'the closing commit stages no manifest: the pin has a commit of its own (0028)',
+  );
   assert.ok(
     stdout.indexOf('init --apply') < stdout.indexOf('pnpm import'),
     'the gate is written before the resolve that reads it',
@@ -376,8 +406,9 @@ test('an uncommitted repository is told to commit before it is told to apply', a
     `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  5  pnpm install --lockfile-only',
-    `  6  git add pnpm-lock.yaml package.json && git commit -m "${TRACK_COMMIT}"`,
-    `  7  ${SCAN_STEP}`,
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  8  ${SCAN_STEP}`,
   ]);
   assert.ok(
     stdout.indexOf('git commit') < stdout.indexOf('init --apply'),
@@ -400,6 +431,37 @@ test('a clean tree commits after the writes, because the writes are what dirty i
   );
 });
 
+test('nothing to pin means no pin commit, and the closing commit stages no manifest', async (t) => {
+  // The pin's commit prints only where `pin --apply` prints, because a commit that stages nothing is
+  // not a step (0016, 0028). The closing commit keeps naming what it covers: the lockfile the install
+  // writes and the foreign one the migration removes — never a manifest, which no step here writes.
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'package-lock.json', ranges: false });
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+    '  3  pnpm import',
+    `  4  git switch -c ${FEATURE_BRANCH}`,
+    '  5  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    `  6  git add pnpm-lock.yaml package-lock.json && git commit -m "${TRACK_COMMIT}"`,
+    `  7  ${SCAN_STEP}`,
+  ]);
+  assert.equal(stdout.includes('pin --apply'), false, 'there is no range to clear');
+  assert.equal(stdout.includes(PIN_COMMIT), false, 'so there is no pin to commit either');
+  assert.equal(
+    stdout.includes('git add package.json'),
+    false,
+    'no commit on the path stages the manifest when the pin never ran',
+  );
+  assert.ok(
+    stdout.includes('git add pnpm-lock.yaml package-lock.json'),
+    'the closing commit still carries the removal the migration left in the index',
+  );
+});
+
 test('a pnpm-generated project is told neither to migrate nor to add', async (t) => {
   const dir = scratch(t);
   generatedBy(dir, { lockfile: 'pnpm-lock.yaml' });
@@ -411,10 +473,11 @@ test('a pnpm-generated project is told neither to migrate nor to add', async (t)
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  4  pnpm install --lockfile-only',
-    `  5  git add pnpm-lock.yaml package.json && git commit -m "${TRACK_COMMIT}"`,
-    `  6  ${SCAN_STEP}`,
+    `  5  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  7  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7], 'the numbering stays continuous');
   assert.equal(stdout.includes('funky-secure migrate'), false, 'no foreign lockfile to leave behind');
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile the generator wrote is the one to keep');
   assert.equal(
