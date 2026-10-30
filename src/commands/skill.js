@@ -233,9 +233,12 @@ export async function run({
       : () => decided;
 
     if (answer === null) {
-      throw Object.assign(
-        new Error(`cannot ask whether to replace ${found.display}: ${differenceSentence(found)} and stdin is not a terminal`),
-        { action: 'pass --force to replace it, or --keep to leave it as it is' },
+      // A refusal, not a failure to answer: the state is known, the decision is known to be the human's,
+      // and the action that lifts it is printed. Exit 2 would tell an integration to retry or fix its
+      // flags, when what it must do is choose --force or --keep (RFC 10.4, 0013).
+      throw new RefusalError(
+        `cannot ask whether to replace ${found.display}: ${differenceSentence(found)} and stdin is not a terminal`,
+        'pass --force to replace it, or --keep to leave it as it is',
       );
     }
     if ((await answer()) !== true) return report(SYMBOL.info, `Kept  ·  ${found.display}`, 'the file was not changed');

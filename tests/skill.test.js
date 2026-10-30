@@ -292,7 +292,7 @@ test('--install refuses to replace an older installed copy when no terminal can 
 
   const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
 
-  assert.equal(code, 2, 'a differing file with no terminal did not fail');
+  assert.equal(code, 3, 'a differing file with no terminal was not reported as a refusal');
   assert.match(err, /^funky-secure: /, 'the first line does not carry the action');
   assert.match(err, /--force/, 'the action does not name --force');
   assert.match(err, /--keep/, 'the action does not name --keep');
@@ -309,7 +309,7 @@ test('--install names the same version with different bytes as local changes', a
 
   const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
 
-  assert.equal(code, 2);
+  assert.equal(code, 3);
   assert.match(err, new RegExp(`local changes on version ${SHIPPED_VERSION.replaceAll('.', '\\.')}`), 'an edited file is not described as local changes');
   assert.equal(readFileSync(path, 'utf8'), variant(SHIPPED_VERSION), 'the edited file was replaced');
 });
@@ -399,7 +399,7 @@ test('--install treats a copy with no version line as untraceable, and asks', as
 
   const { code, err } = await install(['skill', '--install'], { cwd, home, stdin: { isTTY: false } });
 
-  assert.equal(code, 2);
+  assert.equal(code, 3);
   assert.match(err, /carries no version line/, 'an unversioned copy is not described as untraceable');
   assert.equal(readFileSync(path, 'utf8'), 'no frontmatter at all\n', 'the unversioned file was replaced');
 });

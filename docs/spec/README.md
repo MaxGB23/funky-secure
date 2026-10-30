@@ -78,6 +78,7 @@ number keeps resolving.
 | 11 | [`0010`](../../rfcs/0010-remediation-conformance/rfc.md) | 11.7: the commit step, because `init --apply` refuses to write over an uncommitted tree |
 | 11 | [`0011`](../../rfcs/0011-pin-command/rfc.md) | 11.9: the `pin` command — the plan, the write, the three limits and the exit codes |
 | 11 | [`0012`](../../rfcs/0012-lockfile-lists/rfc.md) | 8.2 R5: ignored lockfile sections are checked at the first level, and a legal list inside one is not a refusal |
+| 10.4, 11.5, 11.9 | [`0013`](../../rfcs/0013-scenario-findings/rfc.md) | 10.4/11.5: a refusal that cannot ask is a refusal, not a failure; 11.9: the pin summary counts a manifest already at policy |
 
 ## Changing the contract
 
