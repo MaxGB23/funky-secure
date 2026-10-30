@@ -79,6 +79,7 @@ number keeps resolving.
 | 11 | [`0011`](../../rfcs/0011-pin-command/rfc.md) | 11.9: the `pin` command — the plan, the write, the three limits and the exit codes |
 | 11 | [`0012`](../../rfcs/0012-lockfile-lists/rfc.md) | 8.2 R5: ignored lockfile sections are checked at the first level, and a legal list inside one is not a refusal |
 | 10.4, 11.5, 11.9 | [`0013`](../../rfcs/0013-scenario-findings/rfc.md) | 10.4/11.5: a refusal that cannot ask is a refusal, not a failure; 11.9: the pin summary counts a manifest already at policy |
+| 8.2, 10.4 | [`0014`](../../rfcs/0014-peer-suffix/rfc.md) | 8.2 R5: the recorded version is the bare version, never the snapshot identity with its peer suffix; 10.4: `--help` names exit `3` |
 
 ## Changing the contract
 

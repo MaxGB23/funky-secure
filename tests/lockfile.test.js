@@ -203,6 +203,33 @@ test('reads a snapshots entry that carries a list value, as a real lockfile does
   assert.equal(recordedVersion(result.importers['.'], 'vitest', 'devDependencies'), '4.1.10');
 });
 
+test('reads a version that records its peer suffix as the bare version', () => {
+  // pnpm writes `version: 6.3.1(react-dom@19.2.3(react@19.2.3))(...)` for anything resolved with peers,
+  // which is most of a real dependency set. The suffix describes the snapshot, not the version, so a
+  // specifier must never carry it (0014).
+  const text = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      eslint:',
+    '        specifier: 9.39.5',
+    '        version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)',
+    '      next:',
+    '        specifier: 16.0.10',
+    '        version: 16.0.10(react-dom@19.2.3(react@19.2.3))(react@19.2.3)',
+    '',
+  ].join('\n');
+
+  const result = parseLockfile(text);
+
+  assert.equal(result.supported, true);
+  assert.equal(recordedVersion(result.importers['.'], 'eslint', 'dependencies'), '9.39.5');
+  assert.equal(recordedVersion(result.importers['.'], 'next', 'dependencies'), '16.0.10');
+});
+
 test('never throws on a truncated document and reports an unsupported shape', () => {
   const text = fixture('lockfile/v9-workspace/pnpm-lock.yaml');
   const truncated = text.split('\n').slice(0, 8).join('\n');

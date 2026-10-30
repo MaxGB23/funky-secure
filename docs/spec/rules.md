@@ -124,7 +124,10 @@ deviation is recorded here and in section 9.1.
 - **Lockfile reader scope (v0.1).** The comparison uses `src/lib/lockfile.js`, a bounded indent reader
   that needs no YAML dependency (4.7) and understands only `lockfileVersion`,
   `importers.<path>.specifiers` and
-  `importers.<path>.{dependencies,devDependencies,optionalDependencies,peerDependencies}`. Anything
+  `importers.<path>.{dependencies,devDependencies,optionalDependencies,peerDependencies}`. The
+  recorded version is the bare version: pnpm appends a peer suffix (`9.39.5(jiti@2.7.0)`) that names the
+  snapshot, not the version, so everything from the first `(` is dropped before the value is used as a
+  remedy or compared with a specifier (0014). Anything
   outside that subset — `catalogs`, `overrides`, `patchedDependencies`, a `snapshots` layout it does
   not recognize — makes the comparison return `skip: unsupported-lockfile-shape`, never a guessed
   finding. One fixture per supported `lockfileVersion` (currently `9.0`) proves the reader, and a
