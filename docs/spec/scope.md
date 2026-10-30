@@ -43,7 +43,11 @@ runner's machine configuration is not the developer's and is outside the contrac
 
 ### 7.3 What a scan never does
 
-- Never writes any file, anywhere.
+- Never writes any file, anywhere. This includes the files a tool it spawns would write on
+  its own: a probe runs outside the scanned repository when reading a version, because pnpm 12 with a
+  `packageManager` declared records that manager in the project's lockfile on any invocation. The
+  repository is byte-identical after every command, and `tests/read-only.test.js` is what holds that
+  true (0019).
 - Never runs a lifecycle script, an install, or a build.
 - Never resolves a version (no registry access, no `pnpm view`, no `--dry-run` install).
 - Never sends anything over the network.

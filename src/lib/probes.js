@@ -7,6 +7,7 @@
  */
 
 import { spawn as nodeSpawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { readFile as nodeReadFile } from 'node:fs/promises';
 import { win32 } from 'node:path';
 
@@ -198,7 +199,11 @@ export function createCollector({
     memo('pnpmVersion', async () => {
       const resolved = await pnpm();
       if (resolved.file === null) return { ok: false, reason: resolved.reason, installations: resolved.installations };
-      const result = await run(resolved.file, [...resolved.prefixArgs, '--version']);
+      // Outside the scanned repository, deliberately. pnpm 12 with a `packageManager` declared treats
+      // any invocation as an occasion to record that manager in the project's own lockfile, so asking
+      // for a version from inside the repository rewrote a file this tool promises never to touch
+      // (0019, and the read-only test that now guards it). Reading a version needs no project.
+      const result = await run(resolved.file, [...resolved.prefixArgs, '--version'], { cwd: tmpdir() });
       if (!result.ok) return { ok: false, reason: 'spawn-failed', error: result.error };
       if (result.code !== 0) return { ok: false, reason: 'failed' };
       const version = (result.stdout ?? '').trim();
