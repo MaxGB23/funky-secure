@@ -414,7 +414,7 @@ test('migrate prints the five RFC steps in order from the repository facts', asy
   );
   assert.ok(streams.stdout.text.includes('package-lock.json'));
   assert.ok(streams.stdout.text.includes('npm@10.0.0'));
-  assert.ok(streams.stdout.text.includes('pnpm install'));
+  assert.ok(streams.stdout.text.includes('pnpm import'));
 });
 
 test('migrate refuses outside git with exit 3, because it decided not to act', async (t) => {

@@ -93,6 +93,13 @@ function npmrcKey(line) {
   return (equals === -1 ? line : line.slice(0, equals)).trim();
 }
 
+/** The lockfile each named manager must leave behind, so `--from` can be checked against evidence. */
+const LOCKFILE_FOR = {
+  npm: { source: 'package-lock.json', test: (name) => name === 'package-lock.json' },
+  yarn: { source: 'yarn.lock', test: (name) => name === 'yarn.lock' },
+  bun: { source: 'bun.lock', test: (name) => name.startsWith('bun.lock') },
+};
+
 function resolvedOrigin({ from, foreign }) {
   if (from !== 'auto') return from;
   if (foreign.includes('yarn.lock')) return 'yarn';
@@ -285,6 +292,19 @@ export async function run({
     /^(?:package-manager|package_manager|packageManager)\b/i.test(line),
   );
 
+  // `--from` names a manager the repository must actually hold. Without this it only changed the
+  // header of the plan and recommended the detected manager anyway, which is a flag that lies about
+  // what it did (0021).
+  if (from !== 'auto') {
+    const expected = LOCKFILE_FOR[from];
+    if (expected !== undefined && !foreign.some((name) => expected.test(name))) {
+      throw unanswered(
+        `run migrate --apply without --from, so the detected manager decides`,
+        `refusing --from ${from}: the repository holds ${foreign.length === 0 ? 'no foreign lockfile' : foreign.join(', ')}, not ${expected.source}`,
+      );
+    }
+  }
+
   const hasPnpmLock = present.includes('pnpm-lock.yaml');
   const origin = resolvedOrigin({ from, foreign });
   const reportOnly = REPORT_ONLY_KEYS.filter((entry) =>
@@ -314,8 +334,8 @@ export async function run({
   lines.push(
     '',
     '3. human step (this tool never runs it)',
-    foreign.includes('yarn.lock')
-      ? '   pnpm import   # reads yarn.lock and writes pnpm-lock.yaml'
+    foreign.length > 0
+      ? `   pnpm import   # reads ${foreign[0]} and writes pnpm-lock.yaml`
       : '   pnpm install   # resolves and downloads; writes pnpm-lock.yaml',
     '',
     '4. removal (only after pnpm-lock.yaml exists)',

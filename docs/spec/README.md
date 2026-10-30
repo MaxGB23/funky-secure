@@ -86,6 +86,7 @@ number keeps resolving.
 | 11.7, 10.4 | [`0018`](../../rfcs/0018-print-the-command/rfc.md) | 11.7: 13 rows — the re-sync after `pin`, the `git switch -c` the migration needs, and the closing commit that stages the removal; 10.4: the branch refusal names the command |
 | 7 | [`0019`](../../rfcs/0019-a-scan-never-writes/rfc.md) | 7.3: the read-only clause names the files a spawned tool would write, and the version probe runs outside the scanned repository |
 | 8 | [`0020`](../../rfcs/0020-self-managed-pin/rfc.md) | 8.2 R1: a pin the project manages itself (`devEngines.packageManager`) that differs from the answering binary is a skip, never a conflict |
+| 11 | [`0021`](../../rfcs/0021-the-step-matches-the-manager/rfc.md) | 11.2.2, 11.3 and 11.7: `pnpm import` for any foreign lockfile, and `--from` validated against the lockfiles the repository holds |
 
 ## Changing the contract
 

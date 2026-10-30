@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "tool": {
     "name": "funky-secure",
-    "version": "0.8.5"
+    "version": "0.8.6"
   },
   "scope": "all",
   "policy": {
@@ -137,7 +137,7 @@
       "target": "ci",
       "path": ".github/workflows/deploy.yml",
       "line": 11,
-      "message": "actions/checkout@v4 is a tag; pin the 40-character commit SHA so the workflow cannot change under you",
+      "message": "actions/checkout@v4 is a tag; pin the 40-character commit SHA so the workflow cannot change under you — resolve it with git ls-remote against the action's host and keep the tag as the comment, because this tool does not use the network",
       "evidence": {
         "uses": "actions/checkout@v4",
         "form": "tag"

@@ -138,7 +138,10 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     steps.push(commitWrites);
   }
   if (foreign.length > 0) {
-    steps.push('pnpm install');
+    // `pnpm import` reads the foreign lockfile and writes `pnpm-lock.yaml` with the versions it
+    // recorded. `pnpm install` never reads it: it resolves from the manifest, so the pins the user
+    // migrated from are gone before `migrate` deletes the file that held them (0021).
+    steps.push('pnpm import');
   }
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {

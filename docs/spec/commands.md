@@ -125,8 +125,8 @@ executed:
 - `pnpm install` when the repository has no `pnpm-lock.yaml`, because the tool never resolves or
   installs (4.7, 11.6).
 - `funky-secure migrate --apply` when a foreign lockfile coexists with the pnpm one; `--from` is
-  omitted so the plan names the manager it actually finds — a `yarn.lock` needs `pnpm import`, not
-  `pnpm install` (11.3).
+  omitted so the plan names the manager it actually finds — a foreign lockfile needs `pnpm import`,
+  because `pnpm install` never reads one (11.3, 0021).
 - `git add` for the paths the plan wrote, so the next `--apply` over the same state is not refused as
   dirty (11.2, safety rules).
 
@@ -146,8 +146,9 @@ Plan steps, printed in order:
 2. **Report-only, no action:** behavior settings in `.npmrc` that pnpm no longer reads (4.1 and 1.3),
    listed by key name so the user moves them to `pnpm-workspace.yaml` or the pnpm global config
    deliberately.
-3. **Human step:** create the pnpm lockfile (`pnpm import` for a yarn lockfile, `pnpm install`
-   otherwise). This step is never executed by the tool: it resolves and downloads (4.9).
+3. **Human step:** create the pnpm lockfile with `pnpm import` for any foreign lockfile — it reads
+   `yarn.lock` or `package-lock.json` and records the versions they pinned, which `pnpm install`
+   discards by resolving from the manifest. This step is never executed by the tool (4.9).
 4. **Removal:** the foreign lockfile(s), only after `pnpm-lock.yaml` exists.
 5. **CI follow-up:** the workflow lines that need rewriting, quoted by `file:line`, as suggestions.
 
