@@ -45,14 +45,14 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `lockfile-committed` | `vercel/…` (pnpm 8 shape) and `t3` (pnpm 9) pass; `berry` (yarn only) fails, correctly — and the message no longer claims a berry repository is unreproducible |
 `foreign-lockfile` | `primevue` warns on a tracked `package-lock.json` next to `pnpm-lock.yaml`; `berry` warns on `yarn.lock` |
 `quarantine` | Declared and strict at `2880` in `shadcn-ui/ui` (passes), declared at `1440` in `t3`; the block written by `init --apply` is read back by pnpm (`pnpm config get minimum-release-age` → `1440`) |
-`exact-versions` | 206 floating ranges located line by line in `shadcn-ui/ui` with 0 mismatches; 68 findings and 0 skips on `primevue` after the catalogue is resolved (13 false positives gone); 26 specifiers pinnable on the pnpm 8 shape in `vercel/…`; 0 desyncs over 245 specifiers across 7 importers in `shadcn-ui/ui`; 80 of 96 findings carry `pnpm -C <dir>` in `t3` |
+`exact-versions` | 206 floating ranges located line by line in `shadcn-ui/ui` with 0 mismatches and 0 desyncs over 245 specifiers across 7 importers; 68 findings on `primevue` after the catalogue is resolved (13 false positives gone); 80 of its 96 findings carry `pnpm -C <dir>` in `t3`; 26 specifiers pinnable on the pnpm 8 shape in `vercel/…` |
 `sensitive-ignored` | True positives on `primevue` and `shadcn-ui/ui` (`git check-ignore --no-index` confirms the paths are not ignored), and a tracked tokenless `.npmrc` correctly exempt |
 `env-not-tracked` | `.env.local.example` in `vercel/…` is a template and not a finding; a tracked `.env` still is |
 `actions-pinned-sha` | 53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 24 in `t3` — the last two inside `.github/actions/setup/action.yml`, a composite action six workflows consume |
 `no-bot-auto-merge` | 2 findings in `berry`; passes on `shadcn-ui/ui`, whose kodiak requires a label |
 `ci-no-safety-overrides` | Detects `--no-frozen-lockfile` in `ts-safeql/safeql` `.github/workflows/ci.yml:49` (`ci-frozen-lockfile-disabled`, with the command in `evidence`); passes on `shadcn-ui/ui` and `t3` (`--frozen-lockfile` and nothing worse) |
 `pull-request-target` | Detects a genuine pwn request in `cloud-bulldozer/benchmark-operator` `.github/workflows/e2e.yml:33` — the step checks out `github.event.pull_request.head.sha` and later steps consume real secrets (`pull-request-target-checkout`); passes on `t3` and `shadcn-ui/ui`, where the two `pull_request_target` workflows never check out the head |
-`workflow-permissions` | 32 findings in `berry` (0 skips, after the indentless-sequence fix), 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
+`workflow-permissions` | 32 findings in `berry` — the rule that produced no signal at all before the indentless-sequence fix — and 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
 
 ## Behaviour that was measured rather than assumed
 
@@ -76,6 +76,21 @@ GitHub Actions behaviour: that a correct workflow really runs green, and that `p
 Linux and macOS | Everything above ran on Windows. The code has no platform branch, which is not the same as evidence |
 The published tarball on another machine | The tarball was installed and exercised locally only |
 The correctness of every remediation that needs an install (`pnpm install --lockfile-only`, `pnpm pkg set`) | Following one would change a repository; the commands were verified for shape, not for effect |
+
+## Totals, and the mistake this page made once
+
+A total is not a subtotal. This page first carried 89, 68, 206 and 96 as the *totals* of four clones; those are the
+`exact-versions` subtotals (and 89 is `berry` without `workflow-permissions`). An independent agent re-ran the
+five clones and measured 121, 74, 277 and 129. The rows above now name the rule whose count they quote, and
+this note stays because the error is the one a reader is most likely to repeat.
+
+| clone | total findings | rules skipped |
+|---|---|---|
+| `yarnpkg/berry` | 121 | 3 |
+| `vercel/nextjs-subscription-payments` | 26 pinnable by `pin` | — |
+| `primefaces/primevue` | 74 | 4 |
+| `shadcn-ui/ui` | 277 | 2 |
+| `t3-oss/create-t3-app` | 129 | 2 |
 
 ## How this page stays true
 
