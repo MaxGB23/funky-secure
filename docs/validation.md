@@ -50,8 +50,8 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `env-not-tracked` | `.env.local.example` in `vercel/…` is a template and not a finding; a tracked `.env` still is |
 `actions-pinned-sha` | 53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 24 in `t3` — the last two inside `.github/actions/setup/action.yml`, a composite action six workflows consume |
 `no-bot-auto-merge` | 2 findings in `berry`; passes on `shadcn-ui/ui`, whose kodiak requires a label |
-`ci-no-safety-overrides` | Passes on `shadcn-ui/ui` and `t3` (they use `--frozen-lockfile` and nothing worse) |
-`pull-request-target` | Passes on `t3` and `shadcn-ui/ui`, where the two `pull_request_target` workflows never check out the head |
+`ci-no-safety-overrides` | Detects `--no-frozen-lockfile` in `ts-safeql/safeql` `.github/workflows/ci.yml:49` (`ci-frozen-lockfile-disabled`, with the command in `evidence`); passes on `shadcn-ui/ui` and `t3` (`--frozen-lockfile` and nothing worse) |
+`pull-request-target` | Detects a genuine pwn request in `cloud-bulldozer/benchmark-operator` `.github/workflows/e2e.yml:33` — the step checks out `github.event.pull_request.head.sha` and later steps consume real secrets (`pull-request-target-checkout`); passes on `t3` and `shadcn-ui/ui`, where the two `pull_request_target` workflows never check out the head |
 `workflow-permissions` | 32 findings in `berry` (0 skips, after the indentless-sequence fix), 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
 
 ## Behaviour that was measured rather than assumed
@@ -72,7 +72,6 @@ pnpm 10 reads the block | pnpm 10.16.1 and 12.3.4 both answer `1440`, `4320` and
 
 | Not verified | Why, and what it would take |
 |---|---|
-A real repository that **violates** `ci-no-safety-overrides` or `pull-request-target` | Both were observed only on their passing side in real code (`shadcn-ui/ui`, `t3`). Their detecting side is covered by fixtures in `tests/rules/`, which is the shape this repository's own lesson warns about |
 GitHub Actions behaviour: that a correct workflow really runs green, and that `permissions: contents: read` really produces a 403 | Needs a runner and a repository. The rules were verified statically against 11 real workflows |
 Linux and macOS | Everything above ran on Windows. The code has no platform branch, which is not the same as evidence |
 The published tarball on another machine | The tarball was installed and exercised locally only |
