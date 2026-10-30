@@ -41,18 +41,18 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 
 | Rule | What was verified on real repositories |
 |---|---|
-`package-manager-pin` | A declared `pnpm@10.33.4` (`shadcn-ui/ui`) and `pnpm@9.6.0` (`primevue`) pass, and no plan rewrites them; a repository declaring `yarn@4.2.1` (`berry`) is a skip, not a violation; a repository declaring nothing (`vercel/…`) still fails with `pin-missing` |
-`lockfile-committed` | `vercel/…` (pnpm 8 shape) and `t3` (pnpm 9) pass; `berry` (yarn only) fails, correctly |
+`package-manager-pin` | A declared `pnpm@10.33.4` (`shadcn-ui/ui`) and `pnpm@9.6.0` (`primevue`) pass while the machine answers 12.3.4, and no plan rewrites them; `yarn@4.2.1` (`berry`) is `skip not-pnpm`; a repository declaring nothing (`vercel/…`) still fails with `pin-missing` |
+`lockfile-committed` | `vercel/…` (pnpm 8 shape) and `t3` (pnpm 9) pass; `berry` (yarn only) fails, correctly — and the message no longer claims a berry repository is unreproducible |
 `foreign-lockfile` | `primevue` warns on a tracked `package-lock.json` next to `pnpm-lock.yaml`; `berry` warns on `yarn.lock` |
 `quarantine` | Declared and strict at `2880` in `shadcn-ui/ui` (passes), declared at `1440` in `t3`; the block written by `init --apply` is read back by pnpm (`pnpm config get minimum-release-age` → `1440`) |
-`exact-versions` | 206 floating ranges located line by line in `shadcn-ui/ui` with 0 mismatches; catalogue specifiers and the pnpm 8 shape are covered by the 0.9.0 work |
+`exact-versions` | 206 floating ranges located line by line in `shadcn-ui/ui` with 0 mismatches; 68 findings and 0 skips on `primevue` after the catalogue is resolved (13 false positives gone); 26 specifiers pinnable on the pnpm 8 shape in `vercel/…`; 0 desyncs over 245 specifiers across 7 importers in `shadcn-ui/ui`; 80 of 96 findings carry `pnpm -C <dir>` in `t3` |
 `sensitive-ignored` | True positives on `primevue` and `shadcn-ui/ui` (`git check-ignore --no-index` confirms the paths are not ignored), and a tracked tokenless `.npmrc` correctly exempt |
 `env-not-tracked` | `.env.local.example` in `vercel/…` is a template and not a finding; a tracked `.env` still is |
-`actions-pinned-sha` | 53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 24 in `t3` including the two inside `.github/actions/setup/action.yml` |
+`actions-pinned-sha` | 53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 24 in `t3` — the last two inside `.github/actions/setup/action.yml`, a composite action six workflows consume |
 `no-bot-auto-merge` | 2 findings in `berry`; passes on `shadcn-ui/ui`, whose kodiak requires a label |
 `ci-no-safety-overrides` | Passes on `shadcn-ui/ui` and `t3` (they use `--frozen-lockfile` and nothing worse) |
 `pull-request-target` | Passes on `t3` and `shadcn-ui/ui`, where the two `pull_request_target` workflows never check out the head |
-`workflow-permissions` | 32 findings in `berry`, 4 in `shadcn-ui/ui`, name the jobs that inherit the default |
+`workflow-permissions` | 32 findings in `berry` (0 skips, after the indentless-sequence fix), 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
 
 ## Behaviour that was measured rather than assumed
 
