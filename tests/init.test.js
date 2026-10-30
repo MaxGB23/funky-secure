@@ -219,7 +219,10 @@ test('a repository below policy gets exactly one managed block with the baseline
   const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
   assert.equal(blockCount(workspace), 1);
   assert.ok(workspace.includes('minimumReleaseAgeStrict: true'));
-  assert.ok(!workspace.includes('minimumReleaseAge:'));
+  assert.ok(
+    workspace.includes('minimumReleaseAge: 1440'),
+    'baseline declares the day the repository waits instead of inheriting it',
+  );
   assert.ok(!workspace.includes('packages:'), 'init must not synthesize a packages: key');
   assert.equal(before.has('pnpm-workspace.yaml'), false);
 
@@ -426,7 +429,10 @@ test('planFor composes W1, W2 and W3 from the context and a report, and adds W4 
     ['pnpm-workspace.yaml', '.gitignore', 'package.json'],
   );
   assert.ok(baseline.every((item) => item.state === 'would-write'));
-  assert.ok(!baseline[0].content.includes('minimumReleaseAge:'));
+  assert.ok(
+    baseline[0].content.includes('minimumReleaseAge: 1440'),
+    'the baseline block declares its own age',
+  );
 
   const strictPolicy = { ...policy, preset: 'strict', quarantineMinutes: 4320 };
   const strict = planFor(ctx, { policy: strictPolicy, report, configText: null });
@@ -526,7 +532,7 @@ test('init --apply on a repository with no pnpm-workspace.yaml creates the manag
   const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
   assert.equal(
     workspace,
-    `${BEGIN}\nminimumReleaseAgeStrict: true\nsavePrefix: ''\n${END}\n`,
+    `${BEGIN}\nminimumReleaseAgeStrict: true\nminimumReleaseAge: 1440\nsavePrefix: ''\n${END}\n`,
     'the created file carries the managed block and nothing else',
   );
   assert.equal(workspace.includes('packages:'), false, 'init never synthesizes a packages: key');

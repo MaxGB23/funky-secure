@@ -240,7 +240,7 @@ test('plan() writes the gate for a repository that declares nothing, whatever th
   assert.ok(item.path.startsWith(dir));
   assert.ok(item.content.includes('minimumReleaseAgeStrict: true'));
   assert.ok(item.content.includes("savePrefix: ''"), 'the same block carries savePrefix: \'\' (W1c)');
-  assert.ok(!item.content.includes('minimumReleaseAge:'));
+  assert.ok(item.content.includes('minimumReleaseAge: 1440'));
   assert.match(item.reason, /minimumReleaseAgeStrict/);
 });
 

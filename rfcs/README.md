@@ -23,6 +23,7 @@ document that changes without a new record.
 | [0014](0014-peer-suffix/rfc.md) | The version and its peer suffix | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5; [`docs/spec/commands.md`](../docs/spec/commands.md) §10.4 |
 | [0015](0015-followable-start/rfc.md) | The start that can be followed | `implemented` | — | [`0009`](0009-gate-before-resolve/rfc.md) | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0016](0016-close-the-loop/rfc.md) | Close the loop | `implemented` | — | [`0015`](0015-followable-start/rfc.md) | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
+| [0017](0017-declare-the-age/rfc.md) | The gate declares its own number | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R2; [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2 |
 
 ## Layout
 

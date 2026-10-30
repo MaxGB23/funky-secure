@@ -100,7 +100,11 @@ deviation is recorded here and in section 9.1.
   `baseline` only warns on the inherited non-strict default, which keeps the rule adoptable anywhere
   (4.2, K1). The deviation is recorded in section 9.1.
 - **Remediation:** `init --apply` writes the managed block W1a of section 11.2 —
-  `minimumReleaseAgeStrict: true` — plus `minimumReleaseAge: 4320` as W1b under `--preset strict`.
+  `minimumReleaseAgeStrict: true` — and W1b, the age itself, in the same block: `minimumReleaseAge: 1440`
+  under `baseline` and `4320` under `--preset strict`. The age is always written, never inherited: pnpm's
+  built-in default is `1440` from the 11 line on and `0` before it, so a block that declares only the
+  strict flag claims a gate that an older major enforces nowhere, and no repository could state its own
+  number (0017).
   Manual equivalents: `pnpm config set minimum-release-age-strict true --location=project` and
   `pnpm config set minimum-release-age 4320 --location=project`; in pnpm 12 both write
   `pnpm-workspace.yaml`, because project config **is** that file (E8), while `--location=global`
