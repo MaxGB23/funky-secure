@@ -253,6 +253,16 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 13 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest, because after the pin's own commit nothing else on the path writes one (0028) |
 | 14 | `funky-secure scan --preset starter` | always, and last |
 
+A directory that is not a repository is the one state where this derivation does not exist to be made.
+R7 `sensitive-ignored` answers through `git check-ignore` and declares `outside git, skip` (§8.2), so its
+write is not planned until a repository exists, and the question in row 3 — whether the tree already
+carries uncommitted work — is asked of a git that is not there. In that state the path prints only the
+steps that create the missing state: row 1, row 2 when there is no manifest, and then one line,
+`funky-secure start`, with the reason beside it. It prints no numbered write plan, no commit step and no
+counts, because those would be derived from the directory the reader is about to leave behind, and the
+next run contradicts them by one write (0031). `why this order` is not printed there either: there is no
+order yet, and the one line takes its place.
+
 The order is the cause order and not a preference: a managed block has to exist before the install that
 reads it, the block is only written over a committed tree, `migrate --apply` refuses to remove a
 foreign lockfile while `pnpm-lock.yaml` is absent, and the branch it needs has to exist before it runs.
