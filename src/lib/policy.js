@@ -156,8 +156,9 @@ function assertRuleMap(rules, catalog) {
  * @param {string[]} [options.only]
  * @param {string[]} [options.ignore]
  * @param {string} [options.failOn]
+ * @param {boolean} [options.requireVerified] treat an unverified rule as a violation (0023)
  * @param {number} [options.major] active pnpm major, when a probe answered
- * @returns {{ preset: string, quarantineMinutes: number, failOn: string, severities: Record<string, string>, active: string[] }}
+ * @returns {{ preset: string, quarantineMinutes: number, failOn: string, requireVerified: boolean, severities: Record<string, string>, active: string[] }}
  */
 export function resolvePolicy({
   catalog = [],
@@ -166,6 +167,7 @@ export function resolvePolicy({
   only,
   ignore,
   failOn,
+  requireVerified = false,
   major,
 } = {}) {
   const preset = presetFromFlag ?? config.preset ?? DEFAULT_PRESET;
@@ -203,6 +205,7 @@ export function resolvePolicy({
       major,
     }),
     failOn: effectiveFailOn,
+    requireVerified,
     severities,
     active,
   };

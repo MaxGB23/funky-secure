@@ -124,14 +124,14 @@ test('derives the verdict from --fail-on and never from a skip or an info', () =
 test('keeps the policy it was given and never invents a timestamp', () => {
   const report = buildReport({
     scope: 'repo',
-    policy: { preset: 'strict', quarantineMinutes: 4320, failOn: 'warn' },
+    policy: { preset: 'strict', quarantineMinutes: 4320, failOn: 'warn', requireVerified: false },
     catalog,
     tool,
     targets: [{ kind: 'repo-root', path: '.' }],
     findings: [],
   });
 
-  assert.deepEqual(report.policy, { preset: 'strict', quarantineMinutes: 4320, failOn: 'warn' });
+  assert.deepEqual(report.policy, { preset: 'strict', quarantineMinutes: 4320, failOn: 'warn', requireVerified: false });
   assert.equal(report.schemaVersion, 1);
   assert.equal('generatedAt' in report, false);
 });

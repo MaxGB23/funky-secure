@@ -117,13 +117,20 @@ they describe the command and the preset rather than the repository.
 it cannot contradict the report about the same repository (RFC 11.7). Exit `0` in every state,
 including a repository at policy; `2` only for a usage error.
 
+```text
+funky-secure --version
+```
+
+Prints the version of the installed package and exits 0. It answers from the shipped `package.json` and
+reads nothing else, so it is the check to run after installing the tarball.
+
 ### `scan`
 
 ```text
 funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict|starter]
                   [--format human|json] [--fail-on error|warn|info|none]
-                  [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
-                  [--verbose]
+                  [--only <ids>] [--ignore <ids>] [--strict-probes] [--require-verified]
+                  [--with-timestamp] [--verbose]
 ```
 
 Read-only audit. It resolves targets, runs the active rules and renders one report. Defaults are
@@ -134,6 +141,9 @@ or `baseline`.
   `--ignore` wins over `--only` (RFC 9.2).
 - `--strict-probes` turns an unavailable required probe from `skip` into `error`; CI uses it to
   refuse a green build that measured nothing.
+- `--require-verified` makes an unverified rule a failing verdict, not only a count: the run exits 1
+  and the verdict says `fail`. Without it a skip never fails the gate, because not knowing is not a
+  violation; a CI that wants coverage to be part of the gate passes this flag (RFC 0023).
 - `--with-timestamp` adds `generatedAt` to the JSON document. It is the only non-deterministic field
   and is excluded from golden tests by construction.
 - `--verbose` restores what the default human report leaves out: every rule id, the ids of the
@@ -501,7 +511,7 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.7" },
+  "tool": { "name": "funky-secure", "version": "0.8.8" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "provenance": {
@@ -526,7 +536,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.7" },
+  "tool": { "name": "funky-secure", "version": "0.8.8" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -559,7 +569,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.7" },
+  "tool": { "name": "funky-secure", "version": "0.8.8" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```
@@ -594,7 +604,7 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.8.7)
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.8.8)
      commit it, so the repository carries the instructions its agents read
 ```
 
@@ -603,7 +613,7 @@ for "not run":
 
 ```text
 $ funky-secure skill --install
-–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.8.7)
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.8.8)
      nothing to do: it already carries this exact version
 ```
 
@@ -613,30 +623,30 @@ whole point: "the bytes differ" is three different situations.
 ```text
 $ funky-secure skill --install < /dev/null          # an older copy is an upgrade
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.8.7 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.8.8 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # same version, edited by hand
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.7 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.8 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
 funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
-reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.8.7
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.8.8
 ```
 
 With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
 keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
-funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.7
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.8
 funky-secure skill: replacing it discards whatever is there now
 
   1  keep it as it is, and change nothing
-  2  replace it with version 0.8.7
+  2  replace it with version 0.8.8
 
 funky-secure skill: choose 1 or 2 [1]:
 ```

@@ -68,6 +68,7 @@ function provenanceOf({ effectiveScope, policy, presetFromFlag, loaded, repo }) 
  * @param {string[]} [options.only]
  * @param {string[]} [options.ignore]
  * @param {string} [options.failOn]
+ * @param {boolean} [options.requireVerified]
  * @param {boolean} [options.strictProbes]
  * @param {Array<object>} [options.catalog]
  * @param {object} [options.collector] injected collector, for tests
@@ -80,6 +81,7 @@ export async function collectScan({
   only,
   ignore,
   failOn = 'error',
+  requireVerified = false,
   strictProbes = false,
   catalog = [],
   collector,
@@ -106,6 +108,7 @@ export async function collectScan({
     only,
     ignore,
     failOn,
+    requireVerified,
     major: machine?.facts.major ?? undefined,
   });
 

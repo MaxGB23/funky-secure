@@ -2,13 +2,14 @@
   "schemaVersion": 1,
   "tool": {
     "name": "funky-secure",
-    "version": "0.8.7"
+    "version": "0.8.8"
   },
   "scope": "all",
   "policy": {
     "preset": "baseline",
     "quarantineMinutes": 1440,
-    "failOn": "error"
+    "failOn": "error",
+    "requireVerified": false
   },
   "provenance": {
     "preset": "baseline",

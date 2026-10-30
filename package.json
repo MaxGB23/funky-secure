@@ -1,6 +1,6 @@
 {
   "name": "funky-secure",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "description": "Supply-chain auditor and initializer for pnpm repositories: stateless rules, a read-only scan, and a write plan you review before anything is applied.",
   "license": "MIT",
   "author": "MaxGB23",
@@ -23,7 +23,8 @@
     "test": "node --test",
     "golden": "node scripts/gen-golden.js",
     "self": "node bin/funky-secure.js scan --scope repo --fail-on warn",
-    "prepublishOnly": "node --test && node bin/funky-secure.js scan --scope repo --fail-on warn && node scripts/release-guard.js"
+    "prepublishOnly": "node --test && node bin/funky-secure.js scan --scope repo --fail-on warn && node scripts/release-guard.js && node scripts/pack-smoke.js",
+    "pack:smoke": "node scripts/pack-smoke.js"
   },
   "keywords": [
     "supply-chain",
@@ -39,5 +40,10 @@
     "skills": [
       "skills"
     ]
+  },
+  "repository": "git+https://github.com/MaxGB23/funky-secure.git",
+  "homepage": "https://github.com/MaxGB23/funky-secure#readme",
+  "bugs": {
+    "url": "https://github.com/MaxGB23/funky-secure/issues"
   }
 }
