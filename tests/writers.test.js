@@ -57,7 +57,10 @@ test('workspaceBlockFacts reads the managed block, never a key declared outside 
 test('writeQuarantineGate always carries savePrefix in the same block (W1c)', () => {
   const baseline = writeQuarantineGate({});
   assert.equal(baseline.ok, true);
-  assert.equal(baseline.content, `${BEGIN}\nminimumReleaseAgeStrict: true\nsavePrefix: ''\n${END}\n`);
+  assert.equal(
+    baseline.content,
+    `${BEGIN}\nminimumReleaseAgeStrict: true\nminimumReleaseAge: 1440\nsavePrefix: ''\n${END}\n`,
+  );
   assert.match(baseline.reason, /caret/);
 
   const strict = writeQuarantineGate({ preset: 'strict' });

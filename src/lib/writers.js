@@ -20,7 +20,7 @@ import { basename, resolve } from 'node:path';
 import { upsertBlock, blockValues } from './managed-block.js';
 import { validateWriteTarget } from './paths.js';
 import { planItem } from './plan.js';
-import { QUARANTINE_STRICT_MINUTES } from './policy.js';
+import { QUARANTINE_DEFAULT_MINUTES, QUARANTINE_STRICT_MINUTES } from './policy.js';
 
 export const WORKSPACE_RELATIVE = 'pnpm-workspace.yaml';
 export const GITIGNORE_RELATIVE = '.gitignore';
@@ -174,8 +174,10 @@ export function planTarget(ctx, { relative, operation, result }) {
 /**
  * W1a, W1b and W1c in one managed block of `pnpm-workspace.yaml`.
  *
- * `minimumReleaseAgeStrict: true` is always written (the gate flip, W1a). `minimumReleaseAge: 4320` is
- * written only for the strict preset (W1b), in the same block, so the file stays one unit of review.
+ * `minimumReleaseAgeStrict: true` is always written (the gate flip, W1a). The age itself is written too,
+ * always (W1b): `1440` under `baseline` and `4320` under `strict`, in the same block, so the file stays
+ * one unit of review. Leaving it out made the gate inherit pnpm's own default, which is `0` up to pnpm 10
+ * and `1440` from pnpm 11 on — a block claiming a gate that an older major enforces nowhere (0017).
  * `savePrefix: ''` is always written too (W1c): it is the project-level setting that stops a later
  * `pnpm add` from saving a caret, which measurement on pnpm 12.3.4 confirms (`^1.3.0` without the key,
  * `1.3.0` with it). A file that declares any of these keys outside the block is a conflict: two sources
@@ -195,17 +197,15 @@ export function writeQuarantineGate({ workspaceYaml = null, exists = false, pres
     };
   }
   const existing = typeof workspaceYaml === 'string' ? workspaceYaml : null;
-  const strictFloor = preset === 'strict';
+  const minutes = preset === 'strict' ? QUARANTINE_STRICT_MINUTES : QUARANTINE_DEFAULT_MINUTES;
   const body = [QUARANTINE_GATE_LINE];
   const keys = [QUARANTINE_GATE_KEY];
   const values = [QUARANTINE_GATE_LINE];
   const effects = ['turn the quarantine into a gate'];
-  if (strictFloor) {
-    body.push(`minimumReleaseAge: ${QUARANTINE_STRICT_MINUTES}`);
-    keys.push('minimumReleaseAge');
-    values.push(`minimumReleaseAge: ${QUARANTINE_STRICT_MINUTES}`);
-    effects.push('set the strict floor');
-  }
+  body.push(`minimumReleaseAge: ${minutes}`);
+  keys.push('minimumReleaseAge');
+  values.push(`minimumReleaseAge: ${minutes}`);
+  effects.push(preset === 'strict' ? 'set the 3-day floor' : 'declare the day the repository waits');
   body.push(SAVE_PREFIX_LINE);
   keys.push(SAVE_PREFIX_KEY);
   values.push(SAVE_PREFIX_LINE);
