@@ -72,6 +72,7 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 Whether `pnpm import` can read a **berry** `yarn.lock` | Needs a real install. If it cannot, the step `start` prints for a berry repository is wrong |
 Whether a `pnpm-workspace.yaml` without `packages:` breaks a repository that declares `workspaces` | Needs an install that resolves `workspace:^` |
 Whether pnpm 10 reads `minimumReleaseAge` / `savePrefix` from `pnpm-workspace.yaml` | No pnpm 10 on this machine; `init` writes the block for repositories whose own CI may run it |
+A real repository that **violates** `ci-no-safety-overrides` or `pull-request-target` | Both were observed only on their passing side in real code (`shadcn-ui/ui`, `t3`). Their detecting side is covered by fixtures in `tests/rules/`, which is the shape this repository's own lesson warns about |
 GitHub Actions behaviour: that a correct workflow really runs green, and that `permissions: contents: read` really produces a 403 | Needs a runner and a repository. The rules were verified statically against 11 real workflows |
 Linux and macOS | Everything above ran on Windows. The code has no platform branch, which is not the same as evidence |
 The published tarball on another machine | The tarball was installed and exercised locally only |
