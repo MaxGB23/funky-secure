@@ -45,8 +45,11 @@ finds; that is a property of the remediation, not of the verdict.
 `devEngines.packageManager` — the field npm enforces, where `packageManager` is the one npm ignores —
 has three states, and this page names all three (0030). Declared and **equal to the pin** is a fact
 this tool owns: `init --apply` writes the pin as W3 and the field as W3b in one plan (11.2), so the
-rule compares the pin with the answering pnpm instead of skipping it — a `pass` when they match, the
-same conflict as any other pin when they do not. Declared and **different** is `skip` with
+rule can state that the two declarations agree — and when the answering pnpm matches the pin too, that
+agreement is a `pass` instead of a skip. When the answering pnpm is another version the skip stands:
+the probe runs outside the project, so it describes the machine while the project re-executes with
+what it declares, and no remediation is offered, because rewriting a working pin to the auditing
+machine's version is a downgrade (0020). Declared and **different** is `skip` with
 `self-managed-pin`, because the project manages its own pnpm and the machine's pnpm is not evidence
 about it. **Absent** is unchanged: the pin alone is the declaration, and nothing about it is skipped.
 
