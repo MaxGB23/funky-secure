@@ -192,3 +192,37 @@ test('collectPins reads the version from the lockfile and keeps the manifest sha
   assert.equal(JSON.parse(written.content).dependencies.left, '1.3.0');
   assert.ok(written.content.endsWith('\n'), 'the trailing newline survives');
 });
+
+test('pin reads the pnpm 8 root record, so a lockfileVersion 6.0 repository is pinnable', async (t) => {
+  // vercel/nextjs-subscription-payments: the versions are in the lockfile, one line below each
+  // specifier, and `pin` wrote nothing because the 6.0 shape was refused. `start` step 1 is
+  // `pin --apply`, so this shape could not be cleared on any pnpm 8 repository.
+  const lock = [
+    "lockfileVersion: '6.0'",
+    '',
+    'settings:',
+    '  autoInstallPeers: true',
+    '  excludeLinksFromLockfile: false',
+    '',
+    'dependencies:',
+    '  left:',
+    '    specifier: ^1.3.0',
+    '    version: 1.3.0',
+    '  right:',
+    '    specifier: ~2.0.0',
+    '    version: 2.0.1(postcss@8.4.38)',
+    '',
+  ].join('\n');
+  const manifest = MANIFEST({ left: '^1.3.0', right: '~2.0.0' });
+
+  const plan = await pin(t, ['pin'], { 'package.json': manifest, 'pnpm-lock.yaml': lock });
+  assert.equal(plan.code, 0);
+  assert.match(plan.stdout, /pins 2 specifiers to the version pnpm-lock\.yaml records/);
+  assert.equal(plan.stdout.includes('records no version'), false, 'every range has a recorded version');
+  assert.match(plan.stdout, /right  ~2\.0\.0 → 2\.0\.1/, 'the recorded version drops the peer suffix');
+
+  const applied = await pin(t, ['pin', '--apply'], { 'package.json': manifest, 'pnpm-lock.yaml': lock });
+  assert.equal(applied.code, 0);
+  const written = JSON.parse(readFileSync(join(applied.dir, 'package.json'), 'utf8'));
+  assert.deepEqual(written.dependencies, { left: '1.3.0', right: '2.0.1' });
+});

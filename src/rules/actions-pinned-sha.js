@@ -39,6 +39,95 @@ function skip(code, reason) {
   return { status: 'skip', code, message: `skipped: ${reason}`, probeUnavailable: true };
 }
 
+/** The one top-level `runs:` key of an action's metadata file. */
+const RUNS_KEY = /^runs\s*:(?:\s*#.*)?$/;
+
+/** @param {string} line */
+function isBlankOrComment(line) {
+  const text = line.trim();
+  return text === '' || text.startsWith('#');
+}
+
+/** @param {string} line */
+function indentOf(line) {
+  return /^[ \t]*/.exec(line)[0].length;
+}
+
+/**
+ * A composite action has no `jobs:`: its `runs:` block carries `using:` and `steps:`, and that step
+ * sequence is the same shape as a workflow job's. The block is lifted one level into the shape the
+ * structural reader models — `jobs:` -> job -> `steps:` — and read by that same reader, never by a
+ * second line scan (E6). Only leading indentation changes: no line is dropped, so every step still
+ * reports the line it came from and the caller shifts the reader's 1-based line by `offset`. A key
+ * the reader does not model (`using:`, `main:`, `post:`) stays a job key it ignores, so a javascript
+ * or docker action is read without a guess and yields no step.
+ *
+ * @param {string} text
+ * @returns {{ ok: true, text: string, offset: number } | { ok: false, detail: string } | null}
+ *   null when the file declares no top-level `runs:` block: it is not an action at all.
+ */
+function liftComposite(text) {
+  const lines = text.split(/\r\n|\n|\r/);
+  const runsAt = lines.findIndex((line) => RUNS_KEY.test(line));
+  if (runsAt === -1) return null;
+
+  let end = runsAt + 1;
+  while (end < lines.length && (isBlankOrComment(lines[end]) || indentOf(lines[end]) > 0)) end += 1;
+
+  const body = lines.slice(runsAt + 1, end);
+  if (body.every(isBlankOrComment)) {
+    return { ok: false, detail: `"runs" at line ${runsAt + 1} declares no key` };
+  }
+
+  return {
+    ok: true,
+    text: ['jobs:', '  action:', ...body.map((line) => `  ${line}`)].join('\n'),
+    // body[0] is line runsAt + 2 of the file and line 3 of the lifted document.
+    offset: runsAt + 2 - 3,
+  };
+}
+
+/**
+ * One skip, for a file whose references cannot be attributed. Read and refused is not an unavailable
+ * probe, so `--strict-probes` does not promote it.
+ * @param {string} code
+ * @param {string} path
+ * @param {string} reason
+ */
+function refused(code, path, reason) {
+  return { status: 'skip', code, path, message: `skipped: ${reason}` };
+}
+
+/**
+ * The steps of one composite action, read by the workflow reader. A file that is not an action and a
+ * block the reader refuses come back as a skip that says which of the two it was.
+ * @param {{ path: string, text: string }} file
+ * @returns {Array<object>} findings, or one skip
+ */
+function compositeFindings(file) {
+  const lifted = liftComposite(file.text);
+  if (lifted === null) {
+    return [
+      refused(
+        'not-an-action',
+        file.path,
+        `${file.path} declares no top-level runs: block, so it is not a composite action and no step ` +
+          'can be attributed',
+      ),
+    ];
+  }
+  if (!lifted.ok) {
+    return [refused('unparseable-action', file.path, `unparseable composite action — ${lifted.detail}`)];
+  }
+
+  const parsed = parseWorkflow(lifted.text);
+  if (!parsed.ok) {
+    return [refused('unparseable-action', file.path, `unparseable composite action — ${parsed.detail}`)];
+  }
+
+  return stepFindings(file.path, parsed.jobs, lifted.offset);
+}
+
 /**
  * Lexical classification of a ref. It is not a git answer: no network and no probe (RFC 4.9).
  * @param {string} ref
@@ -102,6 +191,24 @@ function unpinned(path, step) {
   };
 }
 
+/**
+ * One finding per step the reader attributed, from either a workflow job or a composite action.
+ * @param {string} path
+ * @param {Array<object>} jobs jobs the structural reader returned
+ * @param {number} [offset] added to the reader's 1-based line, for a lifted composite action
+ * @returns {Array<object>}
+ */
+function stepFindings(path, jobs, offset = 0) {
+  const findings = [];
+  for (const job of jobs) {
+    for (const step of job.steps) {
+      const finding = unpinned(path, offset === 0 ? step : { ...step, line: step.line + offset });
+      if (finding !== null) findings.push(finding);
+    }
+  }
+  return findings;
+}
+
 export default {
   id: 'actions-pinned-sha',
   title: 'Actions are pinned to a commit SHA',
@@ -112,10 +219,15 @@ export default {
   severity: { baseline: 'error', strict: 'error' },
   question: 'Can a CI workflow change under you without a commit?',
   detection:
-    'Every workflow step the structural reader attributes (jobs -> job -> steps -> step). A uses ' +
+    'Every workflow step the structural reader attributes (jobs -> job -> steps -> step), and every ' +
+    'step of a composite action under .github/actions/**/action.yml or action.yaml, whose runs: ' +
+    'block is lifted into the same jobs -> job -> steps shape and read by the same reader. A uses ' +
     'value is immutable when owner/repo@<40 hex>, a local ./path, or docker://image@sha256:<64 hex>. ' +
     'A tag (@v1), a branch (@main), a short SHA (@<7 hex>) and docker://image:tag are reported. ' +
-    'A uses inside a with: map or a run: block scalar is never a step. An unparseable workflow skips.',
+    'A uses inside a with: map or a run: block scalar is never a step. An unparseable workflow skips. ' +
+    'An action metadata file that declares no top-level runs: skips (not-an-action), and one the ' +
+    'reader cannot attribute skips (unparseable-action); a javascript or docker action declares no ' +
+    'steps and reports nothing.',
   evidence:
     'file:line, the raw reference as written (quotes and trailing comment included) and the form: ' +
     'tag, branch, short-sha or docker-tag. A trailing version comment is evidence, never trusted.',
@@ -125,7 +237,8 @@ export default {
   limits:
     'Proves the reference is a full commit SHA, not that the SHA is the release the comment claims. ' +
     'The tag/branch/short-sha form is a lexical classification, not a git lookup. A workflow the ' +
-    'reader cannot attribute is skipped per file; the rule never guesses from a line scan.',
+    'reader cannot attribute is skipped per file; the rule never guesses from a line scan. Only the ' +
+    'action metadata file is read, so a `uses:` in an action\'s own script is out of reach.',
   docs: 'docs/rules/actions-pinned-sha.md',
 
   /**
@@ -151,19 +264,20 @@ export default {
         continue;
       }
 
-      for (const job of parsed.jobs) {
-        for (const step of job.steps) {
-          const finding = unpinned(file.path, step);
-          if (finding !== null) findings.push(finding);
-        }
-      }
+      findings.push(...stepFindings(file.path, parsed.jobs));
+    }
+
+    for (const file of repo.actionFiles ?? []) {
+      findings.push(...compositeFindings(file));
     }
 
     if (findings.length === 0) {
       findings.push({
         status: 'pass',
         code: 'pinned-actions',
-        message: 'every workflow reference is an immutable commit SHA, a digest or a local action',
+        message:
+          'every workflow and composite action reference is an immutable commit SHA, a digest or a ' +
+          'local action',
       });
     }
 

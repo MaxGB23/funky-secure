@@ -73,6 +73,74 @@ test('passes when only template names are tracked, nested templates included', (
   assert.equal(findings[0].code, 'no-env-tracked');
 });
 
+/**
+ * S1.3: the exception covers the template FAMILY, not two spellings of it. `vercel/nextjs-subscription-payments`
+ * tracks `.env.example` and `.env.local.example`, both templates with empty or public values that its
+ * README tells the reader to copy. A rule that asks for rotation over an empty template teaches
+ * people to ignore the rule.
+ */
+test('accepts the .env*.example template family, at any depth', () => {
+  const tracked = new Set([
+    '.env.local.example',
+    '.env.production.example',
+    '.env.staging.example',
+    'apps/web/.env.test.example',
+    'packages/api/.env.local.example',
+  ]);
+
+  const findings = rule.detect(context({ repo: repo({ tracked }) }));
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].code, 'no-env-tracked');
+});
+
+test('a real .env and .env.local stay findings next to the templates, with the same wording', () => {
+  const tracked = new Set(['.env', '.env.local', '.env.local.example', '.env.production.example']);
+
+  const findings = rule.detect(context({ repo: repo({ tracked }) }));
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.status, finding.path]),
+    [
+      ['fail', '.env'],
+      ['fail', '.env.local'],
+    ],
+  );
+  for (const finding of findings) {
+    assert.equal(finding.code, 'env-tracked');
+    assert.equal(
+      finding.message,
+      `${finding.path} is tracked by git; removing it from the index (git rm --cached ${finding.path}) ` +
+        'does not remove it from history, so the credentials it contains must be rotated',
+    );
+    assert.deepEqual(finding.remediation, { kind: 'manual', command: `git rm --cached ${finding.path}` });
+  }
+});
+
+test('only a name that ends with .example is a template', () => {
+  const tracked = new Set([
+    '.env.example.bak',
+    '.env.local.example.txt',
+    '.env.examples',
+    '.envrc',
+    '.env.local',
+  ]);
+
+  const findings = rule.detect(context({ repo: repo({ tracked }) }));
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.status, finding.path]),
+    [
+      ['fail', '.env.example.bak'],
+      ['fail', '.env.examples'],
+      ['fail', '.env.local'],
+      ['fail', '.env.local.example.txt'],
+      ['fail', '.envrc'],
+    ],
+  );
+});
+
 test('fails an environment file nested at any depth', () => {
   const findings = rule.detect(
     context({ repo: repo({ tracked: new Set(['packages/api/.env', 'src/index.js']) }) }),

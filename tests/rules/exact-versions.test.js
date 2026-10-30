@@ -520,3 +520,406 @@ test('skips instead of passing when no package.json could be parsed', () => {
   assert.equal(findings[0].code, 'unreadable-package-json');
   assert.equal(findings[0].probeUnavailable, true);
 });
+
+/// The lockfile shapes real repositories have (field round 4): the pnpm 8 root record, the catalogue
+/// map, and the two comparisons the reader used to invent.
+
+test('a lockfileVersion 6.0 root record supplies the version a pin writes', () => {
+  // vercel/nextjs-subscription-payments carries this shape. Every one of its floating ranges used to
+  // be reported as "the lockfile records no version", which was false: the version is the line below
+  // the specifier.
+  const text = `{
+  "dependencies": {
+    "react": "^18.3.1"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '6.0'",
+    '',
+    'dependencies:',
+    '  react:',
+    '    specifier: ^18.3.1',
+    '    version: 18.3.1(react-dom@18.3.1)',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  const floats = findings.filter((finding) => finding.code === 'floating-range');
+  assert.equal(floats.length, 1);
+  assert.equal(
+    floats[0].remediation.command,
+    `pnpm pkg set 'dependencies["react"]=18.3.1' && pnpm install`,
+    'the version the 6.0 record carries is the version a pin writes',
+  );
+  assert.deepEqual(findings.filter((finding) => finding.status !== 'fail'), []);
+});
+
+test('a catalog: specifier is resolved through the catalogue the lockfile records', () => {
+  // primefaces/primevue, sliced verbatim from its lockfile: `catalog:app` is exact when the app
+  // catalogue pins it (`chart.js`), and floating when the catalogue itself holds a range.
+  const text = `{
+  "dependencies": {
+    "chart.js": "catalog:app",
+    "@docsearch/js": "catalog:app",
+    "primeicons": "catalog:",
+    "left-pad": "^1.3.0"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'catalogs:',
+    '  app:',
+    "    '@docsearch/js':",
+    '      specifier: ^3',
+    '      version: 3.9.0',
+    '    chart.js:',
+    '      specifier: 3.3.2',
+    '      version: 3.3.2',
+    '  default:',
+    '    primeicons:',
+    '      specifier: ^7.0.0',
+    '      version: 7.0.0',
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    "      '@docsearch/js':",
+    '        specifier: catalog:app',
+    '        version: 3.9.0',
+    '      chart.js:',
+    '        specifier: catalog:app',
+    '        version: 3.3.2',
+    '      primeicons:',
+    "        specifier: 'catalog:'",
+    '        version: 7.0.0',
+    '      left-pad:',
+    '        specifier: ^1.3.0',
+    '        version: 1.3.0',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  // The catalogs section no longer refuses the comparison: nothing is a skip and nothing desyncs.
+  assert.deepEqual(
+    findings.filter((finding) => finding.status === 'skip' || finding.code === 'lockfile-desync'),
+    [],
+  );
+
+  const floats = findings.filter((finding) => finding.code === 'floating-range');
+  assert.deepEqual(
+    floats.map((finding) => [finding.path, finding.evidence.dependency]),
+    [
+      ['pnpm-workspace.yaml', '@docsearch/js'],
+      ['pnpm-workspace.yaml', 'primeicons'],
+      ['package.json', 'left-pad'],
+    ],
+    'the exact catalogue entry is not a finding, and a catalogue range names the file that holds it',
+  );
+
+  const [docsearch] = floats.filter((finding) => finding.evidence.dependency === '@docsearch/js');
+  assert.equal(docsearch.line, undefined, 'the package.json line cannot be made exact, so no line is claimed');
+  assert.match(docsearch.message, /catalog:app/);
+  assert.match(docsearch.message, /pnpm-workspace\.yaml/);
+  assert.match(docsearch.message, /app catalogue/);
+  assert.deepEqual(docsearch.evidence, {
+    specifier: '^3',
+    dependency: '@docsearch/js',
+    type: 'dependencies',
+    catalog: 'app',
+  });
+  assert.match(docsearch.remediation.command, /pnpm-workspace\.yaml/);
+  assert.match(docsearch.remediation.command, /3\.9\.0/);
+
+  const primeicons = floats.find((finding) => finding.evidence.dependency === 'primeicons');
+  assert.match(primeicons.message, /default catalogue/);
+  assert.match(primeicons.remediation.command, /catalog\["primeicons"\]/);
+});
+
+test('a catalog: specifier the catalogue does not resolve is reported nowhere, never guessed', () => {
+  const text = `{
+  "dependencies": {
+    "ghost": "catalog:missing"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'catalogs:',
+    '  default:',
+    '    left-pad:',
+    '      specifier: 1.3.0',
+    '      version: 1.3.0',
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      ghost:',
+    '        specifier: catalog:missing',
+    '        version: 1.3.0',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  assert.deepEqual(findings.filter((finding) => finding.status === 'fail'), []);
+});
+
+test('a peer dependency is never compared against another section record', () => {
+  // shadcn-ui/ui packages/helpers: pnpm 9 records no `peerDependencies` in an importer block at all,
+  // so the devDependency record of the same name is a different declaration and used to be reported
+  // as a desync (7 of 8 were this).
+  const text = `{
+  "peerDependencies": {
+    "@tanstack/ai": ">=0.40.0 <0.41.0"
+  },
+  "devDependencies": {
+    "@tanstack/ai": "0.40.0"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    devDependencies:',
+    '      @tanstack/ai:',
+    '        specifier: 0.40.0',
+    '        version: 0.40.0',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  assert.deepEqual(findings.filter((finding) => finding.code === 'lockfile-desync'), []);
+  assert.equal(findings.filter((finding) => finding.code === 'floating-range').length, 1, 'the peer range still floats');
+});
+
+test('a peer dependency the lockfile does record as a peer is still compared', () => {
+  const text = `{
+  "peerDependencies": {
+    "react": "18.3.1"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    peerDependencies:',
+    '      react:',
+    '        specifier: 17.0.2',
+    '        version: 17.0.2',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+  const desync = findings.filter((finding) => finding.code === 'lockfile-desync');
+
+  assert.deepEqual(desync.map((finding) => finding.evidence), [{ specifier: '18.3.1', resolved: '17.0.2' }]);
+});
+
+test('a name the lockfile records under another kind is not a missing record', () => {
+  // shadcn-ui/ui apps/v4 declares the same package in dependencies (^4.3.0, which the lockfile
+  // records) and in devDependencies (^4). pnpm writes one record per importer, so the second entry is
+  // not a desync, and comparing it against the first one invented one.
+  const text = `{
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      @tailwindcss/postcss:',
+    '        specifier: ^4.3.0',
+    '        version: 4.3.0',
+    '    devDependencies:',
+    '      zod:',
+    '        specifier: 3.25.76',
+    '        version: 3.25.76',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  assert.deepEqual(findings.filter((finding) => finding.code === 'lockfile-desync'), []);
+});
+
+test('a specifier an override rewrote is not a desync', () => {
+  // shadcn-ui/ui root: the manifest declares @types/react ^18.2.65 and the root `overrides` section
+  // rewrites it to 19.2.2, so the lockfile record disagrees with the manifest by construction.
+  const text = `{
+  "dependencies": {
+    "@types/react": "^18.2.65"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'overrides:',
+    "  '@types/react': 19.2.2",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      @types/react:',
+    '        specifier: 19.2.2',
+    '        version: 19.2.2',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  assert.deepEqual(
+    findings.filter((finding) => finding.status === 'skip'),
+    [],
+    'the overrides section no longer refuses the comparison',
+  );
+  assert.deepEqual(findings.filter((finding) => finding.code === 'lockfile-desync'), []);
+  assert.equal(findings.filter((finding) => finding.code === 'floating-range').length, 1, 'the range still floats');
+});
+
+test('an override for another name does not exempt a desync', () => {
+  const text = `{
+  "dependencies": {
+    "@types/react": "^18.2.65"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'overrides:',
+    "  '@types/react-dom': 19.2.2",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      @types/react:',
+    '        specifier: 19.2.2',
+    '        version: 19.2.2',
+    '',
+  ].join('\n');
+
+  const findings = rule.detect(
+    ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+  );
+
+  assert.deepEqual(
+    findings.filter((finding) => finding.code === 'lockfile-desync').map((finding) => finding.evidence),
+    [{ specifier: '^18.2.65', resolved: '19.2.2' }],
+  );
+});
+
+test('the remediation names the importer that owns the manifest', () => {
+  // create-t3-app, 80 of 96 findings: `pnpm pkg set` run at the repository root wrote into the ROOT
+  // package.json, not into the manifest the finding is about.
+  const api = `{
+  "dependencies": {
+    "left-pad": "^1.3.0"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .: {}',
+    '',
+    '  packages/api:',
+    '    dependencies:',
+    '      left-pad:',
+    '        specifier: ^1.3.0',
+    '        version: 1.3.0',
+    '',
+  ].join('\n');
+
+  const [finding] = rule
+    .detect(
+      ctx({ importers: [importer('packages/api', api)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(
+    finding.remediation.command,
+    `pnpm -C packages/api pkg set 'dependencies["left-pad"]=1.3.0' && pnpm -C packages/api install`,
+  );
+});
+
+test('a workspace importer with no recorded version keeps the workspace-wide resolve step', () => {
+  const api = `{
+  "dependencies": {
+    "ghost": "^9.9.9"
+  }
+}`;
+  const lockfile = ["lockfileVersion: '9.0'", '', 'importers:', '', '  .: {}', '', '  packages/api: {}', ''].join('\n');
+
+  const [finding] = rule
+    .detect(
+      ctx({ importers: [importer('packages/api', api)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(
+    finding.remediation.command,
+    'pnpm install --lockfile-only && funky-secure scan --only exact-versions',
+    'the resolve step writes the lockfile, not a manifest, so it stays workspace-wide',
+  );
+});
+
+test('a root finding keeps the bare pnpm form', () => {
+  const text = `{
+  "dependencies": {
+    "left-pad": "^1.3.0"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      left-pad:',
+    '        specifier: ^1.3.0',
+    '        version: 1.3.0',
+    '',
+  ].join('\n');
+
+  const [finding] = rule
+    .detect(
+      ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(finding.remediation.command, `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install`);
+});

@@ -105,6 +105,99 @@ test('reads a bare dash step followed by an indented map', () => {
   assert.deepEqual(steps[1].with, { version: '12.3.4' });
 });
 
+/// An indentless sequence — `steps:` followed by a dash at the key's own column — is valid YAML and
+/// is the shape GitHub's own templates and most real workflows write (S1.1).
+
+const INDENTLESS_STEPS = [
+  'name: ci',
+  'on: [push]',
+  'jobs:',
+  '  build:',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2',
+  '    - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda',
+  '      with:',
+  '        version: 12.3.4',
+  '    - name: test',
+  '      run: npm test',
+  '',
+].join('\n');
+
+const INDENTED_STEPS = [
+  'name: ci',
+  'on: [push]',
+  'jobs:',
+  '  build:',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2',
+  '      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda',
+  '        with:',
+  '          version: 12.3.4',
+  '      - name: test',
+  '        run: npm test',
+  '',
+].join('\n');
+
+test('reads a step list written as an indentless sequence', () => {
+  const result = parseWorkflow(INDENTLESS_STEPS);
+  assert.equal(result.ok, true, result.detail);
+  assert.deepEqual(result.jobs.map((job) => job.id), ['build']);
+  assert.deepEqual(
+    result.jobs[0].steps.map((step) => [step.line, step.uses, step.name, step.run]),
+    [
+      [7, 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683', null, null],
+      [8, 'pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda', null, null],
+      [11, null, 'test', 'npm test'],
+    ],
+  );
+  assert.equal(
+    result.jobs[0].steps[0].raw,
+    'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2',
+  );
+  assert.deepEqual(result.jobs[0].steps[1].with, { version: '12.3.4' });
+});
+
+test('gives the same job for both spellings of the same step list', () => {
+  const indentless = parseWorkflow(INDENTLESS_STEPS);
+  const indented = parseWorkflow(INDENTED_STEPS);
+  assert.equal(indentless.ok, true, indentless.detail);
+  assert.equal(indented.ok, true, indented.detail);
+  assert.deepEqual(indentless.jobs, indented.jobs);
+});
+
+test('ends an indentless step list at the next job-level key instead of swallowing the job', () => {
+  const text = [
+    'jobs:',
+    '  build:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+    '    permissions:',
+    '      contents: read',
+    '  publish:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '    - run: npm publish',
+    '',
+  ].join('\n');
+  const result = parseWorkflow(text);
+  assert.equal(result.ok, true, result.detail);
+  assert.deepEqual(result.jobs.map((job) => job.id), ['build', 'publish']);
+  assert.deepEqual(result.jobs[0].permissions, { form: 'map', line: 6, entries: { contents: 'read' } });
+  assert.deepEqual(result.jobs[0].steps.map((step) => step.line), [5]);
+  assert.deepEqual(result.jobs[1].steps.map((step) => [step.line, step.run]), [[11, 'npm publish']]);
+});
+
+test('reads a top-level value written as an indentless sequence', () => {
+  const text = ['on:', '- push', 'jobs:', '  build:', '    steps:', '      - run: npm test', ''].join('\n');
+  const result = parseWorkflow(text);
+  assert.equal(result.ok, true, result.detail);
+  assert.deepEqual(result.jobs.map((job) => job.id), ['build']);
+  assert.deepEqual(result.jobs[0].steps.map((step) => step.run), ['npm test']);
+});
+
 test('finds every step of this repository\'s own workflow with its line', () => {
   const result = parseWorkflow(fixture('workflows/self.yml'));
   assert.equal(result.ok, true);

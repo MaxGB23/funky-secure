@@ -99,18 +99,18 @@ test('an absent pin fails with pin-missing and names the value to declare', () =
   assert.deepEqual(finding.remediation, { kind: 'auto', command: 'funky-secure init --apply' });
 });
 
-test('another manager fails with pin-conflict', () => {
+test('another manager is a skip, not a conflict: the pnpm question does not apply', () => {
   const [finding] = rule.detect(context({ packageManager: 'npm@10' }));
 
-  assert.equal(finding.status, 'fail');
-  assert.equal(finding.code, 'pin-conflict');
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'not-pnpm');
   assert.match(finding.message, /npm@10/);
   assert.deepEqual(finding.evidence, {
     declared: 'npm@10',
     observed: '12.3.4',
     executable: EXECUTABLE,
   });
-  assert.deepEqual(finding.remediation, { kind: 'manual', command: 'corepack use pnpm@12.3.4' });
+  assert.deepEqual(finding.remediation, { kind: 'none' });
 });
 
 test('a pin the project manages itself is a skip, not a conflict (0020)', () => {
@@ -134,18 +134,19 @@ test('a pin the project manages itself is a skip, not a conflict (0020)', () => 
   assert.equal(finding.remediation.kind, 'none', 'and it must never suggest a downgrade');
 });
 
-test('a pnpm pin without a self-managing devEngines entry is still a conflict', () => {
+test('a declared pnpm that differs from the machine is information, not a conflict', () => {
   const [finding] = rule.detect(context({ version: '12.3.4', packageManager: 'pnpm@12.16.0' }));
 
-  assert.equal(finding.status, 'fail');
-  assert.equal(finding.code, 'pin-conflict');
+  assert.equal(finding.status, 'pass', 'a declared pin is correct: the repository is the authority');
+  assert.equal(finding.code, 'pin-differs-from-machine');
+  assert.deepEqual(finding.remediation, { kind: 'none' }, 'a declared pin is never rewritten');
 });
 
-test('another pnpm version fails with pin-conflict', () => {
+test('another pnpm version passes, and never carries a remediation', () => {
   const [finding] = rule.detect(context({ packageManager: 'pnpm@11.0.0' }));
 
-  assert.equal(finding.status, 'fail');
-  assert.equal(finding.code, 'pin-conflict');
+  assert.equal(finding.status, 'pass');
+  assert.equal(finding.code, 'pin-differs-from-machine');
   assert.match(finding.message, /pnpm@11\.0\.0/);
   assert.deepEqual(finding.evidence, {
     declared: 'pnpm@11.0.0',

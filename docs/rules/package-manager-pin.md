@@ -9,15 +9,17 @@ answering?
 
 ## Detection
 
-Reads `packageManager` from the root `package.json` and compares it with the version
-`pnpm --version` reports.
+Reads `packageManager` from the root `package.json`. A versioned pnpm declaration is the authority:
+pnpm re-executes itself to honour it, so inside the project the answering version is the declared one
+and the version on the machine's `PATH` is evidence rather than a verdict (0024).
 
 | State | Status | Code |
 |---|---|---|
-| `packageManager` equals `pnpm@<observed version>` | `pass` | — |
+| `packageManager` names a versioned pnpm | `pass` | `pin-differs-from-machine` when the machine answers another version |
 | `packageManager` is absent | `fail` | `pin-missing` |
-| `packageManager` names npm, yarn, bun, or another pnpm version | `fail` | `pin-conflict` |
-| `packageManager` differs but the project manages its own pnpm (`devEngines.packageManager`) | `skip` | `self-managed-pin` |
+| `packageManager` names npm, yarn or bun | `skip` | `not-pnpm` |
+| `packageManager` names pnpm in a shape this rule cannot compare | `fail` | `pin-conflict` |
+| `packageManager` differs and the project manages its own pnpm (`devEngines.packageManager`) | `skip` | `self-managed-pin` |
 | `pnpm --version` did not answer | `skip` | `no-pnpm` |
 | Machine facts are out of scope (`--scope repo`) | `skip` | `no-pnpm` |
 | The root `package.json` is missing or malformed | `skip` | `no-package-json` |
@@ -42,9 +44,14 @@ The executable path is evidence, not message text: a report body never carries a
 ## Remediation
 
 - `pin-missing` — `auto`: `funky-secure init --apply` performs write W3 (RFC 11.2) and sets
-  `packageManager` to `"pnpm@<observed version>"`. The message names that exact value.
-- `pin-conflict` — `manual`: `corepack use pnpm@<observed version>`. A value that exists and differs
-  is never overwritten (RFC 4.3); the plan reports it as a conflict instead.
+  `packageManager` to `"pnpm@<observed version>"`. The message names that exact value. Write W3 is the
+  only path that touches the declaration: a pin that already exists is never rewritten.
+- `pin-differs-from-machine` — `none`: the declaration is honoured inside the project, and the
+  difference belongs to the machine. Nothing to fix, nothing to run.
+- `not-pnpm` — `none`: the repository runs on another manager; the rules that need a pnpm repository
+  already report the consequence.
+- `pin-conflict` — `manual`: `corepack use pnpm@<observed version>`, only for a pnpm declaration this
+  rule cannot compare. A value that exists and differs is never overwritten (RFC 4.3).
 - `self-managed-pin` — `none`: pnpm 12 with `devEngines.packageManager` answers with the version the
   project declares, not the one on `PATH`. The probe runs outside the repository (0019), so a
   difference here is not evidence that the pin is wrong, and the rule never recommends a downgrade.
@@ -57,6 +64,7 @@ The executable path is evidence, not message text: a report body never carries a
 The rule reads one field of one file. It deliberately does not read corepack state, does not resolve
 a version against a registry, does not inspect the lockfile and does not repair a conflicting pin.
 
-A repository deliberately on another manager is not a false positive of this rule: that is the
-finding. The documented override is `"rules": { "package-manager-pin": "off" }`, which stays visible
-in `explain` instead of disappearing.
+A repository deliberately on another manager is a `skip`, not a finding: a remediation that replaces a
+deliberate manager with whatever the auditor's machine runs would be worse than the defect it came
+from (0020). The documented override is `"rules": { "package-manager-pin": "off" }`, which stays
+visible in `explain` instead of disappearing.

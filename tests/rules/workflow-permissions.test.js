@@ -183,6 +183,22 @@ jobs:
   );
 });
 
+test('reports an indentless step list instead of skipping it as unparseable', () => {
+  const indentless = `name: ci
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+`;
+  const findings = rule.detect(context({ workflows: [workflow(indentless)] }));
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'fail');
+  assert.equal(findings[0].code, 'workflow-permissions-missing');
+});
+
 test('skips instead of passing when the fact it would read is absent', () => {
   assert.equal(rule.detect({ policy: {}, severity: () => 'warn' })[0].code, 'no-repo');
   assert.equal(rule.detect(context({}))[0].code, 'no-ci');

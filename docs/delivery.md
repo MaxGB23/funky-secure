@@ -49,8 +49,8 @@ what was tested. Each has a structural answer, and none of them is a policy docu
 by construction rather than by discipline.
 
 The packed-file check compares the `npm pack --dry-run --json` file list with the `files` contract of
-section 14: `bin/`, `src/`, `docs/`, `README.md`, `LICENSE` and `package.json`. Any other entry fails
-the release. A fixture, a golden, a stray note or a `.env` that reached the tree is a defect the
+section 14: `bin/`, `src/`, `docs/`, `skills/`, `README.md`, `LICENSE` and `package.json`. Any other
+entry fails the release. A fixture, a golden, a stray note or a `.env` that reached the tree is a defect the
 release must not discover in public.
 
 ### 17.5 Version and release notes

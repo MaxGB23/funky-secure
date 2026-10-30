@@ -9,6 +9,8 @@
  * Shape it understands: block and flow-style step maps, quoted values, trailing comments kept as
  * evidence, `with:` maps (including their block scalars), block scalars (`run: |`, `run: >-`) whose
  * bodies are never steps, `docker://image:tag`, `docker://image@sha256:…` and local `./path` actions.
+ * A sequence may be indented under its key or written *indentless* — a dash at the key's own column,
+ * which is valid YAML and the shape GitHub's own templates write.
  *
  * Shapes it refuses, each naming the line: anchors/aliases/merge keys, tabs, multi-document streams,
  * sequences or flow maps where a job map is expected, and a `uses:` value written as a block scalar
@@ -34,6 +36,15 @@ function fail(detail) {
 }
 
 const BLOCK_SCALAR = /^[|>][+\-0-9]*$/;
+
+/**
+ * Whether a trimmed line is a sequence item: a bare `-` or `- <value>`.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isSequenceItem(text) {
+  return text === '-' || text.startsWith('- ');
+}
 
 /**
  * Strips a trailing `# comment` outside quotes, when the `#` starts a word. `#` inside a `${{ … }}`
@@ -252,6 +263,11 @@ class Reader {
   /**
    * Index after the entry at `start`, whose key sits at `indent`. A block-scalar value consumes its
    * own body; any other value owns every deeper line.
+   *
+   * An *indentless sequence* — a key with no value followed by a dash at the key's own column — is
+   * valid YAML and is the shape GitHub's own templates write (S1.1). There the body continues at the
+   * key's indentation, but only through further sequence items, so the next key of the enclosing map
+   * still ends it.
    * @param {number} start
    * @param {number} indent
    * @param {number} limit
@@ -259,13 +275,22 @@ class Reader {
   entryEnd(start, indent, limit = this.lines.length) {
     const kv = splitKeyValue(stripComment(this.content(start)));
     if (kv && BLOCK_SCALAR.test(kv.value)) return Math.min(this.readBlockScalar(start, indent).end, limit);
+    const first = this.next(start + 1);
+    const indentless =
+      kv !== null &&
+      kv.value === '' &&
+      first < limit &&
+      this.indent(first) === indent &&
+      isSequenceItem(this.content(first));
     let i = start + 1;
     while (i < limit) {
       if (this.skippable(i)) {
         i += 1;
         continue;
       }
-      if (this.indent(i) <= indent) break;
+      const lineIndent = this.indent(i);
+      if (lineIndent < indent) break;
+      if (lineIndent === indent && !(indentless && isSequenceItem(this.content(i)))) break;
       i += 1;
     }
     return i;
@@ -325,7 +350,7 @@ class Reader {
       if (indent !== level) fail(`unexpected indentation at line ${line} in ${context}`);
       const rawText = this.content(i);
       const text = stripComment(rawText);
-      if (text === '-' || text.startsWith('- ')) {
+      if (isSequenceItem(text)) {
         fail(`sequence item at line ${line} where ${context} expects a key`);
       }
       checkNode(text, line);
@@ -508,7 +533,7 @@ class Reader {
     let i = this.next(entry.bodyStart);
     if (i >= entry.bodyEnd) return steps;
     const dashIndent = this.indent(i);
-    if (dashIndent <= entry.indent) {
+    if (dashIndent < entry.indent) {
       fail(`unexpected indentation at line ${this.lines[i].no} in the steps of "${jobId}"`);
     }
     while (i < entry.bodyEnd) {
@@ -521,7 +546,7 @@ class Reader {
         fail(`unexpected indentation at line ${line} in the steps of "${jobId}"`);
       }
       const text = this.content(i);
-      if (text !== '-' && !text.startsWith('- ')) fail(`expected a step at line ${line}`);
+      if (!isSequenceItem(text)) fail(`expected a step at line ${line}`);
       const parsed = this.parseStep(i, dashIndent, entry.bodyEnd, steps.length);
       steps.push(parsed.step);
       i = parsed.end;

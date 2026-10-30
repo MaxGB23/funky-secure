@@ -21,8 +21,9 @@ from the laptop that ran it.
   `conflict` you read, never an edit it makes.
 - **A way out of npm.** `migrate` prints the five steps and performs only the removal of the foreign
   lockfile, and only when that cannot delete your only lockfile.
-- **A contract for CI and agents.** One JSON document, three exit codes, no prose to parse and no
-  timestamp unless you ask for one.
+- **A contract for CI and agents.** One JSON document and four exit codes — `0` nothing to report,
+  `1` a violation, `2` a question the tool could not answer, `3` a refusal, which wrote nothing — no
+  prose to parse and no timestamp unless you ask for one.
 - **Nothing to trust.** Zero runtime dependencies, zero development dependencies, no network, no
   cache, no daemon. Two runs over the same state produce the same bytes.
 
@@ -75,7 +76,7 @@ npx funky-secure init --apply   # perform exactly that plan
 
 `npx` is deliberate and it is the only place it appears: the quick start cannot assume pnpm, because
 installing pnpm is one of the steps it is about to print. Once pnpm is there, bring the auditor the
-same way as the dependencies it audits — `pnpm dlx funky-secure@0.5.0` — and in CI pin it in your
+same way as the dependencies it audits — `pnpm dlx funky-secure@0.9.0` — and in CI pin it in your
 lockfile instead, as [`docs/guide.md`](docs/guide.md) shows.
 
 `pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the auditor needs
@@ -88,10 +89,11 @@ permissions — so a project that already uses pnpm gets **fewer findings becaus
 migrate, not a shorter check**. `start` drops only the steps that do not apply.
 
 In a new repository, `funky-secure start` is the first command: it prints the steps that still apply,
-in the order that makes them work, and writes nothing itself — `init --apply` stays the only writer
-inside the repository. It ends by pointing the first scan at `--preset starter`, the six rules a
-project needs on day zero, and states which rules that preset leaves `off` instead of claiming a
-coverage it does not have.
+in the order that makes them work, and writes nothing itself. Three commands write, and each only when
+it is asked: `init --apply` inside the repository, `pin --apply` over the specifiers the lockfile
+already resolved, and `migrate --apply` over the foreign lockfile. `start` ends by pointing the first
+scan at `--preset starter`, the six rules a project needs on day zero, and states which rules that
+preset leaves `off` instead of claiming a coverage it does not have.
 
 `init` also ends with the steps it will not take for you, in order: `pnpm install` when there is no
 lockfile, `funky-secure migrate --apply` when another manager's lockfile is still around, and `git add`

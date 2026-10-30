@@ -8,11 +8,11 @@ document that changes without a new record.
 | # | Title | Status | Supersedes | Superseded by | Present contract |
 |---|---|---|---|---|---|
 | [0001](0001-funky-secure-v1/rfc.md) | funky-secure as a supply-chain auditor and initializer | `implemented` | — | — | [`docs/spec/`](../docs/spec/README.md) |
-| [0002](0002-human-output-v2/rfc.md) | Human output v2 | `accepted` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.1 |
-| [0003](0003-first-ten-minutes/rfc.md) | The first ten minutes | `accepted` | — | — | [`docs/spec/policy.md`](../docs/spec/policy.md) §9.1, [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
-| [0004](0004-agent-skill/rfc.md) | An agent skill | `accepted` | — | — | [`skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md) |
-| [0005](0005-skill-install/rfc.md) | Installing the skill | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.5 point 7, §11.8 |
-| [0006](0006-human-defaults/rfc.md) | Human defaults | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.4 |
+| [0002](0002-human-output-v2/rfc.md) | Human output v2 | `implemented` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.1 |
+| [0003](0003-first-ten-minutes/rfc.md) | The first ten minutes | `implemented` | — | — | [`docs/spec/policy.md`](../docs/spec/policy.md) §9.1, [`docs/spec/report.md`](../docs/spec/report.md) §10.3, [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
+| [0004](0004-agent-skill/rfc.md) | An agent skill | `implemented` | — | — | [`skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md) |
+| [0005](0005-skill-install/rfc.md) | Installing the skill | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.5 point 7, §11.8 |
+| [0006](0006-human-defaults/rfc.md) | Human defaults | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.4 |
 | [0007](0007-remediation-routes/rfc.md) | Remediation routes | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5, §8.2 R4 |
 | [0008](0008-refusal-honesty/rfc.md) | Refusal and verification honesty | `implemented` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.4, §10.3 |
 | [0009](0009-gate-before-resolve/rfc.md) | The gate precedes the first resolve | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
@@ -30,6 +30,8 @@ document that changes without a new record.
 | [0021](0021-the-step-matches-the-manager/rfc.md) | The printed step matches the manager | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2.2, §11.3, §11.7 |
 | [0022](0022-the-output-tells-the-truth/rfc.md) | The output tells the truth | `implemented` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3; [`docs/spec/scope.md`](../docs/spec/scope.md) §8.2 R7 |
 | [0023](0023-the-gate-can-refuse-an-unknown/rfc.md) | The gate can refuse an unknown | `implemented` | — | — | [`docs/cli.md`](../docs/cli.md) §scan |
+| [0024](0024-the-contract-says-what-it-does/rfc.md) | The contract says what it does | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2, §8.3; [`docs/spec/report.md`](../docs/spec/report.md) §10.4; [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2, §11.3 |
+| [0025](0025-the-lockfile-forms/rfc.md) | The lockfile forms real repositories have | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
 
 ## Layout
 

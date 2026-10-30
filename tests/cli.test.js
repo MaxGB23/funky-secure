@@ -426,7 +426,9 @@ test('migrate prints the five RFC steps in order from the repository facts', asy
  */
 function catalogsRepo(t) {
   const dir = scratch(t);
-  writeFileSync(join(dir, 'package.json'), '{"dependencies":{"react":"18.3.1"}}');
+  // The shape pnpm writes: a catalogue entry is a {specifier, version} pair, and a manifest refers to it
+  // with `catalog:` (0025).
+  writeFileSync(join(dir, 'package.json'), '{"dependencies":{"react":"catalog:"}}');
   writeFileSync(
     join(dir, 'pnpm-lock.yaml'),
     [
@@ -434,7 +436,41 @@ function catalogsRepo(t) {
       '',
       'catalogs:',
       '  default:',
-      '    react: 18.3.1',
+      '    react:',
+      '      specifier: 18.3.1',
+      '      version: 18.3.1',
+      '',
+      'importers:',
+      '',
+      '  .:',
+      '    dependencies:',
+      '      react:',
+      '        specifier: catalog:',
+      '        version: 18.3.1',
+      '',
+    ].join('\n'),
+  );
+  return dir;
+}
+
+/**
+ * A lockfile shape the reader still refuses by design (`patchedDependencies`), which is how a skip is
+ * produced without inventing an unsupported shape.
+ * @param {object} t
+ * @returns {string}
+ */
+function refusedShapeRepo(t) {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{"dependencies":{"react":"18.3.1"}}');
+  writeFileSync(
+    join(dir, 'pnpm-lock.yaml'),
+    [
+      "lockfileVersion: '9.0'",
+      '',
+      'patchedDependencies:',
+      '  react@18.3.1:',
+      '    hash: abcdef',
+      '    path: patches/react.patch',
       '',
       'importers:',
       '',
@@ -449,11 +485,23 @@ function catalogsRepo(t) {
   return dir;
 }
 
+test('a catalogue in the shape pnpm writes is read, not skipped (0025)', async (t) => {
+  const dir = catalogsRepo(t);
+
+  const streams = io(dir, { root: dir });
+  const code = await run(['scan', '--scope', 'repo', '--only', 'exact-versions', '--format', 'json'], streams);
+
+  const report = JSON.parse(streams.stdout.text);
+  assert.equal(code, 0);
+  assert.equal(report.summary.skip, 0, 'the catalogue no longer refuses the comparison');
+  assert.equal(report.findings.filter((f) => f.code === 'floating-range').length, 0, 'an exact catalogue entry is exact');
+});
+
 test('a skip is named in human output, not only counted (0022)', async (t) => {
   // The verdict said "1 rule not verified" and the reader could not learn which rule or why: the
   // renderer hardcoded an empty `skipped` array on the path that groups findings without a path, so a
   // lockfile the tool refuses to read disappeared from the human report entirely.
-  const dir = catalogsRepo(t);
+  const dir = refusedShapeRepo(t);
 
   const streams = io(dir, { root: dir });
   const code = await run(['scan', '--scope', 'all', '--only', 'exact-versions'], streams);
@@ -476,7 +524,7 @@ test('--require-verified turns an unverified rule into a failing verdict (0023)'
   // A green gate is a claim about coverage, and a skip is the one finding that claims nothing while
   // still ending the run at 0. The opt-in moves the coverage into the verdict itself rather than only
   // changing the exit code, so a CI log that reads the line and a machine that reads the JSON agree.
-  const dir = catalogsRepo(t);
+  const dir = refusedShapeRepo(t);
 
   const streams = io(dir, { root: dir });
   const code = await run(

@@ -85,10 +85,19 @@ number keeps resolving.
 | 8.2, 11.2 | [`0017`](../../rfcs/0017-declare-the-age/rfc.md) | 8.2 W1b: the managed block always writes `minimumReleaseAge` — 1440 under baseline, 4320 under strict — instead of inheriting pnpm's default, which is 0 before the 11 line |
 | 11.7, 10.4 | [`0018`](../../rfcs/0018-print-the-command/rfc.md) | 11.7: 13 rows — the re-sync after `pin`, the `git switch -c` the migration needs, and the closing commit that stages the removal; 10.4: the branch refusal names the command |
 | 7 | [`0019`](../../rfcs/0019-a-scan-never-writes/rfc.md) | 7.3: the read-only clause names the files a spawned tool would write, and the version probe runs outside the scanned repository |
+| 7 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 7.1: the `ci` target names the five rules that read it, and the glob note counts twelve rules instead of nine |
 | 8 | [`0020`](../../rfcs/0020-self-managed-pin/rfc.md) | 8.2 R1: a pin the project manages itself (`devEngines.packageManager`) that differs from the answering binary is a skip, never a conflict |
 | 11 | [`0021`](../../rfcs/0021-the-step-matches-the-manager/rfc.md) | 11.2.2, 11.3 and 11.7: `pnpm import` for any foreign lockfile, and `--from` validated against the lockfiles the repository holds |
 | 10, 8, 11 | [`0022`](../../rfcs/0022-the-output-tells-the-truth/rfc.md) | 10.3: the verdict names the rules it did not verify; 8.2 R7: the managed ignore block covers `node_modules/`; 11.2: the W1b row matches 0017 |
 | 10 | [`0023`](../../rfcs/0023-the-gate-can-refuse-an-unknown/rfc.md) | 10.3: with `--require-verified` a skipped rule is a failing verdict, not only a count |
+| 8 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 8.2: R10, R11 and R12 — `ci-no-safety-overrides`, `pull-request-target` and `workflow-permissions`, all three shipped in 0.2 and none of them renumbered; 8.3: the deferred catalogue, with the three it used to defer removed from it |
+| 8 | [`0025`](../../rfcs/0025-the-lockfile-forms/rfc.md) | 8.2 R5: the reader understands the pnpm 8 root shape and the `catalogs` map, resolves `catalog:` through it, and reports a desync only for the same dependency kind in the same importer |
+| 8 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 8.2 R6: a tracked `.env*.example` file is a template, not a credential — the family, not two enumerated spellings |
+| 8 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 8.2 R8 and R9: the workflow reader accepts a sequence at its key's own indentation, so the five CI rules see the workflows GitHub's own templates write; R8's remediation is `git ls-remote` |
+| 8 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 8.2 R7: the managed ignore block covers `node_modules/` |
+| 10 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 10.4: the four exit codes restated — a refusal is `3` and only `2` is a question the tool could not answer |
+| 11 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 11.2, 11.3 and 11.8: a refusal is exit `3`, and 11.2's W2 names `!.env*.example` and `node_modules/` |
+| 12 | [`0024`](../../rfcs/0024-the-contract-says-what-it-does/rfc.md) | 12.5: the machine facts a rule does not carry are twelve rules' worth, not nine |
 
 ## Changing the contract
 

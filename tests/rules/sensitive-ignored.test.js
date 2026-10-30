@@ -189,7 +189,7 @@ test('plan() writes the ignore block only when the rule fails', (t) => {
   assert.equal(item.operation, 'managed block');
   assert.equal(item.state, 'would-write');
   assert.ok(item.path.startsWith(dir));
-  for (const entry of ['.env', '.env.*', '!.env.example', '!.env.test.example', '*.pem', '*.key', '.npmrc']) {
+  for (const entry of ['.env', '.env.*', '!.env*.example', '*.pem', '*.key', '.npmrc']) {
     assert.ok(item.content.split('\n').includes(entry), `missing ${entry}`);
   }
 

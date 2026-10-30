@@ -9,14 +9,20 @@
  * in the message, because no command can undo a secret that already reached history.
  */
 
-/** The RFC's mandatory template exclusion list (RFC 8.2 R6, E4). */
-const TEMPLATE_NAMES = new Set([
-  '.env.example',
-  '.env.sample',
-  '.env.template',
-  '.env.dist',
-  '.env.test.example',
-]);
+/**
+ * The template names that are not spelled `.example` (RFC 8.2 R6, E4). The `.example` family itself
+ * is matched by suffix, not by enumeration: a template is a file meant to be copied, and
+ * `.env.local.example` is as much a template as `.env.example` (S1.3).
+ */
+const TEMPLATE_NAMES = new Set(['.env.sample', '.env.template', '.env.dist']);
+
+/**
+ * @param {string} base a basename
+ * @returns {boolean} is this name a template rather than a live environment file?
+ */
+function isTemplateName(base) {
+  return base.endsWith('.example') || TEMPLATE_NAMES.has(base);
+}
 
 /**
  * A fact the rule needs is absent. `probeUnavailable` lets `--strict-probes` refuse a green build
@@ -34,7 +40,7 @@ function skip(code, reason) {
  */
 function isEnvironmentFile(path) {
   const base = path.slice(path.lastIndexOf('/') + 1);
-  return base.startsWith('.env') && !TEMPLATE_NAMES.has(base);
+  return base.startsWith('.env') && !isTemplateName(base);
 }
 
 export default {
@@ -48,7 +54,9 @@ export default {
   question: 'Is any environment file committed?',
   detection:
     'Every path in the complete tracked set whose basename starts with ".env", at any depth, ' +
-    'excluding .env.example, .env.sample, .env.template, .env.dist and .env.test.example. ' +
+    'excluding the template names .env.sample, .env.template and .env.dist and every name ending in ' +
+    '.example (.env.example, .env.local.example, .env.production.example): a template is a file ' +
+    'meant to be copied, not a credential. ' +
     'No pathspec and no second git probe: the collector already resolved the whole list.',
   evidence: 'The tracked path. File contents are never read and no value is printed.',
   remediation:
@@ -56,7 +64,9 @@ export default {
     'history, so the credentials it contains must be rotated.',
   limits:
     'Judges tracked state only, not ignore coverage (R7) or history. A prefix match, as the RFC ' +
-    'glob is, so .envrc and .env.local are included. Outside git the tracked set is unknown: skip.',
+    'glob is, so .envrc and .env.local are included, and only the template family (.env.sample, ' +
+    '.env.template, .env.dist and any name ending in .example) is excluded. Outside git the ' +
+    'tracked set is unknown: skip.',
   docs: 'docs/rules/env-not-tracked.md',
 
   /**

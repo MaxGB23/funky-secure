@@ -76,8 +76,9 @@ a guess.
 ## Remediation
 
 `auto`: `funky-secure init --apply` writes one managed block in `pnpm-workspace.yaml` that carries
-`minimumReleaseAgeStrict: true`, plus `minimumReleaseAge: 4320` under `--preset strict`, plus
-`savePrefix: ''`. The last key is W1c (D-18) and it is not about the quarantine: it is the
+`minimumReleaseAgeStrict: true`, the age itself — `minimumReleaseAge: 1440` under `baseline` and
+`4320` under `--preset strict`, always written rather than inherited (0017) — and `savePrefix: ''`.
+The last key is W1c (D-18) and it is not about the quarantine: it is the
 project-level setting that stops a later `pnpm add` from saving a caret, measured on pnpm 12.3.4 as
 `^1.3.0` without the key and `1.3.0` with it, so a repository cannot drift back to floating ranges
 after it is reported clean.

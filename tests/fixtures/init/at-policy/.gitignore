@@ -3,8 +3,7 @@ node_modules/
 # funky-secure:begin (managed block — do not edit by hand)
 .env
 .env.*
-!.env.example
-!.env.test.example
+!.env*.example
 *.pem
 *.key
 .npmrc

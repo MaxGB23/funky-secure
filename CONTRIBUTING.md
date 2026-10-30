@@ -44,7 +44,7 @@ request have different checklists because they need different evidence.
 ### Bug report checklist
 
 - [ ] One sentence naming what `funky-secure` did and what it should have done.
-- [ ] The exact command, its full output, and the exit code (`0`, `1` or `2`).
+- [ ] The exact command, its full output, and the exit code (`0`, `1`, `2` or `3`).
 - [ ] The rule id (`explain --list`) and whether `--format json` shows the same verdict.
 - [ ] A minimal reproduction: the smallest repository layout that still fails, not your real project.
 - [ ] Environment: `node --version`, `pnpm --version`, operating system, and whether the repository
@@ -56,7 +56,7 @@ request have different checklists because they need different evidence.
 ### Feature request checklist
 
 - [ ] The problem, not the solution: what question about a repository this tool cannot answer today.
-- [ ] Which of the nine rules it touches, or the argument for a tenth (spec 8.3 is the intake).
+- [ ] Which of the twelve rules it touches, or the argument for a thirteenth (spec 8.3 is the intake).
 - [ ] The facts it needs and where they come from (`ctx.repo`, `ctx.machine`, a collector probe).
 - [ ] What it does when that fact is missing: the `skip` code and its message.
 - [ ] Severity in `baseline` and `strict`, friction, and the single command that fixes it — or why it
@@ -91,7 +91,10 @@ issue reference, exactly one checked type, the evidence of what you ran, and the
 - [ ] A rule or library change has its `docs/rules/<id>.md` page updated; a command, flag or message
       change has `docs/cli.md` and the help text updated.
 - [ ] The drift gate passes: `node --test tests/drift.test.js` (help, `explain`, rule pages, README
-      table and `docs/architecture.md` still agree with the catalog).
+      table and `docs/architecture.md` still agree with the catalog), and so does the documentation
+      contract: `node --test tests/docs-contract.test.js` (the command and flag surface, the four
+      exit codes, the version strings, the rule count and the `AGENTS.md` path map still describe
+      the code).
 - [ ] Goldens are regenerated only when the report was meant to change, with the intended diff read
       line by line: `pnpm golden`, then `git diff tests/golden/`.
 - [ ] The repository still passes its own audit: `pnpm self`

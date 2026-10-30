@@ -13,11 +13,11 @@ a plan you read first, and never pretends a policy it cannot verify.
   answer is a pure function of local files and local probes.
 - **Not stateful.** There is no cache directory, no database, no `.funky/`, no daemon. Two runs on
   the same state produce the same bytes.
-- **Not a writer, except when asked.** Nothing is written outside `init --apply`, `migrate` and
-  `skill --install`, and each writes only what its own contract names: `init --apply` the closed,
-  printed target list and never the manager-owned settings the RFC excludes; `migrate` the foreign
-  lockfile it was told to remove; `skill --install` the one file an agent reads, and only when the flag
-  asks for it.
+- **Not a writer, except when asked.** Nothing is written outside `init --apply`, `pin --apply`,
+  `migrate` and `skill --install`, and each writes only what its own contract names: `init --apply`
+  the closed, printed target list and never the manager-owned settings the RFC excludes; `pin --apply`
+  the specifiers `pnpm-lock.yaml` already records a version for; `migrate` the foreign lockfile it was
+  told to remove; `skill --install` the one file an agent reads, and only when the flag asks for it.
 
 ## What it writes, and when
 
@@ -30,7 +30,7 @@ any laptop:
 | Write | File | Change |
 |---|---|---|
 | W1a | `pnpm-workspace.yaml` | `minimumReleaseAgeStrict: true` — turns the quarantine into a gate |
-| W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 4320` — the strict-preset floor, same managed block |
+| W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 1440`, or `4320` under `--preset strict` — the age, always written in the same managed block (0017) |
 | W1c | `pnpm-workspace.yaml` | `savePrefix: ''` — stops a later `pnpm add` from saving a caret |
 | W2 | `.gitignore` | the managed block covering the sensitive paths |
 | W3 | `package.json` | `packageManager: pnpm@<version>` — only when the pin is missing |
@@ -46,7 +46,7 @@ it wrote — printed in order and never executed.
 do so without a `pnpm-lock.yaml` (never delete the only lockfile), on the default branch, with a
 detached `HEAD`, with uncommitted changes in the files it would remove, or when git cannot report the
 tree. `init --apply` refuses a target file with uncommitted changes the same way. Every refusal exits
-`2` with the action on the first line and the reason on the second; a value that exists and differs is
+`3` with the action on the first line and the reason on the second; a value that exists and differs is
 reported as a `conflict` and left alone, never overwritten. A second `--apply` over the same state
 writes nothing.
 
@@ -69,10 +69,16 @@ A rule that applies to a missing target reports `skip`, and a skip is never a pa
 
 ## Exit-code contract
 
-`scan` exits `0` when no finding sits at or above `--fail-on`, so skips and infos do not fail a
-build. It exits `1` when at least one policy violation does, which is the only meaning of `1`. It
-exits `2` when the tool could not answer — bad usage, malformed config, unreadable input, an
-unavailable required probe under `--strict-probes`, or a refused write — and never for a violation.
+A refusal — the target has uncommitted changes, the branch is the default one, the foreign lockfile is
+the only one, a differing skill copy with no terminal to ask — exits `3`, with the action on the first
+line and the reason on the second, and writes nothing. It is a decision, not a failure: nothing was
+judged and nothing crossed a threshold, so it is not `1` either, and an integration that tells a
+decision from a crash reads one code.
+
+`scan` exits `0` when no finding sits at or above `--fail-on`, so skips and infos do not fail a build.
+It exits `1` when at least one policy violation does, which is the only meaning of `1`. It exits `2`
+when the tool could not answer: bad usage, malformed config, unreadable input, an unavailable required
+probe under `--strict-probes`. Those are the four codes, and no code is reused for two answers.
 
 The full command and flag reference is in [`cli.md`](cli.md); the layers and invariants are in
 [`architecture.md`](architecture.md); the decisions a reviewer wants are in

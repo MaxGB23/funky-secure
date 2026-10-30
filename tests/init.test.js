@@ -291,7 +291,7 @@ test('.gitignore gains the block once and omits .npmrc when a tokenless .npmrc i
 
   const gitignore = readFileSync(join(dir, '.gitignore'), 'utf8');
   assert.equal(blockCount(gitignore), 1);
-  for (const entry of ['.env', '.env.*', '!.env.example', '!.env.test.example', '*.pem', '*.key']) {
+  for (const entry of ['.env', '.env.*', '!.env*.example', '*.pem', '*.key']) {
     const pattern = `^${entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`;
     assert.match(gitignore, new RegExp(pattern, 'm'), `missing ${entry}`);
   }
@@ -322,7 +322,7 @@ test('package.json gains packageManager and keeps its four-space indentation and
   });
 });
 
-test('an existing conflicting pin is a conflict item and is never written', async (t) => {
+test('a repository on another manager is a skip: the plan never replaces its manager', async (t) => {
   const dir = scratch(t, 'pinned-conflict');
   const before = readFileSync(join(dir, 'package.json'), 'utf8');
   const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
@@ -332,22 +332,19 @@ test('an existing conflicting pin is a conflict item and is never written', asyn
   const document = JSON.parse(preview.stdout.text);
   assert.deepEqual(document.refused, []);
 
+  // The fixture declares npm@10.9.0. Overwriting a deliberate packageManager because the auditor runs
+  // pnpm is the remediation worse than the bug that 0020 named, so the plan holds no item for
+  // package.json at all — not a conflict, not a write (0024, S9).
   const conflicts = document.plan.filter((item) => item.state === 'conflict');
-  assert.equal(conflicts.length, 1);
-  assert.equal(conflicts[0].target, 'package.json');
-  assert.equal(conflicts[0].digest, null);
-  assert.match(conflicts[0].reason, /npm@10\.9\.0/);
-  assert.ok(conflicts[0].path.startsWith(dir));
+  assert.equal(conflicts.length, 0);
+  const pins = document.plan.filter((item) => item.target === 'package.json');
+  assert.equal(pins.length, 0, 'no plan item may rewrite a declared manager');
   assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before);
 
   const applied = runner(dir, { tracked });
   assert.equal(await applied.run(['init', '--apply']), 0);
-  assert.match(applied.stdout.text, /conflicts/);
-  // With the fixture block carrying the gate, the floor and savePrefix, the pin conflict is the only
-  // plan item: nothing is written at all, and package.json keeps its bytes.
   assert.match(applied.stdout.text, /nothing to apply/);
   assert.equal(writeCount(applied.stdout.text), 0);
-  assert.doesNotMatch(applied.stdout.text, /^write {2}.*package\.json/m);
   assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), before);
 });
 

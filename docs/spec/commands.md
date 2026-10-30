@@ -11,14 +11,17 @@
 ```
 funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict|starter]
                   [--format human|json] [--fail-on error|warn|info|none]
-                  [--only <ids>] [--ignore <ids>] [--strict-probes] [--with-timestamp]
-                  [--verbose]
+                  [--only <ids>] [--ignore <ids>] [--strict-probes] [--require-verified]
+                  [--with-timestamp] [--verbose]
 ```
 
 - Read-only, always. No file is created, modified or removed, in any scope.
 - Default: `--scope auto`, `--format human`, `--fail-on error`, preset from config or `baseline`.
 - `--strict-probes`: a required probe that is unavailable becomes `error` (exit `2`) instead of
   `skip`. CI uses it to refuse a green build that measured nothing.
+- `--require-verified`: a skipped rule makes the verdict `fail` and the run exits `1`, and
+  `policy.requireVerified` records that the gate asked for it. Without the flag a skip is never a
+  failure, because not knowing is not a violation (0023).
 - `--verbose`: the human report gains what 10.3 leaves out by default — the id of every finding, the
   reason and the verifying command of each skipped rule in place of the collapsed line, the ids of the
   passing rules, and the machine block's paths unbroken. It is a rendering flag: it changes no count,
@@ -44,7 +47,7 @@ With `--apply` it performs exactly these writes, and no others:
 | W1a | `pnpm-workspace.yaml` | the managed block does not already declare `minimumReleaseAgeStrict: true`, whether or not the machine satisfies it (11.2.1) | managed block with `minimumReleaseAgeStrict: true` |
 | W1b | `pnpm-workspace.yaml` | always, beside W1a | the same managed block also carries the age: `minimumReleaseAge: 1440` under `baseline`, `4320` under `--preset strict` (0017) |
 | W1c | `pnpm-workspace.yaml` | the managed block does not already carry `savePrefix: ''` (D-18) | the same managed block also carries `savePrefix: ''` |
-| W2 | `.gitignore` | `sensitive-ignored` fails | managed block with the missing entries required by R7: `.env`, `.env.*`, `!.env.example`, `!.env.test.example`, `*.pem`, `*.key`, plus `.npmrc` only when the repository does not track a root `.npmrc` without a token |
+| W2 | `.gitignore` | `sensitive-ignored` fails | managed block with the entries R7 requires: `.env`, `.env.*`, `!.env*.example` — the template family negated as a family, not two enumerated spellings (0024) — `*.pem`, `*.key` and `node_modules/`, plus `.npmrc` only when the repository does not track a root `.npmrc` without a token |
 | W3 | `package.json` | `package-manager-pin` fails **without** conflict | set `packageManager` |
 | W4 | `funky-secure.config.json` | `--preset strict` passed | persist `{ "preset": "strict" }` so CI agrees |
 
@@ -52,7 +55,7 @@ It never writes `ignoreScripts`, `allowBuilds`, `onlyBuiltDependencies`, `strict
 `trustPolicy`, `blockExoticSubdeps`, dependency versions, `.npmrc`, workflows, or anything on the
 machine.
 
-`--format json` for `init` and `migrate` prints a **plan document**, not a scan report:
+`--format json` for `init` prints a **plan document**, not a scan report:
 `{ schemaVersion, tool, command, policy, plan: [{ target, operation, path, digest, reason, state }], refused: [] }`.
 `path` is absolute and `digest` is the sha256 of the exact bytes to be written, because a write plan
 without them cannot be checked (11.5, point 5); absolute paths remain forbidden in the `scan` report
@@ -81,10 +84,12 @@ savePrefix: ''
 # funky-secure:end
 ```
 
-The second key is written only when `--preset strict` was passed (W1b); the first is written whenever
-the managed block does not declare it (W1a); `savePrefix: ''` is written whenever the block lacks it
-(W1c), because it is the project-level setting that stops a later `pnpm add` from saving a caret
-(4.6, D-18).
+The second key is written on every run (W1b) — `1440` under `baseline`, `4320` under `--preset
+strict` — because pnpm's built-in default is `1440` from the 11 line on and `0` before it, so a block
+that declared only the strict flag would claim a gate an older major enforces nowhere; the first is
+written whenever the managed block does not declare it (W1a); `savePrefix: ''` is written whenever the
+block lacks it (W1c), because it is the project-level setting that stops a later `pnpm add` from saving
+a caret (4.6, D-18). The sample above is the `--preset strict` one.
 
 Rules for the block:
 
@@ -99,7 +104,7 @@ Rules for the block:
 
 Safety rules for `--apply`:
 
-- A target file with uncommitted changes is refused (exit `2`, naming the file) unless
+- A target file with uncommitted changes is refused (exit `3`, naming the file) unless
   `--allow-dirty`. A security tool does not mix its edits with a stranger's.
 - An empty plan performs zero writes and prints `nothing to apply`.
 - Every write is printed before it happens, with its absolute path and a content digest, on the same
@@ -154,7 +159,7 @@ Plan steps, printed in order:
 
 `--apply` performs step 4 only. It refuses when `pnpm-lock.yaml` is absent (never delete the only
 lockfile), when the tree is dirty for those files, or when the current branch is the default branch.
-Every refusal is exit `2` with the reason, never a silent no-op. The default branch is read from
+Every refusal is exit `3` with the reason, never a silent no-op. The default branch is read from
 `refs/remotes/origin/HEAD` (12.1); a repository without a remote cannot resolve it, and the fallback
 is a literal `main`/`master` match, stated as a fallback in the refusal message.
 
@@ -236,7 +241,7 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 3 | `git add -A && git commit -m "<message>"` | the plan has a `would-write` item and any of its target paths already carries uncommitted work, because `init --apply` refuses to write over a tree whose state is not recorded |
 | 4 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
 | 5 | `git add <the paths the plan wrote> && git commit -m "<message>"` | step 4 printed: it leaves the manifest dirty, and the next writer refuses that state. The step names those paths instead of staging everything, so an untracked tool cache beside them stays out of the commit. The commit appears twice in a repository whose tree already carried work, because it answers two questions, and each carries a line of its own in `why this order` |
-| 6 | `pnpm install` | a lockfile another package manager produced is present: the migration resolves once, under the block step 4 wrote |
+| 6 | `pnpm import` | a lockfile another package manager produced is present: it reads that lockfile and writes `pnpm-lock.yaml` with the versions it recorded, under the block step 4 wrote. `pnpm install` never reads a foreign lockfile, so it would resolve from the manifest and discard the pins the repository already has (11.3, 0021) |
 | 7 | `funky-secure pin --apply` | the report carries a `floating-range` finding, printed with its count: the block governs the dependencies added next, and nothing else clears the ranges the manifest already has (11.9) |
 | 8 | `pnpm install --lockfile-only` | step 7 printed: `pin` writes exact specifiers over a lockfile that recorded a range, which is a desync by construction (11.9), and this is the resolve that re-syncs it without touching `node_modules` |
 | 9 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
@@ -319,7 +324,7 @@ this binary, and the same version edited by hand. So the comparison is version f
 | `--keep` in any differing state | — | write nothing, report that it kept it |
 | `--force` in any differing state | — | replace, report `installed (version)` |
 | differing, no flag, stdin is a terminal | — | ask; an explicit overwrite replaces, any other answer keeps |
-| differing, no flag, stdin is not a terminal | — | exit `2`: nobody is there to answer, and guessing is not an option |
+| differing, no flag, stdin is not a terminal | — | exit `3`: nobody is there to answer, and guessing is not an option |
 
 A downgrade is never routine: this binary has nothing better than what is installed, so taking the
 newer copy away requires `--force` and `--keep` is accepted as an answer there too.
