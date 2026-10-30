@@ -48,6 +48,12 @@ const APPLY_MESSAGE = 'chore: apply funky-secure';
 /** The commit that puts the lockfile under version control, which is what the last scan reads. */
 const TRACK_MESSAGE = 'chore: track the lockfile';
 
+/** The branch the migration step names. A step that requires a state prints how to reach it (0018). */
+const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
+
+/** `pin` desyncs the lockfile on purpose (0011), so the resolve that re-syncs it is a step, not a footnote. */
+const LOCKFILE_ONLY_STEP = 'pnpm install --lockfile-only';
+
 /**
  * Why the same step appears twice, and what each appearance is for.
  *
@@ -111,7 +117,7 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // A commit that stages nothing is not a step. The lockfile needs one only when it will be new — the
   // install above is about to write it — or when the report already says it is untracked.
   const lockfileAtEnd = foreign.length > 0 || trackLockfile;
-  const trackFiles = ['pnpm-lock.yaml', ...(pins > 0 ? ['package.json'] : [])];
+  const trackFiles = ['pnpm-lock.yaml', ...(pins > 0 ? ['package.json'] : []), ...foreign];
   const trackStep = `git add ${trackFiles.join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
 
   if (repo?.inGit !== true) steps.push('git init');
@@ -145,7 +151,9 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
       `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} this repository already has`,
     );
   }
+  if (pins > 0) steps.push(LOCKFILE_ONLY_STEP);
   if (foreign.length > 0) {
+    steps.push(`git switch -c ${FEATURE_BRANCH}`);
     steps.push(
       'funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
     );

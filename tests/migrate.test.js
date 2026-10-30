@@ -169,7 +169,10 @@ test('apply refuses on the default branch read from origin/HEAD', async (t) => {
 
   assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
-  assert.equal(action, 'switch to a feature branch and re-run migrate --apply');
+  assert.equal(
+    action,
+    'switch to a feature branch (git switch -c chore/supply-chain-bootstrap) and re-run migrate --apply',
+  );
   assert.equal(
     reason,
     'refusing to remove package-lock.json: the current branch main is the default branch, read from refs/remotes/origin/HEAD',
@@ -189,7 +192,10 @@ test('apply without a remote says the main/master check is a fallback', async (t
 
     assert.equal(result.code, 3);
     const { action, reason } = refusal(result.stderr);
-    assert.equal(action, 'switch to a feature branch and re-run migrate --apply');
+    assert.equal(
+    action,
+    'switch to a feature branch (git switch -c chore/supply-chain-bootstrap) and re-run migrate --apply',
+  );
     assert.equal(
       reason,
       `refusing to remove package-lock.json: the current branch ${branch} matches the main/master check, which is a fallback because refs/remotes/origin/HEAD could not be read (the repository has no remote)`,

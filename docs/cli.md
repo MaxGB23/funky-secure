@@ -66,12 +66,16 @@ where the refusal would have taught it. From a real run:
 ```text
 funky-secure start  ·  guidance, nothing is written
 
-  1  funky-secure init --apply  plan the 3 writes (nothing is written)
-  2  git add -A && git commit -m "chore: baseline before funky-secure"
-  3  pnpm install
-  4  funky-secure pin --apply  pin the 2 ranges this repository already has
-  5  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main
-  6  funky-secure scan --preset starter
+  1  git add -A && git commit -m "chore: baseline before funky-secure"
+  2  funky-secure init --apply  plan the 3 writes (nothing is written)
+  3  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"
+  4  pnpm install
+  5  funky-secure pin --apply  pin the 2 ranges this repository already has
+  6  pnpm install --lockfile-only
+  7  git switch -c chore/supply-chain-bootstrap
+  8  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main
+  9  git add pnpm-lock.yaml package.json package-lock.json && git commit -m "chore: track the lockfile"
+  10  funky-secure scan --preset starter
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
@@ -89,6 +93,14 @@ carries work: once before the writer, which refuses to land on someone else's un
 after, because the writer has just produced that state and the next one refuses it too. And `pin` is
 printed only when the report carries a floating range, with the count, so a repository already at exact
 versions is never told to run a step that would change nothing.
+
+Three more exist because following the list as printed is the whole point. `pnpm install --lockfile-only`
+comes right after `pin`, because exact specifiers over a lockfile that recorded a range are a desync by
+construction; without it the last scan reads a stale lockfile. `git switch -c chore/supply-chain-bootstrap`
+comes right before the migration, because `migrate --apply` refuses on the default branch and a step that
+requires a branch has to say how to reach it. And the closing commit stages the lockfile the migration
+removed beside the one it tracks, because a commit that leaves a deletion in the index has left the tree
+dirty — which is what the previous release did, while reporting green.
 
 ```
 
@@ -488,7 +500,7 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.2" },
+  "tool": { "name": "funky-secure", "version": "0.8.3" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "provenance": {
@@ -513,7 +525,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.2" },
+  "tool": { "name": "funky-secure", "version": "0.8.3" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -546,7 +558,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.2" },
+  "tool": { "name": "funky-secure", "version": "0.8.3" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```
@@ -581,7 +593,7 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.8.2)
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.8.3)
      commit it, so the repository carries the instructions its agents read
 ```
 
@@ -590,7 +602,7 @@ for "not run":
 
 ```text
 $ funky-secure skill --install
-–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.8.2)
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.8.3)
      nothing to do: it already carries this exact version
 ```
 
@@ -600,30 +612,30 @@ whole point: "the bytes differ" is three different situations.
 ```text
 $ funky-secure skill --install < /dev/null          # an older copy is an upgrade
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.8.2 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.8.3 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # same version, edited by hand
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.2 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.3 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
 funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
-reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.8.2
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.8.3
 ```
 
 With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
 keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
-funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.2
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.3
 funky-secure skill: replacing it discards whatever is there now
 
   1  keep it as it is, and change nothing
-  2  replace it with version 0.8.2
+  2  replace it with version 0.8.3
 
 funky-secure skill: choose 1 or 2 [1]:
 ```
