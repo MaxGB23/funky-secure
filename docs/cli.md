@@ -34,11 +34,12 @@ guidance, not a gate. `--help` is the only flag it accepts; a `--preset` on `sta
 
 The steps are `git init`, `pnpm init`, `funky-secure init --apply` with the number of writes it is
 holding, `pnpm import` and `funky-secure migrate --apply` when another manager's lockfile is still
-there, `funky-secure pin --apply` and the commit that carries its rewrite of the manifest when the
-repository still has a range, `pnpm add <your first dependency>` when it is not, and `funky-secure
-scan --preset starter` last. Each one prints only while its condition holds: a repository that
-already has a manifest, a lockfile and a commit, but no managed block, is told to run `init --apply`
-and then `scan`, numbered from `1`. An empty directory, from a real run:
+there, `funky-secure pin --apply` with the resolve that re-syncs the lockfile and the commit that
+carries its rewrite of the manifest when the repository still has a range, `pnpm add <your first
+dependency>` when it is not, and `funky-secure scan --preset starter` last. Each one prints only while
+its condition holds: a repository that already has a manifest, a lockfile and a commit, but no managed
+block, is told to run `init --apply` and then `scan`, numbered from `1`. An empty directory, from a
+real run:
 
 ```text
 funky-secure start  ·  guidance, nothing is written
@@ -46,9 +47,10 @@ funky-secure start  ·  guidance, nothing is written
   1  git init
   2  pnpm init
   3  funky-secure init --apply  plan the 1 write (nothing is written)
-  4  git add -A && git commit -m "chore: baseline before funky-secure"
+  4  git add pnpm-workspace.yaml && git commit -m "chore: apply funky-secure"
   5  pnpm add <your first dependency>
-  6  funky-secure scan --preset starter
+  6  git add pnpm-lock.yaml && git commit -m "chore: track the lockfile"
+  7  funky-secure scan --preset starter
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
@@ -71,12 +73,13 @@ funky-secure start  ·  guidance, nothing is written
   2  funky-secure init --apply  plan the 3 writes (nothing is written)
   3  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"
   4  pnpm import
-  5  funky-secure pin --apply  pin the 2 ranges this repository already has
+  5  funky-secure pin --apply  pin the 3 ranges this repository already has
   6  pnpm install --lockfile-only
-  7  git switch -c chore/supply-chain-bootstrap
-  8  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main
-  9  git add pnpm-lock.yaml package.json package-lock.json && git commit -m "chore: track the lockfile"
-  10  funky-secure scan --preset starter
+  7  git add package.json && git commit -m "chore: pin the ranges"
+  8  git switch -c chore/supply-chain-bootstrap
+  9  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main
+  10  git add pnpm-lock.yaml package-lock.json && git commit -m "chore: track the lockfile"
+  11  funky-secure scan --preset starter
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
@@ -103,7 +106,16 @@ requires a branch has to say how to reach it. And the closing commit stages the 
 removed beside the one it tracks, because a commit that leaves a deletion in the index has left the tree
 dirty — which is what the previous release did, while reporting green.
 
-```
+The pin has a commit of its own. `pin --apply` rewrites `package.json`, so the tree stays dirty until
+the `pnpm install --lockfile-only` step and the commit printed right after it: that commit is what
+produces the clean tree the steps below it require, while the dirty window in between blocks nothing —
+`migrate` refuses only on the foreign lockfiles — and explains nothing. It stages `package.json` and
+nothing else, so a generated repository's untracked tool cache stays out of the commit, and its message
+names the pin: months later, in `git log`, the commit that cleared the ranges is `chore: pin the ranges`
+and not a lockfile commit that happened to carry a manifest. For the same reason the closing commit
+stages the lockfile and the removed foreign lockfile, never `package.json`: after the pin's own commit
+nothing else on the path writes the manifest, so a manifest in that `git add` would be a path staged but
+never changed.
 
 `why this order` is the reason the sequence is not a list: the managed block has to exist before the
 install that reads it, a lockfile can only exist after the first add, and a migration puts the block

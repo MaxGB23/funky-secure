@@ -47,6 +47,15 @@ const COMMIT_STEP = `git add -A && git commit -m "${COMMIT_MESSAGE}"`;
 const APPLY_MESSAGE = 'chore: apply funky-secure';
 /** The commit that puts the lockfile under version control, which is what the last scan reads. */
 const TRACK_MESSAGE = 'chore: track the lockfile';
+/**
+ * The commit that names the pin, so `git log --grep` finds it months later (0028).
+ *
+ * `pin --apply` leaves the manifest dirty and the next writer refuses that state, so the path prints
+ * the command that produces the clean tree the steps after it require. It stages the manifest and
+ * nothing else, for the reason 0016 gives: a generated repository's untracked tool cache stays out.
+ */
+const PIN_MESSAGE = 'chore: pin the ranges';
+const PIN_STEP = `git add package.json && git commit -m "${PIN_MESSAGE}"`;
 
 /** The branch the migration step names. A step that requires a state prints how to reach it (0018). */
 const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
@@ -114,10 +123,11 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     tracked.length > 0
       ? `git add ${tracked.join(' ')} && git commit -m "${APPLY_MESSAGE}"`
       : COMMIT_STEP;
-  // A commit that stages nothing is not a step. The lockfile needs one only when it will be new — the
-  // install above is about to write it — or when the report already says it is untracked.
+  // The closing commit names what it covers: the lockfile the install writes and the foreign one the
+  // migration removes. It stages no manifest, because after the pin's own commit nothing else on the
+  // path writes one (0028), and a commit that stages nothing is not a step.
   const lockfileAtEnd = foreign.length > 0 || trackLockfile;
-  const trackFiles = ['pnpm-lock.yaml', ...(pins > 0 ? ['package.json'] : []), ...foreign];
+  const trackFiles = ['pnpm-lock.yaml', ...foreign];
   const trackStep = `git add ${trackFiles.join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
 
   if (repo?.inGit !== true) steps.push('git init');
@@ -154,7 +164,13 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
       `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} this repository already has`,
     );
   }
-  if (pins > 0) steps.push(LOCKFILE_ONLY_STEP);
+  if (pins > 0) {
+    steps.push(LOCKFILE_ONLY_STEP);
+    // The pin has a commit of its own, immediately after the resolve it requires: it leaves the
+    // manifest dirty and the next writer refuses that state (0028). It prints only where `pin`
+    // printed, because a commit that stages nothing is never printed.
+    steps.push(PIN_STEP);
+  }
   if (foreign.length > 0) {
     steps.push(`git switch -c ${FEATURE_BRANCH}`);
     steps.push(

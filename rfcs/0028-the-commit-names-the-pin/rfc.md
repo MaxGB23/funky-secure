@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | `accepted` — agreed 2026-10-30; the pin gets a commit of its own before any code moves. |
+| **Status** | `implemented` — `start` prints the pin's commit and the closing commit stages no manifest. |
 | **Revision** | 1 |
-| **Present contract** | [`docs/spec/commands.md`](../../docs/spec/commands.md) §11.7, row 12: `git add pnpm-lock.yaml [package.json] [<the removed lockfile>] && git commit -m "<message>"`. |
+| **Present contract** | [`docs/spec/commands.md`](../../docs/spec/commands.md) §11.7, row 9 and row 13. |
 | **Supersedes** | nothing. It amends 0016 and 0018 in one place: which commit carries the pin. |
 
 ## What a reader meets today
