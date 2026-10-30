@@ -87,6 +87,7 @@ number keeps resolving.
 | 7 | [`0019`](../../rfcs/0019-a-scan-never-writes/rfc.md) | 7.3: the read-only clause names the files a spawned tool would write, and the version probe runs outside the scanned repository |
 | 8 | [`0020`](../../rfcs/0020-self-managed-pin/rfc.md) | 8.2 R1: a pin the project manages itself (`devEngines.packageManager`) that differs from the answering binary is a skip, never a conflict |
 | 11 | [`0021`](../../rfcs/0021-the-step-matches-the-manager/rfc.md) | 11.2.2, 11.3 and 11.7: `pnpm import` for any foreign lockfile, and `--from` validated against the lockfiles the repository holds |
+| 10, 8, 11 | [`0022`](../../rfcs/0022-the-output-tells-the-truth/rfc.md) | 10.3: the verdict names the rules it did not verify; 8.2 R7: the managed ignore block covers `node_modules/`; 11.2: the W1b row matches 0017 |
 
 ## Changing the contract
 

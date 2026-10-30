@@ -42,7 +42,7 @@ With `--apply` it performs exactly these writes, and no others:
 | # | Target | Condition | Operation |
 |---|---|---|---|
 | W1a | `pnpm-workspace.yaml` | the managed block does not already declare `minimumReleaseAgeStrict: true`, whether or not the machine satisfies it (11.2.1) | managed block with `minimumReleaseAgeStrict: true` |
-| W1b | `pnpm-workspace.yaml` | `--preset strict` passed | the same managed block also carries `minimumReleaseAge: 4320` |
+| W1b | `pnpm-workspace.yaml` | always, beside W1a | the same managed block also carries the age: `minimumReleaseAge: 1440` under `baseline`, `4320` under `--preset strict` (0017) |
 | W1c | `pnpm-workspace.yaml` | the managed block does not already carry `savePrefix: ''` (D-18) | the same managed block also carries `savePrefix: ''` |
 | W2 | `.gitignore` | `sensitive-ignored` fails | managed block with the missing entries required by R7: `.env`, `.env.*`, `!.env.example`, `!.env.test.example`, `*.pem`, `*.key`, plus `.npmrc` only when the repository does not track a root `.npmrc` without a token |
 | W3 | `package.json` | `package-manager-pin` fails **without** conflict | set `packageManager` |
