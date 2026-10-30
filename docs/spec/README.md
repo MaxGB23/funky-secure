@@ -84,6 +84,7 @@ number keeps resolving.
 | 11.7 | [`0016`](../../rfcs/0016-close-the-loop/rfc.md) | 11.7: the writing commit names the paths it stages, and the path closes with a commit that tracks the lockfile |
 | 8.2, 11.2 | [`0017`](../../rfcs/0017-declare-the-age/rfc.md) | 8.2 W1b: the managed block always writes `minimumReleaseAge` — 1440 under baseline, 4320 under strict — instead of inheriting pnpm's default, which is 0 before the 11 line |
 | 11.7, 10.4 | [`0018`](../../rfcs/0018-print-the-command/rfc.md) | 11.7: 13 rows — the re-sync after `pin`, the `git switch -c` the migration needs, and the closing commit that stages the removal; 10.4: the branch refusal names the command |
+| 7 | [`0019`](../../rfcs/0019-a-scan-never-writes/rfc.md) | 7.3: the read-only clause names the files a spawned tool would write, and the version probe runs outside the scanned repository |
 
 ## Changing the contract
 
