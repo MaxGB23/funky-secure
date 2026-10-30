@@ -85,3 +85,12 @@ On pnpm 11 the first resolve after the field appears records a `packageManagerDe
 `start` already contains it; a repository that runs `init --apply` alone and commits needs one install
 before CI is green. It is one row in `docs/validation.md` and one sentence in `docs/rules/package-manager-pin.md`,
 and hiding it would be the sort of omission this catalog exists to report.
+
+## Errata
+
+**2026-10-30 — the writer identifier.** This record called the new plan item `W4`. `W4` was already
+taken: it is the `funky-secure.config.json` strict-preset writer of §11.2. The writer this record
+introduces is **`W3b`**, following the file-sibling convention the table already uses — `W1a`, `W1b`
+and `W1c` are three plan items over one file — so it stays a sibling of `W3`: same file, different
+key, and its own plan item so the plan reports it separately. The collision was found while writing
+the spec, before any code existed; nothing else in the record changes.
