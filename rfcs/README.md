@@ -36,6 +36,7 @@ document that changes without a new record.
 | [0027](0027-the-adversary-comes-in/rfc.md) | The adversary comes in | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1, R5 |
 | [0028](0028-the-commit-names-the-pin/rfc.md) | The commit names the pin | `draft` | — | — | — |
 | [0029](0029-two-trees-are-not-a-warning/rfc.md) | Two trees are not a warning | `draft` | — | — | — |
+| [0030](0030-the-guard-both-managers-read/rfc.md) | The guard both managers read | `draft` | — | — | — |
 
 ## Layout
 
