@@ -306,7 +306,7 @@ happens.
 | W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing |
 | W4 | `funky-secure.config.json` | `{ "preset": "strict" }` so CI agrees with the run; `--preset strict` only |
 
-It refuses — exit `2`, naming the file or the reason, and writing nothing:
+It refuses — exit `3`, naming the file or the reason, and writing nothing:
 
 - a target with uncommitted changes, unless `--allow-dirty` is passed;
 - a working tree `git status --porcelain -z` cannot report, because the check above cannot be made;
@@ -318,6 +318,57 @@ a `minimumReleaseAge` or `minimumReleaseAgeStrict` declared outside the managed 
 unparseable or differently-configured `funky-secure.config.json`, and a config file discovered
 somewhere other than the repository root. A `conflict` alone does not make the command fail; it makes
 the plan a refusal you can read. A second `--apply` over the same state performs zero writes.
+
+### `pin`
+
+```text
+funky-secure pin [--format human|json] [--apply] [--allow-dirty]
+```
+
+The complement of `exact-versions`: it takes the specifiers that float and writes the version
+`pnpm-lock.yaml` already records for each, so the same install resolves to the same tree without
+anyone retyping `pnpm pkg set` once per finding. Running the command is the approval; the `--apply`
+split is the family convention, so nothing is written on the first invocation.
+
+Default is a plan: it names `package.json`, the number of specifiers and the line list, and exits `0`.
+
+```text
+$ funky-secure pin
+
+would write
+  /repo/package.json
+    set exact versions   (pins 3 specifiers to the version pnpm-lock.yaml records)
+
+summary  1 write · 0 already at policy · 0 conflicts
+
+pins
+  dependencies.left-pad  ^1.3.0 → 1.3.0
+  dependencies.is-odd  ^3.0.1 → 3.0.1
+  devDependencies.typescript  ~5.9.2 → 5.9.2
+
+next steps
+  pnpm install --lockfile-only
+```
+
+Three properties are the whole contract:
+
+- **The version comes from the lockfile or is not written.** A floating range with no recorded
+  resolution is listed under `not pinned` with its reason; the tool never guesses a version (RFC 4.9).
+- **One write per file**, because a plan item carries the whole rewritten manifest. Indentation, key
+  order and line endings survive; nothing but the specifiers changes.
+- **Root `package.json` only.** Workspace importers are named under `not pinned` with their count,
+  because their manifests are outside the files the scan collects — the plan says so instead of leaving
+  a silently incomplete pin.
+
+It refuses — exit `3`, writing nothing — on uncommitted changes to the target, unless `--allow-dirty` is
+passed, exactly as `init --apply` does. A second `--apply` over the same state performs zero writes.
+
+Writing an exact specifier desyncs the lockfile on purpose: its `specifier` field still records the
+range. `pin` never runs an install (RFC 11.6), so the plan ends with the step that re-records it —
+`pnpm install --lockfile-only` — after which `scan --only exact-versions` is clean.
+
+With `--format json` stdout carries the plan document and nothing else; the ledger of writes goes to
+stderr. The `pins` and `not pinned` blocks are human presentation and never reach the document.
 
 ### `migrate`
 
@@ -425,7 +476,7 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.6.1" },
+  "tool": { "name": "funky-secure", "version": "0.7.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "provenance": {
@@ -450,7 +501,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.6.1" },
+  "tool": { "name": "funky-secure", "version": "0.7.0" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -483,7 +534,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.6.1" },
+  "tool": { "name": "funky-secure", "version": "0.7.0" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```
@@ -518,7 +569,7 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.6.1)
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.7.0)
      commit it, so the repository carries the instructions its agents read
 ```
 
@@ -527,7 +578,7 @@ for "not run":
 
 ```text
 $ funky-secure skill --install
-–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.6.1)
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.7.0)
      nothing to do: it already carries this exact version
 ```
 
@@ -537,30 +588,30 @@ whole point: "the bytes differ" is three different situations.
 ```text
 $ funky-secure skill --install < /dev/null          # an older copy is an upgrade
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.6.1 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.7.0 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # same version, edited by hand
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.6.1 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.7.0 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
 funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
-reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.6.1
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.7.0
 ```
 
 With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
 keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
-funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.6.1
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.7.0
 funky-secure skill: replacing it discards whatever is there now
 
   1  keep it as it is, and change nothing
-  2  replace it with version 0.6.1
+  2  replace it with version 0.7.0
 
 funky-secure skill: choose 1 or 2 [1]:
 ```

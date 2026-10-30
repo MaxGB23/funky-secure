@@ -60,6 +60,7 @@ severity — instead of into whoever happened to run the command.
 | `scan` | what is wrong here, with evidence | nothing, ever |
 | `init` | what can be fixed, and exactly how | the printed plan, only with `--apply` |
 | `migrate` | how do I leave npm or yarn | the foreign lockfile's removal, only with `--apply` |
+| `pin` | how do I pin the ranges this repository already has | the specifiers it pins, with `--apply` |
 | `explain` | what does one rule actually check | nothing |
 | `skill` | what does an agent need to know before it acts | nothing: it prints the shipped skill on stdout |
 

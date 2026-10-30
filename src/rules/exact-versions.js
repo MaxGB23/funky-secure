@@ -18,7 +18,8 @@
  *   specifier the package already has.
  */
 
-import { parseLockfile } from '../lib/lockfile.js';
+import { parseLockfile, recordedVersion } from '../lib/lockfile.js';
+import { isFloating } from '../lib/specifiers.js';
 
 const DOC = 'docs/rules/exact-versions.md';
 const DEPENDENCY_TYPES = [
@@ -30,9 +31,6 @@ const DEPENDENCY_TYPES = [
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
 const URL_USERINFO = /^([a-z][a-z0-9+.-]*:\/\/)([^/@\s]+)@/i;
-const EXACT_LITERAL = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const PARTIAL_LITERAL = /^\d+(?:\.\d+)*$/;
-const TAG_LITERAL = /^[a-z][a-z0-9._-]*$/i;
 
 /**
  * A specifier is echoed in messages and evidence, and the version the lockfile records is echoed in
@@ -52,60 +50,6 @@ function redactedSpecifier(specifier) {
 /** @param {string} text */
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * A wildcard version token such as `x`, `1.x` or `1.2.X`.
- * @param {string} value
- * @returns {boolean}
- */
-function isWildcard(value) {
-  const segments = value.split('.');
-  return (
-    segments.some((segment) => /^[xX]$/.test(segment)) &&
-    segments.every((segment) => /^[xX]$/.test(segment) || /^\d+$/.test(segment))
-  );
-}
-
-/**
- * @param {unknown} specifier
- * @returns {boolean}
- */
-function isFloating(specifier) {
-  if (typeof specifier !== 'string') return false;
-  const value = specifier.trim();
-  if (value === '') return false;
-
-  const scheme = value.match(SCHEME)?.[1]?.toLowerCase() ?? null;
-  if (scheme !== null) {
-    if (scheme === 'npm') {
-      const rest = value.slice('npm:'.length);
-      const at = rest.lastIndexOf('@');
-      if (at <= 0) return true;
-      return isFloating(rest.slice(at + 1));
-    }
-    // workspace:* is a pinned internal link, workspace:^ and workspace:~ are ranges, and
-    // workspace:<literal version> is a pin like any other literal version.
-    if (scheme === 'workspace') {
-      const rest = value.slice('workspace:'.length);
-      if (rest === '*') return false;
-      return isFloating(rest);
-    }
-    // link: is a live local link (the workspace:*-like internal case); git+, github:, http(s):,
-    // git:, ssh: and file: pin no registry version at all.
-    return scheme !== 'link';
-  }
-
-  if (value === 'latest') return true;
-  if (/^[\^~<>]/.test(value)) return true;
-  if (value.startsWith('*')) return true;
-  if (isWildcard(value)) return true;
-  if (/\s|\|\|/.test(value)) return true;
-  if (EXACT_LITERAL.test(value)) return false;
-  if (/^v\d/.test(value) && EXACT_LITERAL.test(value.slice(1))) return false;
-  if (PARTIAL_LITERAL.test(value)) return true;
-  if (TAG_LITERAL.test(value)) return true;
-  return false;
 }
 
 /**
@@ -226,11 +170,6 @@ function lockfileSpecifier(lock, name) {
  * @param {string} type the section the entry lives in
  * @returns {string | null}
  */
-function recordedVersion(lock, name, type) {
-  const record = lock?.[type]?.[name];
-  if (!record || typeof record.version !== 'string' || record.version === '') return null;
-  return record.version;
-}
 
 /**
  * The remediation of a floating range (S4). `pnpm add --save-exact <name>@<range>` is a measured
