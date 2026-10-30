@@ -78,18 +78,25 @@ repository (7.3, 0019), and the pnpm that answers there describes the machine, n
   installed pnpm; that check belongs to pnpm itself on install, and duplicating it would create a
   second, staler source of truth (4.1).
 
-#### R3 — `foreign-lockfile` · friction 0 · sev `warn`/`warn` · fix `manual` (`migrate`)
+#### R3 — `foreign-lockfile` · friction 0 · sev `warn`/`warn` alone, `error`/`error` in coexistence · fix `manual` (`migrate`)
 
 - **Question:** does another package manager still shape this repository?
 - **Detection:** `package-lock.json`, `yarn.lock` or `bun.lock`/`bun.lockb` present at the root.
-  Severity is `warn` in both presets: the product recommends pnpm, it does not require it (G4).
-  Deviates from the guidance of 4.2, where friction 0 would suggest `error`; G4 wins, and the
-deviation is recorded here and in section 9.1.
+  Severity follows the state, identically in `baseline` and in `strict`: a foreign lockfile that
+  stands alone is `warn`, and a foreign lockfile that coexists with `pnpm-lock.yaml` is `error`. The
+  standalone case is the declared deviation from the guidance of 4.2, where friction 0 would suggest
+  `error`: the product recommends pnpm, it does not require it (G4). That reasoning does not reach
+  coexistence, because two lockfiles are two resolutions of the same manifest and not a preference —
+  one wins locally and the other wins in CI — so the deviation is declared for the standalone case
+  only, and it is recorded here and in section 9.1 (0029). The split needs no new probe and no new
+  field: the `evidence` already carries `pnpmLockfile`, the same fact that decides the state.
 - **Evidence:** the files found; whether `pnpm-lock.yaml` coexists (the dangerous case, because two
-  lockfiles resolve two trees).
+  lockfiles resolve two trees, so the install works locally and breaks in CI).
 - **Remediation:** `funky-secure migrate --from npm --apply` prints or executes the plan (section
-  11.3). Two lockfiles present raises the message to `error` level wording while keeping its
-  severity, because coexistence is the state that produces "works locally, breaks in CI".
+  11.3). The message no longer changes register with the state: one wording names the state, and the
+  severity carries the weight, because a `warn` finding cannot fail a run whose `--fail-on` is the
+  default `error` (10.5, 0029). `migrate` remains the remedy and the product's suggestion, never a
+  requirement.
 
 #### R4 — `quarantine` · friction 2 · sev `warn`/`error` · fix `auto`
 

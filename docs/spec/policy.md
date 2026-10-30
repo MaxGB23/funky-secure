@@ -16,8 +16,11 @@
 
 Declared deviations from that table, all visible in the rule headings of section 8.2:
 
-- **`foreign-lockfile` (R3)** stays `warn` in every preset: G4 says recommend pnpm, not require it, and
-  `starter` runs it at that `warn` (0003 L10).
+- **`foreign-lockfile` (R3)** is `warn` in `baseline` and in `strict` while the foreign lockfile stands
+  alone, and `error` in both presets while it coexists with `pnpm-lock.yaml`: G4 says recommend pnpm,
+  not require it, and that covers a repository that chose another manager, not a repository holding
+  two lockfiles and therefore two resolutions of one manifest (0029). `starter` runs the rule, so it
+  carries both severities (0003 L10).
 - **`quarantine` (R4)** is promoted to `error` in `strict` and stays `warn` in `baseline`, and its
   floor follows the preset: the manager's built-in default in `baseline`, `4320` in `strict` (8.2 R4,
   9.4).
@@ -31,7 +34,9 @@ workflow rules. Those read artefacts a new project does not have yet, and `off` 
 silent, so a green report under `starter` names the coverage it does not have (10.3). The foreign
 lockfile belongs to the set because a repository a framework generator produced starts with another
 manager's lockfile, and it is the one rule that says a second package manager still shapes the
-repository; it keeps the `warn` of `baseline`, so including it keeps the preset gentle. `starter` is
+repository; the standalone case keeps the `warn` of `baseline`, so including it keeps the preset
+gentle, and coexistence with `pnpm-lock.yaml` is the one state in the preset that is not, because a
+repository on day zero with two lockfiles is the case nobody should leave overnight. `starter` is
 selectable through `--preset starter` and through `preset` in the config file, and an added catalog
 rule stays `off` under it until the preset says otherwise, because a preset that claims to check less
 must fail in the safe direction.
