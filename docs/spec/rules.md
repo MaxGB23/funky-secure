@@ -53,7 +53,8 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
   rule cannot compare. If `pnpm --version` fails, `skip` — an unverifiable pin is not a wrong pin.
 - **Evidence:** declared value, observed value, path of the answering binary.
 - **Remediation:** `init --apply` writes `packageManager` when it is missing (auto), and only then; a
-  declaration that already exists is never rewritten, whatever the machine runs.
+  declaration that already exists is never rewritten, whatever the machine runs. The same plan writes
+  the `devEngines.packageManager` that the manifest does not declare (11.2, W3b).
 - **Why it is free:** one line in a file every Node repository has; it makes the accidental use of
   another manager detectable without blocking anything.
 - **False positives:** a repository deliberately on another manager is a `skip`, not a finding: the
@@ -62,8 +63,14 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
 
 
 A pin the project manages itself (`devEngines.packageManager`, which pnpm 12 writes on `pnpm init`)
-that differs from the answering binary is `skip` with `self-managed-pin`: the probe runs outside the
+has three states, and the field the tool writes must not collapse them (0030). Declared and **equal to
+the pin** is a fact the tool owns — `init --apply` writes both declarations in one plan (11.2, W3 and
+W3b) — so the rule evaluates the pin instead of skipping it: `pass` when the answering pnpm matches
+the declaration, a conflict when it does not. Declared and **different**
+is `skip` with `self-managed-pin`: the project manages its own pnpm, the probe runs outside the
 repository (7.3, 0019), and the pnpm that answers there describes the machine, not that project (0020).
+**Absent** is unchanged: the pin alone is the declaration, and nothing about it is skipped.
+
 #### R2 — `lockfile-committed` · friction 0 · sev `error`/`error` · fix `none`
 
 - **Question:** is the lockfile present, tracked, and not ignored?
