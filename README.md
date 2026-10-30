@@ -108,7 +108,7 @@ line says what to do and the second says why it refused.
 |---|---|---|
 | `package-manager-pin` | error / error | does `package.json` declare the pnpm actually answering? |
 | `lockfile-committed` | error / error | is the lockfile present, tracked and not ignored? |
-| `foreign-lockfile` | warn / warn | does another package manager still shape this repository? |
+| `foreign-lockfile` | warn / warn alone · error / error in coexistence | does another package manager still shape this repository? |
 | `quarantine` | warn / error | is the release-age quarantine a gate, or an auto-approval list? |
 | `exact-versions` | warn / error | are dependency specifiers exact, and does the lockfile agree? |
 | `env-not-tracked` | error / error | is any environment file committed? |

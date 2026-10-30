@@ -133,12 +133,29 @@ function readmeTableRows() {
 
 test('the README rule table carries every catalog rule id with its exact severities', () => {
   const rows = readmeTableRows();
+  const pair = (severity) => `${severity?.baseline ?? 'warn'} / ${severity?.strict ?? 'warn'}`;
 
   for (const rule of catalog) {
-    const severity = `${rule.severity?.baseline ?? 'warn'} / ${rule.severity?.strict ?? 'warn'}`;
     const row = rows.find((line) => line.includes(`\`${rule.id}\``));
     assert.ok(row, `README has no table row for ${rule.id}`);
+
+    const severity = pair(rule.severity);
     assert.ok(row.includes(severity), `README row for ${rule.id} does not state "${severity}": ${row}`);
+
+    // A rule whose severity follows the state of its finding (record 0029) states one pair per state,
+    // so the row carries every pair the catalog declares and names the state it belongs to. The gate
+    // verifies the catalog, never one rule id.
+    for (const entry of rule.severityWhen ?? []) {
+      const stated = pair(entry.severity);
+      assert.ok(
+        row.includes(stated),
+        `README row for ${rule.id} does not state "${stated}" for the ${entry.state} state: ${row}`,
+      );
+      assert.ok(
+        row.includes(entry.state),
+        `README row for ${rule.id} does not name the ${entry.state} state: ${row}`,
+      );
+    }
   }
 });
 

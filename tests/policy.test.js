@@ -6,6 +6,7 @@ import {
   PRESETS,
   RULE_SEVERITIES,
   FAIL_ON_VALUES,
+  findingSeverity,
   quarantineFloor,
   resolvePolicy,
   severityRank,
@@ -227,4 +228,105 @@ test('starter keeps the manager default quarantine, never the strict floor', () 
   assert.equal(resolve({ presetFromFlag: 'starter' }).quarantineMinutes, 1440);
   assert.equal(resolve({ presetFromFlag: 'baseline' }).quarantineMinutes, 1440);
   assert.equal(resolve({ presetFromFlag: 'strict' }).quarantineMinutes, 4320);
+});
+
+/// The state severity (record 0029): a rule whose severity follows the state of its finding states it
+/// in the catalog, and the policy clamps what the rule may say. One rule needs it today; the mechanism
+/// names none of them.
+
+const FOREIGN = ruleCatalog.find((rule) => rule.id === 'foreign-lockfile');
+
+/** The finding `foreign-lockfile` produces, as the engine hands it to the report. */
+function lockfileFinding(policy, pnpmLockfile) {
+  return {
+    rule: 'foreign-lockfile',
+    status: 'fail',
+    severity: policy.severities['foreign-lockfile'],
+    evidence: { files: ['package-lock.json'], pnpmLockfile },
+  };
+}
+
+test('a state severity replaces the preset severity in every preset, starter included', () => {
+  for (const preset of PRESETS) {
+    const policy = resolve({ presetFromFlag: preset });
+
+    assert.equal(
+      findingSeverity({ policy, rule: FOREIGN, finding: lockfileFinding(policy, true) }),
+      'error',
+      `${preset}: coexistence with pnpm-lock.yaml is an error`,
+    );
+    assert.equal(
+      findingSeverity({ policy, rule: FOREIGN, finding: lockfileFinding(policy, false) }),
+      'warn',
+      `${preset}: a foreign lockfile that stands alone stays a warn`,
+    );
+  }
+});
+
+test('a severity the repository states in rules wins over the state severity', () => {
+  const silenced = resolve({ config: { rules: { 'foreign-lockfile': 'warn' } } });
+  const promoted = resolve({ config: { rules: { 'foreign-lockfile': 'error' } } });
+
+  assert.equal(
+    findingSeverity({ policy: silenced, rule: FOREIGN, finding: lockfileFinding(silenced, true) }),
+    'warn',
+    'the repository decided, and the config outranks the rule (9.2)',
+  );
+  assert.equal(
+    findingSeverity({ policy: promoted, rule: FOREIGN, finding: lockfileFinding(promoted, false) }),
+    'error',
+    'and it promotes the standalone state too',
+  );
+});
+
+test('a rule the policy resolved as off is never escalated back into the report', () => {
+  const policy = { preset: 'starter', severities: { 'foreign-lockfile': 'off' }, overridden: [] };
+
+  assert.equal(findingSeverity({ policy, rule: FOREIGN, finding: lockfileFinding(policy, true) }), 'off');
+});
+
+test('a rule that states no state severities reads exactly as it did before', () => {
+  const policy = resolve({ presetFromFlag: 'strict' });
+
+  for (const rule of ruleCatalog) {
+    if (rule.severityWhen !== undefined) continue;
+    const finding = {
+      rule: rule.id,
+      status: 'fail',
+      severity: policy.severities[rule.id],
+      evidence: { pnpmLockfile: true },
+    };
+    assert.equal(
+      findingSeverity({ policy, rule, finding }),
+      policy.severities[rule.id],
+      `${rule.id} keeps the severity the policy gave it`,
+    );
+  }
+
+  assert.deepEqual(
+    ruleCatalog.filter((rule) => rule.severityWhen !== undefined).map((rule) => rule.id),
+    ['foreign-lockfile'],
+    '0029 changes one severity in one rule, and nothing else in the preset table',
+  );
+});
+
+test('a state severity that is not a severity is a configuration error, never a silent pass', () => {
+  const policy = resolve({});
+  const broken = {
+    id: 'foreign-lockfile',
+    severity: { baseline: 'warn', strict: 'warn' },
+    severityWhen: [
+      {
+        state: 'coexistence',
+        evidence: 'pnpmLockfile',
+        is: true,
+        severity: { baseline: 'fatal', strict: 'fatal' },
+      },
+    ],
+  };
+
+  assert.throws(
+    () => findingSeverity({ policy, rule: broken, finding: lockfileFinding(policy, true) }),
+    (error) => error instanceof ConfigError && error.message.includes('fatal'),
+  );
 });

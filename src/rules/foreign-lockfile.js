@@ -1,8 +1,10 @@
 /**
  * R3 — `foreign-lockfile` (RFC 8.2).
  *
- * Pure: the foreign lockfile names are read from the resolved presence list. Severity stays `warn`
- * in both presets (RFC 9.1 deviation from 4.2): the product recommends pnpm, it does not require it.
+ * Pure: the foreign lockfile names are read from the resolved presence list. The severity follows the
+ * state (0029): a foreign lockfile that stands alone is `warn` in `baseline` and in `strict`, because
+ * the product recommends pnpm and does not require it, and one that coexists with `pnpm-lock.yaml` is
+ * `error` in both, because two lockfiles are two resolutions of one manifest.
  */
 
 const DOC = 'docs/rules/foreign-lockfile.md';
@@ -23,14 +25,24 @@ export default {
   targets: ['repo-root'],
   friction: 0,
   severity: { baseline: 'warn', strict: 'warn' },
+  // The coexistence state carries its own severity, selected by the evidence the finding already
+  // holds: no second rule id, no second probe, and the policy still clamps what this says (0029).
+  severityWhen: [
+    {
+      state: 'coexistence',
+      evidence: 'pnpmLockfile',
+      is: true,
+      severity: { baseline: 'error', strict: 'error' },
+    },
+  ],
   question: 'Does another package manager still shape this repository?',
   detection:
-    'package-lock.json, yarn.lock, bun.lock or bun.lockb at the repository root. None present passes; one or more produce a single foreign-lockfile finding that lists them all. When pnpm-lock.yaml coexists the message uses error-level wording, because two lockfiles resolve two dependency trees; the severity itself remains warn in both presets (RFC 9.1).',
+    'package-lock.json, yarn.lock, bun.lock or bun.lockb at the repository root. None present passes; one or more produce a single foreign-lockfile finding that lists them all. The severity follows the state, identically in baseline and in strict: a foreign lockfile that stands alone is warn, and one that coexists with pnpm-lock.yaml is error (RFC 0029, 8.2 R3).',
   evidence: '{ files, pnpmLockfile }',
   remediation:
     'manual — funky-secure migrate --from npm --apply, or --from yarn when yarn.lock is the foreign lockfile; a bun-only repository names --from auto.',
   limits:
-    'Recommends pnpm, never requires it, so the rule stays warn in both presets (RFC 9.1 deviation from 4.2). It lists files only: it does not read them, does not decide which tree wins and deletes nothing; the removal is step 4 of the migrate plan.',
+    'A foreign lockfile that stands alone is a warn, never a gate: the product recommends pnpm and does not require it, so the declared deviation from the friction table (RFC 9.1) covers that state only (0029). It lists files only: it does not read them, does not decide which tree wins and deletes nothing; the removal is step 4 of the migrate plan.',
   docs: DOC,
 
   detect(ctx) {
@@ -63,9 +75,11 @@ export default {
     }
 
     const listed = files.join(', ');
-    const message = pnpmLockfile
-      ? `${listed} ${files.length === 1 ? 'coexists' : 'coexist'} with ${PNPM_LOCKFILE}: two lockfiles resolve two dependency trees, so the install works locally and breaks in CI`
-      : `${listed} ${files.length === 1 ? 'is' : 'are'} still present; another package manager still shapes this repository`;
+    // One register in both states: the sentence names the state, and the severity carries the weight
+    // (0029). It never escalates to error-level wording, because `warn` and `error` are the policy's
+    // answer about this state, not the sentence's.
+    const beside = pnpmLockfile ? ` beside ${PNPM_LOCKFILE}` : '';
+    const message = `${listed} ${files.length === 1 ? 'is' : 'are'} still present${beside}; another package manager still shapes this repository`;
 
     return [
       {
