@@ -117,7 +117,19 @@ export function findingSeverity({ policy = {}, rule, finding = {} }) {
   const state = states.find((entry) => finding?.evidence?.[entry.evidence] === entry.is);
   const resolved = policy?.severities?.[rule?.id];
 
-  if (state === undefined) return finding?.severity ?? resolved;
+  if (state === undefined) {
+    // Fail closed. A table whose evidence key a finding never carries would select nothing and keep the
+    // base pair, so the state the author wrote to be strict would read as the lenient one, silently —
+    // the class of miss this codebase refuses everywhere else (9.2, 0022).
+    const unreachable = states.find((entry) => !Object.hasOwn(finding?.evidence ?? {}, entry.evidence));
+    if (unreachable !== undefined) {
+      throw new ConfigError(
+        `state "${unreachable.state}" selects on evidence "${unreachable.evidence}", which a finding of rule "${rule.id}" does not carry`,
+        rule.id,
+      );
+    }
+    return finding?.severity ?? resolved;
+  }
   if (resolved === 'off') return 'off';
 
   // The preset key wins, and `starter` falls back to `baseline` because it is a reduced baseline: the
@@ -126,6 +138,16 @@ export function findingSeverity({ policy = {}, rule, finding = {} }) {
   if (!RULE_SEVERITIES.includes(severity)) {
     throw new ConfigError(
       `unknown severity "${severity}" for rule "${rule.id}" in state "${state.state}"`,
+      rule.id,
+    );
+  }
+
+  // `off` is a policy decision about a rule, not about a state: the summary counts findings, and a state
+  // the policy switched off would have to disappear before the report, which this function cannot do.
+  // Naming it is the honest answer until a record decides otherwise.
+  if (severity === 'off') {
+    throw new ConfigError(
+      `state "${state.state}" of rule "${rule.id}" declares severity "off", which is not supported for a state`,
       rule.id,
     );
   }

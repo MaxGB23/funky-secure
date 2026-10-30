@@ -330,3 +330,45 @@ test('a state severity that is not a severity is a configuration error, never a 
     (error) => error instanceof ConfigError && error.message.includes('fatal'),
   );
 });
+
+test('a state whose evidence key a finding never carries is a configuration error, not a silent fallback', () => {
+  const policy = resolve({});
+  const broken = {
+    id: 'foreign-lockfile',
+    severity: { baseline: 'warn', strict: 'warn' },
+    severityWhen: [
+      {
+        state: 'coexistence',
+        evidence: 'pnpmLockfileTypo',
+        is: true,
+        severity: { baseline: 'error', strict: 'error' },
+      },
+    ],
+  };
+
+  // Without the check the table selects nothing and the rule keeps the lenient pair, so the state an
+  // author wrote to be strict reads as the one that is not — silently, and in the dangerous direction.
+  assert.throws(
+    () => findingSeverity({ policy, rule: broken, finding: lockfileFinding(policy, true) }),
+    (error) =>
+      error instanceof ConfigError &&
+      error.message.includes('pnpmLockfileTypo') &&
+      error.message.includes('coexistence'),
+  );
+});
+
+test('a state severity of off is refused, because the summary counts states it cannot remove', () => {
+  const policy = resolve({});
+  const offByState = {
+    id: 'foreign-lockfile',
+    severity: { baseline: 'warn', strict: 'warn' },
+    severityWhen: [
+      { state: 'coexistence', evidence: 'pnpmLockfile', is: true, severity: { baseline: 'off', strict: 'off' } },
+    ],
+  };
+
+  assert.throws(
+    () => findingSeverity({ policy, rule: offByState, finding: lockfileFinding(policy, true) }),
+    (error) => error instanceof ConfigError && error.message.includes('not supported for a state'),
+  );
+});
