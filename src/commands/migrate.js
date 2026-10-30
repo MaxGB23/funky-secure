@@ -77,7 +77,8 @@ function unanswered(action, message) {
 }
 
 /** The action of a branch precondition: the removal only makes sense on a feature branch (S5). */
-const FEATURE_BRANCH_ACTION = 'switch to a feature branch and re-run migrate --apply';
+const FEATURE_BRANCH_ACTION =
+  'switch to a feature branch (git switch -c chore/supply-chain-bootstrap) and re-run migrate --apply';
 
 function npmrcLines(text) {
   if (typeof text !== 'string') return [];

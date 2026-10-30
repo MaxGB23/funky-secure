@@ -1,6 +1,6 @@
 ---
 name: funky-secure
-version: 0.8.2
+version: 0.8.3
 description: Bootstrap or audit a pnpm repository's supply-chain posture. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
 ---
 
@@ -43,9 +43,14 @@ It prints the applicable steps in order, and the order is the contract:
 5. `pnpm install` — when another manager's lockfile is still present.
 6. `funky-secure pin --apply` — when the manifest still carries ranges; the workspace block governs
    the dependencies added next, and nothing else clears the ones already there.
-7. `funky-secure migrate --apply` — on a feature branch: it refuses to remove a lockfile on `main`.
-8. A commit staging the lockfile — the last step reads a tracked one.
-9. `funky-secure scan --preset starter` — the reduced audit.
+7. `pnpm install --lockfile-only` — after `pin`, when it wrote: exact specifiers over a lockfile that
+   recorded a range are a desync, and this is what re-resolves it without touching `node_modules`.
+8. `git switch -c chore/supply-chain-bootstrap` — when a foreign lockfile is present, because the next
+   step refuses to remove one on the default branch. The command is printed, not just the requirement.
+9. `funky-secure migrate --apply` — on that feature branch: it refuses to remove a lockfile on `main`.
+10. A commit staging the lockfile — the last step reads a tracked one. When step 9 removed a foreign
+    lockfile, the commit stages that removal too, or the tree ends the path still dirty.
+11. `funky-secure scan --preset starter` — the reduced audit.
 
 **Never install before the block exists.** `savePrefix: ''` and `minimumReleaseAge` only act on an
 install that happens after the managed block exists. Installing first is how a project acquires
