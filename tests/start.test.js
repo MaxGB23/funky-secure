@@ -72,10 +72,11 @@ function ignoredFromGitignore(root, input) {
 
 /**
  * A collector for every probe: reads files from disk, answers git from `inGit`, resolves ignore
- * questions from the repository's own `.gitignore`, and reports no pnpm version at all.
- * @param {{ dir: string, inGit?: boolean }} options
+ * questions from the repository's own `.gitignore`, and answers the pnpm version only when the test
+ * asks for one — a repository whose pin can be written is the only state that needs it.
+ * @param {{ dir: string, inGit?: boolean, version?: string | null }} options
  */
-function fakeCollector({ dir, inGit = true }) {
+function fakeCollector({ dir, inGit = true, version = null }) {
   const root = realpathSync(dir);
   const ok = (stdout) => ({ ok: true, code: 0, stdout, stderr: '' });
   const refuse = { ok: true, code: 1, stdout: '', stderr: '' };
@@ -117,7 +118,16 @@ function fakeCollector({ dir, inGit = true }) {
       }
       return refuse;
     },
-    pnpmVersion: async () => ({ ok: false, reason: 'not-on-path', installations: [] }),
+    pnpmVersion: async () =>
+      version === null
+        ? { ok: false, reason: 'not-on-path', installations: [] }
+        : {
+            ok: true,
+            version,
+            major: Number(version.split('.')[0]),
+            executable: '/tools/pnpm',
+            installations: ['/tools/pnpm'],
+          },
     pnpmConfig: async () => ({ ok: false, reason: 'not-on-path' }),
   };
 }
@@ -134,13 +144,13 @@ function capture() {
 }
 
 /** Runs the real CLI over one directory, with every probe injected. */
-async function start(dir, { inGit = true, argv = ['start'] } = {}) {
+async function start(dir, { inGit = true, version = null, argv = ['start'] } = {}) {
   const streams = {
     cwd: dir,
     env: {},
     stdout: capture(),
     stderr: capture(),
-    collector: fakeCollector({ dir, inGit }),
+    collector: fakeCollector({ dir, inGit, version }),
   };
   const code = await run(argv, streams);
   return { code, stdout: streams.stdout.text, stderr: streams.stderr.text };
@@ -223,6 +233,21 @@ const PIN_COMMIT = 'chore: pin the ranges';
 const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
+/**
+ * The `at-policy` fixture carries the pin and nothing else, which stopped being "at policy" the day the
+ * plan started writing the guard beside an existing pin (0030). The guard belongs in that fixture; it
+ * lives here because `tests/fixtures/` is outside this task's surfaces.
+ * @param {string} dir
+ * @returns {string}
+ */
+function withGuard(dir) {
+  const path = join(dir, 'package.json');
+  const json = JSON.parse(readFileSync(path, 'utf8'));
+  json.devEngines = { packageManager: { name: 'pnpm', version: '12.3.4' } };
+  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
+  return dir;
+}
+
 test('an empty directory is six steps, numbered from one', async (t) => {
   const dir = scratch(t);
   const { code, stdout } = await start(dir, { inGit: false });
@@ -270,7 +295,7 @@ test('a repository with a plan to write names init --apply and how many writes',
 });
 
 test('a repository missing only the lockfile starts at the first dependency', async (t) => {
-  const dir = scratch(t, 'at-policy');
+  const dir = withGuard(scratch(t, 'at-policy'));
   unlinkSync(join(dir, 'pnpm-lock.yaml'));
   const { code, stdout } = await start(dir);
 
@@ -286,7 +311,7 @@ test('a repository missing only the lockfile starts at the first dependency', as
 });
 
 test('a repository past the start says so in one line and names the scan', async (t) => {
-  const dir = scratch(t, 'at-policy');
+  const dir = withGuard(scratch(t, 'at-policy'));
   const { code, stdout } = await start(dir);
 
   assert.equal(code, 0);
@@ -431,6 +456,64 @@ test('a clean tree commits after the writes, because the writes are what dirty i
   );
 });
 
+test('a repository the pin can be written into counts the two writes over its manifest', async (t) => {
+  // With a pnpm answering, `init --apply` plans the pin (W3) and the devEngines guard beside it
+  // (W3b) over the same file. The count is the plan's item count, so it moves by one, and the commit
+  // names `package.json` once because a path is staged once (11.2, 0030).
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'package-lock.json' });
+  const { code, stdout } = await start(dir, { version: '12.3.4' });
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 4 writes (nothing is written)',
+    `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+    '  3  pnpm import',
+    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  5  pnpm install --lockfile-only',
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git switch -c ${FEATURE_BRANCH}`,
+    '  8  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    `  9  git add pnpm-lock.yaml package-lock.json && git commit -m "${TRACK_COMMIT}"`,
+    `  10  ${SCAN_STEP}`,
+  ]);
+  assert.equal(
+    stdout.split('package.json pnpm-workspace.yaml .gitignore').length - 1,
+    1,
+    'two plan items over one file are one path to stage',
+  );
+});
+
+test('a repository that already carries the pin counts the guard as a write', async (t) => {
+  // The repository pinned by an earlier release, which the guard used to leave uncovered: the plan adds
+  // one write over the manifest without touching the pin, and the commit names that file once.
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'pnpm-lock.yaml' });
+  const path = join(dir, 'package.json');
+  const json = JSON.parse(readFileSync(path, 'utf8'));
+  json.packageManager = 'pnpm@12.3.4';
+  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
+  commitAll(dir, 'pin the manager');
+
+  const { code, stdout } = await start(dir, { version: '12.3.4' });
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 3 writes (nothing is written)',
+    `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+    '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  4  pnpm install --lockfile-only',
+    `  5  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  7  ${SCAN_STEP}`,
+  ]);
+  assert.equal(
+    stdout.split('git add package.json pnpm-workspace.yaml').length - 1,
+    1,
+    'the guard and the block are three writes over three files, each staged once',
+  );
+});
+
 test('nothing to pin means no pin commit, and the closing commit stages no manifest', async (t) => {
   // The pin's commit prints only where `pin --apply` prints, because a commit that stages nothing is
   // not a step (0016, 0028). The closing commit keeps naming what it covers: the lockfile the install
@@ -497,8 +580,8 @@ test('renders the same bytes twice over the same state, in every state', async (
     ['empty', scratch(t)],
     ['no manifest', scratch(t)],
     ['writes waiting', scratch(t, 'below-policy')],
-    ['no lockfile', scratch(t, 'at-policy')],
-    ['past the start', scratch(t, 'at-policy')],
+    ['no lockfile', withGuard(scratch(t, 'at-policy'))],
+    ['past the start', withGuard(scratch(t, 'at-policy'))],
   ];
   unlinkSync(join(states[3][1], 'pnpm-lock.yaml'));
 

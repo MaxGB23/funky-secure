@@ -74,16 +74,22 @@ export function renderPlanJson({ tool, command, policy, plan, refused = [], time
 }
 
 /**
- * The paths a plan writes, relative to the repository root and in plan order (RFC 11.2.2). A plan item
- * that is already at policy or refused writes nothing, so it is not staged either.
+ * The paths a plan writes, relative to the repository root and in plan order, one entry per file
+ * (RFC 11.2.2). A plan item that is already at policy or refused writes nothing, so it is not staged
+ * either, and two items over one file — W3 and W3b, or W1a and W1c if they were ever split — name the
+ * file once: `git add` takes a path, not a plan item.
+ *
+ * `init`'s next steps and `start`'s commit line both read this, so the two commands cannot spell the
+ * same plan differently.
  * @param {Array<object>} plan
  * @param {string | null} root
  * @returns {string[]}
  */
-function writtenPaths(plan, root) {
+export function writtenPaths(plan, root) {
   const paths = [];
   for (const item of plan) {
     if (item.state !== 'would-write') continue;
+    if (typeof item.path !== 'string' || item.path === '') continue;
     const path = typeof root === 'string' ? relative(root, item.path) : item.path;
     const normalized = path.split('\\').join('/');
     if (!paths.includes(normalized)) paths.push(normalized);

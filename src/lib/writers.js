@@ -1,5 +1,6 @@
 /**
- * The five writes of `init --apply` (RFC 11.2): W1a, W1b and W1c in one managed block, W2, W3 and W4.
+ * The writes of `init --apply` (RFC 11.2): W1a, W1b and W1c in one managed block, W2, W3, W3b and
+ * W4.
  *
  * A builder receives bytes and resolved facts and returns the bytes it would write; none of them
  * reads or writes a file, so the plan is a pure function of the repository state the scan already
@@ -344,25 +345,11 @@ export function writePackageManagerPin({ packageJsonText = null, version = null 
     };
   }
 
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return {
-      ok: false,
-      state: 'conflict',
-      reason: `${PACKAGE_JSON_RELATIVE} is not valid JSON; it is not rewritten`,
-      key: 'packageManager',
-    };
+  const read = readManifestObject(text);
+  if (read.ok === false) {
+    return { ok: false, state: 'conflict', reason: read.reason, key: 'packageManager' };
   }
-  if (json === null || typeof json !== 'object' || Array.isArray(json)) {
-    return {
-      ok: false,
-      state: 'conflict',
-      reason: `${PACKAGE_JSON_RELATIVE} does not contain a JSON object; it is not rewritten`,
-      key: 'packageManager',
-    };
-  }
+  const json = read.json;
 
   if (typeof version !== 'string' || version === '') {
     return {
@@ -412,20 +399,259 @@ export function writePackageManagerPin({ packageJsonText = null, version = null 
     };
   }
 
-  const indent = detectIndent(text);
-  const eol = text.includes('\r\n') ? '\r\n' : '\n';
   json.packageManager = target;
-  let content = JSON.stringify(json, null, indent);
-  if (eol === '\r\n') content = content.replace(/\n/g, '\r\n');
-  if (text.endsWith('\n') || text.endsWith('\r')) content += eol;
 
   return {
     ok: true,
     operation,
-    content,
+    content: serializeManifest(text, json),
     reason: `sets packageManager to "${target}"`,
     state: 'would-write',
   };
+}
+
+/**
+ * The parsed manifest, or the reason it is not rewritten. W3 and W3b refuse the same files with the
+ * same words, so the two writes cannot disagree about what is readable.
+ * @param {string} text
+ * @returns {{ ok: true, json: object } | { ok: false, reason: string }}
+ */
+function readManifestObject(text) {
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: `${PACKAGE_JSON_RELATIVE} is not valid JSON; it is not rewritten` };
+  }
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) {
+    return {
+      ok: false,
+      reason: `${PACKAGE_JSON_RELATIVE} does not contain a JSON object; it is not rewritten`,
+    };
+  }
+  return { ok: true, json };
+}
+
+/**
+ * The document re-emitted in its own formatting, so a writer changes the keys it owns and nothing
+ * else — one serializer for every write over `package.json`.
+ * @param {string} text the bytes the document was read from
+ * @param {object} json the parsed document, already mutated
+ * @returns {string}
+ */
+function serializeManifest(text, json) {
+  const indent = detectIndent(text);
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  let content = JSON.stringify(json, null, indent);
+  if (eol === '\r\n') content = content.replace(/\n/g, '\r\n');
+  if (text.endsWith('\n') || text.endsWith('\r')) content += eol;
+  return content;
+}
+
+/**
+ * Whether a declared guard already names the pair this writer owns, `name` and `version`.
+ *
+ * Only those two keys are compared. `pnpm init` writes `onFail: "download"` beside them, and any value
+ * of that key is a decision one of the two managers loses (RFC 0030), so a manifest that carries it is
+ * equal — already at policy — and the key is never rewritten.
+ * @param {unknown} found
+ * @param {{ name: string, version: string }} target
+ * @returns {boolean}
+ */
+function isGuardFor(found, target) {
+  if (found === null || typeof found !== 'object' || Array.isArray(found)) return false;
+  return found.name === target.name && found.version === target.version;
+}
+
+/**
+ * W3b: set `devEngines.packageManager` beside the pin W3 writes (RFC 11.2, 0030).
+ *
+ * This is the field npm enforces — `packageManager` is a Corepack pin npm ignores — and it is written
+ * **without** `onFail` on purpose: npm treats the absent value as `error`, pnpm's default is its own
+ * version switch, and any explicit value is a regression for one of the two managers (measured in
+ * `rfcs/0030-the-guard-both-managers-read/evidence/onfail-and-autoswitch.md`).
+ *
+ * The version is the one the pin establishes, never a second opinion: the caller passes the same
+ * value W3 writes, and a plan that establishes no version (a conflicting pin) plans no guard.
+ *
+ * Three states, and only the first writes:
+ *
+ * 1. Absent — no `devEngines`, or one without `packageManager`: `would-write`, keeping every other
+ *    key of `devEngines` (a manifest may already carry `devEngines.runtime`) and of the document.
+ * 2. Declared and naming the pair this writer owns in `name` and `version`: `would-skip`, with the
+ *    file's own bytes, like a matching pin. Any other key of the declared object — `onFail` in
+ *    particular — is neither compared nor rewritten.
+ * 3. Declared and different, or not interpretable: a `conflict` naming the field and the value found,
+ *    and no bytes to write. A value the tool cannot interpret is never treated as absent (0027,
+ *    decision I-58).
+ *
+ * @param {{ packageJsonText?: string | null, version?: string | null }} [options]
+ * @returns {{ ok: true, operation: string, content: string, reason: string, state: string } | { ok: false, state: 'conflict', reason: string, key: string }}
+ */
+export function writeDevEnginesPackageManager({ packageJsonText = null, version = null } = {}) {
+  const text = typeof packageJsonText === 'string' ? packageJsonText : null;
+  const operation = 'set devEngines.packageManager';
+
+  if (text === null) {
+    return {
+      ok: false,
+      state: 'conflict',
+      reason: `${PACKAGE_JSON_RELATIVE} could not be read, so devEngines.packageManager cannot be written`,
+      key: 'devEngines.packageManager',
+    };
+  }
+
+  const read = readManifestObject(text);
+  if (read.ok === false) {
+    return {
+      ok: false,
+      state: 'conflict',
+      reason: read.reason,
+      key: 'devEngines.packageManager',
+    };
+  }
+  const json = read.json;
+
+  if (typeof version !== 'string' || version === '') {
+    return {
+      ok: false,
+      state: 'conflict',
+      reason: 'no pnpm version answered, so there is no devEngines.packageManager to write',
+      key: 'devEngines.packageManager',
+    };
+  }
+
+  const target = { name: 'pnpm', version };
+  const declared = json.devEngines;
+
+  if (typeof declared !== 'undefined') {
+    if (declared === null || typeof declared !== 'object' || Array.isArray(declared)) {
+      return {
+        ok: false,
+        state: 'conflict',
+        reason: `${PACKAGE_JSON_RELATIVE} already declares devEngines as ${JSON.stringify(declared)}, which is not an object; it is not overwritten`,
+        key: 'devEngines',
+      };
+    }
+
+    if (Object.hasOwn(declared, 'packageManager')) {
+      const found = declared.packageManager;
+      if (isGuardFor(found, target)) {
+        return {
+          ok: true,
+          operation,
+          content: text,
+          reason: `${PACKAGE_JSON_RELATIVE} already declares devEngines.packageManager "pnpm@${version}"`,
+          state: 'would-skip',
+        };
+      }
+      return {
+        ok: false,
+        state: 'conflict',
+        reason: `${PACKAGE_JSON_RELATIVE} already declares devEngines.packageManager as ${JSON.stringify(found)}; it is not overwritten with ${JSON.stringify(target)}`,
+        key: 'devEngines.packageManager',
+      };
+    }
+  }
+
+  json.devEngines = { ...(declared ?? {}), packageManager: target };
+
+  return {
+    ok: true,
+    operation,
+    content: serializeManifest(text, json),
+    reason: `sets devEngines.packageManager to ${JSON.stringify(target)} and writes no onFail`,
+    state: 'would-write',
+  };
+}
+
+/**
+ * The version a declared pin establishes, or `null` when the declaration is not a versioned pnpm.
+ *
+ * This reads the manifest, never the machine: the guard the plan writes must carry the version the
+ * manifest ends up declaring, and a `packageManager` the tool keeps is a second opinion if its version
+ * is replaced with whatever pnpm answered (RFC 0030, 11.2).
+ * @param {object | null} json the parsed manifest
+ * @returns {string | null}
+ */
+function declaredPinVersion(json) {
+  const value = json?.packageManager;
+  if (typeof value !== 'string') return null;
+  const match = /^pnpm@(\d+\.\d+\.\d+\S*)$/.exec(value);
+  return match === null ? null : match[1];
+}
+
+/**
+ * W3 and W3b, in the order the plan prints them: the pin, then the guard beside it.
+ *
+ * Two plan items over one file on purpose — the plan is the only place a human sees what will be
+ * written, so a writer that reports one path and changes two keys is the defect 0019 and 0027 both
+ * name. The guard's input is the pin's own bytes when the pin writes, so applying both items leaves one
+ * file carrying both keys instead of the second overwriting the first.
+ *
+ * **The guard is planned whenever the manifest declares no `devEngines.packageManager` and a versioned
+ * pnpm pin is established**, whichever of the two established it (0030):
+ *
+ * - the pin is written by this plan, so the guard rides on the pin's bytes and carries its version;
+ * - the manifest already declares the pin and this plan keeps it, so the guard rides on the manifest's
+ *   own bytes and carries the version that declaration names — never the answering one;
+ * - the pin is a conflict, so nothing establishes a version and no guard is planned. The two
+ *   declarations are then never written disagreeing.
+ *
+ * Nothing is emitted for a file this plan would not touch: a repository carrying both declarations gets
+ * no `package.json` item at all.
+ *
+ * @param {object} ctx
+ * @param {{ version?: string | null, pinFailing?: boolean }} [options] `version` is what the pin writes
+ *   when `pinFailing`, and `pinFailing` is the rule's own verdict on the declaration
+ * @returns {Array<object>} plan items
+ */
+export function planPackageManagerWrites(ctx, { version = null, pinFailing = false } = {}) {
+  const packageJsonText = ctx?.repo?.files?.packageJson?.text ?? null;
+  const packageJson = ctx?.repo?.files?.packageJson?.json ?? null;
+  const items = [];
+
+  let guardInput = packageJsonText;
+  let established = null;
+
+  if (pinFailing) {
+    const pin = writePackageManagerPin({ packageJsonText, version });
+    const pinItem = planTarget(ctx, {
+      relative: PACKAGE_JSON_RELATIVE,
+      operation: 'set packageManager',
+      result: pin,
+    });
+    items.push(pinItem);
+
+    // A conflict — the writer's or the write-target guard's — is the whole answer: nothing establishes
+    // the version the guard would carry.
+    if (pinItem.state === 'conflict') return items;
+
+    established = version;
+    if (pin.ok === true && pin.state === 'would-write') guardInput = pin.content;
+  } else {
+    // The declaration this plan keeps is the one that establishes the version.
+    established = declaredPinVersion(packageJson);
+    if (established === null) return items;
+  }
+
+  if (typeof established !== 'string' || established === '') return items;
+
+  const guard = writeDevEnginesPackageManager({
+    packageJsonText: guardInput,
+    version: established,
+  });
+  const guardItem = planTarget(ctx, {
+    relative: PACKAGE_JSON_RELATIVE,
+    operation: 'set devEngines.packageManager',
+    result: guard,
+  });
+
+  // Already at policy with nothing else over this file: no item, because this plan would not touch it.
+  if (items.length === 0 && guardItem.state === 'would-skip') return items;
+
+  items.push(guardItem);
+  return items;
 }
 
 /**
@@ -563,9 +789,11 @@ export function planStrictConfig(ctx, { configText = null, existingPath = null }
  * Every write the RFC authorizes for this run, in W1..W4 order: a convenience for callers that hold
  * a context and a report. Conditions follow RFC 11.2 and 11.2.1 — W1a when this repository's managed
  * block does not declare the gate, whatever the machine applies, W1b when the preset is `strict`, W1c
- * when the block does not carry `savePrefix: ''`, W2 when `sensitive-ignored` failed, W3 when
- * `package-manager-pin` failed (a conflicting pin becomes a conflict item), W4 when the preset is
- * `strict`. Without a report the rule-driven writes (W2, W3) are not planned: no finding, no fix.
+ * when the block does not carry `savePrefix: ''`, W2 when `sensitive-ignored` failed, W3 and W3b when
+ * `package-manager-pin` failed (a conflicting pin becomes a conflict item and plans no guard), W3b alone
+ * when the pin passes and the manifest declares no guard, and W4 when the preset is `strict`. Without a
+ * report the rule-driven writes (W2, W3) are not planned: no finding, no fix; the guard follows the pin
+ * itself, which the manifest already declares.
  *
  * @param {object} ctx
  * @param {{ policy?: object, severity?: object, report?: object, configText?: string | null, configPath?: string | null }} [options]
@@ -620,18 +848,15 @@ export function planFor(
       finding.status === 'fail' &&
       (finding.code === 'pin-missing' || finding.code === 'pin-conflict'),
   );
-  if (pinFailed) {
-    items.push(
-      planTarget(ctx, {
-        relative: PACKAGE_JSON_RELATIVE,
-        operation: 'set packageManager',
-        result: writePackageManagerPin({
-          packageJsonText: ctx.repo.files?.packageJson?.text ?? null,
-          version: ctx.machine?.version ?? null,
-        }),
-      }),
-    );
-  }
+  // W3 and W3b: the pin when the rule failed, and the guard beside it whenever a versioned pnpm pin is
+  // established and the manifest declares none — a pin-by-pin decision, so a failing and a passing pin
+  // are two inputs to one derivation instead of two conditions in two places.
+  items.push(
+    ...planPackageManagerWrites(ctx, {
+      version: ctx.machine?.version ?? null,
+      pinFailing: pinFailed,
+    }),
+  );
 
   // W4: the strict preset persists itself.
   if (preset === 'strict') {
