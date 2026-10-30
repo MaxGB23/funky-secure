@@ -35,8 +35,8 @@ document that changes without a new record.
 | [0026](0026-a-catalogue-is-not-a-version/rfc.md) | A catalogue is not a version | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.3, §11.9; [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
 | [0027](0027-the-adversary-comes-in/rfc.md) | The adversary comes in | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1, R5 |
 | [0028](0028-the-commit-names-the-pin/rfc.md) | The commit names the pin | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
-| [0029](0029-two-trees-are-not-a-warning/rfc.md) | Two trees are not a warning | `accepted` | — | — | — |
-| [0030](0030-the-guard-both-managers-read/rfc.md) | The guard both managers read | `accepted` | — | — | — |
+| [0029](0029-two-trees-are-not-a-warning/rfc.md) | Two trees are not a warning | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R3, [`docs/spec/policy.md`](../docs/spec/policy.md) §9.1 |
+| [0030](0030-the-guard-both-managers-read/rfc.md) | The guard both managers read | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2, [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1 |
 
 ## Layout
 

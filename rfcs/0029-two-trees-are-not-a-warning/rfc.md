@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Status** | `accepted` — agreed 2026-10-30; coexistence becomes `error` and the standalone case stays `warn`. |
+| **Status** | `implemented` — the rule answers a state-dependent severity and the verdict follows it. |
 | **Revision** | 1 |
-| **Present contract** | [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R3 and [`docs/spec/policy.md`](../../docs/spec/policy.md) §9.1, both of which fix `warn` in every preset. |
+| **Present contract** | [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R3 and [`docs/spec/policy.md`](../../docs/spec/policy.md) §9.1, as amended here. |
 | **Supersedes** | nothing. It narrows a declared deviation from 0001 §4.2, without reopening the goal it defends. |
 
 ## What a reader meets today
