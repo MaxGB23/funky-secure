@@ -94,3 +94,16 @@ introduces is **`W3b`**, following the file-sibling convention the table already
 and `W1c` are three plan items over one file — so it stays a sibling of `W3`: same file, different
 key, and its own plan item so the plan reports it separately. The collision was found while writing
 the spec, before any code existed; nothing else in the record changes.
+
+**2026-10-30 — the guard's condition.** This record said `W3b` shares `W3`'s condition. Read
+literally, that writes the guard only into a repository that has no pin at all — and the repository
+this record was argued from already carries one, written by an earlier release: `packageManager:
+pnpm@12.3.4` and no `devEngines`, which is exactly the case the field report named. Measured on the
+implementation: `init --format json` over that manifest plans the workspace block and the ignore block
+and nothing else, so `init --apply` would never have added the guard where the risk is real.
+
+The condition is the manifest declaring no `devEngines.packageManager` **and** a versioned pnpm pin
+being established — whether this plan writes it or the manifest already declares it. A plan that
+cannot establish a version (the pin is a conflict, which is the state where the tool will not rewrite
+a declaration it did not make) plans no guard, so the two declarations are never written disagreeing.
+Found by the independent verification of the implementation, before it merged.
