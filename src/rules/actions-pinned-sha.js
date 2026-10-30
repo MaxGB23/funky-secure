@@ -96,7 +96,7 @@ function unpinned(path, step) {
     code: 'unpinned-action',
     path,
     line: step.line,
-    message: `${uses} ${what}; pin the 40-character commit SHA so the workflow cannot change under you`,
+    message: `${uses} ${what}; pin the 40-character commit SHA so the workflow cannot change under you — resolve it with git ls-remote against the action's host and keep the tag as the comment, because this tool does not use the network`,
     evidence: { uses: raw, form },
     remediation: remediationFor(at === -1 ? uses : uses.slice(0, at), ref),
   };

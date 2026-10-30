@@ -335,7 +335,7 @@ test('an npm-generated project installs once, and the gate exists before that in
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
-    '  3  pnpm install',
+    '  3  pnpm import',
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  5  pnpm install --lockfile-only',
     `  6  git switch -c ${FEATURE_BRANCH}`,
@@ -345,11 +345,11 @@ test('an npm-generated project installs once, and the gate exists before that in
   ]);
   assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7, 8, 9], 'the numbering stays continuous');
   assert.ok(
-    stdout.indexOf('init --apply') < stdout.indexOf('pnpm install'),
+    stdout.indexOf('init --apply') < stdout.indexOf('pnpm import'),
     'the gate is written before the resolve that reads it',
   );
   assert.ok(
-    stdout.indexOf('pnpm install') < stdout.indexOf('migrate'),
+    stdout.indexOf('pnpm import') < stdout.indexOf('migrate'),
     'migrate needs pnpm-lock.yaml, and pnpm-lock.yaml is what the install writes',
   );
   assert.equal(stdout.includes(ADD_STEP), false, 'a migration is not the place to add a dependency');

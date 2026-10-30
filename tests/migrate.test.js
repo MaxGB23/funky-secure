@@ -504,6 +504,22 @@ test('--from yarn keeps its wording and does not widen the removal list', async 
   assert.deepEqual(readdirSync(dir).sort(), ['package.json', 'pnpm-lock.yaml']);
 });
 
+test('--from a manager the repository does not hold is refused, not relabelled (0021)', async (t) => {
+  // The flag used to change only the header of the plan and then recommend the manager it actually
+  // detected, so `--from npm` over a yarn repository exited 0 while doing nothing npm-like.
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'yarn.lock': '# yarn lockfile v1\n',
+    'pnpm-lock.yaml': 'lockfileVersion: 9\n',
+  });
+
+  const refused = await migrate(t, ['migrate', '--from', 'npm'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(refused.code, 2, 'naming the wrong manager is a usage error, not a repository state');
+  assert.match(refused.stderr, /refusing --from npm/);
+  assert.match(refused.stderr, /yarn.lock/, 'the refusal names what the repository actually holds');
+});
+
 // PRESERVE: a plan-only run never runs the apply-only probes.
 test('a plan-only run does not ask git for the status or the default branch', async (t) => {
   const dir = repository(t, {
