@@ -134,7 +134,9 @@ funky-secure migrate       # the plan for leaving npm or yarn; --apply removes t
 `start` is the entry point for a new project. It answers one question — what do I run first — and it
 answers it in order, with only the steps that still apply, because the order is the point: the
 workspace block has to exist before the install that reads it, and a lockfile can only exist after the
-first dependency. From an empty directory that is `git init`, `pnpm init`,
+first dependency. A directory that is not a repository yet is told to create one and to run `start`
+again, and nothing more: the plan is derived from facts only git can answer, so a plan printed before
+there is a git is a count the next run would contradict. Inside a repository it names
 `funky-secure init --apply`, `pnpm add <your first dependency>`, and `funky-secure scan --preset
 starter` last. A project a framework generator produced is the case the order turns on: while another
 manager's lockfile is still there it names `init --apply` first, then one `pnpm import` under the

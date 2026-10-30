@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { run } from '../src/cli.js';
+import { START_AGAIN_STEP } from '../src/commands/start.js';
 
 /**
  * `start` (record 0003, 11.7): the ordered path from an empty directory to a first scan. One test per
@@ -248,21 +249,36 @@ function withGuard(dir) {
   return dir;
 }
 
-test('an empty directory is six steps, numbered from one', async (t) => {
+test('a directory that is not a repository stops at the step that asks again', async (t) => {
   const dir = scratch(t);
   const { code, stdout } = await start(dir, { inGit: false });
 
   assert.equal(code, 0, 'start is guidance: it exits 0 when nothing is in place');
+  // No plan, no counts, no commit: R7 declares `outside git, skip`, so W2 is not planned until a
+  // repository exists and the dirty-tree question has no git to answer it (0031).
   assert.deepEqual(stepLines(stdout), [
     '  1  git init',
     '  2  pnpm init',
-    '  3  funky-secure init --apply  plan the 1 write (nothing is written)',
-    `  4  git add pnpm-workspace.yaml && git commit -m "${APPLY_COMMIT}"`,
-    `  5  ${ADD_STEP}`,
-    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-    `  7  ${SCAN_STEP}`,
+    `  3  ${START_AGAIN_STEP}`,
   ]);
+  assert.equal(stdout.includes('init --apply'), false, 'no write plan is asserted from a directory');
+  assert.equal(stdout.includes('writes'), false, 'no count is printed that the next run contradicts');
+  assert.equal(stdout.includes('git commit'), false, 'no commit step is printed without a plan');
+  assert.equal(stdout.includes('scan'), false, 'the first run does not prescribe the last step');
   assert.equal(stdout.includes(dir), false, 'no absolute path reaches the steps');
+});
+
+test('a directory with a manifest and no repository is git init, then start again', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(
+    join(dir, 'package.json'),
+    `${JSON.stringify({ name: 'probe', private: true, dependencies: { 'is-number': '^7.0.0' } }, null, 2)}\n`,
+  );
+  const { code, stdout } = await start(dir, { inGit: false });
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), ['  1  git init', `  2  ${START_AGAIN_STEP}`]);
+  assert.equal(stdout.includes('pnpm init'), false, 'the manifest is already there');
 });
 
 test('a repository without a manifest starts at pnpm init', async (t) => {

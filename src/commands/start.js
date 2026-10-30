@@ -42,6 +42,32 @@ const SCAN_STEP = `funky-secure scan --preset ${START_PRESET}`;
  */
 const COMMIT_MESSAGE = 'chore: baseline before funky-secure';
 const COMMIT_STEP = `git add -A && git commit -m "${COMMIT_MESSAGE}"`;
+/** The step that asks a second time, printed where no repository exists yet. */
+export const START_AGAIN_STEP = 'funky-secure start';
+
+/** Why the path stops there: the plan is a measurement, and only a repository can be measured. */
+const WHY_START_AGAIN =
+  'the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git';
+
+/**
+ * The steps printed in a directory that is not a repository yet.
+ *
+ * Nothing past `git init` is derivable there: R7 `sensitive-ignored` declares `outside git, skip`, so W2
+ * is not planned until a repository exists, and the dirty-tree question has no git to answer it. A plan
+ * printed from this directory is one that `init --apply` contradicts one step later (0031).
+ *
+ * @param {{ repo: object | null }} state
+ * @returns {string[]}
+ */
+function pendingBootSteps({ repo }) {
+  const steps = ['git init'];
+  if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
+    steps.push('pnpm init');
+  }
+  steps.push(START_AGAIN_STEP);
+  return steps;
+}
+
 /** The commit that closes the writes: it names them, so an untracked cache beside them stays out. */
 const APPLY_MESSAGE = 'chore: apply funky-secure';
 /** The commit that puts the lockfile under version control, which is what the last scan reads. */
@@ -209,23 +235,29 @@ async function hasUncommitted({ plan, ctx, collector }) {
  * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean }} options
  * @returns {string}
  */
-function renderStart({ off, catalog, pending, migrate }) {
+function renderStart({ off, catalog, pending, migrate, boot = false }) {
   const lines = ['funky-secure start  ·  guidance, nothing is written', ''];
 
   if (pending.length === 0) {
     lines.push(`the repository is past the start; the next step is ${SCAN_STEP}`);
   } else {
-    // The steps are numbered as printed, so a repository missing only the lockfile starts at 1.
-    for (const [index, step] of [...pending, SCAN_STEP].entries()) {
+    // The steps are numbered as printed, so a repository missing only the lockfile starts at 1. A
+    // directory that is not a repository stops at the step that asks again, so it appends no scan.
+    const printed = boot ? pending : [...pending, SCAN_STEP];
+    for (const [index, step] of printed.entries()) {
       lines.push(`  ${index + 1}  ${step}`);
     }
 
-    // `why this order` explains an order, so it is printed only when there is one to explain.
-    lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
-    // Each reason is printed only when its step is, so the block never argues for a step that is absent.
-    if (pending.some((step) => step.includes('git commit'))) lines.push(`  ${WHY_COMMIT_AFTER}`);
-    if (pending.some((step) => step.includes('pin --apply'))) lines.push(`  ${WHY_PIN}`);
-    if (migrate) lines.push(`  ${WHY_MIGRATE_AFTER}`);
+    if (boot) {
+      lines.push('', `  ${WHY_START_AGAIN}`);
+    } else {
+      // `why this order` explains an order, so it is printed only when there is one to explain.
+      lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
+      // Each reason is printed only when its step is, so the block never argues for a step that is absent.
+      if (pending.some((step) => step.includes('git commit'))) lines.push(`  ${WHY_COMMIT_AFTER}`);
+      if (pending.some((step) => step.includes('pin --apply'))) lines.push(`  ${WHY_PIN}`);
+      if (migrate) lines.push(`  ${WHY_MIGRATE_AFTER}`);
+    }
   }
 
   // The same sentence the report prints (S6), from the same helper, so the two cannot disagree about
@@ -256,6 +288,24 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     catalog,
     collector,
   });
+
+  // A directory that is not a repository yet has no plan to print: R7 declares `outside git, skip`, so
+  // W2 is not planned until one exists, and the dirty-tree question has no git to answer it. Printing a
+  // plan from here is what the field loop met as a count that `init --apply` contradicted one step
+  // later, so the path stops at the step that asks again (0031).
+  if (ctx.repo?.inGit !== true) {
+    const bootStarter = resolvePolicy({ catalog, presetFromFlag: START_PRESET, failOn: 'none' });
+    stdout.write(
+      renderStart({
+        off: offByPolicy(bootStarter),
+        catalog,
+        pending: pendingBootSteps({ repo: ctx.repo }),
+        migrate: false,
+        boot: true,
+      }),
+    );
+    return 0;
+  }
 
   // The same plan `init` derives: one number for the steps, and the paths whose state decides whether
   // the write would land over uncommitted work.
