@@ -14,13 +14,15 @@ Reads the resolved presence list for four files at the repository root: `package
 - None present: `pass`.
 - One or more present: a single `fail` finding, code `foreign-lockfile`, listing all of them.
 
-When `pnpm-lock.yaml` coexists with a foreign lockfile, the message uses error-level wording because
-two lockfiles resolve two dependency trees — the state that works locally and breaks in CI. The
-severity stays `warn` in both presets: the product recommends pnpm, it does not require it (G4).
-This is a declared deviation from the friction table of RFC 4.2, where friction 0 would start at
-`error`; G4 wins, and the deviation is recorded here and in RFC 9.1.
+When `pnpm-lock.yaml` coexists with a foreign lockfile, the finding is an `error` in `baseline` and
+in `strict`, because two lockfiles resolve two dependency trees — the state that works locally and
+breaks in CI. A foreign lockfile that stands alone is a `warn`: the product recommends pnpm, it does
+not require it (G4), and that is the case the declared deviation from the friction table of RFC 4.2
+covers, where friction 0 would start at `error`. Coexistence is not a preference — it is two
+resolutions of one manifest — so the deviation does not reach it (RFC 0029).
 
-Friction is 0, severity is `warn` in `baseline` and `warn` in `strict`.
+Friction is 0, and severity follows the state in both presets: `warn` while the foreign lockfile
+stands alone, `error` while `pnpm-lock.yaml` coexists with it.
 
 ## Evidence
 
@@ -45,6 +47,6 @@ exists. Never delete the only lockfile a repository has.
 
 The rule lists files; it does not read them, does not decide which tree wins and deletes nothing.
 
-Severity stays `warn` in `strict` as well as `baseline`, so a repository on another manager is
-warned about, never gated. A repository that intentionally keeps a foreign lockfile can turn the
-rule off, and the documentation still reports it.
+A repository on another manager that holds a single lockfile is warned about, never gated. Only the
+coexistence state is gated, and it is gated in both presets. A repository that intentionally keeps a
+foreign lockfile can turn the rule off, and the documentation still reports it.
