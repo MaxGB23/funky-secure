@@ -129,6 +129,11 @@ deviation is recorded here and in section 9.1.
   not recognize — makes the comparison return `skip: unsupported-lockfile-shape`, never a guessed
   finding. One fixture per supported `lockfileVersion` (currently `9.0`) proves the reader, and a
   future major that moves the shape degrades to `skip`.
+  Ignored top-level sections — `packages`, `settings`, `snapshots`, `time` — are checked at their
+  first level only: the section must be a map, and nothing inside it is read. A list as the value of
+  a key inside one of them is legal and cannot affect a specifier: `bundledDependencies` in every
+  `@next/swc-wasm-*` entry, `transitivePeerDependencies` in vitest's snapshot entries. Refusing those
+  made the comparison a `skip` on the common lockfile, not on an exotic one (0012).
 - **Severity:** `warn` in `baseline`, `error` in `strict` — the user's decision (Appendix A). A
   repository can also split it: `"exact-versions": { "dependencies": "error", "devDependencies": "warn" }`
   is **not** supported in v0.1; it is a v2 extension.

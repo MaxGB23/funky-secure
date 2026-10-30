@@ -18,6 +18,7 @@ document that changes without a new record.
 | [0009](0009-gate-before-resolve/rfc.md) | The gate precedes the first resolve | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0010](0010-remediation-conformance/rfc.md) | Remediation conformance | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R2, R8; [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0011](0011-pin-command/rfc.md) | `pin` | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.9 |
+| [0012](0012-lockfile-lists/rfc.md) | Lists inside ignored lockfile sections | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
 
 ## Layout
 

@@ -1,6 +1,6 @@
 ---
 name: funky-secure
-version: 0.7.0
+version: 0.7.1
 description: Bootstrap or audit a pnpm repository's supply-chain posture. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
 ---
 

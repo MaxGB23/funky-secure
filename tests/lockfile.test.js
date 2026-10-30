@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseLockfile } from '../src/lib/lockfile.js';
+import { parseLockfile, recordedVersion } from '../src/lib/lockfile.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -140,6 +140,67 @@ test('rejects a snapshots section whose layout is a sequence, not a map', () => 
   assert.equal(result.reason, 'unsupported-lockfile-shape');
   assert.match(result.detail, /"snapshots"/);
   assert.match(result.detail, /line 9/);
+});
+
+test('reads a packages entry that carries a list value, as a real lockfile does', () => {
+  // Next ships its wasm swc build with bundledDependencies written as a YAML sequence. The sequence
+  // is inside an ignored section, so it cannot change what an importer specifier resolves to.
+  const text = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    "      '@next/swc-wasm-nodejs':",
+    '        specifier: 15.5.4',
+    '        version: 15.5.4',
+    '',
+    'packages:',
+    '',
+    "  '@next/swc-wasm-nodejs@15.5.4':",
+    '    resolution: {integrity: sha512-AAAA}',
+    '    cpu: [wasm32]',
+    '    bundledDependencies:',
+    "      - '@napi-rs/wasm-runtime'",
+    '      - tslib',
+    '',
+  ].join('\n');
+
+  const result = parseLockfile(text);
+
+  assert.equal(result.supported, true);
+  assert.equal(recordedVersion(result.importers['.'], '@next/swc-wasm-nodejs', 'dependencies'), '15.5.4');
+});
+
+test('reads a snapshots entry that carries a list value, as a real lockfile does', () => {
+  // vitest and its siblings record transitivePeerDependencies as a sequence; this shape used to make
+  // every dependency comparison in the repository return a skip.
+  const text = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    devDependencies:',
+    '      vitest:',
+    '        specifier: 4.1.10',
+    '        version: 4.1.10',
+    '',
+    'snapshots:',
+    '',
+    '  vitest@4.1.10:',
+    '    dependencies:',
+    '      siginfo: 2.0.0',
+    '    transitivePeerDependencies:',
+    '      - msw',
+    '',
+  ].join('\n');
+
+  const result = parseLockfile(text);
+
+  assert.equal(result.supported, true);
+  assert.equal(recordedVersion(result.importers['.'], 'vitest', 'devDependencies'), '4.1.10');
 });
 
 test('never throws on a truncated document and reports an unsupported shape', () => {
