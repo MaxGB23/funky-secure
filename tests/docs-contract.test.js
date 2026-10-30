@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMMANDS, FLAGS } from '../src/cli.js';
+import { COMMANDS, FLAGS, renderHelp } from '../src/cli.js';
 import { catalog } from '../src/rules/index.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -168,6 +168,27 @@ test('the README command list names every command the CLI dispatches', () => {
 
 /// The four exit codes (RFC 10.4, 0008). This is the one class in the audit that was not stale but
 /// wrong: a refusal is `3`, and a page that says `2` tells an integration to retry a decision.
+
+test('the help names all four exit codes, and no summary understates a command that can refuse', () => {
+  // The summary is the first line a reader sees. A command that can refuse must not announce a
+  // three-code surface; `scan` only reads and never refuses, so 0/1/2 is the truth for it (0024). The
+  // four codes are named once, in the block every command shares.
+  const help = renderHelp({ catalog: [] });
+  for (const code of ['0', '1', '2']) {
+    assert.match(help, new RegExp(`[·:] ${code} `), `the help never names exit ${code}`);
+  }
+  assert.match(help, /exit code 3 means/, 'the fourth code is named');
+
+  const writers = new Set(['init', 'pin', 'migrate', 'skill']);
+  for (const command of COMMANDS) {
+    if (!writers.has(command.name)) continue;
+    assert.doesNotMatch(
+      command.summary,
+      /exits? 0, 1 or 2/i,
+      `the ${command.name} summary claims no fourth exit code, but it can refuse`,
+    );
+  }
+});
 
 test('the three pages that explain the contract say a refusal is exit 3', () => {
   for (const page of [['docs', 'cli.md'], ['README.md'], ['docs', 'guide.md']]) {
