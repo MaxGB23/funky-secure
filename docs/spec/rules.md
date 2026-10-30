@@ -65,8 +65,12 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
 A pin the project manages itself (`devEngines.packageManager`, which pnpm 12 writes on `pnpm init`)
 has three states, and the field the tool writes must not collapse them (0030). Declared and **equal to
 the pin** is a fact the tool owns — `init --apply` writes both declarations in one plan (11.2, W3 and
-W3b) — so the rule evaluates the pin instead of skipping it: `pass` when the answering pnpm matches
-the declaration, a conflict when it does not. Declared and **different**
+W3b) — so the declarations agreeing is something the rule can state: when the answering pnpm matches
+the pin as well, the pin is verified and answers `pass` instead of a skip. When the answering pnpm
+does not match, the `skip` stands, because the probe runs outside the repository (7.3, 0019) and its
+version describes the machine while the project re-executes with the version it declares; no
+remediation is named, because rewriting a working project's pin to whatever the auditing machine runs
+is the downgrade 0020 removed. Declared and **different**
 is `skip` with `self-managed-pin`: the project manages its own pnpm, the probe runs outside the
 repository (7.3, 0019), and the pnpm that answers there describes the machine, not that project (0020).
 **Absent** is unchanged: the pin alone is the declaration, and nothing about it is skipped.
