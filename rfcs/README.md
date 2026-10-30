@@ -34,6 +34,7 @@ document that changes without a new record.
 | [0025](0025-the-lockfile-forms/rfc.md) | The lockfile forms real repositories have | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
 | [0026](0026-a-catalogue-is-not-a-version/rfc.md) | A catalogue is not a version | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.3, §11.9; [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R5 |
 | [0027](0027-the-adversary-comes-in/rfc.md) | The adversary comes in | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1, R5 |
+| [0028](0028-the-commit-names-the-pin/rfc.md) | The commit names the pin | `draft` | — | — | — |
 
 ## Layout
 
