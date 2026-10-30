@@ -45,39 +45,51 @@ funky-secure start  ·  guidance, nothing is written
   1  git init
   2  pnpm init
   3  funky-secure init --apply  plan the 1 write (nothing is written)
-  4  pnpm add <your first dependency>
-  5  funky-secure scan --preset starter
+  4  git add -A && git commit -m "chore: baseline before funky-secure"
+  5  pnpm add <your first dependency>
+  6  funky-secure scan --preset starter
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
   only exist after the first add
+  a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run
 
 not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions
 ```
 
-A project a framework generator left behind is the case the order turns on. It has a manifest and a
-lockfile, and the lockfile belongs to another manager, so `migrate` comes first — the posture is
-written once the repository has one package manager — and the first add is never asked for, because
-adding now would write a second lockfile beside the npm one. A `pnpm-lock.yaml` that appears during
-the migration is the migration's business, not this step's. A repository of the shape
-`npm create next-app` leaves behind, from a real run:
+A repository a generator left behind turns the order on, in both of its shapes. With a foreign lockfile
+present, the migration resolves once under the block the first step writes, and the ranges the generator
+brought are cleared before the foreign lockfile goes; the branch is named in the step, because that is
+where the refusal would have taught it. From a real run:
 
 ```text
 funky-secure start  ·  guidance, nothing is written
 
   1  funky-secure init --apply  plan the 3 writes (nothing is written)
-  2  pnpm install
-  3  funky-secure migrate --apply
-  4  funky-secure scan --preset starter
+  2  git add -A && git commit -m "chore: baseline before funky-secure"
+  3  pnpm install
+  4  funky-secure pin --apply  pin the 2 ranges this repository already has
+  5  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main
+  6  funky-secure scan --preset starter
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can
   only exist after the first add
+  a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run
+  the workspace block governs the dependencies added next, and pin is what clears the ranges already in the manifest
   migrate comes after the install, because the install is what writes the lockfile it keeps
 
 not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions
+```
+
+Two details in that list are deliberate. The commit appears **twice** in a repository whose tree already
+carries work: once before the writer, which refuses to land on someone else's uncommitted state, and once
+after, because the writer has just produced that state and the next one refuses it too. And `pin` is
+printed only when the report carries a floating range, with the count, so a repository already at exact
+versions is never told to run a step that would change nothing.
+
 ```
 
 `why this order` is the reason the sequence is not a list: the managed block has to exist before the
@@ -476,7 +488,7 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.7.3" },
+  "tool": { "name": "funky-secure", "version": "0.8.0" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
   "provenance": {
@@ -501,7 +513,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.7.3" },
+  "tool": { "name": "funky-secure", "version": "0.8.0" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -534,7 +546,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.7.3" },
+  "tool": { "name": "funky-secure", "version": "0.8.0" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```
@@ -569,7 +581,7 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.7.3)
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.8.0)
      commit it, so the repository carries the instructions its agents read
 ```
 
@@ -578,7 +590,7 @@ for "not run":
 
 ```text
 $ funky-secure skill --install
-–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.7.3)
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.8.0)
      nothing to do: it already carries this exact version
 ```
 
@@ -588,30 +600,30 @@ whole point: "the bytes differ" is three different situations.
 ```text
 $ funky-secure skill --install < /dev/null          # an older copy is an upgrade
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.7.3 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.8.0 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # same version, edited by hand
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.7.3 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.0 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
 funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
-reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.7.3
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.8.0
 ```
 
 With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
 keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
-funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.7.3
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.0
 funky-secure skill: replacing it discards whatever is there now
 
   1  keep it as it is, and change nothing
-  2  replace it with version 0.7.3
+  2  replace it with version 0.8.0
 
 funky-secure skill: choose 1 or 2 [1]:
 ```

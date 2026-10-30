@@ -232,12 +232,14 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 |---|---|---|
 | 1 | `git init` | the directory is not a git repository |
 | 2 | `pnpm init` | there is no `package.json` |
-| 3 | `git add -A && git commit -m "<message>"` | the plan has a `would-write` item and any of its target paths carries uncommitted work, because `init --apply` refuses to write over a tree whose state is not recorded |
+| 3 | `git add -A && git commit -m "<message>"` | the plan has a `would-write` item and any of its target paths already carries uncommitted work, because `init --apply` refuses to write over a tree whose state is not recorded |
 | 4 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
-| 5 | `pnpm install` | a lockfile another package manager produced is present: the migration resolves once, under the block step 4 wrote |
-| 6 | `funky-secure migrate --apply` | the same condition, after step 5: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted |
-| 7 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
-| 8 | `funky-secure scan --preset starter` | always, and last |
+| 5 | `git add -A && git commit -m "<message>"` | step 4 printed: it leaves the manifest dirty, and the next writer refuses that state. The same step appears twice because it answers two different questions, and each carries a line of its own in `why this order` |
+| 6 | `pnpm install` | a lockfile another package manager produced is present: the migration resolves once, under the block step 4 wrote |
+| 7 | `funky-secure pin --apply` | the report carries a `floating-range` finding, printed with its count: the block governs the dependencies added next, and nothing else clears the ranges the manifest already has (11.9) |
+| 8 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The step names the feature branch it requires, because it refuses to remove a lockfile on `main` (10.4) |
+| 9 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
+| 10 | `funky-secure scan --preset starter` | always, and last |
 
 The order is the cause order and not a preference: a managed block has to exist before the install that
 reads it, the block is only written over a committed tree, and `migrate --apply` refuses to remove a
