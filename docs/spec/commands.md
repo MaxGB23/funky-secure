@@ -245,11 +245,12 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 6 | `pnpm import` | a lockfile another package manager produced is present: it reads that lockfile and writes `pnpm-lock.yaml` with the versions it recorded, under the block step 4 wrote. `pnpm install` never reads a foreign lockfile, so it would resolve from the manifest and discard the pins the repository already has (11.3, 0021) |
 | 7 | `funky-secure pin --apply` | the report carries a `floating-range` finding, printed with its count: the block governs the dependencies added next, and nothing else clears the ranges the manifest already has (11.9) |
 | 8 | `pnpm install --lockfile-only` | step 7 printed: `pin` writes exact specifiers over a lockfile that recorded a range, which is a desync by construction (11.9), and this is the resolve that re-syncs it without touching `node_modules` |
-| 9 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
-| 10 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The refusal names the same `git switch -c` command this step prints, because it refuses to remove a lockfile on `main` (10.4) |
-| 11 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
-| 12 | `git add pnpm-lock.yaml [package.json] [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 10 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018) |
-| 13 | `funky-secure scan --preset starter` | always, and last |
+| 9 | `git add package.json && git commit -m "<message>"` | step 8 printed: the pin leaves the manifest dirty and the next writer refuses that state, so the path prints the commit that produces the clean tree the steps after it require (0018, 0028). It stages the manifest and nothing else, because a commit names what it covers and a generated repository's untracked tool cache stays out of it (0016) |
+| 10 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
+| 11 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The refusal names the same `git switch -c` command this step prints, because it refuses to remove a lockfile on `main` (10.4) |
+| 12 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
+| 13 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest, because after the pin's own commit nothing else on the path writes one (0028) |
+| 14 | `funky-secure scan --preset starter` | always, and last |
 
 The order is the cause order and not a preference: a managed block has to exist before the install that
 reads it, the block is only written over a committed tree, `migrate --apply` refuses to remove a
@@ -257,6 +258,12 @@ foreign lockfile while `pnpm-lock.yaml` is absent, and the branch it needs has t
 The earlier order — `migrate` before the block — could not honour the first rule in any repository
 arriving from npm or yarn: the first resolve happened before the policy that governs it. Steps 4 and 5
 therefore run in that order, and step 3 is asked for before them.
+
+The same rule gives the pin a commit of its own: step 7 leaves `package.json` dirty and the next writer
+refuses that state, so the step that requires a clean tree prints the command that produces it (0018).
+Step 9 is that command, and its message names the pin, because the message outlives this tool's output
+and is read in `git log` months later. It prints only where step 7 printed, because a commit that
+stages nothing is never printed (0016, 0028).
 
 The order is the contract: the managed block has to exist before the install that reads it, because
 `savePrefix: ''` and `minimumReleaseAge` only act on an install that happens after `init --apply`

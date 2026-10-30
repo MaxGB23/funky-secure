@@ -34,10 +34,11 @@ guidance, not a gate. `--help` is the only flag it accepts; a `--preset` on `sta
 
 The steps are `git init`, `pnpm init`, `funky-secure init --apply` with the number of writes it is
 holding, `pnpm import` and `funky-secure migrate --apply` when another manager's lockfile is still
-there, `pnpm add <your first dependency>` when it is not, and `funky-secure scan --preset starter`
-last. Each one prints only while its condition holds: a repository that already has a
-manifest, a lockfile and a commit, but no managed block, is told to run `init --apply` and then
-`scan`, numbered from `1`. An empty directory, from a real run:
+there, `funky-secure pin --apply` and the commit that carries its rewrite of the manifest when the
+repository still has a range, `pnpm add <your first dependency>` when it is not, and `funky-secure
+scan --preset starter` last. Each one prints only while its condition holds: a repository that
+already has a manifest, a lockfile and a commit, but no managed block, is told to run `init --apply`
+and then `scan`, numbered from `1`. An empty directory, from a real run:
 
 ```text
 funky-secure start  ·  guidance, nothing is written
