@@ -46,8 +46,11 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
   version is the declared one, and the version answering on the machine's `PATH` rides along as
   evidence rather than as a verdict (0024). `fail` with `pin-missing` if absent. `skip` with
   `not-pnpm` when the declaration names another manager, because the pnpm question does not apply to
-  it. `fail` with `pin-conflict` for a pnpm declaration this rule cannot compare. If `pnpm --version`
-  fails, `skip` — an unverifiable pin is not a wrong pin.
+  it. `fail` with `pin-unversioned` when the declaration names pnpm and no version, because naming
+  the manager and no version is the state `pin-missing` describes, and a `package.json` that exists
+  and cannot be interpreted is a failure too — `unparseable-package-json`, naming the file and what
+  is wrong with it, in every scope (0027). `fail` with `pin-conflict` for a pnpm declaration this
+  rule cannot compare. If `pnpm --version` fails, `skip` — an unverifiable pin is not a wrong pin.
 - **Evidence:** declared value, observed value, path of the answering binary.
 - **Remediation:** `init --apply` writes `packageManager` when it is missing (auto), and only then; a
   declaration that already exists is never rewritten, whatever the machine runs.
@@ -157,7 +160,12 @@ deviation is recorded here and in section 9.1.
   remedy or compared with a specifier (0014). Anything
   outside that subset — `patchedDependencies`, a second record of the root importer, a `snapshots`
   layout it does not recognize — makes the comparison return `skip: unsupported-lockfile-shape`, never a
-  guessed finding. One fixture per supported `lockfileVersion` (`6.0` and `9.0`) proves the reader, and
+  guessed finding. That skip names `pnpm-lock.yaml` and keeps the line it stopped at, a document that
+  ends inside a block it opened is one of those refused shapes rather than the part it managed to
+  read, and a `packages:` entry in `pnpm-workspace.yaml` that resolves outside the repository root is
+  refuses and reported as `skip: workspace-entry-outside-root` on that file, so an importer never
+  disappears without a word (0027). One fixture per supported `lockfileVersion` (`6.0` and `9.0`)
+  proves the reader, and
   a future major that moves the shape degrades to `skip`.
   Ignored top-level sections — `packages`, `settings`, `snapshots`, `time` — are checked at their
   first level only: the section must be a map, and nothing inside it is read. A list as the value of

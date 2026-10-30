@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { machineFacts, majorOf, repoFacts, workspacePackageEntries } from '../src/lib/targets.js';
+import { machineFacts, majorOf, manifestProblem, repoFacts, workspacePackageEntries } from '../src/lib/targets.js';
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'funky-secure-targets-'));
@@ -113,13 +113,58 @@ test('resolves the root package plus every single-level workspace importer', asy
     facts.importers.map((importer) => importer.dir),
     ['.', 'packages/api', 'packages/web'],
   );
-  assert.deepEqual(facts.skippedGlobs, ['apps/**'], 'a nested glob is reported, never silently ignored');
+  assert.deepEqual(facts.skippedGlobs, [
+    {
+      entry: 'apps/**',
+      code: 'unsupported-glob',
+      reason: 'a nested glob is not expanded, so its directories are not read',
+    },
+  ], 'a nested glob is reported, never silently ignored');
   assert.deepEqual(
     targets.map((target) => `${target.kind}:${target.path ?? ''}`),
     ['repo-root:.', 'importer:.', 'importer:packages/api/package.json', 'importer:packages/web/package.json'],
   );
   assert.equal(facts.inGit, true);
   assert.deepEqual([...facts.tracked], ['package.json', 'pnpm-lock.yaml']);
+});
+
+test('refuses a packages: entry that resolves outside the repository root (S3)', async (t) => {
+  // A `packages:` entry of `..` was expanded as a path: the scan read the parent manifest and printed
+  // `IMPORTER  ../package.json`, a file the repository does not contain. The entry is refused instead,
+  // by the same containment decision the write guard already makes, and it is named where it was
+  // skipped.
+  const outer = scratch(t);
+  const dir = join(outer, 'inner');
+
+  write(outer, 'package.json', JSON.stringify({ name: 'outer', dependencies: { 'left-pad': '^1.3.0' } }));
+  write(dir, 'package.json', JSON.stringify({ name: 'inner' }));
+  write(dir, 'pnpm-workspace.yaml', 'packages:\n  - ..\n  - ../..\n  - packages/*\n');
+  write(dir, 'packages/api/package.json', JSON.stringify({ name: 'api' }));
+
+  const { facts, targets } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(
+    facts.importers.map((importer) => importer.dir),
+    ['.', 'packages/api'],
+    'the parent manifest is never read, and a single-level glob beside it still expands',
+  );
+  assert.deepEqual(
+    targets.map((target) => `${target.kind}:${target.path ?? ''}`),
+    ['repo-root:.', 'importer:.', 'importer:packages/api/package.json'],
+    'no importer target outside the root is resolved',
+  );
+  assert.deepEqual(facts.skippedGlobs, [
+    {
+      entry: '..',
+      code: 'outside-root',
+      reason: 'resolves outside the repository root, so the entry is not expanded',
+    },
+    {
+      entry: '../..',
+      code: 'outside-root',
+      reason: 'resolves outside the repository root, so the entry is not expanded',
+    },
+  ]);
 });
 
 test('records a malformed package.json instead of throwing', async (t) => {
@@ -130,6 +175,35 @@ test('records a malformed package.json instead of throwing', async (t) => {
 
   assert.equal(facts.files.packageJson.json, null);
   assert.match(facts.files.packageJson.error, /JSON/);
+});
+
+test('classifies a package.json it could not interpret, so a rule can name the fact (S4)', async (t) => {
+  // The parse error was stored here and read by nobody, so a truncated manifest or one that opens with
+  // a byte-order mark made the scan pass. The classification lives here, once, and both rules that read
+  // a manifest consume it: a byte-order mark is not "invalid JSON" and says so in its own words.
+  const dir = scratch(t);
+  const read = async () => (await repoFacts({ collector: collectorOver(), cwd: dir, root: dir })).facts.files.packageJson;
+
+  write(dir, 'package.json', '\uFEFF{ "name": "bom" }\n');
+  assert.deepEqual(manifestProblem(await read()), {
+    code: 'byte-order-mark',
+    detail: 'starts with a byte-order mark (U+FEFF), which JSON does not allow',
+  });
+
+  write(dir, 'package.json', '{ "name": "truncated"');
+  const truncated = manifestProblem(await read());
+  assert.equal(truncated.code, 'invalid-json');
+  assert.match(truncated.detail, /is not valid JSON \(/);
+
+  write(dir, 'package.json', '[]');
+  assert.deepEqual(manifestProblem(await read()), {
+    code: 'not-an-object',
+    detail: 'does not contain a JSON object',
+  });
+
+  write(dir, 'package.json', JSON.stringify({ name: 'readable' }));
+  assert.equal(manifestProblem(await read()), null, 'a manifest that parsed is not a problem');
+  assert.equal(manifestProblem(null), null, 'an absent manifest is absent, not unreadable');
 });
 
 test('works outside git, checking only what exists', async (t) => {

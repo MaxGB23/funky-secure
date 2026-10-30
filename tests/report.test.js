@@ -343,6 +343,27 @@ test('a skip with no target block names itself and its reason (0024, S12)', () =
   assert.ok(text.includes('overrides'), 'and so is the reason it could not read the lockfile');
 });
 
+test('a label wider than the column separates from its count like every other label (S2)', () => {
+  // A run printed `not verified1 rule did not answer`: `not verified` is twelve characters, the gutter
+  // is nine, and `padEnd` pads nothing — the label ran straight into its own count while every shorter
+  // label kept its two spaces.
+  const report = reportWith([
+    finding({ rule: 'quarantine', status: 'skip', target: 'importer', path: undefined, message: 'skipped: a reason' }),
+    finding({ rule: 'exact-versions', status: 'skip', target: 'importer', path: undefined, message: 'skipped: another' }),
+  ]);
+  const lines = renderHuman(report).split('\n');
+
+  const head = lines.find((line) => line.startsWith('not verified'));
+  assert.equal(head, 'not verified  2 rules did not answer', 'the label and its count are separated, never concatenated');
+  for (const label of ['summary', 'verdict', 'not verified']) {
+    const line = lines.find((entry) => entry.startsWith(label));
+    assert.match(line, new RegExp(`^${label} {2}\\S`), `${label} separates from its value the same way`);
+  }
+
+  const first = lines.slice(lines.indexOf(head)).find((line) => line.includes('–  Quarantine'));
+  assert.equal(first.indexOf('–'), head.indexOf('2 rules'), 'the block hangs under the value, not under the label');
+});
+
 test('a skip a target block already printed is not repeated (0024, S12)', () => {
   const text = renderHuman(reportWith([finding({ status: 'skip', message: 'a single reason' })]));
 

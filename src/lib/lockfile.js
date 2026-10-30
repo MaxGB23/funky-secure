@@ -24,6 +24,10 @@
  *   `snapshots` layout the reader does not recognize, which here means a non-map section).
  * - A concatenated lockfile is read document by document; a later document's importer path replaces
  *   an earlier one. This repository's own lockfile is a two-document stream.
+ * - A document that ends inside a block is refused (S7): a key with no entry under it, or a flow
+ *   collection that outlives its line, is a truncation and not a document this reader read. A cut at a
+ *   line boundary that leaves every block it opened closed is not detectable here and is not claimed
+ *   to be, because refusing it would mean inferring which sections a lockfile should have.
  * - The inline dependency form carries no resolved version, so `version` is `null` for it.
  */
 
@@ -189,11 +193,79 @@ function mapEntries(lines, context) {
 }
 
 /**
- * Confirms that an ignored section is a map of entries, without modeling its content.
- * @param {LockfileLine[]} children
- * @param {string} section
- * @param {number} line
+ * The flow collection a line opens and never closes, or `null` when every one of them closes on it.
+ *
+ * A truncated document can cut a flow collection in half (`resolution: {integrity: sha512-...`), and
+ * braces inside a quoted scalar are text, not structure, so the walk follows the same quote rules the
+ * comment stripper does. pnpm writes every flow collection on one line, so a collection still open at
+ * the end of its line is a document this reader cannot claim to have read (S7).
+ *
+ * @param {string} text
+ * @returns {'{' | '[' | null}
  */
+function unclosedFlow(text) {
+  /** @type {Array<string>} */
+  const open = [];
+  let quote = null;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quote === "'") {
+      if (ch === "'") quote = null;
+      continue;
+    }
+    if (quote === '"') {
+      if (ch === '\\') {
+        i += 1;
+        continue;
+      }
+      if (ch === '"') quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '{' || ch === '[') open.push(ch);
+    else if (ch === '}' || ch === ']') open.pop();
+  }
+  const last = open.pop();
+  return last ?? null;
+}
+
+/**
+ * Confirms that a document is structurally complete (S7): every line that opens a block is followed by
+ * a line inside it, and every flow collection a line opens closes on that line.
+ *
+ * The reader stops at the subset it needs, so a document truncated anywhere else was accepted as
+ * supported: `packages:` with half its tail missing, a package entry whose block never closes, an
+ * importer field the reader does not model (`packageManagerDependencies:`) with nothing under it, or a
+ * `resolution: {integrity: sha512-...` cut before its closing brace. The rule then compared every
+ * specifier against an incomplete document and said nothing about it.
+ *
+ * Two properties are checked and only these two, because they are the ones a truncation leaves behind
+ * without the reader having to model any section's content: a key with no entry under it, and a flow
+ * collection still open at the end of its line (pnpm writes every flow collection on one line, so a
+ * `{` that outlives its line was cut). A cut at a line boundary that leaves every block it opened
+ * closed is not detectable here and is not claimed to be: refusing it would mean inferring which
+ * sections a lockfile "should" have, and a valid lockfile with a short section would be refused.
+ *
+ * @param {LockfileLine[]} lines the lines of one document, without its `---` marker
+ */
+function validateDocumentStructure(lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const kv = splitKeyValue(line.text);
+    if (kv !== null && kv.value === '') {
+      const next = lines[index + 1];
+      if (next === undefined || next.indent <= line.indent) {
+        fail(`the document ends inside a block: "${kv.key}" at line ${line.no} opens a map with no entry`);
+      }
+    }
+    const open = unclosedFlow(line.text);
+    if (open !== null) fail(`the "${open}" opened at line ${line.no} is never closed`);
+  }
+}
+
 /**
  * Checks that an ignored top-level section is a map, and stops there.
  *
@@ -207,6 +279,10 @@ function mapEntries(lines, context) {
  * its siblings). Three of seven real lockfiles on the author's machine were refused this way, each
  * making every dependency comparison in that repository a skip — a valid YAML list inside an ignored
  * section cannot lie about a specifier, so refusing it bought no soundness and cost the rule.
+ *
+ * Not recursing is not the same as not looking: `validateDocumentStructure` walks every line of the
+ * document for the shapes a truncation leaves behind (S7), which is a question about structure and
+ * never about content.
  *
  * @param {LockfileLine[]} children the section's body
  * @param {string} section the top-level key, for the message
@@ -489,6 +565,7 @@ export function parseLockfile(text) {
     let documentLine = 1;
 
     const applyDocument = () => {
+      validateDocumentStructure(document);
       let i = 0;
       while (i < document.length) {
         const line = document[i];

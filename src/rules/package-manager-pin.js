@@ -5,6 +5,7 @@
  * and never touches the filesystem, the machine or the clock.
  */
 
+import { manifestProblem } from '../lib/targets.js';
 import {
   PACKAGE_JSON_RELATIVE,
   findingsOf,
@@ -46,6 +47,23 @@ function isVersionedPnpm(declared) {
   return /^pnpm@\d+\.\d+\.\d+/.test(declared);
 }
 
+/**
+ * Whether the declaration names pnpm and gives no version to verify (`"pnpm"`, `"pnpm@"`).
+ *
+ * This is not `pin-missing`: the field is present, and `writePackageManagerPin` refuses to replace a
+ * declaration it finds, so the auto fix that `pin-missing` prints could never run here. It is not
+ * `not-pnpm` either — a value that names pnpm is not evidence that the repository is on another
+ * manager, and saying so printed "package.json declares pnpm, so this repository is not on pnpm"
+ * (S5). There is simply no pin to compare, which is a skip, and `--require-verified` is the gate that
+ * turns an unverified pin into a failing run.
+ *
+ * @param {string} declared
+ * @returns {boolean}
+ */
+function namesPnpmWithoutVersion(declared) {
+  return /^pnpm@?\s*$/.test(declared);
+}
+
 function readablePackageJson(ctx) {
   const file = ctx.repo?.files?.packageJson ?? null;
   if (file === null) return false;
@@ -63,7 +81,7 @@ export default {
   question:
     'Does package.json declare the package manager, and does the declaration match the pnpm actually answering?',
   detection:
-    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing or malformed package.json is a skip (no-package-json).',
+    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a declaration that names pnpm and no version fails with its own code (pin-unversioned), because naming the manager and no version is the state pin-missing describes — there is no pin — while the declaration itself is kept and never rewritten, so the fix is manual; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing package.json is a skip (no-package-json), and a package.json that exists but cannot be interpreted is a failure (unparseable-package-json) that names the file and what is wrong with it, whatever the scope.',
   evidence: '{ declared, observed, executable }',
   remediation:
     'auto — funky-secure init --apply writes packageManager when it is missing, and only then; a pin that is already declared is never rewritten, whatever the machine runs.',
@@ -76,6 +94,26 @@ export default {
     const executable = ctx.machine?.executable ?? null;
     const declared = declaredPin(ctx);
     const evidence = { declared, observed, executable };
+
+    // A manifest that exists and cannot be interpreted is not an absent manifest, and no machine fact
+    // makes it readable (S4). The check comes before the machine ones because the observed defect was
+    // `scan --scope repo`, where every machine check short-circuits to a skip and the run passed.
+    const file = ctx.repo?.files?.packageJson ?? null;
+    const problem = manifestProblem(file);
+    if (problem !== null) {
+      return [
+        {
+          status: 'fail',
+          code: 'unparseable-package-json',
+          path: PATH,
+          message: `package.json ${problem.detail}, so the packageManager pin cannot be read`,
+          evidence: { ...evidence, problem: problem.code },
+          // Nothing is written to a file this rule could not read: `plan()` refuses it for the same
+          // reason, so a remediation here would describe a write that cannot happen.
+          remediation: { kind: 'none' },
+        },
+      ];
+    }
 
     if (ctx.machine === null) {
       return [
@@ -107,17 +145,13 @@ export default {
       ];
     }
 
-    const file = ctx.repo?.files?.packageJson ?? null;
-    if (file === null || file.json === null || typeof file.json !== 'object') {
+    if (file === null) {
       return [
         {
           status: 'skip',
           code: 'no-package-json',
           path: PATH,
-          message:
-            file === null
-              ? 'skipped: the repository root has no package.json to read the pin from'
-              : 'skipped: package.json could not be parsed, so the pin cannot be read',
+          message: 'skipped: the repository root has no package.json to read the pin from',
           evidence,
           remediation: { kind: 'none' },
         },
@@ -171,6 +205,30 @@ export default {
             message: `package.json declares ${declared}, which pnpm answers inside this project; the pnpm on this machine's PATH is pnpm@${observed}, and that difference describes the machine, not the repository`,
             evidence,
             remediation: { kind: 'none' },
+          },
+        ];
+      }
+
+      // A declaration that names pnpm and no version: the field is present and pins nothing, so there
+      // is no pin to verify. It is its own case, and never the "not on pnpm" one (S5).
+      if (namesPnpmWithoutVersion(declared)) {
+        // A declaration that names the manager and no version is the state `pin-missing` describes:
+        // there is no pin. It is a failure, not a skip — "there is no pin to verify" is the defect, not a
+        // reason the question does not apply. The fix cannot be automatic, because `init --apply` never
+        // rewrites a declaration it finds, so the remediation is manual and names the value to write.
+        return [
+          {
+            status: 'fail',
+            code: 'pin-unversioned',
+            path: PATH,
+            message: `package.json declares packageManager "${declared}", which names pnpm and no version, so no pin can be verified; declaring "packageManager": "pnpm@${observed}" makes it verifiable`,
+            evidence,
+            // A manual remediation is a command a human can run, not a description of an edit:
+            // `pnpm pkg set` is the same verb the other manual routes name, and it keeps the JSON valid.
+            remediation: {
+              kind: 'manual',
+              command: `pnpm pkg set packageManager="pnpm@${observed}"`,
+            },
           },
         ];
       }

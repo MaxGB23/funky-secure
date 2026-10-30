@@ -6,6 +6,7 @@ import {
   trackedNpmrcFacts,
   workspaceBlockFacts,
   writeGitignoreBlock,
+  writePackageManagerPin,
   writeQuarantineGate,
 } from '../src/lib/writers.js';
 
@@ -90,6 +91,55 @@ test('a block that already carries every key is a would-skip with the file own b
   assert.equal(result.ok, true);
   assert.equal(result.state, 'would-skip');
   assert.equal(result.content, text);
+});
+
+test('a packageManager that is not a string is a conflict, never an absent pin (S1)', () => {
+  // `init --apply` rewrote `"packageManager": {"name":"pnpm","version":"10.0.0"}` to
+  // `"packageManager": "pnpm@12.3.4"` and exited 0: a value the tool cannot interpret was read as a
+  // value the user never wrote, and the user's own bytes were destroyed.
+  for (const value of [
+    '{"name":"pnpm","version":"10.0.0"}',
+    '["pnpm@10.0.0"]',
+    'null',
+    '10',
+    'true',
+  ]) {
+    const text = `{\n  "name": "object",\n  "packageManager": ${value}\n}\n`;
+    const result = writePackageManagerPin({ packageJsonText: text, version: '12.3.4' });
+
+    assert.equal(result.ok, false, `${value} is not a missing pin`);
+    assert.equal(result.state, 'conflict');
+    assert.equal(result.key, 'packageManager');
+    assert.equal(result.content, undefined, 'a refused pin carries no bytes to write');
+    assert.equal(
+      result.reason,
+      `package.json already declares packageManager as ${value}, which is not a string; it is not overwritten`,
+    );
+  }
+});
+
+test('a missing, matching and different pin keep their three answers (W3)', () => {
+  const missing = writePackageManagerPin({
+    packageJsonText: '{\n  "name": "plain"\n}\n',
+    version: '12.3.4',
+  });
+  assert.equal(missing.state, 'would-write');
+  assert.equal(missing.content, '{\n  "name": "plain",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+
+  const text = '{\n  "name": "pinned",\n  "packageManager": "pnpm@12.3.4"\n}\n';
+  const same = writePackageManagerPin({ packageJsonText: text, version: '12.3.4' });
+  assert.equal(same.state, 'would-skip');
+  assert.equal(same.content, text, 'the file keeps its own bytes');
+
+  const different = writePackageManagerPin({
+    packageJsonText: '{\n  "name": "other",\n  "packageManager": "npm@10.0.0"\n}\n',
+    version: '12.3.4',
+  });
+  assert.equal(different.state, 'conflict');
+  assert.equal(
+    different.reason,
+    'package.json already declares packageManager "npm@10.0.0"; it is not overwritten',
+  );
 });
 
 test('a token written with spaces around the equals sign is not a tokenless file', () => {
