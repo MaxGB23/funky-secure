@@ -234,7 +234,8 @@ test('a repository below policy gets exactly one managed block with the baseline
   assert.match(gitignore, /^\.env$/m);
   assert.match(gitignore, /^\.npmrc$/m);
 
-  assert.equal(writeCount(applied.stdout.text), 3);
+  // Two writes over package.json now: the pin (W3) and the devEngines guard beside it (W3b).
+  assert.equal(writeCount(applied.stdout.text), 4);
 });
 
 test('under --preset strict the block also carries the 4320 floor and the config is written', async (t) => {
@@ -245,14 +246,20 @@ test('under --preset strict the block also carries the 4320 floor and the config
   assert.equal(await preview.run(['init', '--preset', 'strict', '--format', 'json']), 0);
   const document = JSON.parse(preview.stdout.text);
   assert.deepEqual(
-    document.plan.map((item) => item.target),
-    ['package.json', 'pnpm-workspace.yaml', '.gitignore', 'funky-secure.config.json'],
+    document.plan.map((item) => [item.target, item.operation]),
+    [
+      ['package.json', 'set packageManager'],
+      ['package.json', 'set devEngines.packageManager'],
+      ['pnpm-workspace.yaml', 'managed block'],
+      ['.gitignore', 'managed block'],
+      ['funky-secure.config.json', 'set preset'],
+    ],
   );
   assert.ok(document.plan.every((item) => item.state === 'would-write'));
 
   const applied = runner(dir, { tracked });
   assert.equal(await applied.run(['init', '--preset', 'strict', '--apply']), 0);
-  assert.equal(writeCount(applied.stdout.text), 4);
+  assert.equal(writeCount(applied.stdout.text), 5);
 
   const workspace = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
   assert.equal(blockCount(workspace), 1);
@@ -314,12 +321,152 @@ test('package.json gains packageManager and keeps its four-space indentation and
   assert.ok(text.startsWith('{\n    "name"'), text);
   assert.ok(text.endsWith('}\n'), 'the trailing newline is preserved');
   assert.ok(!text.endsWith('\n\n'));
-  assert.match(text, /^    "packageManager": "pnpm@12\.3\.4"$/m);
+  assert.match(text, /^    "packageManager": "pnpm@12\.3\.4",$/m);
+  assert.match(text, /^    "devEngines": \{$/m, 'the guard lands at the same depth as its sibling');
+  assert.match(text, /^        "packageManager": \{$/m, 'and one level in, in the file own indent');
   assert.deepEqual(JSON.parse(text), {
     name: 'fixture-four-space',
     private: true,
     packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
   });
+});
+
+test('init --apply writes the guard beside the pin, without onFail, keeping every other key (W3b)', async (t) => {
+  // RFC 0030: the field npm enforces is written in the same plan as the pin, and `onFail` is never
+  // written — npm treats the absent value as `error` and pnpm's default is its own version switch.
+  const dir = scratch(t);
+  const manifest = {
+    name: 'guarded',
+    private: true,
+    scripts: { build: 'next build' },
+    devEngines: { runtime: { name: 'node', version: '>=22' } },
+  };
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const pins = JSON.parse(preview.stdout.text).plan.filter((item) => item.target === 'package.json');
+  assert.deepEqual(
+    pins.map((item) => [item.operation, item.state]),
+    [
+      ['set packageManager', 'would-write'],
+      ['set devEngines.packageManager', 'would-write'],
+    ],
+    'the plan reports the guard as its own item, after the pin',
+  );
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+
+  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.deepEqual(json, {
+    name: 'guarded',
+    private: true,
+    scripts: { build: 'next build' },
+    devEngines: {
+      runtime: { name: 'node', version: '>=22' },
+      packageManager: { name: 'pnpm', version: '12.3.4' },
+    },
+    packageManager: 'pnpm@12.3.4',
+  });
+  assert.equal(
+    Object.hasOwn(json.devEngines.packageManager, 'onFail'),
+    false,
+    'the absent value is the one both managers read the way the guard needs them to',
+  );
+});
+
+test('a guard already equal to the pin is planned as already at policy and writes nothing (W3b)', async (t) => {
+  const dir = scratch(t);
+  const manifest = {
+    name: 'already-guarded',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+  };
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const pins = JSON.parse(preview.stdout.text).plan.filter((item) => item.target === 'package.json');
+  assert.deepEqual(
+    pins.map((item) => [item.operation, item.state]),
+    [
+      ['set packageManager', 'would-write'],
+      ['set devEngines.packageManager', 'would-skip'],
+    ],
+  );
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+
+  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.deepEqual(
+    json.devEngines,
+    { packageManager: { name: 'pnpm', version: '12.3.4' } },
+    'a field already at policy keeps its own bytes',
+  );
+  assert.equal(json.packageManager, 'pnpm@12.3.4');
+});
+
+test('a declared guard that differs is a conflict that leaves the field as it was written (W3b)', async (t) => {
+  const dir = scratch(t);
+  const declared = { name: 'yarn', version: '4.0.0' };
+  writeFileSync(
+    join(dir, 'package.json'),
+    `${JSON.stringify({ name: 'declared-guard', devEngines: { packageManager: declared } }, null, 2)}\n`,
+  );
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const pins = JSON.parse(preview.stdout.text).plan.filter((item) => item.target === 'package.json');
+  assert.deepEqual(
+    pins.map((item) => [item.operation, item.state]),
+    [
+      ['set packageManager', 'would-write'],
+      ['set devEngines.packageManager', 'conflict'],
+    ],
+  );
+  const refusal = pins[1];
+  assert.equal(refusal.digest, null, 'a conflict carries no bytes to write');
+  assert.match(refusal.reason, /devEngines\.packageManager/);
+  assert.match(refusal.reason, /"name":"yarn","version":"4\.0\.0"/, 'the reason names the value found');
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+
+  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.deepEqual(json.devEngines.packageManager, declared, 'the declaration is never overwritten');
+  assert.equal(json.packageManager, 'pnpm@12.3.4', 'the pin the plan does establish is written');
+});
+
+test('a pin the plan cannot establish writes no guard, and package.json keeps its bytes (W3b)', async (t) => {
+  // The guard's version is the one the pin establishes, never a second opinion. A pin that is a
+  // conflict establishes nothing, so the plan holds one item for package.json and no version to
+  // disagree with.
+  const dir = scratch(t);
+  const text = '{\n  "name": "uncomparable",\n  "packageManager": "pnpm@^12"\n}\n';
+  writeFileSync(join(dir, 'package.json'), text);
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const pins = JSON.parse(preview.stdout.text).plan.filter((item) => item.target === 'package.json');
+  assert.deepEqual(
+    pins.map((item) => [item.operation, item.state]),
+    [['set packageManager', 'conflict']],
+  );
+  assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), text);
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+  assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), text, 'the file stays byte-identical');
 });
 
 test('a repository on another manager is a skip: the plan never replaces its manager', async (t) => {
@@ -376,6 +523,7 @@ test('the JSON plan document carries target, operation, absolute path, digest, r
     document.plan.map((item) => [item.target, item.state]),
     [
       ['package.json', 'would-write'],
+      ['package.json', 'would-write'],
       ['pnpm-workspace.yaml', 'would-write'],
       ['.gitignore', 'would-write'],
     ],
@@ -408,7 +556,7 @@ test('a dirty target file exits 3 naming the file unless --allow-dirty', async (
   assert.match(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), /minimumReleaseAgeStrict: true/);
 });
 
-test('planFor composes W1, W2 and W3 from the context and a report, and adds W4 under strict', async (t) => {
+test('planFor composes W1, W2, W3 and W3b from the context and a report, and adds W4 under strict', async (t) => {
   const dir = scratch(t, 'below-policy');
   const collector = collectorFor({ root: dir, tracked: ['package.json', 'pnpm-lock.yaml'] });
   const { ctx, policy, report } = await collectScan({
@@ -423,7 +571,7 @@ test('planFor composes W1, W2 and W3 from the context and a report, and adds W4 
   const baseline = planFor(ctx, { policy, report });
   assert.deepEqual(
     baseline.map((item) => item.target),
-    ['pnpm-workspace.yaml', '.gitignore', 'package.json'],
+    ['pnpm-workspace.yaml', '.gitignore', 'package.json', 'package.json'],
   );
   assert.ok(baseline.every((item) => item.state === 'would-write'));
   assert.ok(
@@ -435,7 +583,7 @@ test('planFor composes W1, W2 and W3 from the context and a report, and adds W4 
   const strict = planFor(ctx, { policy: strictPolicy, report, configText: null });
   assert.deepEqual(
     strict.map((item) => item.target),
-    ['pnpm-workspace.yaml', '.gitignore', 'package.json', 'funky-secure.config.json'],
+    ['pnpm-workspace.yaml', '.gitignore', 'package.json', 'package.json', 'funky-secure.config.json'],
   );
   assert.ok(strict[0].content.includes('minimumReleaseAge: 4320'));
 

@@ -5,6 +5,7 @@ import { BEGIN, END } from '../src/lib/managed-block.js';
 import {
   trackedNpmrcFacts,
   workspaceBlockFacts,
+  writeDevEnginesPackageManager,
   writeGitignoreBlock,
   writePackageManagerPin,
   writeQuarantineGate,
@@ -140,6 +141,156 @@ test('a missing, matching and different pin keep their three answers (W3)', () =
     different.reason,
     'package.json already declares packageManager "npm@10.0.0"; it is not overwritten',
   );
+});
+
+test('the guard is written beside the pin and never carries onFail (W3b)', () => {
+  // RFC 0030: npm treats the absent value as `error` and pnpm's default is its own version switch, so
+  // any explicit `onFail` is a regression for one of the two managers. The key is omitted, not set to a
+  // value that happens to work on one of them.
+  const result = writeDevEnginesPackageManager({
+    packageJsonText: '{\n  "name": "plain"\n}\n',
+    version: '12.3.4',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.operation, 'set devEngines.packageManager');
+  assert.equal(result.state, 'would-write');
+  assert.equal(
+    result.content,
+    '{\n  "name": "plain",\n  "devEngines": {\n    "packageManager": {\n      "name": "pnpm",\n      "version": "12.3.4"\n    }\n  }\n}\n',
+  );
+  const written = JSON.parse(result.content).devEngines.packageManager;
+  assert.deepEqual(written, { name: 'pnpm', version: '12.3.4' });
+  assert.equal(Object.hasOwn(written, 'onFail'), false, 'the key is absent, never a value');
+});
+
+test('the guard keeps every other devEngines key and every other manifest key (W3b)', () => {
+  const text = `{
+  "name": "guarded",
+  "private": true,
+  "scripts": {
+    "build": "next build"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22"
+    }
+  }
+}
+`;
+
+  const result = writeDevEnginesPackageManager({ packageJsonText: text, version: '12.3.4' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.state, 'would-write');
+  assert.ok(result.content.startsWith('{\n  "name"'), 'the manifest keeps its own indentation');
+  assert.ok(result.content.endsWith('}\n'), 'and its trailing newline');
+  assert.deepEqual(JSON.parse(result.content), {
+    name: 'guarded',
+    private: true,
+    scripts: { build: 'next build' },
+    devEngines: {
+      runtime: { name: 'node', version: '>=22' },
+      packageManager: { name: 'pnpm', version: '12.3.4' },
+    },
+  });
+});
+
+test('a guard already equal to the pin is already at policy and keeps the file bytes (W3b)', () => {
+  const text = `{
+  "name": "guarded",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.3.4"
+    }
+  }
+}
+`;
+
+  const result = writeDevEnginesPackageManager({ packageJsonText: text, version: '12.3.4' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.state, 'would-skip');
+  assert.equal(result.content, text, 'the file keeps its own bytes');
+  assert.equal(result.reason, 'package.json already declares devEngines.packageManager "pnpm@12.3.4"');
+});
+
+test('a guard equal in name and version is already at policy whatever onFail says (W3b)', () => {
+  // `pnpm init` writes `onFail: "download"`. The pair this writer owns is the name and the version, so
+  // a matching pair is the equal state, and the key is left exactly as the manifest wrote it: writing
+  // anything there is a regression for one of the two managers (0030).
+  for (const text of [
+    '{\n  "name": "guarded",\n  "devEngines": {\n    "packageManager": {\n      "name": "pnpm",\n      "version": "12.3.4",\n      "onFail": "download"\n    }\n  }\n}\n',
+    '{\n  "name": "guarded",\n  "devEngines": {\n    "packageManager": {\n      "version": "12.3.4",\n      "name": "pnpm",\n      "onFail": "error"\n    }\n  }\n}\n',
+  ]) {
+    const result = writeDevEnginesPackageManager({ packageJsonText: text, version: '12.3.4' });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.state, 'would-skip');
+    assert.equal(result.content, text, 'the field keeps its own keys and its own bytes');
+  }
+});
+
+test('a declared guard that differs is a conflict that names the value found (W3b)', () => {
+  // A value the tool cannot interpret is never treated as absent (0027, decision I-58). Every shape
+  // below is something a human wrote, and the writer has no business replacing it.
+  const target = '{"name":"pnpm","version":"12.3.4"}';
+
+  for (const value of [
+    '"pnpm@12.3.4"',
+    '12',
+    'null',
+    '["pnpm@12.3.4"]',
+    '{"version":"12.3.4"}',
+    '{"name":"pnpm"}',
+    '{"name":"yarn","version":"4.0.0"}',
+    '{"name":"pnpm","version":"12.16.0"}',
+  ]) {
+    const text = `{\n  "name": "declared",\n  "devEngines": {\n    "packageManager": ${value}\n  }\n}\n`;
+    const result = writeDevEnginesPackageManager({ packageJsonText: text, version: '12.3.4' });
+
+    assert.equal(result.ok, false, `${value} is not a missing guard`);
+    assert.equal(result.state, 'conflict');
+    assert.equal(result.key, 'devEngines.packageManager');
+    assert.equal(result.content, undefined, 'a refused guard carries no bytes to write');
+    assert.equal(
+      result.reason,
+      `package.json already declares devEngines.packageManager as ${JSON.stringify(JSON.parse(value))}; it is not overwritten with ${target}`,
+    );
+  }
+});
+
+test('a devEngines that is not an object is a conflict, never an absent guard (W3b)', () => {
+  for (const value of ['"npm"', '10', 'null', '[]']) {
+    const text = `{\n  "name": "shaped",\n  "devEngines": ${value}\n}\n`;
+    const result = writeDevEnginesPackageManager({ packageJsonText: text, version: '12.3.4' });
+
+    assert.equal(result.ok, false, `${value} is not an absent devEngines`);
+    assert.equal(result.state, 'conflict');
+    assert.equal(result.key, 'devEngines');
+    assert.equal(result.content, undefined);
+    assert.equal(
+      result.reason,
+      `package.json already declares devEngines as ${JSON.stringify(JSON.parse(value))}, which is not an object; it is not overwritten`,
+    );
+  }
+});
+
+test('the guard is never written without a version the pin establishes (W3b)', () => {
+  const missing = writeDevEnginesPackageManager({
+    packageJsonText: '{\n  "name": "no-version"\n}\n',
+    version: null,
+  });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.state, 'conflict');
+  assert.equal(missing.reason, 'no pnpm version answered, so there is no devEngines.packageManager to write');
+
+  const unreadable = writeDevEnginesPackageManager({ packageJsonText: null, version: '12.3.4' });
+  assert.equal(unreadable.ok, false);
+  assert.equal(unreadable.state, 'conflict');
+  assert.equal(unreadable.reason, 'package.json could not be read, so devEngines.packageManager cannot be written');
 });
 
 test('a token written with spaces around the equals sign is not a tokenless file', () => {

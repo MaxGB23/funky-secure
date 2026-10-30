@@ -70,7 +70,7 @@ where the refusal would have taught it. From a real run:
 funky-secure start  ·  guidance, nothing is written
 
   1  git add -A && git commit -m "chore: baseline before funky-secure"
-  2  funky-secure init --apply  plan the 3 writes (nothing is written)
+  2  funky-secure init --apply  plan the 4 writes (nothing is written)
   3  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"
   4  pnpm import
   5  funky-secure pin --apply  pin the 3 ranges this repository already has
@@ -354,6 +354,7 @@ happens.
 | W1c | `pnpm-workspace.yaml` | `savePrefix: ''` in the same block: stops a later `pnpm add` from saving a caret (D-18) |
 | W2 | `.gitignore` | the managed block with the entries `sensitive-ignored` requires: `.env`, `.env.*`, `!.env*.example`, `*.pem`, `*.key`, `node_modules/`, and `.npmrc` unless the repository tracks a root `.npmrc` without a token |
 | W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing |
+| W3b | `package.json` | `devEngines.packageManager: { "name": "pnpm", "version": "<the version W3 writes>" }`, and never `onFail`: npm treats the absent value as `error`, pnpm's default is its own version switch, and any explicit value is a regression for one of the two managers (0030). Its own plan item beside W3, so the plan reports it separately; every other key of `devEngines` and of the manifest is preserved, a field whose `name` and `version` already match is already at policy (whatever its `onFail` says, which is never rewritten), and a field that differs or cannot be interpreted is a `conflict` |
 | W4 | `funky-secure.config.json` | `{ "preset": "strict" }` so CI agrees with the run; `--preset strict` only |
 
 It refuses — exit `3`, naming the file or the reason, and writing nothing:
@@ -363,11 +364,17 @@ It refuses — exit `3`, naming the file or the reason, and writing nothing:
 - a plan item whose content changed between planning and writing, or that carries no content.
 
 It never overwrites a value it did not write. A value that exists and differs is a `conflict`: it is
-printed in the plan, left untouched, and is not a write. That covers a conflicting `packageManager`,
-a `minimumReleaseAge` or `minimumReleaseAgeStrict` declared outside the managed block, an
-unparseable or differently-configured `funky-secure.config.json`, and a config file discovered
-somewhere other than the repository root. A `conflict` alone does not make the command fail; it makes
-the plan a refusal you can read. A second `--apply` over the same state performs zero writes.
+printed in the plan, left untouched, and is not a write. That covers a conflicting `packageManager`, a
+`devEngines.packageManager` naming another manager or another version, a `minimumReleaseAge` or
+`minimumReleaseAgeStrict` declared outside the managed block, an unparseable or
+differently-configured `funky-secure.config.json`, and a config file discovered somewhere other than
+the repository root. A `conflict` alone does not make the command fail; it makes the plan a refusal
+you can read. A second `--apply` over the same state performs zero writes.
+
+W3 and W3b are two items over one file on purpose. The plan is the only place a human sees what will
+be written before it is, so a writer that reports one path and changes two keys would hide half of
+its own edit. The guard's version is the one the pin establishes, never a second opinion: a plan whose
+pin is a conflict establishes no version and plans no guard, so the two fields can never disagree.
 
 ### `pin`
 

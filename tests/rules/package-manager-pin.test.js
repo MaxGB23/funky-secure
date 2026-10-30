@@ -28,6 +28,11 @@ function packageJson(packageManager) {
   return { path: 'C:/repo/package.json', text: JSON.stringify(json), json, error: null };
 }
 
+/** A manifest carrying the fields the rule reads, both of them. @param {object} json */
+function manifest(json) {
+  return { path: 'C:/repo/package.json', text: JSON.stringify(json), json, error: null };
+}
+
 function context({ version = '12.3.4', packageManager = 'pnpm@12.3.4', packageJson: file } = {}) {
   return {
     scope: 'all',
@@ -113,21 +118,19 @@ test('another manager is a skip, not a conflict: the pnpm question does not appl
   assert.deepEqual(finding.remediation, { kind: 'none' });
 });
 
-test('a pin the project manages itself is a skip, not a conflict (0020)', () => {
+test('a pin the project manages itself is a skip, not a conflict (0020, narrowed by 0030)', () => {
   // pnpm 12 with devEngines.packageManager answers with the version the project declares, not the
-  // one on PATH: from its own directory it reported 12.16.0 while the binary answering was 12.3.4.
-  // The version probe now runs outside the repository (0019), so it sees the PATH binary and used to
-  // report a conflict whose remediation told the user to downgrade the project.
+  // one on PATH: from its own directory it reported another version while the binary answering was
+  // 12.3.4. The version probe runs outside the repository (0019), so it sees the PATH binary, and a
+  // conflict there would carry a remediation that downgrades the project.
+  //
+  // The skip now covers only a declaration that names a version other than the pin: when the two are
+  // equal the tool wrote them itself, so that pair is verified instead (0030).
   const json = {
     packageManager: 'pnpm@12.16.0',
-    devEngines: { packageManager: { name: 'pnpm', version: '12.16.0', onFail: 'download' } },
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4', onFail: 'download' } },
   };
-  const [finding] = rule.detect(
-    context({
-      version: '12.3.4',
-      packageJson: { path: 'C:/repo/package.json', text: JSON.stringify(json), json, error: null },
-    }),
-  );
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
 
   assert.equal(finding.status, 'skip', 'the PATH binary says nothing about a self-managed pin');
   assert.equal(finding.code, 'self-managed-pin');
@@ -140,6 +143,36 @@ test('a declared pnpm that differs from the machine is information, not a confli
   assert.equal(finding.status, 'pass', 'a declared pin is correct: the repository is the authority');
   assert.equal(finding.code, 'pin-differs-from-machine');
   assert.deepEqual(finding.remediation, { kind: 'none' }, 'a declared pin is never rewritten');
+});
+
+test('a guard equal to the pin is verified when the answering pnpm matches (0030)', () => {
+  // The tool writes both declarations in one plan, so the pair is a fact it owns: where the machine
+  // agrees there is nothing left to skip, and an `onFail` written by `pnpm init` does not change the
+  // name and version the field declares.
+  const json = {
+    packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4', onFail: 'download' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'pass');
+  assert.notEqual(finding.code, 'self-managed-pin', 'a fact the tool owns and the machine confirms is verified');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
+test('a guard equal to a pin the answering pnpm does not match stays a skip (0020, 0030)', () => {
+  // The declarations agree, and the machine does not: the answer is still not evidence. A project that
+  // declares its own pnpm re-executes with it, so the PATH binary describes the machine (0019, 0020),
+  // and naming `corepack use pnpm@<machine version>` here would be the downgrade 0020 removed.
+  const json = {
+    packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.16.0', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'self-managed-pin');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
 });
 
 test('another pnpm version passes, and never carries a remediation', () => {
@@ -223,15 +256,15 @@ function reportFor(code) {
   };
 }
 
-test('plan() writes the missing pin and leaves a passing pin alone', (t) => {
+test('plan() writes the missing pin and the guard beside it, and leaves a passing pin alone', (t) => {
   const dir = scratch(t);
 
   const failing = context({ packageJson: packageJson() });
   failing.repo.root = dir;
   const items = rule.plan(failing, { report: reportFor('pin-missing') });
 
-  assert.equal(items.length, 1);
-  const [item] = items;
+  assert.equal(items.length, 2, 'the pin and the guard are two plan items over one file');
+  const [item, guard] = items;
   assert.equal(item.target, 'package.json');
   assert.equal(item.operation, 'set packageManager');
   assert.equal(item.state, 'would-write');
@@ -240,19 +273,32 @@ test('plan() writes the missing pin and leaves a passing pin alone', (t) => {
   assert.equal(item.digest.length, 64);
   assert.match(item.reason, /pnpm@12\.3\.4/);
 
+  assert.equal(guard.target, 'package.json', 'the guard rides on the same file');
+  assert.equal(guard.operation, 'set devEngines.packageManager');
+  assert.equal(guard.state, 'would-write');
+  assert.ok(guard.path.startsWith(dir));
+  assert.equal(guard.digest.length, 64);
+  const guarded = JSON.parse(guard.content);
+  assert.deepEqual(guarded.devEngines.packageManager, { name: 'pnpm', version: '12.3.4' });
+  assert.equal(
+    guarded.packageManager,
+    'pnpm@12.3.4',
+    'the guard carries the pin its sibling writes, so applying both leaves one consistent file',
+  );
+
   const passing = context();
   passing.repo.root = dir;
   assert.deepEqual(rule.plan(passing, { report: reportFor(null) }), []);
 });
 
-test('plan() reports a conflicting pin as a conflict item and writes nothing', (t) => {
+test('plan() reports a conflicting pin as a conflict item and writes no guard', (t) => {
   const dir = scratch(t);
   const ctx = context({ packageManager: 'npm@10' });
   ctx.repo.root = dir;
 
   const items = rule.plan(ctx, { report: reportFor('pin-conflict') });
 
-  assert.equal(items.length, 1);
+  assert.equal(items.length, 1, 'a pin the plan cannot establish establishes no version for the guard');
   assert.equal(items[0].state, 'conflict');
   assert.match(items[0].reason, /npm@10/);
   assert.equal(items[0].content, null);

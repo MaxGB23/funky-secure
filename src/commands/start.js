@@ -17,9 +17,8 @@
  * repository past the start is told so in one line instead of being handed a stale checklist.
  */
 
-import { derivePlan } from '../lib/plan.js';
+import { derivePlan, writtenPaths } from '../lib/plan.js';
 import { statusPorcelain } from '../lib/git.js';
-import { relative } from 'node:path';
 import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { createCollector } from '../lib/probes.js';
@@ -198,10 +197,8 @@ async function hasUncommitted({ plan, ctx, collector }) {
   if (typeof root !== 'string' || root === '') return false;
   const cwd = typeof ctx?.cwd === 'string' && ctx.cwd !== '' ? ctx.cwd : root;
   // The same spelling `applyPlan` uses: the plan carries absolute paths, and `git status` is asked for
-  // repository-relative ones.
-  const paths = plan
-    .map((item) => (typeof item.path === 'string' ? relative(cwd, item.path) : null))
-    .filter((path) => path !== null);
+  // repository-relative ones, one entry per file (`writtenPaths`, shared with `init`'s next steps).
+  const paths = writtenPaths(plan, cwd);
   if (paths.length === 0) return false;
   const dirty = await statusPorcelain(collector, paths);
   if (dirty === null) return false;
@@ -285,10 +282,10 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     trackLockfile: (report.findings ?? []).some(
       (finding) => finding.rule === 'lockfile-committed' && finding.status !== 'pass',
     ),
-    // The plan's own targets, spelled the way git wants them: the same paths `applyPlan` writes.
-    paths: plan
-      .map((item) => (typeof item.path === 'string' ? relative(ctx.cwd ?? ctx.repo.root, item.path) : null))
-      .filter((path) => path !== null),
+    // The plan's own targets, spelled the way git wants them: the same paths `applyPlan` writes, one
+    // entry per file. Two plan items over one file (W3 and W3b) are one path to stage, which is why
+    // this is `writtenPaths` and not a map over the items.
+    paths: writtenPaths(plan, ctx.cwd ?? ctx.repo.root),
   });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
   stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending, migrate }));

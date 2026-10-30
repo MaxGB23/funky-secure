@@ -6,12 +6,7 @@
  */
 
 import { manifestProblem } from '../lib/targets.js';
-import {
-  PACKAGE_JSON_RELATIVE,
-  findingsOf,
-  planTarget,
-  writePackageManagerPin,
-} from '../lib/writers.js';
+import { findingsOf, planPackageManagerWrites } from '../lib/writers.js';
 
 const DOC = 'docs/rules/package-manager-pin.md';
 const PATH = 'package.json';
@@ -29,6 +24,15 @@ function managesOwnVersion(ctx) {
   return engine !== null && typeof engine === 'object' && engine.name === 'pnpm';
 }
 
+/**
+ * Whether the project also declares `devEngines.packageManager`, the field npm enforces (0030). Its
+ * three states are decided by the pin branch below, and the field is measured by name and version
+ * only: `onFail` is a key `pnpm init` writes, the tool never touches it, and it makes no declaration
+ * equal or different.
+ *
+ * @param {object} ctx resolved context
+ * @returns {boolean}
+ */
 function declaredPin(ctx) {
   const json = ctx.repo?.files?.packageJson?.json ?? null;
   if (json === null || typeof json !== 'object' || Array.isArray(json)) return null;
@@ -81,12 +85,12 @@ export default {
   question:
     'Does package.json declare the package manager, and does the declaration match the pnpm actually answering?',
   detection:
-    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a declaration that names pnpm and no version fails with its own code (pin-unversioned), because naming the manager and no version is the state pin-missing describes — there is no pin — while the declaration itself is kept and never rewritten, so the fix is manual; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing package.json is a skip (no-package-json), and a package.json that exists but cannot be interpreted is a failure (unparseable-package-json) that names the file and what is wrong with it, whatever the scope.',
+    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a declaration that names pnpm and no version fails with its own code (pin-unversioned), because naming the manager and no version is the state pin-missing describes — there is no pin — while the declaration itself is kept and never rewritten, so the fix is manual; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. A devEngines.packageManager equal to the pin, with the answering pnpm matching it, is the pair the tool writes itself: the declarations agree and the machine agrees, so the pin is verified and not skipped. The same declaration with a pnpm that answers another version is a skip (self-managed-pin), and so is one that names a different version, because the probe runs outside the project and its version describes the machine. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing package.json is a skip (no-package-json), and a package.json that exists but cannot be interpreted is a failure (unparseable-package-json) that names the file and what is wrong with it, whatever the scope.',
   evidence: '{ declared, observed, executable }',
   remediation:
     'auto — funky-secure init --apply writes packageManager when it is missing, and only then; a pin that is already declared is never rewritten, whatever the machine runs.',
   limits:
-    'Reads the declaration only: it does not resolve a version, does not read corepack state and never checks the lockfile. A difference between the declared pin and the pnpm on the PATH is a property of the machine, not of the repository, so it is evidence and not a finding; the documented override for a repository deliberately on another manager is to turn the rule off.',
+    'Reads the two declarations of one file: packageManager and devEngines.packageManager. It deliberately does not read corepack state, does not resolve a version against a registry, does not inspect the lockfile and does not repair a conflicting pin. The field is a guard, not a wall: npm install --force downgrades the check to a warning, a machine-level pmOnFail or --pm-on-fail overrides it on the pnpm side, and only npm 11.13.0 and no yarn or bun were measured (0030).',
   docs: DOC,
 
   detect(ctx) {
@@ -181,6 +185,14 @@ export default {
       // repositories (shadcn-ui/ui pnpm@10.33.4, create-t3-app pnpm@10.8.0, primevue pnpm@9.6.0).
       // It is information, and it carries no remediation (0024, S9).
       if (managesOwnVersion(ctx)) {
+        // The three states of `devEngines.packageManager` (0030). Declared and equal to the pin, with
+        // the answering pnpm matching it, never reaches this branch: the declarations agree and the
+        // machine agrees, so the pin passes on its own value and there is nothing left to skip. A
+        // declaration that differs from the pin — and an equal one the machine does not confirm — is a
+        // skip, because a project that declares its own pnpm re-executes with it: the probe that
+        // answered here runs outside the repository (0019), so its version describes the machine and
+        // not the project (0020). No branch names `corepack use pnpm@<machine version>`; rewriting a
+        // working project's pin to whatever the auditing machine runs is the downgrade 0020 removed.
         return [
           {
             status: 'skip',
@@ -273,9 +285,10 @@ export default {
   },
 
   /**
-   * RFC 8.2 fix `auto` (W3): declare the missing pin, or report the conflicting one as a conflict
-   * and leave it alone. The finding comes from the same report the run renders, so the plan cannot
-   * describe a different repository than the scan.
+   * RFC 8.2 fix `auto` (W3), with the guard beside it (W3b): declare the missing pin, or report the
+   * conflicting one as a conflict and leave it alone. The finding comes from the same report the run
+   * renders, so the plan cannot describe a different repository than the scan. The guard carries the
+   * version the pin establishes, and a pin that is a conflict plans none (0030).
    *
    * @param {object} ctx resolved context
    * @param {{ report?: object }} [options]
@@ -297,15 +310,6 @@ export default {
           );
     if (!failed) return [];
 
-    return [
-      planTarget(ctx, {
-        relative: PACKAGE_JSON_RELATIVE,
-        operation: 'set packageManager',
-        result: writePackageManagerPin({
-          packageJsonText: ctx.repo.files?.packageJson?.text ?? null,
-          version,
-        }),
-      }),
-    ];
+    return planPackageManagerWrites(ctx, { version });
   },
 };

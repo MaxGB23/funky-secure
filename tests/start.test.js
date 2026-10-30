@@ -72,10 +72,11 @@ function ignoredFromGitignore(root, input) {
 
 /**
  * A collector for every probe: reads files from disk, answers git from `inGit`, resolves ignore
- * questions from the repository's own `.gitignore`, and reports no pnpm version at all.
- * @param {{ dir: string, inGit?: boolean }} options
+ * questions from the repository's own `.gitignore`, and answers the pnpm version only when the test
+ * asks for one — a repository whose pin can be written is the only state that needs it.
+ * @param {{ dir: string, inGit?: boolean, version?: string | null }} options
  */
-function fakeCollector({ dir, inGit = true }) {
+function fakeCollector({ dir, inGit = true, version = null }) {
   const root = realpathSync(dir);
   const ok = (stdout) => ({ ok: true, code: 0, stdout, stderr: '' });
   const refuse = { ok: true, code: 1, stdout: '', stderr: '' };
@@ -117,7 +118,16 @@ function fakeCollector({ dir, inGit = true }) {
       }
       return refuse;
     },
-    pnpmVersion: async () => ({ ok: false, reason: 'not-on-path', installations: [] }),
+    pnpmVersion: async () =>
+      version === null
+        ? { ok: false, reason: 'not-on-path', installations: [] }
+        : {
+            ok: true,
+            version,
+            major: Number(version.split('.')[0]),
+            executable: '/tools/pnpm',
+            installations: ['/tools/pnpm'],
+          },
     pnpmConfig: async () => ({ ok: false, reason: 'not-on-path' }),
   };
 }
@@ -134,13 +144,13 @@ function capture() {
 }
 
 /** Runs the real CLI over one directory, with every probe injected. */
-async function start(dir, { inGit = true, argv = ['start'] } = {}) {
+async function start(dir, { inGit = true, version = null, argv = ['start'] } = {}) {
   const streams = {
     cwd: dir,
     env: {},
     stdout: capture(),
     stderr: capture(),
-    collector: fakeCollector({ dir, inGit }),
+    collector: fakeCollector({ dir, inGit, version }),
   };
   const code = await run(argv, streams);
   return { code, stdout: streams.stdout.text, stderr: streams.stderr.text };
@@ -428,6 +438,34 @@ test('a clean tree commits after the writes, because the writes are what dirty i
   assert.ok(
     stdout.indexOf('init --apply') < stdout.indexOf('git commit'),
     'the commit follows the writes it covers, never precedes them on a clean tree',
+  );
+});
+
+test('a repository the pin can be written into counts the two writes over its manifest', async (t) => {
+  // With a pnpm answering, `init --apply` plans the pin (W3) and the devEngines guard beside it
+  // (W3b) over the same file. The count is the plan's item count, so it moves by one, and the commit
+  // names `package.json` once because a path is staged once (11.2, 0030).
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'package-lock.json' });
+  const { code, stdout } = await start(dir, { version: '12.3.4' });
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 4 writes (nothing is written)',
+    `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+    '  3  pnpm import',
+    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  5  pnpm install --lockfile-only',
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git switch -c ${FEATURE_BRANCH}`,
+    '  8  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    `  9  git add pnpm-lock.yaml package-lock.json && git commit -m "${TRACK_COMMIT}"`,
+    `  10  ${SCAN_STEP}`,
+  ]);
+  assert.equal(
+    stdout.split('package.json pnpm-workspace.yaml .gitignore').length - 1,
+    1,
+    'two plan items over one file are one path to stage',
   );
 });
 
