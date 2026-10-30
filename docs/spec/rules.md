@@ -135,8 +135,10 @@ deviation is recorded here and in section 9.1.
 - **Question:** are dependency specifiers exact, and does the lockfile agree?
 - **Detection:** for every `dependencies`, `devDependencies`, `optionalDependencies`,
   `peerDependencies` entry of every importer: a specifier is floating when it starts with `^`, `~`,
-  `>`, `<`, `*`, or equals `latest`, or contains `x`/`X`, or is a git/tarball URL. Exact means a
-  literal version, `npm:<pkg>@<version>`, or `workspace:*` for internal packages. Additionally,
+  `>` , `<`, `*`, or equals `latest`, or contains `x`/`X`, or is a git/tarball URL. Exact means a
+  literal version, `npm:<pkg>@<version>`, or `workspace:*` for internal packages. A `catalog:`
+  reference is neither floating nor pinnable: the catalogue holds the version, and writing one over
+  the reference would delete it. Additionally,
   compare the specifier with the resolved specifier in `pnpm-lock.yaml` for the same importer and
   dependency; a disagreement is a separate finding with `code: "lockfile-desync"` (10.1).
 - **Lockfile reader scope.** The comparison uses `src/lib/lockfile.js`, a bounded indent reader

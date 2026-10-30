@@ -310,7 +310,13 @@ export async function run({
   const reportOnly = REPORT_ONLY_KEYS.filter((entry) =>
     npmrc.some((line) => npmrcKey(line).toLowerCase() === entry.key),
   );
-  const suggestions = workflowSuggestions(ctx.repo.workflows ?? []);
+  // Composite actions are CI too (S11): a `uses:` or a `run:` inside `.github/actions/**/action.yml`
+  // is as followable as one in a workflow, and the rule already reads them. A file without a `runs:`
+  // block is not an action, so it contributes no suggestion.
+  const actionFiles = (ctx.repo.actionFiles ?? []).filter(
+    (file) => typeof file.text === 'string' && /^runs:/m.test(file.text),
+  );
+  const suggestions = workflowSuggestions([...(ctx.repo.workflows ?? []), ...actionFiles]);
 
   const lines = [
     `funky-secure migrate  ·  from ${origin}${apply ? '  ·  apply' : '  ·  plan only (nothing has been written)'}`,

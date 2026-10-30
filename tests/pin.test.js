@@ -121,6 +121,48 @@ test('a second --apply performs no write, so the command is idempotent', async (
   assert.match(stdout.text, /already exact/, 'the plan does not say why there is nothing to write');
 });
 
+test('a catalogue reference is left alone and the plan says so', async (t) => {
+  // `catalog:` resolves to the version the catalogue in pnpm-workspace.yaml holds. Writing a version
+  // into the manifest would delete the reference and freeze one dependency out of a shared catalogue
+  // while its siblings kept reading it (0026), so it is counted apart from the exact ones.
+  const manifest = MANIFEST({ left: 'catalog:', right: 'catalog:frontend' });
+  const { code, stdout, dir } = await pin(t, ['pin'], {
+    'package.json': manifest,
+    'pnpm-lock.yaml': LOCK,
+  });
+
+  assert.equal(code, 0);
+  assert.match(stdout, /2 catalogue references left alone/);
+  assert.doesNotMatch(stdout, /set exact versions/, 'there is nothing to pin');
+  assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), manifest, 'the manifest is untouched');
+});
+
+test('--apply does not touch a catalogue reference', async (t) => {
+  const manifest = MANIFEST({ left: 'catalog:', floating: '^1.3.0' });
+  const lock = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      left:
+        specifier: catalog:
+        version: 1.3.0
+      floating:
+        specifier: ^1.3.0
+        version: 1.3.0
+`;
+  const { code, dir } = await pin(t, ['pin', '--apply'], {
+    'package.json': manifest,
+    'pnpm-lock.yaml': lock,
+  });
+
+  assert.equal(code, 0);
+  const written = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.equal(written.dependencies.left, 'catalog:', 'the reference survives');
+  assert.equal(written.dependencies.floating, '1.3.0', 'the floating sibling is pinned');
+});
+
 test('a floating range the lockfile never resolved is reported, never pinned', async (t) => {
   const manifest = MANIFEST({ left: '^1.3.0', ghost: '^9.9.9' });
   const { code, stdout, dir } = await pin(t, ['pin', '--apply'], { 'package.json': manifest, 'pnpm-lock.yaml': LOCK });

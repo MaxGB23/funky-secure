@@ -8,6 +8,7 @@
  */
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+const CATALOGUE_SCHEME = 'catalog';
 const EXACT_LITERAL = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const PARTIAL_LITERAL = /^\d+(?:\.\d+)*$/;
 const TAG_LITERAL = /^[a-z][a-z0-9._-]*$/i;
@@ -53,6 +54,10 @@ export function isFloating(specifier) {
       if (rest === '*') return false;
       return isFloating(rest);
     }
+    // A catalogue reference resolves to exactly one version: the one the catalogue holds. It is not
+    // floating, and it is never pinnable — writing a version here would delete the reference and
+    // freeze one dependency out of the catalogue while its siblings kept reading it (0026).
+    if (scheme === CATALOGUE_SCHEME) return false;
     return scheme !== 'link';
   }
 
@@ -66,6 +71,19 @@ export function isFloating(specifier) {
   if (PARTIAL_LITERAL.test(value)) return true;
   if (TAG_LITERAL.test(value)) return true;
   return false;
+}
+
+/**
+ * Whether a specifier reads its range from a `pnpm-workspace.yaml` catalogue (RFC 8.2 R5, 11.9).
+ *
+ * `catalog:` is the `default` catalogue and `catalog:<name>` names another. `pin` needs its own
+ * predicate because "not floating" is not the same as "exact": a catalogue reference is neither.
+ * @param {unknown} specifier
+ * @returns {boolean}
+ */
+export function isCatalogue(specifier) {
+  if (typeof specifier !== 'string') return false;
+  return specifier.trim().toLowerCase().startsWith(`${CATALOGUE_SCHEME}:`);
 }
 
 /**

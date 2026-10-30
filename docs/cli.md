@@ -397,6 +397,11 @@ Three properties are the whole contract:
   because their manifests are outside the files the scan collects — the plan says so instead of leaving
   a silently incomplete pin.
 
+A `catalog:` or `catalog:<name>` reference is left alone and counted apart. It is not floating, because
+it resolves to the one version the catalogue in `pnpm-workspace.yaml` holds, and it is not exact either:
+writing a version over it would delete the reference and freeze one dependency out of a catalogue its
+siblings still read (RFC 0026). The plan says how many it left alone.
+
 It refuses — exit `3`, writing nothing — on uncommitted changes to the target, unless `--allow-dirty` is
 passed, exactly as `init --apply` does. A second `--apply` over the same state performs zero writes.
 
@@ -521,7 +526,7 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.9.0" },
+  "tool": { "name": "funky-secure", "version": "0.9.1" },
   "scope": "all",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error", "requireVerified": false },
   "provenance": {
@@ -546,7 +551,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.9.0" },
+  "tool": { "name": "funky-secure", "version": "0.9.1" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -579,7 +584,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.9.0" },
+  "tool": { "name": "funky-secure", "version": "0.9.1" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```
@@ -614,7 +619,7 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.9.0)
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.9.1)
      commit it, so the repository carries the instructions its agents read
 ```
 
@@ -623,7 +628,7 @@ for "not run":
 
 ```text
 $ funky-secure skill --install
-–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.9.0)
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.9.1)
      nothing to do: it already carries this exact version
 ```
 
@@ -633,30 +638,30 @@ whole point: "the bytes differ" is three different situations.
 ```text
 $ funky-secure skill --install < /dev/null          # an older copy is an upgrade
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.9.0 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.9.1 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # same version, edited by hand
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.9.0 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.9.1 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
 funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
-reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.9.0
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.9.1
 ```
 
 With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
 keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
-funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.9.0
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.9.1
 funky-secure skill: replacing it discards whatever is there now
 
   1  keep it as it is, and change nothing
-  2  replace it with version 0.9.0
+  2  replace it with version 0.9.1
 
 funky-secure skill: choose 1 or 2 [1]:
 ```

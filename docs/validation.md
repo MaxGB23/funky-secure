@@ -64,14 +64,14 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `pnpm --version` rewrites a lockfile when the repository declares `packageManager` | isolated four ways before the probe was moved out of the repository |
 `pnpm --version` answers the declared version **inside** the project | measured on `shadcn-ui/ui` (10.33.4 inside, 12.3.4 on the PATH) |
 `init --apply` is idempotent on a real workspace | `t3`: block appended after `onlyBuiltDependencies`, `packages:` untouched, `yaml@2.9.0` parses it, second run `nothing to apply`, bytes identical |
+`pnpm import` reads a **berry** `yarn.lock` offline and keeps the pin | pnpm 12.3.4, a `__metadata: version: 8` lockfile, `lodash` `4.17.21`: 23 ms, and the new `pnpm-lock.yaml` records `lodash@4.17.21` |
+pnpm **ignores `workspaces` in `package.json`**, and an empty `pnpm-workspace.yaml` changes nothing | four trees: no block, empty block, managed keys only — one importer each; only `packages:` produces three importers and the `workspace:^` link. So creating the file never degrades a workspace pnpm already had, and it never transfers an npm or yarn one either |
+pnpm 10 reads the block | pnpm 10.16.1 and 12.3.4 both answer `1440`, `4320` and `~` from `pnpm-workspace.yaml`, and `undefined` outside it; `ignoreScripts` answers `true` |
 
 ## Not verified — deliberately, and why
 
 | Not verified | Why, and what it would take |
 |---|---|
-Whether `pnpm import` can read a **berry** `yarn.lock` | Needs a real install. If it cannot, the step `start` prints for a berry repository is wrong |
-Whether a `pnpm-workspace.yaml` without `packages:` breaks a repository that declares `workspaces` | Needs an install that resolves `workspace:^` |
-Whether pnpm 10 reads `minimumReleaseAge` / `savePrefix` from `pnpm-workspace.yaml` | No pnpm 10 on this machine; `init` writes the block for repositories whose own CI may run it |
 A real repository that **violates** `ci-no-safety-overrides` or `pull-request-target` | Both were observed only on their passing side in real code (`shadcn-ui/ui`, `t3`). Their detecting side is covered by fixtures in `tests/rules/`, which is the shape this repository's own lesson warns about |
 GitHub Actions behaviour: that a correct workflow really runs green, and that `permissions: contents: read` really produces a 403 | Needs a runner and a repository. The rules were verified statically against 11 real workflows |
 Linux and macOS | Everything above ran on Windows. The code has no platform branch, which is not the same as evidence |
