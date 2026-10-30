@@ -113,6 +113,12 @@ test('a second --apply performs no write, so the command is idempotent', async (
   });
   assert.equal(code, 0);
   assert.equal(stdout.text.includes('would write'), false, 'nothing is left to write');
+  assert.match(
+    stdout.text,
+    /0 writes · 1 already at policy/,
+    'the summary does not say the manifest is already at policy',
+  );
+  assert.match(stdout.text, /already exact/, 'the plan does not say why there is nothing to write');
 });
 
 test('a floating range the lockfile never resolved is reported, never pinned', async (t) => {
@@ -169,7 +175,11 @@ test('nothing to pin is stated, not implied', async (t) => {
   const { code, stdout } = await pin(t, ['pin'], { 'package.json': exact, 'pnpm-lock.yaml': LOCK });
 
   assert.equal(code, 0);
-  assert.match(stdout, /nothing to apply/);
+  // "nothing to apply" alone left the reader unable to tell an already-pinned manifest from one the
+  // command never inspected; the plan now names the file and the reason (0013).
+  assert.match(stdout, /would not write/);
+  assert.match(stdout, /1 specifier is already exact/);
+  assert.match(stdout, /0 writes · 1 already at policy/);
 });
 
 test('collectPins reads the version from the lockfile and keeps the manifest shape', () => {

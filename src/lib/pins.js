@@ -31,10 +31,10 @@ function detectIndent(text) {
  * Every pin the root manifest needs, from the lockfile's own record.
  *
  * @param {{ packageJsonText?: string | null, lockfileText?: string | null }} options
- * @returns {{ pins: Array<{ section: string, name: string, from: string, to: string }>, unrecorded: string[], workspace: number, reason: string | null }}
+ * @returns {{ pins: Array<{ section: string, name: string, from: string, to: string }>, exact: string[], unrecorded: string[], workspace: number, reason: string | null }}
  */
 export function collectPins({ packageJsonText = null, lockfileText = null } = {}) {
-  const empty = { pins: [], unrecorded: [], workspace: 0, reason: null };
+  const empty = { pins: [], exact: [], unrecorded: [], workspace: 0, reason: null };
   if (typeof packageJsonText !== 'string') {
     return { ...empty, reason: `${PACKAGE_JSON} could not be read` };
   }
@@ -52,6 +52,7 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
   const lock = parsed?.supported === true ? parsed.importers?.[ROOT_IMPORTER] ?? null : null;
 
   const pins = [];
+  const exact = [];
   const unrecorded = [];
   for (const section of DEPENDENCY_SECTIONS) {
     const dependencies = manifest[section];
@@ -59,7 +60,12 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
       continue;
     }
     for (const [name, specifier] of Object.entries(dependencies)) {
-      if (!isFloating(specifier)) continue;
+      if (!isFloating(specifier)) {
+        // Counted, not ignored: a second run that writes nothing must still say the manifest is at
+        // policy, or its summary claims zero of both and reads as if nothing had been checked (0013).
+        if (typeof specifier === 'string') exact.push(`${name} (${section})`);
+        continue;
+      }
       const version = recordedVersion(lock, name, section);
       if (typeof version !== 'string' || version === '') {
         unrecorded.push(`${name} (${section})`);
@@ -70,7 +76,7 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
   }
 
   const workspace = Object.keys(parsed?.importers ?? {}).filter((key) => key !== ROOT_IMPORTER).length;
-  return { pins, unrecorded, workspace, reason: null };
+  return { pins, exact, unrecorded, workspace, reason: null };
 }
 
 /**
@@ -132,7 +138,27 @@ export function planPins({ ctx }) {
     );
   }
 
-  if (collected.pins.length === 0) return { items: [], notes, pins: [] };
+  if (collected.pins.length === 0) {
+    // Nothing to write is a plan too. An item with `would-skip` is how the renderer says "this file is
+    // already at policy", which is the truth here and what the old summary contradicted (0013).
+    if (collected.exact.length === 0) return { items: [], notes, pins: [] };
+    const count = collected.exact.length;
+    return {
+      items: [
+        planTarget(ctx, {
+          relative: PACKAGE_JSON,
+          operation: 'keep exact versions',
+          result: {
+            ok: true,
+            state: 'would-skip',
+            reason: `${count} specifier${count === 1 ? ' is' : 's are'} already exact`,
+          },
+        }),
+      ],
+      notes,
+      pins: [],
+    };
+  }
 
   const written = applyPins(packageJsonText, collected.pins);
   const result = written.ok

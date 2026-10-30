@@ -291,6 +291,12 @@ line, then one indented line saying whether that copy travels with the repositor
 The symbols are the report's — `✓` for something done, `–` for nothing to do, `ℹ` for a decision that
 changed nothing — and no line repeats the command name as a prefix.
 
+A copy that differs in version or in bytes is a decision only the human can make. With a terminal the
+command asks; without one it **refuses** — exit `3`, nothing written — and prints the two words that
+settle it, `--force` and `--keep`. It is a refusal and not a failure to answer: the file, the difference
+and the version are known, and `2` would tell an integration to retry a question whose answer is a word
+(10.4). A newer installed copy is refused under both conditions.
+
 The file carries the version it belongs to in its frontmatter, gated to equal the package version.
 **Bytes alone cannot answer the question**, because "different from what I ship" covers three
 situations that are three different decisions: an older copy waiting for an upgrade, a copy newer than
@@ -362,5 +368,6 @@ keeps no allowlist: a specifier edited back to a range is reported by the next s
 a per-package exception is the user's decision in the diff (8.2 R5).
 
 It refuses — exit `3`, nothing written — on uncommitted changes to the target, unless `--allow-dirty`
-is passed, and it is idempotent: a second `--apply` over the same state performs zero writes. With
+is passed, and it is idempotent: a second `--apply` over the same state performs zero writes, and that
+run still reports the manifest as already at policy with the number of specifiers that already are. With
 `--format json` stdout carries the plan document and nothing else; the ledger of writes goes to stderr.
