@@ -15,6 +15,7 @@ Where a change goes. This page is a map, not a contract: the contract is
 | the layout, a file's role, or a data path | [`architecture.md`](architecture.md) |
 | the first ten minutes of a new project | [`guide.md`](guide.md) |
 | what an agent must know before touching a repository | [`../skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md), including its `version` |
+| how a defect the tests could not see gets found before a release | [`field-loop.md`](field-loop.md) |
 
 Nothing on that list fits? Then the page you want probably should not exist, and the rule belongs in
 [`spec/`](spec/README.md).
