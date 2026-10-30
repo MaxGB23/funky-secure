@@ -4,13 +4,17 @@
  * Pure. Rules hand in findings; the verdict is computed here, once, from severities and
  * `--fail-on` — never inside a rule, never inside a renderer.
  *
+ * This is also the one place a rule's severity becomes a finding's severity (0029): a rule whose
+ * severity follows the state of its finding states it in the catalog, and `findingSeverity` applies it
+ * under the policy's clamps, so the summary, the JSON document and the verdict read one number.
+ *
  * The report also carries its provenance (S7): the preset and the source it came from, what the run
  * measured about the quarantine, and whether the machine scope was excluded. The provenance is the
  * caller's observation, never an inference — a report built without one says so with `null` rather
  * than guessing where a preset came from.
  */
 
-import { ConfigError, severityRank } from './policy.js';
+import { ConfigError, findingSeverity, severityRank } from './policy.js';
 
 export { severityRank };
 
@@ -92,13 +96,17 @@ export function buildReport({
   provenance = null,
   tool,
 }) {
-  const ruleIndex = new Map(catalog.map((rule, index) => [rule.id, index]));
+  const positions = new Map(catalog.map((rule, index) => [rule.id, { rule, index }]));
 
   const normalized = findings.map((finding) => {
     validateFinding(finding);
+    const known = positions.get(finding.rule);
+    const severity =
+      known === undefined ? finding.severity : findingSeverity({ policy, rule: known.rule, finding });
     return {
       ...toNfc(finding),
-      ruleIndex: ruleIndex.get(finding.rule) ?? Number.MAX_SAFE_INTEGER,
+      severity,
+      ruleIndex: known?.index ?? Number.MAX_SAFE_INTEGER,
     };
   });
 

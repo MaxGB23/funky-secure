@@ -38,7 +38,9 @@ export const QUARANTINE_FIRST_GATED_MAJOR = 11;
  *
  * `foreign-lockfile` belongs to the day-zero set (L10): a repository a framework generator produced
  * starts with someone else's lockfile, and it is the one rule that names a second package manager. It
- * keeps the `warn` of `baseline`, so including it keeps the preset gentle.
+ * keeps the severities `baseline` gives it — `warn` for a foreign lockfile that stands alone and the
+ * `error` its coexistence state declares (0029) — so including it keeps the preset gentle where a
+ * suggestion is enough and firm where two trees are the answer.
  *
  * @type {Readonly<Record<string, { atBaseline: readonly string[], otherwise: string }>>}
  */
@@ -85,6 +87,73 @@ export function severityRank(severity) {
     throw new ConfigError(`unknown severity "${severity}"`, String(severity));
   }
   return /** @type {0 | 1 | 2 | 3} */ (rank);
+}
+
+/**
+ * The effective severity of one finding, and the one place a rule may state a severity the preset table
+ * cannot (0029).
+ *
+ * A rule declares one severity per preset (`severity`), which cannot follow the state of a finding. A
+ * rule whose severity depends on that state declares `severityWhen`: one entry per state, naming the
+ * evidence key that selects it and the severity that state carries. This function answers the severity
+ * the finding ends up with, and keeps the clamps the policy already enforces:
+ *
+ *  - a rule the policy resolved as `off` never runs, and a state severity never escalates it back;
+ *  - a severity the repository stated in `rules` is the repository's decision, so it wins over the
+ *    rule's state severity exactly as the config wins over the preset (§9.2);
+ *  - a state severity outside `RULE_SEVERITIES` is a configuration error, like any mistyped severity.
+ *
+ * A rule that declares no state severities answers with the finding's own severity, so every rule that
+ * does not need this reads exactly as it did before.
+ *
+ * @param {object} options
+ * @param {{ preset?: string, severities?: Record<string, string>, overridden?: readonly string[] }} options.policy
+ * @param {{ id: string, severityWhen?: ReadonlyArray<{ state: string, evidence: string, is: unknown, severity: Record<string, string> }> }} options.rule
+ * @param {{ severity?: string, evidence?: Record<string, unknown> }} options.finding
+ * @returns {string}
+ */
+export function findingSeverity({ policy = {}, rule, finding = {} }) {
+  const states = Array.isArray(rule?.severityWhen) ? rule.severityWhen : [];
+  const state = states.find((entry) => finding?.evidence?.[entry.evidence] === entry.is);
+  const resolved = policy?.severities?.[rule?.id];
+
+  if (state === undefined) {
+    // Fail closed. A table whose evidence key a finding never carries would select nothing and keep the
+    // base pair, so the state the author wrote to be strict would read as the lenient one, silently —
+    // the class of miss this codebase refuses everywhere else (9.2, 0022).
+    const unreachable = states.find((entry) => !Object.hasOwn(finding?.evidence ?? {}, entry.evidence));
+    if (unreachable !== undefined) {
+      throw new ConfigError(
+        `state "${unreachable.state}" selects on evidence "${unreachable.evidence}", which a finding of rule "${rule.id}" does not carry`,
+        rule.id,
+      );
+    }
+    return finding?.severity ?? resolved;
+  }
+  if (resolved === 'off') return 'off';
+
+  // The preset key wins, and `starter` falls back to `baseline` because it is a reduced baseline: the
+  // same reading `presetSeverity` gives a rule's own `severity`.
+  const severity = state.severity?.[policy?.preset] ?? state.severity?.baseline;
+  if (!RULE_SEVERITIES.includes(severity)) {
+    throw new ConfigError(
+      `unknown severity "${severity}" for rule "${rule.id}" in state "${state.state}"`,
+      rule.id,
+    );
+  }
+
+  // `off` is a policy decision about a rule, not about a state: the summary counts findings, and a state
+  // the policy switched off would have to disappear before the report, which this function cannot do.
+  // Naming it is the honest answer until a record decides otherwise.
+  if (severity === 'off') {
+    throw new ConfigError(
+      `state "${state.state}" of rule "${rule.id}" declares severity "off", which is not supported for a state`,
+      rule.id,
+    );
+  }
+
+  if (policy?.overridden?.includes(rule.id) === true) return resolved;
+  return severity;
 }
 
 /**
@@ -158,7 +227,7 @@ function assertRuleMap(rules, catalog) {
  * @param {string} [options.failOn]
  * @param {boolean} [options.requireVerified] treat an unverified rule as a violation (0023)
  * @param {number} [options.major] active pnpm major, when a probe answered
- * @returns {{ preset: string, quarantineMinutes: number, failOn: string, requireVerified: boolean, severities: Record<string, string>, active: string[] }}
+ * @returns {{ preset: string, quarantineMinutes: number, failOn: string, requireVerified: boolean, severities: Record<string, string>, overridden: string[], active: string[] }}
  */
 export function resolvePolicy({
   catalog = [],
@@ -207,6 +276,9 @@ export function resolvePolicy({
     failOn: effectiveFailOn,
     requireVerified,
     severities,
+    // The ids the repository stated a severity for: their severity is the repository's decision, so a
+    // rule's state severity never replaces it (9.2, `findingSeverity`).
+    overridden: Object.keys(configured),
     active,
   };
 }
