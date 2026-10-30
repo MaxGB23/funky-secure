@@ -13,6 +13,11 @@ Where things live in this repository. Two axes, and each document belongs to exa
 |---|---|
 | `docs/spec/` | **The normative contract.** Extracted verbatim from RFC 0001 sections 6-14 and 17. Where the spec and the record disagree, the spec wins. |
 | `docs/README.md` | The map from a change to the page that must move with it. Start here when you touched code. |
+| `docs/architecture.md` | The four layers, the per-command flows, the invariants and the module map. |
+| `docs/cli.md` | Every command, flag, exit code and JSON field. The operating manual, not a second specification. |
+| `docs/concept.md` | What the product is and what it refuses to be. |
+| `docs/guide.md` | How to read the output, and what to do about each rule a reader meets. |
+| `docs/images/` | The diagram that ships with the package, and its `README.md` note. |
 | `docs/spec/README.md` | The map from every section number (`10.3`, `11.2.1`) to the file that carries it. |
 | `docs/delivery.md` | Contract for CI, pinning, release and provenance (record §17). |
 | `docs/rules/<id>.md` | The page a user reads about one rule; names the spec as normative. |
@@ -22,6 +27,9 @@ Where things live in this repository. Two axes, and each document belongs to exa
 | `rfcs/0001-funky-secure-v1/rfc.md` | Frozen record, revision 7. **Not edited.** Corrections are a dated `## Errata` append or the next record. |
 | `odd/tasks/<feature>.md` | Feature record: specs, tasks, and an append-only Log. |
 | `src/`, `tests/`, `scripts/` | Code, suite and the golden generator. |
+
+The path map is a fact the suite checks: `tests/docs-contract.test.js` fails when an entry here names
+a path that is not on disk.
 
 ## Working rules
 

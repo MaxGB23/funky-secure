@@ -26,9 +26,10 @@ One report has these parts, in this order:
 
 ```text
 funky-secure scan  ·  preset baseline  ·  scope repo
-provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine
+            excluded
 summary  2 errors · 0 warnings · 0 info · 4 passing · 6 skipped
-verdict  FAIL (threshold: error)
+verdict  FAIL (threshold: error · 6 rules not verified: package-manager-pin, quarantine, exact-versions, ci-no-safety-overrides, pull-request-target, workflow-permissions)
 ──────────────────────────────────────────────────────────────────────────────────────────
 
 REPO-ROOT
@@ -108,8 +109,12 @@ where nothing is automatic says the work is manual, because each finding above a
 file, its line and the action. The block is human output only — `--format json` gains no field for it.
 
 **Exit codes** are for the machine, not for you: `0` nothing at or above the threshold, `1` a policy
-violation, `2` the tool could not answer. If you are reading the output yourself, the `verdict` line
-already said it.
+violation, `2` the tool could not answer the question it was asked. A fourth code exists for the
+other kind of no: `3` means the tool understood the request and refused to act — the target has
+uncommitted changes, the branch is the default one, the foreign lockfile is the only one — and nothing
+was written. `3` is not a failure, so do not retry it: read the action on the first stderr line, do
+that, and run the command again. If you are reading the output yourself, the `verdict` line already
+said it.
 
 A block heading is where the finding was measured, in upper case: `REPO-ROOT` for the repository,
 `IMPORTER <path>` for a `package.json`, `CI` for workflows, `MACHINE` for the pnpm that answers on
@@ -132,7 +137,7 @@ workspace block has to exist before the install that reads it, and a lockfile ca
 first dependency. From an empty directory that is `git init`, `pnpm init`,
 `funky-secure init --apply`, `pnpm add <your first dependency>`, and `funky-secure scan --preset
 starter` last. A project a framework generator produced is the case the order turns on: while another
-manager's lockfile is still there it names `init --apply` first, then one `pnpm install` under the
+manager's lockfile is still there it names `init --apply` first, then one `pnpm import` under the
 block that was just written, then `funky-secure migrate --apply` — the removal needs the
 `pnpm-lock.yaml` the install creates, and the install needs the block that governs it to exist first.
 It does not name the first add at all, because adding now would write a second lockfile beside the npm
@@ -206,15 +211,16 @@ repository, is reviewed with it, and the provenance line shows that it was appli
 **Selected rules.** `--only <ids>` and `--ignore <ids>` accept comma-separated ids and repeat;
 `--ignore` wins. Use them to answer one question at a time, not to make a gate pass.
 
-**JSON and agents.** `--format json` prints one document on stdout and nothing else; `plan` documents
-for `init` and `migrate` go with their digests, and the write ledger of `--apply` goes to stderr so
-stdout stays parseable. `--with-timestamp` adds `generatedAt` and is the only non-deterministic field.
-Two runs over the same state produce the same bytes.
+**JSON and agents.** `--format json` prints one document on stdout and nothing else; `init`'s plan
+document goes with its digests, and the write ledger of `--apply` goes to stderr so stdout stays
+parseable. `migrate` has no `--format`: its output is the human plan. `--with-timestamp` adds
+`generatedAt` and is the only non-deterministic field. Two runs over the same state produce the same
+bytes.
 
 **In CI.** Pin the gate, so it cannot change without a change in your diff:
 
 ```sh
-pnpm add -D funky-secure@0.5.0 --save-exact
+pnpm add -D funky-secure@0.9.0 --save-exact
 ```
 
 ```yaml
@@ -226,10 +232,12 @@ morning, which is the defect this tool reports in other projects' workflows. A `
 puts the version in the lockfile, in the diff and in the review.
 
 **Why it never installs, never resolves and never writes your machine.** Because a tool that audits a
-supply chain is part of one. It reads files and runs a closed list of read-only probes; the only
-writes are the printed plan items under `init --apply`, and the only removal is `migrate --apply`'s
-foreign lockfile. Your pnpm configuration, your store and your global settings are read, never
-written — which is also why the report says where a number came from instead of moving it.
+supply chain is part of one. It reads files and runs a closed list of read-only probes; inside the
+repository the only writes are the printed plan items under `init --apply` and `pin --apply`, the only
+removal is `migrate --apply`'s foreign lockfile, and the one write outside it is the skill file that
+`skill --install` places when it is asked to. Your pnpm configuration, your store and your global
+settings are read, never written — which is also why the report says where a number came from instead
+of moving it.
 
 ## Where to read more
 

@@ -43,21 +43,26 @@ finding and no count.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.4.0" },
+  "tool": { "name": "funky-secure", "version": "0.9.0" },
   "scope": "all",
-  "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
+  "policy": {
+    "preset": "baseline",
+    "quarantineMinutes": 1440,
+    "failOn": "error",
+    "requireVerified": false
+  },
   "provenance": {
-    "configPath": "funky-secure.config.json",
-    "presetSource": "config",
-    "machineIncluded": true,
-    "quarantineDeclaredIn": "pnpm-workspace.yaml"
+    "preset": "baseline",
+    "presetSource": "funky-secure.config.json",
+    "quarantine": "declared in pnpm-workspace.yaml",
+    "machine": "included"
   },
   "targets": [
     { "kind": "machine", "detail": "pnpm 12.3.4" },
     { "kind": "repo-root", "path": "." },
     { "kind": "importer", "path": "." }
   ],
-  "summary": { "error": 1, "warn": 2, "info": 0, "pass": 6, "skip": 0, "verdict": "fail" },
+  "summary": { "error": 1, "warn": 2, "info": 0, "pass": 6, "skip": 3, "verdict": "fail" },
   "findings": [ /* Finding[] */ ]
 }
 ```
@@ -67,10 +72,15 @@ importers sorted by path) → `rule` (catalog order) → `path` → `line`; numb
 are NFC; JSON is 2-space indented with a trailing newline. `--with-timestamp` adds `generatedAt` and
 is excluded from golden tests by construction.
 
-`provenance` is additive to `schemaVersion: 1` and carries no unmeasurable claim: `configPath` is the
-discovered config file or `null`, `presetSource` is `config`, `flag` or `default`, `machineIncluded`
-follows the scope, and `quarantineDeclaredIn` is the repository file that declares the key or `null`.
-It is a function of the resolved facts, so it does not break determinism and changes no count.
+`policy` carries the effective `preset`, the `quarantineMinutes` floor it applies, the `failOn`
+threshold and `requireVerified`, which records whether `--require-verified` made an unverified rule a
+failure (0023). `provenance` is additive to `schemaVersion: 1` and carries no unmeasurable claim:
+`preset` is the effective preset, `presetSource` is `--preset`, `default`, or the name of the config
+file the preset was read from, `quarantine` states whether this repository's own `pnpm-workspace.yaml`
+declares the age — or that the question was not verified because the scope excluded the machine or the
+repository — and `machine` is `included` or `excluded`. It is a function of the resolved facts, so it
+does not break determinism and changes no count. The human rendering of the same object is the
+`provenance` line of 10.3.
 
 `summary` counts every rule verdict exactly once: `error`, `warn` and `info` count the failing
 findings by their effective severity; `pass` and `skip` count those statuses. A passing finding is

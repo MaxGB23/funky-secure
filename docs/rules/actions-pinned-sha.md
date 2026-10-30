@@ -40,9 +40,10 @@ Manual, with the exact shape printed:
 uses: actions/checkout@<sha> # v4.1.7
 ```
 
-The tool does not resolve the SHA. Resolving it is `gh api repos/owner/repo/git/refs/tags/vX.Y.Z`,
-a network call, and v0.1 makes none (RFC 4.9). That one command is documented here instead of being
-run for you.
+The tool does not resolve the SHA. Resolving it is `git ls-remote <host>/<owner>/<repo>
+refs/tags/<tag>`, a network call, and the tool makes none (RFC 4.9); the tag stays in the finding as
+the comment to keep, because a 40-character SHA says nothing about which release it is. That one
+command is documented here instead of being run for you.
 
 ## Limits
 

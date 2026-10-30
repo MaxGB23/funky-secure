@@ -1,16 +1,24 @@
 /**
  * Bounded pnpm-lock reader (RFC 8.2 R5, 4.7).
  *
- * A hand-written indent reader, not a YAML parser: it understands only `lockfileVersion`,
- * `importers.<path>.specifiers.<name>` and
- * `importers.<path>.{dependencies,devDependencies,optionalDependencies,peerDependencies}.<name>`,
- * in the `{ specifier, version }` block form or the inline `name: specifier` form. Everything it
- * cannot attribute returns `supported: false` with a reason, never a guessed result — the rules then
- * report `skip: unsupported-lockfile-shape`.
+ * A hand-written indent reader, not a YAML parser. It understands the shapes pnpm actually writes:
+ * `lockfileVersion`, the `importers` map (or, for the `6.0` root shape, the top-level dependency
+ * sections the root importer lives in), `importers.<path>.specifiers.<name>`,
+ * `importers.<path>.{dependencies,devDependencies,optionalDependencies,peerDependencies}.<name>` in the
+ * `{ specifier, version }` block form or the inline `name: specifier` form, the `catalogs` map, and
+ * the dependency names an `overrides` section can rewrite. Everything it cannot attribute returns
+ * `supported: false` with a reason, never a guessed result — the rules then report
+ * `skip: unsupported-lockfile-shape`.
  *
- * Decisions the RFC leaves open, resolved conservatively here:
- * - `catalogs`, `overrides` and `patchedDependencies` change what a specifier resolves to, so their
- *   presence makes the importer comparison unsound: unsupported.
+ * Decisions the RFC leaves open, resolved here and in `docs/rules/exact-versions.md`:
+ * - `catalogs` is read: a catalogue entry is the `{ specifier, version }` map pnpm records, and an entry
+ *   of any other shape is refused by name. A `catalog:` specifier resolves through this map, so the
+ *   comparison no longer needs to be refused for a section that cannot change an importer record.
+ * - `overrides` is read as the dependency names it can rewrite, because a rewritten specifier
+ *   disagrees with the manifest by construction; the importer comparison must not report that as a
+ *   desync. `packageExtensionsChecksum` is a scalar beside it and is accepted.
+ * - `patchedDependencies` stays refused: a patch changes what a package contains, and this reader
+ *   models neither the patch nor the record it produces.
  * - `packages`, `snapshots`, `settings` and `time` never change the importer specifier/version
  *   relation, so they are read structurally and discarded (the RFC asks for `skip` only on a
  *   `snapshots` layout the reader does not recognize, which here means a non-map section).
@@ -19,13 +27,17 @@
  * - The inline dependency form carries no resolved version, so `version` is `null` for it.
  */
 
-export const SUPPORTED_LOCKFILE_VERSIONS = ['9.0'];
+export const SUPPORTED_LOCKFILE_VERSIONS = ['6.0', '9.0'];
 
 const DEPENDENCY_SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
 /** Top-level sections whose presence never changes an importer specifier or version. */
 const IGNORED_SECTIONS = ['packages', 'settings', 'snapshots', 'time'];
+/** Top-level keys that are a scalar record, not a section. */
+const IGNORED_SCALARS = ['packageExtensionsChecksum'];
 /** Top-level sections that would change what a specifier resolves to, so the comparison is unsound. */
-const REFUSED_SECTIONS = ['catalogs', 'overrides', 'patchedDependencies'];
+const REFUSED_SECTIONS = ['patchedDependencies'];
+/** The importer key `pnpm-lock.yaml` uses for the repository root. */
+const ROOT_IMPORTER = '.';
 
 class LockfileShapeError extends Error {}
 
@@ -264,18 +276,27 @@ function parseDependencies(entry, children, section) {
 }
 
 /**
- * @param {LockfileEntry} entry
- * @param {LockfileLine[]} children
- * @returns {Record<string, object>}
+ * The empty shape one importer record has, so every importer and the `6.0` root record are the same
+ * thing downstream.
+ * @returns {object}
  */
-function parseImporter(entry, children) {
-  const importer = {
+function emptyImporter() {
+  return {
     specifiers: {},
     dependencies: {},
     devDependencies: {},
     optionalDependencies: {},
     peerDependencies: {},
   };
+}
+
+/**
+ * @param {LockfileEntry} entry
+ * @param {LockfileLine[]} children
+ * @returns {Record<string, object>}
+ */
+function parseImporter(entry, children) {
+  const importer = emptyImporter();
   if (entry.value === '{}') return importer;
   if (entry.value !== '') fail(`importer "${entry.key}" at line ${entry.line} is not a map`);
   if (children.length === 0) fail(`importer "${entry.key}" at line ${entry.line} is not a map`);
@@ -304,9 +325,148 @@ function parseImporters(lines) {
 }
 
 /**
+ * The catalogue map: catalog name → dependency → the `{ specifier, version }` pnpm records.
+ *
+ * A catalogue holds the range, so a `catalog:` specifier is exact only when the entry it resolves to
+ * is. An entry of any other shape cannot say whether its value is the range or the resolution, so it
+ * is refused by name: a range printed where a pin belongs is worse than a skip (RFC 4.9).
+ *
+ * @param {LockfileEntry} entry
+ * @param {LockfileLine[]} children
+ * @returns {Record<string, Record<string, { specifier: string, version: string }>>}
+ */
+function parseCatalogs(entry, children) {
+  /** @type {Record<string, Record<string, { specifier: string, version: string }>>} */
+  const catalogs = {};
+  if (entry.value === '{}') return catalogs;
+  if (entry.value !== '') fail(`top-level "catalogs" section is not a map (line ${entry.line})`);
+  if (children.length === 0) fail(`top-level "catalogs" section is not a map (line ${entry.line})`);
+
+  for (const catalog of mapEntries(children, '"catalogs"')) {
+    /** @type {Record<string, { specifier: string, version: string }>} */
+    const entries = {};
+    catalogs[catalog.key] = entries;
+    if (catalog.value === '{}') continue;
+    if (catalog.value !== '') {
+      fail(`catalog "${catalog.key}" in the "catalogs" section at line ${catalog.line} is not a map`);
+    }
+    const body = children.slice(catalog.start + 1, catalog.end);
+    if (body.length === 0) {
+      fail(`catalog "${catalog.key}" in the "catalogs" section at line ${catalog.line} is not a map`);
+    }
+    for (const item of mapEntries(body, `catalog "${catalog.key}"`)) {
+      const fields = body.slice(item.start + 1, item.end);
+      const block = item.value === '' ? mapEntries(fields, `catalogue entry "${item.key}" at line ${item.line}`) : [];
+      const specifier = block.find((field) => field.key === 'specifier');
+      const version = block.find((field) => field.key === 'version');
+      if (!specifier || !version) {
+        fail(
+          `catalogue entry "${item.key}" in the "catalogs" section at line ${item.line} is not a {specifier, version} map`,
+        );
+      }
+      entries[item.key] = {
+        specifier: unquote(specifier.value),
+        version: unquote(version.value),
+      };
+    }
+  }
+  return catalogs;
+}
+
+/**
+ * The segments of an override selector, split at the `>` that separates `parent>child`.
+ *
+ * A range can carry a `>` of its own (`foo@>=1`, `foo@>1.0.0`), so a `>` is a separator only when it
+ * is not part of one: not followed by `=`, and not directly after the `@` or an operator that opens a
+ * range. Getting this wrong names `=1` as the dependency, and the exemption then misses.
+ *
+ * @param {string} selector
+ * @returns {string[]}
+ */
+function overrideSegments(selector) {
+  /** @type {string[]} */
+  const segments = [];
+  let start = 0;
+  for (let i = 0; i < selector.length; i += 1) {
+    if (selector[i] !== '>') continue;
+    const next = selector[i + 1];
+    const previous = selector[i - 1];
+    if (next === '=' || ['@', '>', '<', '=', '~', '^'].includes(previous)) continue;
+    segments.push(selector.slice(start, i));
+    start = i + 1;
+  }
+  segments.push(selector.slice(start));
+  return segments;
+}
+
+/**
+ * The dependency one override selector rewrites: the last segment, with any `@range` cut off.
+ * @param {string} selector
+ * @returns {string}
+ */
+function overrideTarget(selector) {
+  const last = overrideSegments(selector).pop().trim();
+  const match = /^((?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+)/.exec(last);
+  return match === null ? last : match[1];
+}
+
+/**
+ * Whether an `overrides` selector states that it rewrites one dependency.
+ *
+ * A rewritten specifier disagrees with the manifest by construction — that is what the override is
+ * for — so the importer comparison asks which names an override touched before it reports a desync.
+ * A parent selector (`react@^18>react-dom`) names its child, never the parent.
+ *
+ * @param {string[]} selectors the selectors `parseLockfile` returned for `overrides`
+ * @param {string} dependency
+ * @returns {boolean}
+ */
+export function overrideTouches(selectors, dependency) {
+  if (!Array.isArray(selectors) || typeof dependency !== 'string') return false;
+  return selectors.some((selector) => overrideTarget(selector) === dependency);
+}
+
+/**
+ * The selectors an `overrides` section declares.
+ *
+ * A rewritten specifier disagrees with the manifest by construction — that is what the override is
+ * for — so the importer comparison must know which names it touched before it reports a desync. The
+ * section is read leniently: its effect is only ever to exempt a comparison, and it never supplies a
+ * version.
+ *
+ * @param {LockfileEntry} entry
+ * @param {LockfileLine[]} children
+ * @returns {string[]}
+ */
+function parseOverrides(entry, children) {
+  /** @type {string[]} */
+  const selectors = [];
+  if (entry.value === '{}') return selectors;
+  if (entry.value !== '') fail(`top-level "overrides" section is not a map (line ${entry.line})`);
+
+  /** @param {LockfileLine[]} lines @param {string} prefix */
+  const walk = (lines, prefix) => {
+    for (const child of mapEntries(lines, `"overrides" at line ${entry.line}`)) {
+      const selector = prefix === '' ? child.key : `${prefix}>${child.key}`;
+      const body = lines.slice(child.start + 1, child.end);
+      if (child.value === '' && body.length > 0) {
+        walk(body, selector);
+        continue;
+      }
+      selectors.push(selector);
+    }
+  };
+  walk(children, '');
+
+  return [...new Set(selectors)];
+}
+
+/**
  * Reads one lockfile shape from a string.
  * @param {string} text
- * @returns {{ supported: true, version: string, importers: Record<string, object> }
+ * @returns {{ supported: true, version: string, importers: Record<string, object>,
+ *   catalogs: Record<string, Record<string, { specifier: string, version: string }>>,
+ *   overrides: string[] }
  *   | { supported: false, reason: 'unsupported-lockfile-shape', detail: string }}
  */
 export function parseLockfile(text) {
@@ -317,6 +477,14 @@ export function parseLockfile(text) {
     let version = null;
     /** @type {Record<string, object>} */
     const importers = {};
+    /** @type {Record<string, Record<string, { specifier: string, version: string }>>} */
+    let catalogs = {};
+    /** @type {string[]} */
+    let overrides = [];
+    /** The top-level sections the `6.0` root shape records the root importer in, until the end. */
+    /** @type {object | null} */
+    let rootSections = null;
+    let importersSeen = false;
     let document = [];
     let documentLine = 1;
 
@@ -330,6 +498,7 @@ export function parseLockfile(text) {
         let end = i + 1;
         while (end < document.length && document[end].indent > 0) end += 1;
         const entry = { key: kv.key, value: kv.value, line: line.no, start: i, end };
+        const children = document.slice(entry.start + 1, entry.end);
 
         if (entry.key === 'lockfileVersion') {
           if (entry.value === '') fail(`lockfileVersion at line ${entry.line} has no value`);
@@ -339,17 +508,37 @@ export function parseLockfile(text) {
           }
           version = found;
         } else if (entry.key === 'importers') {
+          if (rootSections !== null) {
+            fail(
+              `"importers" at line ${entry.line} and a top-level dependency section both describe the root importer`,
+            );
+          }
+          importersSeen = true;
           if (entry.value !== '') fail(`importers at line ${entry.line} is not a map`);
-          const children = document.slice(entry.start + 1, entry.end);
           if (children.length === 0) fail(`importers at line ${entry.line} is not a map`);
           Object.assign(importers, parseImporters(children));
+        } else if (DEPENDENCY_SECTIONS.includes(entry.key)) {
+          // The `6.0` root shape: pnpm 8 records the root importer's sections at the top level.
+          if (importersSeen) {
+            fail(
+              `"importers" and the top-level "${entry.key}" section at line ${entry.line} both describe the root importer`,
+            );
+          }
+          if (rootSections === null) rootSections = emptyImporter();
+          rootSections[entry.key] = parseDependencies(entry, children, entry.key);
+        } else if (entry.key === 'catalogs') {
+          catalogs = parseCatalogs(entry, children);
+        } else if (entry.key === 'overrides') {
+          overrides = parseOverrides(entry, children);
+        } else if (IGNORED_SCALARS.includes(entry.key)) {
+          if (children.length > 0) fail(`top-level "${entry.key}" is a map where a scalar belongs (line ${entry.line})`);
         } else if (REFUSED_SECTIONS.includes(entry.key)) {
           fail(`top-level "${entry.key}" section is outside the supported importer subset (line ${entry.line})`);
         } else if (IGNORED_SECTIONS.includes(entry.key)) {
           if (entry.value !== '' && entry.value !== '{}') {
             fail(`top-level "${entry.key}" section is not a map (line ${entry.line})`);
           }
-          validateIgnoredSection(document.slice(entry.start + 1, entry.end), entry.key, entry.line);
+          validateIgnoredSection(children, entry.key, entry.line);
         } else {
           fail(`unexpected top-level key "${entry.key}" at line ${entry.line}`);
         }
@@ -370,7 +559,8 @@ export function parseLockfile(text) {
     applyDocument();
 
     if (version === null) fail(`missing lockfileVersion at line ${documentLine}`);
-    return { supported: true, version, importers };
+    if (rootSections !== null) importers[ROOT_IMPORTER] = rootSections;
+    return { supported: true, version, importers, catalogs, overrides };
   } catch (error) {
     if (error instanceof LockfileShapeError) {
       return { supported: false, reason: 'unsupported-lockfile-shape', detail: error.message };

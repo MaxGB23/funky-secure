@@ -96,14 +96,14 @@ flowchart TD
   e -->|"plan only"| f["exit 0"]
   e -->|"apply with nothing to write"| f
   e -->|"apply"| g["check the working tree"]
-  g -->|"dirty target or git cannot answer"| z["exit 2 refusal, nothing written"]
+  g -->|"dirty target or git cannot answer"| z["exit 3 refusal, nothing written"]
   g --> h["write each item after its digest matches"]
   h --> i["exit 0"]
 ```
 
 The decisive stop is the working-tree check immediately before the first write: a target with
-uncommitted changes, or a `git status` that cannot answer, refuses at exit `2` and writes nothing
-(11.2 safety rules, 11.5 point 4). Printing a plan never reaches it.
+uncommitted changes, or a `git status` that cannot answer, refuses with exit `3` and writes nothing
+(11.2 safety rules, 11.5 point 4, 10.4). Printing a plan never reaches it.
 
 ### `pin`
 
@@ -136,15 +136,18 @@ flowchart LR
   b --> c["3 human step"]
   c --> d["4 removal gate"]
   d --> e["5 ci follow-up"]
-  d -->|"pnpm-lock.yaml absent"| z["exit 2 refusal"]
+  d -->|"pnpm-lock.yaml absent"| z["exit 3 refusal"]
   d -->|"tree dirty or default branch or detached HEAD"| z
+  d -->|"git cannot report the tree or the branch"| u["exit 2, could not answer"]
   d -->|"all preconditions hold"| r["remove the foreign lockfiles"]
   r --> s["step 4 complete"]
 ```
 
 Outside a git worktree it refuses before printing anything, because step 4 needs a tree and a branch.
 The gate is step 4 alone, and it re-checks the pnpm lockfile, the tree, the branch and `HEAD`
-immediately before the first removal (11.3, 11.5 point 4).
+immediately before the first removal (11.3, 11.5 point 4). The split between the two codes is drawn per
+check and not per command: a situation the tool read correctly is a refusal (`3`), and a git that
+cannot answer is a question it could not answer (`2`).
 
 ### `explain`
 
@@ -152,7 +155,7 @@ immediately before the first removal (11.3, 11.5 point 4).
 flowchart TD
   a["argv and flags"] -->|"the list flag"| b["read the catalog"]
   a -->|"one rule id"| c["find the rule in the catalog"]
-  a -->|"no id or two ids"| z["exit 2 usage error"]
+  a -->|"two ids, or the list flag with an id"| z["exit 2 usage error"]
   b --> d["render the list"]
   c -->|"id not in the catalog"| z
   c --> e["render one rule"]
@@ -160,9 +163,10 @@ flowchart TD
   e --> f
 ```
 
-No repository read and no probe: the only refusals are argv parsing and the catalog lookup — two ids,
+No repository read and no probe: the only failures are argv parsing and the catalog lookup — two ids,
 `--list` together with an id, or an id the catalog lacks, all exit `2` (11.4). A missing id is not a
-refusal: it prints the catalog, the same bytes `--list` prints. Nothing after the lookup can fail.
+refusal: it prints the catalog, the same bytes `--list` prints, and exits `0`. Nothing after the
+lookup can fail.
 
 ### `skill`
 
@@ -222,11 +226,12 @@ fail-closed code for a run that could not answer.
   names one rule to read next from the findings the report carries (RFC 10.3).
 - **The machine is read-only, permanently.** No probe writes an environment variable, a global
   config or a store.
-- **There are two write paths, and both are plans.** `init --apply` writes only through
-  `applyPlan`, `migrate --apply` removes only through its step-4 function, and each writes only to
-  the closed target catalog, after printing the absolute path and digest of the exact bytes, and
-  after the same three refusals: uncommitted target, unreadable tree, unusable branch. Nothing else
-  in the product writes a byte.
+- **There are three write paths, and each is a plan.** `init --apply` writes only through
+  `applyPlan`, `pin --apply` writes only the manifests its plan item carries, `migrate --apply` removes
+  only through its step-4 function, and each writes only to the closed target catalog, after printing
+  the absolute path and digest of the exact bytes, and after the same three refusals: uncommitted
+  target, unreadable tree, unusable branch. The one write outside the repository is `skill --install`,
+  bounded by 11.5 point 7. Nothing else in the product writes a byte.
 
 ## Module map
 
@@ -259,7 +264,7 @@ not.
 | `src/lib/targets.js` | target resolution and the context a rule receives (RFC 7.1) |
 | `src/lib/tool.js` | the package identity every document carries |
 | `src/lib/workflows.js` | structural `jobs -> steps` workflow reader for R8 and R9 (RFC 8.2) |
-| `src/lib/writers.js` | the five `init` writes: quarantine block, gitignore block, pin, strict preset (RFC 11.2) |
+| `src/lib/writers.js` | the six `init` writes: quarantine block, gitignore block, pin, strict preset (RFC 11.2) |
 | `src/rules/index.js` | the catalog: catalog order is report order |
 | `scripts/gen-golden.js` | regenerates `tests/golden/*.json` with a deterministic collector (RFC 15.2) |
 | `scripts/check-pr-policy.js` | the issue link, single `type:*` label and branch-name gate (RFC 17 aside, `CONTRIBUTING.md`) |

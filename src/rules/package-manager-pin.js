@@ -35,6 +35,17 @@ function declaredPin(ctx) {
   return typeof value === 'string' && value !== '' ? value : null;
 }
 
+/**
+ * Whether the declaration names a versioned pnpm, which is the only shape where the repository is the
+ * authority: pnpm re-executes itself to honour `packageManager`, so the version answering from the
+ * project's own directory is the declared one (S9, 0024).
+ * @param {string} declared
+ * @returns {boolean}
+ */
+function isVersionedPnpm(declared) {
+  return /^pnpm@\d+\.\d+\.\d+/.test(declared);
+}
+
 function readablePackageJson(ctx) {
   const file = ctx.repo?.files?.packageJson ?? null;
   if (file === null) return false;
@@ -52,12 +63,12 @@ export default {
   question:
     'Does package.json declare the package manager, and does the declaration match the pnpm actually answering?',
   detection:
-    'Reads packageManager from the root package.json and compares it with the version pnpm --version reports. A pin equal to pnpm@<observed> passes; an absent declaration fails with pin-missing; any other value — another manager or a different pnpm version — fails with pin-conflict. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing or malformed package.json is a skip (no-package-json).',
+    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing or malformed package.json is a skip (no-package-json).',
   evidence: '{ declared, observed, executable }',
   remediation:
-    'auto — funky-secure init --apply writes packageManager when the pin is missing; a conflicting pin is manual — corepack use pnpm@<observed>.',
+    'auto — funky-secure init --apply writes packageManager when it is missing, and only then; a pin that is already declared is never rewritten, whatever the machine runs.',
   limits:
-    'Reads the declaration only: it does not resolve a version, does not read corepack state, does not check the lockfile and never rewrites a conflicting pin (RFC 4.3). A repository deliberately on another manager is the finding, not a false positive; the documented override is turning the rule off.',
+    'Reads the declaration only: it does not resolve a version, does not read corepack state and never checks the lockfile. A difference between the declared pin and the pnpm on the PATH is a property of the machine, not of the repository, so it is evidence and not a finding; the documented override for a repository deliberately on another manager is to turn the rule off.',
   docs: DOC,
 
   detect(ctx) {
@@ -127,11 +138,14 @@ export default {
     }
 
     if (declared !== `pnpm@${observed}`) {
-      // A project that declares devEngines.packageManager answers with the version it manages: from its
-      // own directory it reported 12.16.0 while the binary on PATH was 12.3.4. The version probe runs
-      // outside the repository now (0019), so it sees the PATH binary, and the honest finding is that
-      // the machine cannot verify this pin — never a conflict whose remediation tells the user to
-      // downgrade the project to whatever happens to be installed here (0020).
+      // A repository that declares a versioned pnpm is the authority for that question: pnpm
+      // re-executes itself to honour `packageManager`, so from inside the project the answering
+      // version is the declared one. The probe runs outside the repository (0019), which is why it
+      // sees the PATH binary, and comparing the two says something about THIS MACHINE. Reporting it
+      // as a violation made a correctly pinned repository fail and printed a remediation that would
+      // rewrite a deliberate pin to whatever the auditor happens to run — measured on three real
+      // repositories (shadcn-ui/ui pnpm@10.33.4, create-t3-app pnpm@10.8.0, primevue pnpm@9.6.0).
+      // It is information, and it carries no remediation (0024, S9).
       if (managesOwnVersion(ctx)) {
         return [
           {
@@ -145,12 +159,44 @@ export default {
         ];
       }
 
+      if (isVersionedPnpm(declared)) {
+        // The repository is the authority and it is correct: pnpm honours the declaration inside the
+        // project, so there is nothing to fix. The machine's own PATH version rides along as evidence,
+        // because hiding it would leave a reader wondering why the two differ.
+        return [
+          {
+            status: 'pass',
+            code: 'pin-differs-from-machine',
+            path: PATH,
+            message: `package.json declares ${declared}, which pnpm answers inside this project; the pnpm on this machine's PATH is pnpm@${observed}, and that difference describes the machine, not the repository`,
+            evidence,
+            remediation: { kind: 'none' },
+          },
+        ];
+      }
+
+      // A declaration that is not a versioned pnpm: another manager, or a shape this rule cannot
+      // compare. The pnpm question does not apply to it, and the rules that need a pnpm repository
+      // already report the consequence (lockfile-committed, foreign-lockfile).
+      if (!declared.startsWith('pnpm@')) {
+        return [
+          {
+            status: 'skip',
+            code: 'not-pnpm',
+            path: PATH,
+            message: `skipped: package.json declares ${declared}, so this repository is not on pnpm and the pin question does not apply`,
+            evidence,
+            remediation: { kind: 'none' },
+          },
+        ];
+      }
+
       return [
         {
           status: 'fail',
           code: 'pin-conflict',
           path: PATH,
-          message: `package.json declares ${declared}, but the pnpm answering is pnpm@${observed}`,
+          message: `package.json declares ${declared}, which is not a version this rule can compare with the pnpm answering (pnpm@${observed})`,
           evidence,
           remediation: { kind: 'manual', command: `corepack use pnpm@${observed}` },
         },

@@ -4,7 +4,11 @@
 > [`../../rfcs/0001-funky-secure-v1/rfc.md`](../../rfcs/0001-funky-secure-v1/rfc.md); this file is
 > what the code owes. Change this file, not the record.
 
-## 8. Rule catalog v0.1 (the nine)
+## 8. Rule catalog (the twelve)
+
+> §8.2 and §8.3 are amended by [record 0024](../../rfcs/0024-the-contract-says-what-it-does/rfc.md): the
+> three rules the record deferred ship, and they are R10, R11 and R12 beside R1–R9 rather than a
+> renumbering, because `8.2 R5` is a citation in code, tests, commits and the decision log.
 
 ### 8.1 Rule contract
 
@@ -31,21 +35,27 @@ input) returns `error` for itself and never a false `pass`.
 Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline` / `strict`,
 **fix** is `auto` (an apply path exists), `manual` (exact command), or `none` (report only).
 
-### 8.2 The nine rules
+### 8.2 The twelve rules
 
 #### R1 — `package-manager-pin` · friction 0 · sev `error`/`error` · fix `auto`
 
-- **Question:** does `package.json` declare the package manager, and does the declaration match the
-  pnpm actually answering?
-- **Detection:** `package.json` → `packageManager`. `pass` if it equals `pnpm@<active version>`.
-  `fail` if absent. `fail` with `conflict` evidence if present but different (npm, yarn, or another
-  pnpm version). If `pnpm --version` fails, `skip` — an unverifiable pin is not a wrong pin.
+- **Question:** does `package.json` declare the package manager, and is that declaration the one pnpm
+  honours?
+- **Detection:** `package.json` → `packageManager`. A declaration naming a versioned pnpm is the
+  authority and `pass`es: pnpm re-executes itself to honour it, so inside the project the answering
+  version is the declared one, and the version answering on the machine's `PATH` rides along as
+  evidence rather than as a verdict (0024). `fail` with `pin-missing` if absent. `skip` with
+  `not-pnpm` when the declaration names another manager, because the pnpm question does not apply to
+  it. `fail` with `pin-conflict` for a pnpm declaration this rule cannot compare. If `pnpm --version`
+  fails, `skip` — an unverifiable pin is not a wrong pin.
 - **Evidence:** declared value, observed value, path of the answering binary.
-- **Remediation:** `corepack use pnpm@<version>` (manual) or `init --apply` (auto write).
+- **Remediation:** `init --apply` writes `packageManager` when it is missing (auto), and only then; a
+  declaration that already exists is never rewritten, whatever the machine runs.
 - **Why it is free:** one line in a file every Node repository has; it makes the accidental use of
   another manager detectable without blocking anything.
-- **False positives:** repositories deliberately on another manager. That is not a false positive; it
-  is the finding. The override is `off`, and the report says so.
+- **False positives:** a repository deliberately on another manager is a `skip`, not a finding: the
+  rules that need a pnpm repository report the consequence, and a remediation that replaces a
+  deliberate manager would be worse than the defect it came from (0020, 0024).
 
 
 A pin the project manages itself (`devEngines.packageManager`, which pnpm 12 writes on `pnpm init`)
@@ -129,17 +139,24 @@ deviation is recorded here and in section 9.1.
   literal version, `npm:<pkg>@<version>`, or `workspace:*` for internal packages. Additionally,
   compare the specifier with the resolved specifier in `pnpm-lock.yaml` for the same importer and
   dependency; a disagreement is a separate finding with `code: "lockfile-desync"` (10.1).
-- **Lockfile reader scope (v0.1).** The comparison uses `src/lib/lockfile.js`, a bounded indent reader
-  that needs no YAML dependency (4.7) and understands only `lockfileVersion`,
-  `importers.<path>.specifiers` and
-  `importers.<path>.{dependencies,devDependencies,optionalDependencies,peerDependencies}`. The
+- **Lockfile reader scope.** The comparison uses `src/lib/lockfile.js`, a bounded indent reader
+  that needs no YAML dependency (4.7) and understands `lockfileVersion` (the `9.0` shape and the `6.0`
+  root shape, whose top-level dependency sections become importer `.`), `importers.<path>.specifiers`,
+  `importers.<path>.{dependencies,devDependencies,optionalDependencies,peerDependencies}`, and the
+  top-level `catalogs` and `overrides` maps (0025). A `catalog:` or `catalog:<name>` specifier is
+  resolved through the catalogue before it is judged: an entry that records an exact version is exact,
+  and a catalogue range is reported at `pnpm-workspace.yaml`, the file that holds it, because the
+  manifest line that refers to the catalogue cannot be made exact. A desync is reported only for the
+  same dependency kind in the same importer, never for a peer absence (importer blocks record no
+  peers), never for a name the lockfile records under another section, and never for a specifier an
+  override rewrote. The
   recorded version is the bare version: pnpm appends a peer suffix (`9.39.5(jiti@2.7.0)`) that names the
   snapshot, not the version, so everything from the first `(` is dropped before the value is used as a
   remedy or compared with a specifier (0014). Anything
-  outside that subset — `catalogs`, `overrides`, `patchedDependencies`, a `snapshots` layout it does
-  not recognize — makes the comparison return `skip: unsupported-lockfile-shape`, never a guessed
-  finding. One fixture per supported `lockfileVersion` (currently `9.0`) proves the reader, and a
-  future major that moves the shape degrades to `skip`.
+  outside that subset — `patchedDependencies`, a second record of the root importer, a `snapshots`
+  layout it does not recognize — makes the comparison return `skip: unsupported-lockfile-shape`, never a
+  guessed finding. One fixture per supported `lockfileVersion` (`6.0` and `9.0`) proves the reader, and
+  a future major that moves the shape degrades to `skip`.
   Ignored top-level sections — `packages`, `settings`, `snapshots`, `time` — are checked at their
   first level only: the section must be a map, and nothing inside it is read. A list as the value of
   a key inside one of them is legal and cannot affect a specifier: `bundledDependencies` in every
@@ -164,10 +181,14 @@ deviation is recorded here and in section 9.1.
 #### R6 — `env-not-tracked` · friction 0 · sev `error`/`error` · fix `none`
 
 - **Question:** is any environment file committed?
-- **Detection:** `git ls-files -z -- ':(glob)**/.env*'`; exclude template names (`.env.example`,
-  `.env.sample`, `.env.template`, `.env.dist`, `.env.test.example`). The `:(glob)` magic is required:
-  without it a root `.env` is not matched at all (E4). The pattern also matches `.env.example`, so the
-  template exclusion list is mandatory, not a convenience. Outside git, `skip`.
+- **Detection:** every path in the complete tracked set whose basename starts with `.env`, at any
+  depth, excluding the template family: any name ending in `.example` (`.env.example`,
+  `.env.local.example`, `.env.production.example`) plus `.env.sample`, `.env.template` and
+  `.env.dist`. A template is a file meant to be copied, not a credential, so its name is not one of
+  two enumerated spellings but a family (0024, S1.3). The `:(glob)` magic the record names is what a
+  pathspec probe would need — without it a root `.env` is not matched at all (E4) — and the
+  collector's complete tracked list makes the pathspec unnecessary: the pattern also matches
+  `.env.example`, so the template exclusion is mandatory, not a convenience. Outside git, `skip`.
 - **Evidence:** each tracked path. **No content is read**, and no value is printed (N5).
 - **Remediation:** `git rm --cached <path>` (manual) plus a rotation note in the message: removing a
   file from the index does not remove it from history, so the credentials must be rotated. That
@@ -201,7 +222,9 @@ deviation is recorded here and in section 9.1.
   and a loose `uses:` scan takes false positives from block scalars, folded `>-` values and `with:`
   map keys while missing flow-style step maps (E6). The reader maps `jobs:` → job → `steps:` → step
   and must handle: single-line and multi-line step maps (`- name: x`, and `-` alone followed by an
-  indented map), flow-style maps (`- { name: …, uses: … }`), quoted `uses:` values, trailing
+  indented map), **a sequence written at its key's own indentation** (the *indentless* form: `steps:`
+  followed by `- uses:` at the same column, which is valid YAML and the shape GitHub's own templates
+  write — 0024, S1.1), flow-style maps (`- { name: …, uses: … }`), quoted `uses:` values, trailing
   `# vX.Y.Z` comments (preserved as evidence, never trusted), `with:` maps, block scalars (`run: |`,
   `run: >-`) whose bodies are not steps, `docker://image:tag` versus `docker://image@sha256:...`, and
   local `./path` actions. Accept `owner/repo@<40 hex>`. Flag `@v1`/`@main`/`@<7 hex>`. Treat
@@ -212,7 +235,7 @@ deviation is recorded here and in section 9.1.
   `uses: docker://<image>@sha256:<64 hex> # <tag>` for a container tag. A generic `owner/repo`
   placeholder makes the reader retype both facts, and `<sha>` alone does not say what precedes the
   `@`. The tool still does not resolve the SHA, because that is a network call (4.9); the rule doc
-  explains how to (`gh api repos/owner/repo/git/refs/tags/v4.1.7`).
+  explains how to (`git ls-remote`, keeping the tag as the comment — 0021, 0024).
 - **Evidence:** `file:line`, the raw reference, the offending form.
 
 #### R9 — `no-bot-auto-merge` · friction 0 · sev `error`/`error` · fix `none`
@@ -232,23 +255,117 @@ deviation is recorded here and in section 9.1.
      rule never guesses from a line scan.
 - **Reader scope note:** this is the structural read that section 8.3 has in mind. The reader ships in
   v0.1 because R8 and R9 both need it; the deferred workflow rules reuse it instead of growing a
-  second parser.
+  second parser. It reads a sequence at its key's own indentation as well as indented under it, so a
+  workflow GitHub's own templates produced is read and not skipped (0024, S1.1).
 - **Remediation:** none automatic. The message states the rule: an update is merged by a person
   after reading the diff and running the gate.
 - **Why it is free:** it costs nothing to not automate a merge, and it removes the only path by
   which a compromised upstream reaches `main` with no human in it. This is the encoded form of the
   author's position that "you can never know whether it is safe without auditing" (Appendix A).
 
-### 8.3 Deferred catalog (nine rules, three of them in 0.2)
+#### R10 — `ci-no-safety-overrides` · friction 1 · sev `warn`/`error` · fix `manual`
 
-Not in v0.1. The table keeps the order of expected value; revision 4 changes which of them ship
-first, for the reason given under it:
+- **Question:** does CI disable the frozen lockfile, or re-enable lifecycle scripts?
+- **Detection:** every workflow step the structural reader of section 14 attributes, plus the root
+  `.npmrc`. A run word `--no-frozen-lockfile` or `--frozen-lockfile=false` is
+  `ci-frozen-lockfile-disabled`; a run word `--ignore-scripts=false` or `--enable-pre-post-scripts` is
+  `ci-lifecycle-scripts-enabled`. The `.npmrc` keys `frozen-lockfile=false`, `ignore-scripts=false`
+  and `enable-pre-post-scripts=true` are the same two findings, at the 1-based line of the key. A
+  quoted word and a comment are not a command. No override is one pass (`ci-safety-defaults`); no
+  workflow and no `.npmrc` skips (`no-ci`), and an unparseable workflow skips
+  (`unparseable-workflow`) without a pass on top of it.
+- **Evidence:** for a workflow, the job, the step index, the offending word and the command line that
+  carries it, at the step line; for `.npmrc`, the key and its value, at the 1-based line of the key.
+- **Severity:** `warn` in `baseline`, `error` in `strict`. Friction 1 starts at `warn` in `baseline`
+  (9.1), and the rule deviates from it in neither direction: removing a flag is one edit, and the
+  finding names an explicit override of pnpm's own CI default rather than a preference, so a
+  repository that never overrides the default is never touched.
+- **Remediation:** manual, printed as the step or the removal to perform — `run: pnpm install
+  --frozen-lockfile` or `run: pnpm install --ignore-scripts` for a workflow, deleting the key from
+  `.npmrc` for the configuration. The tool never edits a workflow and never rewrites `.npmrc`.
+- **Limits:** proves that no declared step and no root `.npmrc` key names the override. It does not
+  prove the install was frozen, because an inherited environment, a global config, a composite action
+  or a script the step calls can still pass the same flag. A word is classified by its own text, not
+  by resolving it: whether the command is an install is not decided here. A workflow the reader cannot
+  attribute is skipped per file; the rule never guesses from a line scan.
+
+#### R11 — `pull-request-target` · friction 1 · sev `error`/`error` · fix `manual`
+
+- **Question:** does a workflow combine the `pull_request_target` trigger with a checkout of the pull
+  request head?
+- **Detection:** every workflow through the structural reader. The trigger is read only from the
+  top-level `on:` key — as a value, a flow collection or a block key — so a token in a `run:` body, a
+  comment or a job `if:` is not a declaration. In a workflow that declares `pull_request_target`, each
+  step is checked for a checkout of the head: an `actions/checkout` step whose `with.ref` is
+  `github.event.pull_request.head.sha`, `github.event.pull_request.head.ref` or `github.head_ref`
+  (`pull-request-target-checkout`), or a `run:` command that checks one of them out with
+  `git checkout` or `gh pr checkout`. Each offending step is one failure at the step line. The
+  trigger without a head checkout is one pass (`pull-request-target-without-head-checkout`); a
+  workflow set that never declares the trigger is one pass (`no-pull-request-target`); no workflow at
+  all skips (`no-ci`) and an unparseable workflow skips (`unparseable-workflow`), without a pass on
+  top.
+- **Evidence:** the job, the step index, the kind (`uses` or `run`) and the raw expression that checks
+  the head out, at the step line. A `run:` step reports the command that carries the expression.
+- **Severity:** `error` in `baseline` and in `strict`, a declared deviation from 9.1, where friction 1
+  starts at `warn` in `baseline`: the finding fires only on the combination of the trigger and a head
+  checkout, removing either half is one edit, and no repository that never writes
+  `pull_request_target` is touched — so the friction class of the finding is not the friction of the
+  fix, as with R8.
+- **Remediation:** manual, printed as the choice to make: remove the `pull_request_target` trigger, or
+  remove the step that checks the pull request head out, so the workflow never runs fork code with
+  this repository's secrets. The tool never edits a workflow.
+- **Limits:** proves that a declared workflow event and a declared step name the combination. It does
+  not read whether the job has secrets, does not evaluate `permissions:`, does not resolve the
+  expression — whether that ref is the fork head at run time is not decided here — and does not decide
+  whether the checked-out code is built or executed. A workflow the reader cannot attribute is skipped
+  per file; the rule never guesses from a line scan.
+
+#### R12 — `workflow-permissions` · friction 1 · sev `warn`/`error` · fix `manual`
+
+- **Question:** does each workflow declare least-privilege `permissions:`?
+- **Detection:** every workflow through the structural reader, which models `permissions:` at the
+  workflow level and in each job. A declaration is read as a form — `write-all`, `read-all`, `none`
+  for `{}`, or a map of scopes — with the 1-based line it was declared on; a `permissions:` value the
+  reader cannot attribute makes the workflow unparseable, never a guess. A workflow with no
+  workflow-level declaration and at least one job that declares none either is
+  `workflow-permissions-missing` at the default, and each job it names inherits the repository
+  setting. A workflow-level or job-level `write-all` is `workflow-permissions-write-all` at the line
+  of the declaration that grants it, and a workflow-level `write-all` is reported even when a job
+  narrows it. `read-all`, `{}` and a map of scopes are least privilege: no failure is one pass
+  (`least-privilege-permissions`). No workflow at all skips (`no-ci`), an unparseable workflow skips
+  (`unparseable-workflow`) without a pass on top, and no repository facts skip (`no-repo`).
+- **Evidence:** `level` (`workflow` or `job`) at the line of the declaration that grants `write-all`;
+  a missing declaration reports the job ids that inherit the repository setting. A job-level finding
+  also carries the job id and is reported at the line of that job's `permissions:` declaration, since
+  that key is what the fix replaces.
+- **Severity:** `warn` in `baseline`, `error` in `strict` — the 9.1 severity for friction 1, without
+  the `error`/`error` deviation of R10 and R11, because the weakest finding is about a fact the tool
+  cannot read: GitHub's default for `GITHUB_TOKEN` is a repository setting, not a file, so a job that
+  inherits it without declaring anything is not knowable as a deviation offline and `baseline` cannot
+  call it an error. `strict` can, because there the declaration is required.
+- **Remediation:** manual, printed as the declaration to write: add a top-level `permissions:` with
+  `contents: read` and widen it only in the job that needs it, or replace `write-all` with the exact
+  scopes. The tool never edits a workflow.
+- **Limits:** proves what the workflow declares, never the token a job receives. The declaration is
+  not the effective grant: a repository setting decides the default for a workflow that declares none,
+  a reusable workflow the job calls brings its own permissions, and an environment can narrow or widen
+  what a job gets. Nor does it judge whether the scopes a job does declare are the narrowest possible
+  for what that job runs — a workflow that declares `contents: write` everywhere, needed or not, is
+  reported as a pass.
+
+### 8.3 Deferred catalog (six rules, none of them in 0.2)
+
+The three workflow rules this section used to defer against the 0.2 line **have shipped**: the frozen
+record's own _0.2 scope_ clause admitted `ci-no-safety-overrides`, `pull-request-target` and
+`workflow-permissions`, `odd/tasks/funky-secure-v0.2.md` built them as T4, T5 and T6, and `0.2.0`
+closed with them in the catalogue, where they are R10, R11 and R12 of §8.2. Their specification is the
+code's own `detection` string plus the page a user reads, `docs/rules/<id>.md`, because that is where a
+reader already is; §8.2 states the obligation those two must agree with (0024).
+
+What is still deferred, in the order of expected value:
 
 | id | Question | Why deferred |
 |---|---|---|
-| `ci-no-safety-overrides` | does CI disable the frozen lockfile or re-enable lifecycle scripts? | pnpm already freezes in CI (4.1); only explicit overrides are interesting, and they are rare |
-| `workflow-permissions` | does each workflow declare least-privilege `permissions:`? | needs the shared workflow reader (v0.1) plus a per-job permission matrix, which is the v2 work |
-| `pull-request-target` | does a workflow combine `pull_request_target` with PR-head checkout outside automerge? | today folded into R9's evidence; deserves its own message |
 | `editor-hooks` | do `.vscode/tasks.json` / `.claude/settings.json` execute anything? | stateless audit, no baseline: list what runs, let the human judge |
 | `hook-drift` | did those hooks change since the last approved state? | genuinely needs state; the design must work on a fresh clone before it ships |
 | `lifecycle-scripts` | which dependencies have build scripts and what is their approval state? | pnpm's `approve-builds` owns the flow; report-only, and it needs a lockfile reader |
@@ -256,26 +373,17 @@ first, for the reason given under it:
 | `block-exotic-subdeps` | are transitive git/tarball dependencies blocked? | same reasoning as `trust-policy` |
 | `quarantine-exclusions` | are `minimumReleaseAgeExclude` entries justified and tracked? | needs a decision on where an exemption is recorded |
 
-**0.2 scope (revision 4).** Three of the nine ship first, and not the three F5 of revision 3 named.
-The v0.1 workflow reader built for R8/R9 already answers what any workflow rule needs, so the
-cheapest real value is the rules that reuse it:
+**`hook-drift` is out of every release until a decision admits it.** It is the one deferred rule whose
+blocker is design, not implementation: a drift baseline has to survive a fresh clone, which means
+committed state, and no decision admits committed state (4.4). Shipping it half-useful — a baseline
+that exists only on the machine that created it — would reproduce exactly the defect section 2.6
+documents in the old design. It returns when a decision admits a committed, reviewable baseline, and
+not before.
 
-1. `ci-no-safety-overrides` — E5 already measured the behavior it inspects.
-2. `pull-request-target` — today folded into R9's evidence; it gets its own message and its own
-   severity, and it names the combination a fork-based compromise needs.
-3. `workflow-permissions` — the shared reader plus a per-job permission map.
+A rule that leaves this table moves into §8.2 with the next free number; numbering in the catalog is
+append-only, so a citation like `8.2 R5` never changes what it names (0024).
 
-`editor-hooks`, `lifecycle-scripts`, `trust-policy`, `block-exotic-subdeps` and
-`quarantine-exclusions` keep their place in this table and stay out of 0.2: each needs a reader or a
-decision that does not exist yet.
-
-**`hook-drift` is out of 0.2, deliberately.** It is the only rule whose blocker is design: a drift
-baseline has to survive a fresh clone, which means committed state, and no decision admits committed
-state (4.4). Shipping it half-useful — a baseline that exists only on the machine that created it —
-would reproduce exactly the defect section 2.6 documents in the old design. It returns when a
-decision admits a committed, reviewable baseline, and not before.
-
-### 8.4 Why exactly nine
+### 8.4 Why nine, and then twelve
 
 The count is a product constraint, not an accident. Nine rules fit one screen of output on a real
 repository, one page of documentation, one test file each, and one release note. Every additional
@@ -294,10 +402,12 @@ ambiguously:
 - `hook-drift` moved to v2, because it is the only rule that needs state, and v0.1 is stateless by
   design (4.4).
 
-**And in 0.2 the count still binds.** Nine was a v0.1 budget; 0.2 raises it to twelve, and the budget
+**And in 0.2 the count still binds.** Nine was a v0.1 budget; 0.2 raised it to twelve, and the budget
 that matters is per release, not per catalog: twelve rules must still fit one screen of output on a
 real repository, one page of documentation, one test file each and one release note. The three that
-ship first were chosen by that test — each reuses a reader that already exists, so none of them adds
-a new way for the tool to be wrong in public.
+shipped first were chosen by that test — each reuses a reader that already exists, so none of them adds
+a new way for the tool to be wrong in public. The catalogue is twelve today, and
+`tests/docs-contract.test.js` counts this file's `#### R` sections against the catalog the code
+exports, so a thirteenth rule cannot arrive without a section here (0024).
 
 ---

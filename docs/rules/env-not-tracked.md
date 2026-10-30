@@ -8,10 +8,11 @@ Is any environment file committed to this repository?
 ## Detection
 
 From the complete tracked set the collector already resolved, the rule keeps every path whose
-basename starts with `.env`, at any depth, then excludes the template names, exactly:
-`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, `.env.test.example`. Each remaining
-path is one `env-tracked` finding. No tracked environment file is a pass. Outside git the tracked
-set is unknown and the rule skips with `no-git`.
+basename starts with `.env`, at any depth, then excludes the template family: the fixed names
+`.env.sample`, `.env.template` and `.env.dist`, plus **every** name ending in `.example` —
+`.env.example`, `.env.local.example`, `.env.production.example`. Each remaining path is one
+`env-tracked` finding. No tracked environment file is a pass. Outside git the tracked set is
+unknown and the rule skips with `no-git`.
 
 The RFC states this rule as `git ls-files -z -- ':(glob)**/.env*'`. The `:(glob)` magic exists
 because a pathspec without it misses a root `.env` (E4). This implementation runs no pathspec at
@@ -22,8 +23,16 @@ a nested `packages/api/.env`, and `.env.local` — and so is the over-match the 
 too, and not a convenience. Because the rule adds no second git probe, it cannot disagree with the
 tracked set that `lockfile-committed` and `sensitive-ignored` also read.
 
-The match is prefix-based, exactly like the RFC glob: `.envrc` is included, and only the five
-template names are excluded.
+The match is prefix-based, exactly like the RFC glob: `.envrc` is included, and only the template
+family is excluded.
+
+A template is a file meant to be copied, so the exemption covers the family and not the two
+spellings the RFC happens to name. `vercel/nextjs-subscription-payments` tracks `.env.example` and
+`.env.local.example`, both with empty or public values, and its README tells the reader to copy the
+second one; enumerating `.env.example` and `.env.test.example` alone accused that repository of
+leaking credentials, and the accusation could not be cleared by `init --apply` (S1.3). A safety
+rule that demands a rotation over an empty template is a rule people learn to ignore. What stays a
+finding is the file itself: `.env`, `.env.local` and any environment file that is not a template.
 
 ## Evidence
 
@@ -48,6 +57,8 @@ while keeping the secret live is the accident this rule exists to catch.
 
 - Only tracked state is judged. Ignore coverage is R7, and history is not inspected at all.
 - A path is classified by its basename prefix, not by content: what the file contains and whether
-  its values are still live are outside the rule.
+  its values are still live are outside the rule. A name ending in `.example` is treated as a
+  template whatever its values; a template that carries a live secret is not distinguished from an
+  empty one.
 - Outside git the rule returns `skip: no-git`. An unknown tracked set is not a clean one, and
   `--strict-probes` turns that skip into an error rather than a green run that measured nothing.

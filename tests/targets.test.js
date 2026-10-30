@@ -170,7 +170,52 @@ test('lists workflows and bot configs as ci targets', async (t) => {
 
   assert.deepEqual(facts.workflows.map((file) => file.path), ['.github/workflows/ci.yml']);
   assert.deepEqual(facts.botFiles, ['.github/dependabot.yml']);
-  assert.ok(targets.some((target) => target.kind === 'ci'));
+  assert.deepEqual(facts.actionFiles, [], 'a workflow-only repository has no action metadata');
+  assert.deepEqual(
+    targets.filter((target) => target.kind === 'ci'),
+    [{ kind: 'ci', path: '.github/workflows' }],
+    'a workflow-only repository resolves one ci target, unchanged',
+  );
+});
+
+test('collects composite action metadata at any depth as a ci target', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, '.github/actions/setup/action.yml', 'name: setup\nruns:\n  using: composite\n  steps:\n    - run: echo\n');
+  write(dir, '.github/actions/nested/deep/lint/action.yaml', 'name: lint\n');
+  write(dir, '.github/actions/setup/notes.txt', 'ignored\n');
+  write(dir, '.github/actions/setup/action.yml.bak', 'ignored\n');
+
+  const { facts, targets } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(facts.actionFiles.map((file) => file.path), [
+    '.github/actions/nested/deep/lint/action.yaml',
+    '.github/actions/setup/action.yml',
+  ]);
+  assert.match(facts.actionFiles[1].text, /^name: setup$/m);
+  assert.deepEqual(
+    targets.filter((target) => target.kind === 'ci'),
+    [{ kind: 'ci', path: '.github/actions' }],
+  );
+});
+
+test('resolves both ci roots when a repository has workflows and actions', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, '.github/workflows/ci.yml', 'name: ci\n');
+  write(dir, '.github/actions/setup/action.yml', 'name: setup\n');
+
+  const { facts, targets } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(facts.workflows.map((file) => file.path), ['.github/workflows/ci.yml']);
+  assert.deepEqual(facts.actionFiles.map((file) => file.path), ['.github/actions/setup/action.yml']);
+  assert.deepEqual(
+    targets.filter((target) => target.kind === 'ci'),
+    [
+      { kind: 'ci', path: '.github/workflows' },
+      { kind: 'ci', path: '.github/actions' },
+    ],
+  );
 });
 
 test('resolves whether a root .npmrc is tracked without a token', async (t) => {

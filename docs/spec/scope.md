@@ -16,7 +16,7 @@ kinds it applies to.
 | `machine` | `pnpm --version`, `pnpm config list --json`, `where`/`which pnpm`, `~/.npmrc` | `quarantine` |
 | `repo-root` | `git rev-parse --show-toplevel`, else `cwd` | `package-manager-pin`, `lockfile-committed`, `foreign-lockfile`, `quarantine`, `env-not-tracked`, `sensitive-ignored` |
 | `importer` | `pnpm-workspace.yaml` `packages:` globs → each `package.json`; plus the root `package.json` | `exact-versions` |
-| `ci` | `.github/workflows/*.yml`, `.github/workflows/*.yaml`, `.github/dependabot.yml`, `.github/renovate.json` | `actions-pinned-sha`, `no-bot-auto-merge` |
+| `ci` | `.github/workflows/*.yml`, `.github/workflows/*.yaml`, `.github/dependabot.yml`, `.github/renovate.json` | `actions-pinned-sha`, `no-bot-auto-merge`, `ci-no-safety-overrides`, `pull-request-target`, `workflow-permissions` |
 | `editor` | `.vscode/tasks.json`, `.claude/settings.json` (existence only in v0.1) | none in v0.1 |
 
 Rules that apply to a target kind that does not exist return `skip` with `reason: "no target"`, and a
@@ -25,7 +25,7 @@ looked and it was fine" must never print the same.
 
 Importer resolution in v0.1 is intentionally narrow: `pnpm-workspace.yaml` `packages:` entries that
 contain `*` are expanded with a single-level glob, and nested globs are reported as
-`skip: unsupported-glob` rather than silently ignored. Nine rules do not justify a glob engine; the
+`skip: unsupported-glob` rather than silently ignored. Twelve rules do not justify a glob engine; the
 report tells the truth instead.
 
 ### 7.2 Scope selection

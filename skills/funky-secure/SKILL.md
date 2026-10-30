@@ -1,6 +1,6 @@
 ---
 name: funky-secure
-version: 0.8.8
+version: 0.9.0
 description: Bootstrap or audit a pnpm repository's supply-chain posture. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
 ---
 
@@ -40,7 +40,8 @@ It prints the applicable steps in order, and the order is the contract:
 3. `funky-secure init --apply` — the pin, the release-age gate, the ignore block.
 4. A commit naming the files that step wrote — because it just dirtied the tree, and the next writer
    refuses that. It names them, so an untracked tool cache beside them stays out.
-5. `pnpm install` — when another manager's lockfile is still present.
+5. `pnpm import` — when another manager's lockfile is still present. Import reads that lockfile and
+   keeps the versions it pins; `pnpm install` never reads one, so it would resolve from the manifest.
 6. `funky-secure pin --apply` — when the manifest still carries ranges; the workspace block governs
    the dependencies added next, and nothing else clears the ones already there.
 7. `pnpm install --lockfile-only` — after `pin`, when it wrote: exact specifiers over a lockfile that

@@ -1,7 +1,7 @@
 # Command line
 
-One binary, `funky-secure`, with six commands: `start`, `scan`, `init`, `migrate`, `explain` and
-`skill`.
+One binary, `funky-secure`, with seven commands: `start`, `scan`, `init`, `pin`, `migrate`, `explain`
+and `skill`.
 Every command is defined by the contract in [`spec/report.md`](spec/report.md) and
 [`spec/commands.md`](spec/commands.md) — the record behind them is
 `rfcs/0001-funky-secure-v1/rfc.md`, sections 10 and 11, amended by records 0002 and 0003. This page is
@@ -33,7 +33,7 @@ guidance, not a gate. `--help` is the only flag it accepts; a `--preset` on `sta
 (exit `2`), because the preset it recommends is named in the answer.
 
 The steps are `git init`, `pnpm init`, `funky-secure init --apply` with the number of writes it is
-holding, `pnpm install` and `funky-secure migrate --apply` when another manager's lockfile is still
+holding, `pnpm import` and `funky-secure migrate --apply` when another manager's lockfile is still
 there, `pnpm add <your first dependency>` when it is not, and `funky-secure scan --preset starter`
 last. Each one prints only while its condition holds: a repository that already has a
 manifest, a lockfile and a commit, but no managed block, is told to run `init --apply` and then
@@ -69,7 +69,7 @@ funky-secure start  ·  guidance, nothing is written
   1  git add -A && git commit -m "chore: baseline before funky-secure"
   2  funky-secure init --apply  plan the 3 writes (nothing is written)
   3  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"
-  4  pnpm install
+  4  pnpm import
   5  funky-secure pin --apply  pin the 2 ranges this repository already has
   6  pnpm install --lockfile-only
   7  git switch -c chore/supply-chain-bootstrap
@@ -164,9 +164,10 @@ Then one block per target, and the `next` block last:
 
 ```text
 funky-secure scan  ·  preset baseline  ·  scope repo
-provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine
+            excluded
 summary  2 errors · 0 warnings · 0 info · 4 passing · 6 skipped
-verdict  FAIL (threshold: error)
+verdict  FAIL (threshold: error · 6 rules not verified: package-manager-pin, quarantine, exact-versions, ci-no-safety-overrides, pull-request-target, workflow-permissions)
 ──────────────────────────────────────────────────────────────────────────────────────────
 
 REPO-ROOT
@@ -222,7 +223,7 @@ funky-secure scan  ·  preset strict  ·  scope repo
 provenance  preset strict (funky-secure.config.json)  ·  quarantine not verified (machine
             excluded)  ·  machine excluded
 summary  0 errors · 0 warnings · 0 info · 8 passing · 4 skipped
-verdict  PASS (threshold: error)
+verdict  PASS (threshold: error · 4 rules not verified: package-manager-pin, quarantine, env-not-tracked, sensitive-ignored)
 ──────────────────────────────────────────────────────────────────────────────────────────
 
 REPO-ROOT
@@ -251,9 +252,10 @@ next     nothing to do: everything at or above the policy passes
 
 ```text
 funky-secure scan  ·  preset baseline  ·  scope repo
-provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine excluded
+provenance  preset baseline (default)  ·  quarantine not verified (machine excluded)  ·  machine
+            excluded
 summary  2 errors · 0 warnings · 0 info · 4 passing · 6 skipped
-verdict  FAIL (threshold: error)
+verdict  FAIL (threshold: error · 6 rules not verified: package-manager-pin, quarantine, exact-versions, ci-no-safety-overrides, pull-request-target, workflow-permissions)
 ──────────────────────────────────────────────────────────────────────────────────────────
 
 REPO-ROOT
@@ -335,8 +337,9 @@ happens.
 | Write | Target | Content |
 |---|---|---|
 | W1a | `pnpm-workspace.yaml` | `minimumReleaseAgeStrict: true` in the managed block: the gate flip (D-16) |
-| W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 4320` in the same block; `--preset strict` only |
-| W2 | `.gitignore` | the managed block with the six candidate paths of `sensitive-ignored` |
+| W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 1440`, or `4320` under `--preset strict`, in the same block: the age, always written (D-18, 0017) |
+| W1c | `pnpm-workspace.yaml` | `savePrefix: ''` in the same block: stops a later `pnpm add` from saving a caret (D-18) |
+| W2 | `.gitignore` | the managed block with the entries `sensitive-ignored` requires: `.env`, `.env.*`, `!.env*.example`, `*.pem`, `*.key`, `node_modules/`, and `.npmrc` unless the repository tracks a root `.npmrc` without a token |
 | W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing |
 | W4 | `funky-secure.config.json` | `{ "preset": "strict" }` so CI agrees with the run; `--preset strict` only |
 
@@ -457,25 +460,32 @@ An unknown id, two ids, or `--list` together with an id is a usage error (exit `
 
 ## Flags
 
-Every flag below is in the closed list of `src/cli.js`. A flag used with a command that does not
+Every flag below is in the closed list of `src/cli.js`, except `--version`, which is answered before
+a command is resolved. A flag used with a command that does not
 accept it is a usage error, never a silently ignored argument. Enumerated values are exact.
 
 | Flag | Accepted by | Values | Meaning |
 |---|---|---|---|
+| `--version` | every command (answered before the command is resolved) | boolean | print the installed version and exit `0` |
 | `--help` | every command | boolean | print the static help and exit `0` |
 | `--scope` | `scan` | `auto`, `repo`, `machine`, `all` | target scope; default `auto` |
 | `--preset` | `scan`, `init` | `baseline`, `strict`, `starter` | policy preset; default from config, else `baseline` |
-| `--format` | `scan`, `init`, `explain` | `human`, `json` | output format; default `human` |
+| `--format` | `scan`, `init`, `pin`, `explain` | `human`, `json` | output format; default `human` |
 | `--fail-on` | `scan` | `error`, `warn`, `info`, `none` | verdict threshold; default `error` |
+| `--require-verified` | `scan` | boolean | a skipped rule fails the verdict (RFC 0023) |
 | `--only` | `scan` | comma-separated rule ids | run only these rules; repeats accumulate |
 | `--ignore` | `scan` | comma-separated rule ids | never run these rules; repeats accumulate |
 | `--strict-probes` | `scan` | boolean | unavailable required probe becomes `error` |
 | `--with-timestamp` | `scan` | boolean | add `generatedAt` to the JSON report |
 | `--verbose` | `scan` | boolean | show rule ids, per-rule skip reasons and the machine binary path |
-| `--apply` | `init`, `migrate` | boolean | perform the write plan instead of only printing it |
-| `--allow-dirty` | `init`, `migrate` | boolean | allow writing over uncommitted target files |
+| `--apply` | `init`, `pin`, `migrate` | boolean | perform the write plan instead of only printing it |
+| `--allow-dirty` | `init`, `pin`, `migrate` | boolean | allow writing over uncommitted target files |
 | `--from` | `migrate` | `npm`, `yarn`, `auto` | declared origin; default `auto` |
 | `--list` | `explain` | boolean | list the catalog instead of explaining one rule |
+| `--install` | `skill` | boolean | write the shipped skill instead of printing it |
+| `--user` | `skill` | boolean | with `--install`: the home directory, not the worktree |
+| `--force` | `skill` | boolean | with `--install`: replace a differing copy |
+| `--keep` | `skill` | boolean | with `--install`: leave a differing copy alone |
 
 `--flag value` and `--flag=value` are both accepted. A boolean flag with a value, an unknown flag, a
 missing value, or a value outside its enum is a usage error naming the flag.
@@ -511,14 +521,14 @@ the determinism rules live there; in outline:
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.8" },
+  "tool": { "name": "funky-secure", "version": "0.9.0" },
   "scope": "all",
-  "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error" },
+  "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "error", "requireVerified": false },
   "provenance": {
-    "configPath": null,
+    "preset": "baseline",
     "presetSource": "default",
-    "machineIncluded": true,
-    "quarantineDeclaredIn": null
+    "quarantine": "not declared in this repository",
+    "machine": "included"
   },
   "targets": [],
   "summary": { "error": 0, "warn": 0, "info": 0, "pass": 0, "skip": 0, "verdict": "pass" },
@@ -536,7 +546,7 @@ Only `fail`, `skip` and `error` findings are serialized; passes are counted in `
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.8" },
+  "tool": { "name": "funky-secure", "version": "0.9.0" },
   "command": "init",
   "policy": { "preset": "baseline", "quarantineMinutes": 1440, "failOn": "none" },
   "plan": [
@@ -569,7 +579,7 @@ on stdout, where the plan was printed.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.8.8" },
+  "tool": { "name": "funky-secure", "version": "0.9.0" },
   "rules": [{ "id": "…", "title": "…", "friction": 0, "severity": { "baseline": "error", "strict": "error" }, "docs": "docs/rules/….md" }]
 }
 ```
@@ -604,7 +614,7 @@ repository; outside one, or with `--user`, it is the home directory.
 
 ```text
 $ funky-secure skill --install
-✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.8.8)
+✓  Installed  ·  .agents/skills/funky-secure/SKILL.md (0.9.0)
      commit it, so the repository carries the instructions its agents read
 ```
 
@@ -613,7 +623,7 @@ for "not run":
 
 ```text
 $ funky-secure skill --install
-–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.8.8)
+–  Current  ·  .agents/skills/funky-secure/SKILL.md (0.9.0)
      nothing to do: it already carries this exact version
 ```
 
@@ -623,30 +633,30 @@ whole point: "the bytes differ" is three different situations.
 ```text
 $ funky-secure skill --install < /dev/null          # an older copy is an upgrade
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.8.8 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md is version 0.3.0; this binary ships 0.9.0 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # same version, edited by hand
 funky-secure: pass --force to replace it, or --keep to leave it as it is
-reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.8 and stdin is not a terminal
+reason: cannot ask whether to replace .agents/skills/funky-secure/SKILL.md: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.9.0 and stdin is not a terminal
 ```
 
 ```text
 $ funky-secure skill --install < /dev/null          # a newer copy is not downgraded
 funky-secure: install the newer funky-secure to keep that version, or pass --force to downgrade the installed skill
-reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.8.8
+reason: refusing to replace .agents/skills/funky-secure/SKILL.md: it is version 9.0.0, and this binary ships 0.9.0
 ```
 
 With a terminal the command asks instead. The menu is numbered because a number is unambiguous on any
 keyboard, each line states what the answer does, and the default is visible and safe:
 
 ```text
-funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.8.8
+funky-secure skill: .agents/skills/funky-secure/SKILL.md carries local changes on version 0.9.0
 funky-secure skill: replacing it discards whatever is there now
 
   1  keep it as it is, and change nothing
-  2  replace it with version 0.8.8
+  2  replace it with version 0.9.0
 
 funky-secure skill: choose 1 or 2 [1]:
 ```

@@ -31,8 +31,11 @@ export const CONFIG_RELATIVE = 'funky-secure.config.json';
 export const GITIGNORE_ENTRIES = Object.freeze([
   '.env',
   '.env.*',
-  '!.env.example',
-  '!.env.test.example',
+  // The template family, negated as a family. Enumerating spellings twice (`.env.example` and
+  // `.env.test.example`) left `.env.local.example` matching `.env.*` and therefore ignored, so a repository
+  // that ran `init --apply` could not add a `.env.production.example` afterwards — the write path
+  // contradicting the rule that accepts the family (S3, 0024).
+  '!.env*.example',
   '*.pem',
   '*.key',
   // The install step of the path creates it, so ignoring it is the tool closing its own loop rather

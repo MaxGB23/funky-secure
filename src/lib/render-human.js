@@ -307,6 +307,52 @@ function summaryLine(summary) {
 }
 
 /**
+ * The skips the report counted in the verdict, said in full: rule, file when there is one, and the
+ * reason the prose carries. One line per rule, because a rule that skipped forty files skipped for one
+ * reason and repeating it forty times is how a reader learns to scroll past it (S12, 0024).
+ *
+ * A skip already rendered inside a target block is not repeated: those blocks exist precisely to attach
+ * the reason to the file it belongs to.
+ *
+ * @param {object} report
+ * @param {Array<object>} catalog
+ * @param {{ color: boolean, labels: Map<string, string> }} options
+ * @param {Set<object>} renderedSkips the skips a target block already printed with their file
+ * @returns {string[]}
+ */
+function unverifiedLines(report, catalog, options, renderedSkips = new Set()) {
+  const skips = report.findings.filter(
+    (finding) => finding.status === 'skip' && !renderedSkips.has(finding),
+  );
+  if (skips.length === 0) return [];
+
+  const byRule = new Map();
+  for (const finding of skips) {
+    const entry = byRule.get(finding.rule) ?? { label: null, messages: new Set(), paths: new Set() };
+    entry.messages.add(finding.message);
+    if (finding.path) entry.paths.add(finding.path);
+    byRule.set(finding.rule, entry);
+  }
+  for (const rule of catalog) {
+    const entry = byRule.get(rule.id);
+    if (entry !== undefined) entry.label = rule.label ?? rule.id;
+  }
+
+  const indent = ' '.repeat(LABEL_WIDTH);
+  const lines = [`${'not verified'.padEnd(LABEL_WIDTH)}${plural(byRule.size, 'rule', 'rules')} did not answer`];
+  for (const [rule, entry] of byRule) {
+    const label = entry.label ?? rule;
+    const reason = [...entry.messages].join(' · ');
+    const scope = entry.paths.size > 0 ? ` (${plural(entry.paths.size, 'file', 'files')})` : '';
+    lines.push(`${indent}–  ${label}${scope}`);
+    for (const line of wrap(reason, WIDTH - LABEL_WIDTH - 3)) {
+      lines.push(`${indent}   ${line}`);
+    }
+  }
+  return [...lines, ''];
+}
+
+/**
  * The verdict, with the number of rules it did not verify (RFC 10.3, S12).
  *
  * `PASS` alone was read as "checked": a repository scanned with `--scope repo` printed a pass while
@@ -324,16 +370,21 @@ function summaryLine(summary) {
  */
 function verdictLine(summary, failOn, color, unverifiedIds = []) {
   const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
-  // The count alone left the reader unable to learn which rule it was: the refused-lockfile skip never
-  // reached the body either, so "1 rule not verified" was the whole story (0022). The ids ride the
-  // verdict, where a reader and a CI log both look.
+  const gutter = 'verdict'.padEnd(LABEL_WIDTH);
+  const head = `${gutter}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${failOn}`;
+  if (summary.skip === 0) return `${head})`;
+
+  const count = `${plural(summary.skip, 'rule', 'rules')} not verified`;
   const named = unverifiedIds.length > 0 ? `: ${unverifiedIds.join(', ')}` : '';
-  const unverified =
-    summary.skip > 0 ? ` · ${plural(summary.skip, 'rule', 'rules')} not verified${named}` : '';
-  return (
-    `${'verdict'.padEnd(LABEL_WIDTH)}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)}` +
-    ` (threshold: ${failOn}${unverified})`
-  );
+  const oneLine = `${head} · ${count}${named})`;
+  if (oneLine.length <= WIDTH) return oneLine;
+
+  // Naming the unverified rules made this line reach 207 columns on a repository with six of them, and
+  // 10.3 bounds every rendered line at 96. The gutter continues, the sentence wraps, and the closing
+  // parenthesis travels with the last id (0024).
+  const indent = ' '.repeat(LABEL_WIDTH);
+  const body = wrap(`${unverifiedIds.join(', ')})`, WIDTH - LABEL_WIDTH);
+  return [`${head} · ${count}:`, ...body.map((line) => indent + line)].join('\n');
 }
 
 /**
@@ -486,15 +537,24 @@ export function renderHuman(report, { color = false, verbose = false, off } = {}
   if (off !== undefined) lines.push(...notRunLines({ off, catalog: defaultCatalog }));
   lines.push(SEPARATOR, '');
 
+  /** @type {Set<object>} */
+  const renderedSkips = new Set();
   for (const kind of TARGET_ORDER) {
     for (const block of blocksFor(kind, targets, visible, passing)) {
       const rendered = renderBlock(block, options);
       if (rendered.length === 0) continue;
+      for (const finding of block.skipped ?? []) renderedSkips.add(finding);
       lines.push(...rendered, '');
     }
   }
 
   if (verbose && passing.length > 0) lines.push(...passingIds(passing), '');
+
+  // S12 (0024): a rule that could not verify something names itself and its reason here, whether or not
+  // a target block had room for it. The verdict counts the unverified rules; without this section the
+  // count was all a reader got, and `exact-versions` refusing a lockfile shape reached neither the body
+  // nor `--verbose` because its finding has a target and no path, so no block was ever built for it.
+  lines.push(...unverifiedLines(report, defaultCatalog, options, renderedSkips));
 
   lines.push(...nextBlock(report, defaultCatalog));
 

@@ -6,7 +6,7 @@
  */
 
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative as relativePath } from 'node:path';
 
 import { currentBranch, ignoredPaths, trackedFiles } from './git.js';
 
@@ -36,6 +36,13 @@ export const PROBED_IGNORE_PATHS = [...IGNORE_CANDIDATES, 'pnpm-lock.yaml'];
 export const FOREIGN_LOCKFILES = ['package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 export const BOT_CONFIGS = ['.github/dependabot.yml', '.github/renovate.json'];
 export const EDITOR_FILES = ['.vscode/tasks.json', '.claude/settings.json'];
+
+/**
+ * The metadata filenames of a GitHub action, collected under `.github/actions/**` (RFC 7.1, S11).
+ * Both spellings are read because GitHub reads either one for the same action; supporting only
+ * `.yml` would make an action written as `action.yaml` invisible for no reason the user could see.
+ */
+export const ACTION_METADATA = ['action.yml', 'action.yaml'];
 
 /**
  * @param {string} version
@@ -261,6 +268,26 @@ export async function repoFacts({ collector, cwd, root = null }) {
   }
   workflowFiles.sort((a, b) => a.path.localeCompare(b.path));
 
+  // A composite action carries the same `steps:` a workflow job does, and its steps run in every
+  // workflow that references it, so `.github/actions/**/action.y(a)ml` is CI too (S11). Only the
+  // metadata file is read: a step's `uses:` never appears anywhere else in an action directory.
+  const actionFiles = [];
+  const actionsRoot = join(at, '.github', 'actions');
+  try {
+    const entries = await readdir(actionsRoot, { recursive: true, withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !ACTION_METADATA.includes(entry.name)) continue;
+      const dir = entry.parentPath ?? entry.path;
+      const nested = relativePath(actionsRoot, join(dir, entry.name)).replaceAll('\\', '/');
+      const file = await readTextFile(collector, join(actionsRoot, nested));
+      if (file === null) continue;
+      actionFiles.push({ path: `.github/actions/${nested}`, text: file.text });
+    }
+  } catch {
+    // no actions directory: no composite action to read
+  }
+  actionFiles.sort((a, b) => a.path.localeCompare(b.path));
+
   const botFiles = [];
   for (const path of BOT_CONFIGS) {
     if (await exists(join(at, path))) botFiles.push(path);
@@ -274,6 +301,7 @@ export async function repoFacts({ collector, cwd, root = null }) {
   if (inGit || packageJson !== null) targets.push({ kind: 'repo-root', path: '.' });
   targets.push(...importerTargets);
   if (workflowFiles.length > 0) targets.push({ kind: 'ci', path: '.github/workflows' });
+  if (actionFiles.length > 0) targets.push({ kind: 'ci', path: '.github/actions' });
   if (editorFiles.length > 0) targets.push({ kind: 'editor', path: '.' });
 
   const facts = {
@@ -298,6 +326,7 @@ export async function repoFacts({ collector, cwd, root = null }) {
     },
     importers,
     workflows: workflowFiles,
+    actionFiles,
     botFiles,
     editorFiles,
     skippedGlobs,

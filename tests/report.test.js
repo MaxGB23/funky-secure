@@ -326,6 +326,62 @@ function nextBlock(report) {
   return start === -1 ? [] : lines.slice(start);
 }
 
+test('a skip with no target block names itself and its reason (0024, S12)', () => {
+  // The exact-versions refusal is a finding with a target and no path: no target block is built for it,
+  // so before this section its reason reached neither the body nor --verbose while the verdict counted
+  // it. A count is not a reason.
+  const reason = 'skipped: top-level "overrides" section is outside the supported importer subset (line 7)';
+  const text = renderHuman(
+    reportWith([
+      finding({ rule: 'exact-versions', status: 'skip', target: 'importer', path: undefined, message: reason }),
+    ]),
+  );
+
+  assert.match(text, /not verified/);
+  assert.match(text, /1 rule did not answer/);
+  assert.match(text, /Dependency ranges/, 'the rule is named by its label');
+  assert.ok(text.includes('overrides'), 'and so is the reason it could not read the lockfile');
+});
+
+test('a skip a target block already printed is not repeated (0024, S12)', () => {
+  const text = renderHuman(reportWith([finding({ status: 'skip', message: 'a single reason' })]));
+
+  assert.equal(text.split('a single reason').length - 1, 1, 'said once, where the file is');
+});
+
+test('no rendered line exceeds 96 columns when many rules did not verify (10.3, 0024)', () => {
+  // Naming the unverified rules made the verdict line reach 207 columns on a repository with eight of
+  // them, which broke the bound 10.3 states. The gutter continues and the sentence wraps.
+  const ids = [
+    'package-manager-pin',
+    'quarantine',
+    'env-not-tracked',
+    'sensitive-ignored',
+    'exact-versions',
+    'ci-no-safety-overrides',
+    'pull-request-target',
+    'workflow-permissions',
+  ];
+  const text = renderHuman(
+    reportWith(
+      ids.map((rule) =>
+        finding({
+          rule,
+          status: 'skip',
+          target: 'importer',
+          path: undefined,
+          message: 'skipped: a reason long enough to need wrapping beside the label in a narrow column',
+        }),
+      ),
+    ),
+  );
+
+  for (const line of text.split('\n')) {
+    assert.ok(line.length <= 96, `too long (${line.length}): ${line}`);
+  }
+  assert.match(text, /8 rules not verified/);
+});
+
 function reportWith(findings, failOn = 'error') {
   return buildReport({
     scope: 'repo',
