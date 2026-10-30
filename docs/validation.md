@@ -10,7 +10,7 @@ number becomes wrong at the next release, and the suite itself is the authority 
 
 | Claim | How | Where |
 |---|---|---|
-521 tests, 520 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
+557 tests, 556 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
 The repository passes its own audit | `node bin/funky-secure.js scan --scope repo --fail-on warn`, exit 0 | CI |
 Every documented flag is accepted by the command the document names | `tests/docs-contract.test.js` | documentation contract |
 The spec stays a true slice of the record, and every amendment names a shipped record | `tests/drift.test.js` | the drift gate |
@@ -67,13 +67,18 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `pnpm import` reads a **berry** `yarn.lock` offline and keeps the pin | pnpm 12.3.4, a `__metadata: version: 8` lockfile, `lodash` `4.17.21`: 23 ms, and the new `pnpm-lock.yaml` records `lodash@4.17.21` |
 pnpm **ignores `workspaces` in `package.json`**, and an empty `pnpm-workspace.yaml` changes nothing | four trees: no block, empty block, managed keys only — one importer each; only `packages:` produces three importers and the `workspace:^` link. So creating the file never degrades a workspace pnpm already had, and it never transfers an npm or yarn one either |
 pnpm 10 reads the block | pnpm 10.16.1 and 12.3.4 both answer `1440`, `4320` and `~` from `pnpm-workspace.yaml`, and `undefined` outside it; `ignoreScripts` answers `true` |
+`devEngines.packageManager` is a guard npm enforces and `packageManager` is not | npm 11.13.0 exits 1 `EBADDEVENGINES` before the install and writes no `package-lock.json`; `--force` downgrades it to a warning and writes one; a machine-level `pmOnFail` overrides it on pnpm's side | `rfcs/0030-the-guard-both-managers-read/evidence/onfail-and-autoswitch.md` |
+The `onFail` value is not a free choice | with `onFail: "error"` pnpm 11.28.10 refuses to re-execute as the pinned 12.3.4 and exits 1, while the same manifest with no `onFail` — and with no `devEngines` at all — exits 0 having switched; npm's default is already `error`, and `warn` makes it write the lockfile | same evidence file |
+The manifest writer loses nothing it was not asked to change | 28 manifest shapes (indentation, tabs, CRLF, no trailing newline, `devEngines.runtime`, uninterpretable declarations) compared item by item against the base commit: the pin's item is identical in state, content, reason and digest, and every key survives | differential against `git archive`, not committed |
+The new state severity changes no other rule | 13 findings across 8 rules byte-identical to the base commit, including their severities; the three presets' severity maps, `failOn` and `active` identical; the standalone-lockfile human output byte-identical | differential against `git archive`, not committed |
 
 ## Not verified — deliberately, and why
 
 | Not verified | Why, and what it would take |
 |---|---|
 GitHub Actions behaviour: that a correct workflow really runs green, and that `permissions: contents: read` really produces a 403 | Needs a runner and a repository. The rules were verified statically against 11 real workflows |
-Linux and macOS | Everything above ran on Windows. The code has no platform branch, which is not the same as evidence |
+Linux | the suite, the self-scan and the drift gate run on `ubuntu-24.04` in the CI matrix, at the engines floor and the Active LTS, and `tests/ci-coverage.test.js` fails if the label leaves the matrix. A field loop has never run there: every field round was Windows |
+macOS | never executed, locally or in CI. The code branches on `win32` against POSIX, so macOS runs the path Ubuntu exercises — an argument, not evidence |
 The published tarball on another machine | The tarball was installed and exercised locally only |
 The correctness of every remediation that needs an install (`pnpm install --lockfile-only`, `pnpm pkg set`) | Following one would change a repository; the commands were verified for shape, not for effect |
 
