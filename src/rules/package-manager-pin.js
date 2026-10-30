@@ -15,6 +15,19 @@ import {
 const DOC = 'docs/rules/package-manager-pin.md';
 const PATH = 'package.json';
 
+/**
+ * Whether the project pins the manager it runs with, through `devEngines.packageManager`.
+ *
+ * @param {object} ctx resolved context
+ * @returns {boolean}
+ */
+function managesOwnVersion(ctx) {
+  const json = ctx.repo?.files?.packageJson?.json ?? null;
+  if (json === null || typeof json !== 'object') return false;
+  const engine = json.devEngines?.packageManager;
+  return engine !== null && typeof engine === 'object' && engine.name === 'pnpm';
+}
+
 function declaredPin(ctx) {
   const json = ctx.repo?.files?.packageJson?.json ?? null;
   if (json === null || typeof json !== 'object' || Array.isArray(json)) return null;
@@ -114,6 +127,24 @@ export default {
     }
 
     if (declared !== `pnpm@${observed}`) {
+      // A project that declares devEngines.packageManager answers with the version it manages: from its
+      // own directory it reported 12.16.0 while the binary on PATH was 12.3.4. The version probe runs
+      // outside the repository now (0019), so it sees the PATH binary, and the honest finding is that
+      // the machine cannot verify this pin — never a conflict whose remediation tells the user to
+      // downgrade the project to whatever happens to be installed here (0020).
+      if (managesOwnVersion(ctx)) {
+        return [
+          {
+            status: 'skip',
+            code: 'self-managed-pin',
+            path: PATH,
+            message: `package.json declares ${declared} and manages its own pnpm through devEngines.packageManager, so the pnpm answering (pnpm@${observed}) does not describe it; run pnpm --version inside the project to confirm the pin`,
+            evidence,
+            remediation: { kind: 'none' },
+          },
+        ];
+      }
+
       return [
         {
           status: 'fail',
