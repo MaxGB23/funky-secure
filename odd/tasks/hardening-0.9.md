@@ -59,3 +59,12 @@ on 6 411 files.
 
 **L5** — decision, exit codes: the spec moves to 3, not the code, because `3` ("decided not to act") and
 `2` ("could not answer") are different answers and 0008 established that split.
+
+**L6** — decision, delivery: this ships as **one** release of 3 719 authored lines rather than the three
+planned (0.8.9 / 0.9.0 / 0.9.1). Three writers worked on disjoint surfaces in one tree, so the changes
+interleave inside shared test files (`tests/cli.test.js`, `tests/report.test.js`, `tests/init.test.js`):
+splitting them now would produce commits that neither compile nor pass alone, which is worse for a
+reader than one large slice that does. The trade is recorded here rather than hidden: a reviewer who
+needs smaller units should review by file group — the parser (`workflows.js`, `targets.js`), the reader
+(`lockfile.js`, `exact-versions.js`), the rules (`package-manager-pin.js`, `env-not-tracked.js`), the
+renderer (`render-human.js`), and the documentation set with its contract test.
