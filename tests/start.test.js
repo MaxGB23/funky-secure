@@ -204,7 +204,7 @@ const SCAN_STEP = 'funky-secure scan --preset starter';
 const BASELINE_COMMIT = 'chore: baseline before funky-secure';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
-test('an empty directory is five steps, numbered from one', async (t) => {
+test('an empty directory is six steps, numbered from one', async (t) => {
   const dir = scratch(t);
   const { code, stdout } = await start(dir, { inGit: false });
 
@@ -213,8 +213,9 @@ test('an empty directory is five steps, numbered from one', async (t) => {
     '  1  git init',
     '  2  pnpm init',
     '  3  funky-secure init --apply  plan the 1 write (nothing is written)',
-    `  4  ${ADD_STEP}`,
-    `  5  ${SCAN_STEP}`,
+    `  4  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  5  ${ADD_STEP}`,
+    `  6  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes(dir), false, 'no absolute path reaches the steps');
 });
@@ -227,8 +228,9 @@ test('a repository without a manifest starts at pnpm init', async (t) => {
   assert.deepEqual(stepLines(stdout), [
     '  1  pnpm init',
     '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  3  ${ADD_STEP}`,
-    `  4  ${SCAN_STEP}`,
+    `  3  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  4  ${ADD_STEP}`,
+    `  5  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes('git init'), false, 'it is already a repository');
 });
@@ -240,7 +242,8 @@ test('a repository with a plan to write names init --apply and how many writes',
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  2  ${SCAN_STEP}`,
+    `  2  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    `  3  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile is committed');
 });
@@ -320,11 +323,13 @@ test('an npm-generated project installs once, and the gate exists before that in
   assert.equal(code, 0, 'a second package manager is guidance, not a refusal');
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    '  2  pnpm install',
-    '  3  funky-secure migrate --apply',
-    `  4  ${SCAN_STEP}`,
+    `  2  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    '  3  pnpm install',
+    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  5  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    `  6  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6], 'the numbering stays continuous');
   assert.ok(
     stdout.indexOf('init --apply') < stdout.indexOf('pnpm install'),
     'the gate is written before the resolve that reads it',
@@ -334,7 +339,11 @@ test('an npm-generated project installs once, and the gate exists before that in
     'migrate needs pnpm-lock.yaml, and pnpm-lock.yaml is what the install writes',
   );
   assert.equal(stdout.includes(ADD_STEP), false, 'a migration is not the place to add a dependency');
-  assert.equal(whyBlock(stdout).length, 3, 'why this order grows by one line, never two');
+  assert.equal(
+    whyBlock(stdout).filter((line) => line.includes('migrate')).length,
+    1,
+    'the migration reason appears once, never twice',
+  );
 });
 
 test('an uncommitted repository is told to commit before it is told to apply', async (t) => {
@@ -350,7 +359,9 @@ test('an uncommitted repository is told to commit before it is told to apply', a
   assert.deepEqual(stepLines(stdout), [
     `  1  git add -A && git commit -m "${BASELINE_COMMIT}"`,
     '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  3  ${SCAN_STEP}`,
+    `  3  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    `  5  ${SCAN_STEP}`,
   ]);
   assert.ok(
     stdout.indexOf('git commit') < stdout.indexOf('init --apply'),
@@ -358,12 +369,19 @@ test('an uncommitted repository is told to commit before it is told to apply', a
   );
 });
 
-test('a committed repository is not told to commit', async (t) => {
+test('a clean tree commits after the writes, because the writes are what dirty it', async (t) => {
+  // The other half of the commit rule: `init --apply` refuses a tree carrying someone else's work, and
+  // it makes exactly that state itself. Without the step after it, the next writer — `pin` — refuses,
+  // which is the friction a create-next-app run reported (0015).
   const dir = scratch(t);
   generatedBy(dir, { lockfile: 'pnpm-lock.yaml' });
   const { stdout } = await start(dir);
 
-  assert.equal(stdout.includes('git commit'), false, 'a clean tree needs no commit step');
+  assert.ok(stdout.includes('git commit'), 'the writes dirty the tree, so a commit step is due');
+  assert.ok(
+    stdout.indexOf('init --apply') < stdout.indexOf('git commit'),
+    'the commit follows the writes it covers, never precedes them on a clean tree',
+  );
 });
 
 test('a pnpm-generated project is told neither to migrate nor to add', async (t) => {
@@ -374,12 +392,23 @@ test('a pnpm-generated project is told neither to migrate nor to add', async (t)
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
-    `  2  ${SCAN_STEP}`,
+    `  2  git add -A && git commit -m "${BASELINE_COMMIT}"`,
+    '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    `  4  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4], 'the numbering stays continuous');
   assert.equal(stdout.includes('funky-secure migrate'), false, 'no foreign lockfile to leave behind');
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile the generator wrote is the one to keep');
-  assert.equal(whyBlock(stdout).length, 2, 'no migration means no extra reason');
+  assert.equal(
+    whyBlock(stdout).filter((line) => line.includes('migrate')).length,
+    0,
+    'no migration means no migration reason',
+  );
+  assert.equal(
+    whyBlock(stdout).filter((line) => line.includes('pin')).length,
+    1,
+    'the pin step carries its own reason',
+  );
 });
 
 test('renders the same bytes twice over the same state, in every state', async (t) => {

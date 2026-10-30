@@ -45,6 +45,21 @@ const COMMIT_MESSAGE = 'chore: baseline before funky-secure';
 const COMMIT_STEP = `git add -A && git commit -m "${COMMIT_MESSAGE}"`;
 
 /**
+ * Why the same step appears twice, and what each appearance is for.
+ *
+ * One before `init --apply`, because the writer refuses to land on work someone else left uncommitted.
+ * One after it, because the writer has just made exactly that state, and the next writer — `pin` —
+ * refuses it too. `start` promised a path whose own steps could not be completed in order: a
+ * `create-next-app` manifest carries carets, `pin` is the verb that clears them, and running `start`
+ * literally left the reader with warnings and no route (0015).
+ */
+const WHY_COMMIT_AFTER =
+  'a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run';
+/** The one line `pin` adds: the block governs the next add, and something has to govern the ranges already here. */
+const WHY_PIN =
+  'the workspace block governs the dependencies added next, and pin is what clears the ranges already in the manifest';
+
+/**
  * Two lines of cause, printed on every run. The order is the whole point of the command: without
  * them the steps read as a list of commands rather than a sequence.
  */
@@ -80,7 +95,7 @@ function foreignLockfiles(repo) {
  * @param {{ repo: object | null, writes: number }} state
  * @returns {string[]}
  */
-function pendingSteps({ repo, writes, uncommitted = false }) {
+function pendingSteps({ repo, writes, uncommitted = false, pins = 0 }) {
   const present = Array.isArray(repo?.present) ? repo.present : [];
   const foreign = foreignLockfiles(repo);
   const steps = [];
@@ -98,14 +113,27 @@ function pendingSteps({ repo, writes, uncommitted = false }) {
     steps.push(
       `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')} (nothing is written)`,
     );
+    // `init --apply` leaves the manifest dirty, and `pin --apply` refuses that state.
+    steps.push(COMMIT_STEP);
   }
   if (foreign.length > 0) {
     steps.push('pnpm install');
-    steps.push('funky-secure migrate --apply');
   }
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
     steps.push('pnpm add <your first dependency>');
+  }
+  // The ranges already in the manifest are the second debt: the workspace block governs the next
+  // `pnpm add`, and only `pin` touches what is in `package.json` today.
+  if (pins > 0) {
+    steps.push(
+      `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} this repository already has`,
+    );
+  }
+  if (foreign.length > 0) {
+    steps.push(
+      'funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    );
   }
 
   return steps;
@@ -152,6 +180,9 @@ function renderStart({ off, catalog, pending, migrate }) {
 
     // `why this order` explains an order, so it is printed only when there is one to explain.
     lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
+    // Each reason is printed only when its step is, so the block never argues for a step that is absent.
+    if (pending.some((step) => step.includes('git commit'))) lines.push(`  ${WHY_COMMIT_AFTER}`);
+    if (pending.some((step) => step.includes('pin --apply'))) lines.push(`  ${WHY_PIN}`);
     if (migrate) lines.push(`  ${WHY_MIGRATE_AFTER}`);
   }
 
@@ -193,12 +224,15 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
   // A real run has no injected collector: `start` now asks git one question, so it needs the probe.
   const probe = collector ?? createCollector();
   const uncommitted = writes > 0 && (await hasUncommitted({ plan, ctx, collector: probe }));
+  // The ranges the manifest already carries: `start` is guidance, so it names the verb that clears them
+  // instead of counting them again. A finding is enough — the count is what the step says.
+  const floating = (report.findings ?? []).filter((finding) => finding.code === 'floating-range').length;
 
   // The honesty line describes the preset this command recommends, not the repository's own policy:
   // S4's last step runs `scan --preset starter`, so that is the coverage the reader will get.
   const starter = resolvePolicy({ catalog, presetFromFlag: START_PRESET, failOn: 'none' });
 
-  const pending = pendingSteps({ repo: ctx.repo, writes, uncommitted });
+  const pending = pendingSteps({ repo: ctx.repo, writes, uncommitted, pins: floating });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
   stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending, migrate }));
   return 0;
