@@ -104,6 +104,8 @@ number keeps resolving.
 | 8 | [`0027`](../../rfcs/0027-the-adversary-comes-in/rfc.md) | 8.2 R5: an unsupported lockfile shape names `pnpm-lock.yaml` and keeps its line, a document cut inside a block is a refused shape, and a `packages:` entry outside the root is refused and reported |
 | 11.7 | [`0028`](../../rfcs/0028-the-commit-names-the-pin/rfc.md) | 11.7: the pin gets a commit of its own after the resolve that re-syncs the lockfile, and the closing commit stages no manifest |
 | 8 | [`0029`](../../rfcs/0029-two-trees-are-not-a-warning/rfc.md) | 8.2 R3: `foreign-lockfile` is `error` when a foreign lockfile coexists with `pnpm-lock.yaml` and stays `warn` when it stands alone, in both `baseline` and `strict`, and its message no longer changes register with the state |
+| 8 | [`0030`](../../rfcs/0030-the-guard-both-managers-read/rfc.md) | 8.2 R1: three states — the `devEngines.packageManager` the tool writes beside the pin is verified, and only a declaration that differs from the pin stays 0020's `self-managed-pin` skip |
+| 11 | [`0030`](../../rfcs/0030-the-guard-both-managers-read/rfc.md) | 11.2: writer W3b, so `init --apply` writes the `devEngines.packageManager` npm enforces beside the `packageManager` pin W3 writes, without `onFail` |
 
 ## Changing the contract
 

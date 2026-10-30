@@ -42,6 +42,14 @@ value that names pnpm is not evidence that the repository is on another manager,
 `pin-unversioned`. Its fix is manual only because `init --apply` never rewrites a declaration it
 finds; that is a property of the remediation, not of the verdict.
 
+`devEngines.packageManager` — the field npm enforces, where `packageManager` is the one npm ignores —
+has three states, and this page names all three (0030). Declared and **equal to the pin** is a fact
+this tool owns: `init --apply` writes the pin as W3 and the field as W3b in one plan (11.2), so the
+rule compares the pin with the answering pnpm instead of skipping it — a `pass` when they match, the
+same conflict as any other pin when they do not. Declared and **different** is `skip` with
+`self-managed-pin`, because the project manages its own pnpm and the machine's pnpm is not evidence
+about it. **Absent** is unchanged: the pin alone is the declaration, and nothing about it is skipped.
+
 An unverifiable pin is not a wrong pin, so an unavailable version probe is a skip rather than a
 failure; under `--strict-probes` the engine turns that skip into an error. A `--scope repo` scan
 never probes the machine, so its skip is an out-of-scope fact and is not reported as an unavailable
@@ -89,8 +97,17 @@ The executable path is evidence, not message text: a report body never carries a
 
 ## Limits
 
-The rule reads one field of one file. It deliberately does not read corepack state, does not resolve
+The rule reads two fields of one file. It deliberately does not read corepack state, does not resolve
 a version against a registry, does not inspect the lockfile and does not repair a conflicting pin.
+
+**The field is a guard, not a wall.** `npm install --force` downgrades npm's check to a warning and
+writes `package-lock.json`; a machine-level `pmOnFail`, or `--pm-on-fail` on the command line,
+overrides the check on pnpm's side. npm 11.13.0 is the only version measured, and yarn and bun were
+not measured at all, so what those managers do with the field is unknown rather than safe. On pnpm 11
+the first resolve after the field appears records a `packageManagerDependencies` block in
+`pnpm-lock.yaml`, so `--frozen-lockfile` fails until that resolve has run once: the printed path of
+`start` already runs it, and a repository that ran `init --apply` alone needs one `pnpm install`
+before CI is green (0030).
 
 One failure is not about the pin: a manifest the rule cannot interpret is reported in its own words,
 whatever the scope, because no machine fact makes a file readable. Every other row above is reached
