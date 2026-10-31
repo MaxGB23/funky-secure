@@ -106,6 +106,8 @@ number keeps resolving.
 | 8 | [`0029`](../../rfcs/0029-two-trees-are-not-a-warning/rfc.md) | 8.2 R3: `foreign-lockfile` is `error` when a foreign lockfile coexists with `pnpm-lock.yaml` and stays `warn` when it stands alone, in both `baseline` and `strict`, and its message no longer changes register with the state |
 | 8 | [`0030`](../../rfcs/0030-the-guard-both-managers-read/rfc.md) | 8.2 R1: three states — the `devEngines.packageManager` the tool writes beside the pin is verified, and only a declaration that differs from the pin stays 0020's `self-managed-pin` skip |
 | 11 | [`0030`](../../rfcs/0030-the-guard-both-managers-read/rfc.md) | 11.2: writer W3b, so `init --apply` writes the `devEngines.packageManager` npm enforces beside the `packageManager` pin W3 writes, without `onFail` |
+| 14 | [`0032`](../../rfcs/0032-stage-only-release/rfc.md) | 14.1: the packed set stated instead of implied — `docs/rules/` mandatory because `explain` names those pages, the development record kept in the repository, and the README image published because npm renders it |
+| 17 | [`0032`](../../rfcs/0032-stage-only-release/rfc.md) | 17.2 and 17.3: a trusted publisher granted `npm stage publish` only, the tag stages instead of publishing, approval by a human with 2FA, and the first version bootstrapped off a staged placeholder instead of an out-of-band `npm publish` |
 
 ## Changing the contract
 

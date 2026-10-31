@@ -1,8 +1,8 @@
 name: release
 
 # Publication is reachable only from a version tag (RFC 17.3). Never add `pull_request` or a branch
-# to this trigger: a pull request that can reach the publish job is the defect this workflow exists
-# to prevent. `tests/release-workflow.test.js` asserts that shape.
+# to this trigger: a pull request that can reach the staging job is the defect this workflow exists to
+# prevent. `tests/release-workflow.test.js` asserts that shape.
 on:
   push:
     tags: ['v*']
@@ -28,9 +28,43 @@ jobs:
           node-version: 24
           check-latest: true
           registry-url: https://registry.npmjs.org
+      # The npm bundled with Node 24.16 is 11.13.0, and `npm stage` does not exist before 11.15.0: the
+      # staging step below fails as an unknown command without this explicit upgrade. The floor is the
+      # one the delivery contract names (17.2), and `^` keeps it inside npm 11.
+      - name: install the npm that can stage
+        run: npm install --global npm@^11.15.0
       - name: the tag must name the package version
         run: node scripts/release-guard.js --tag "$GITHUB_REF_NAME"
-      # `npm publish` runs `prepublishOnly` first: the suite, the drift gate, the self-scan and the
-      # packed-file check. There is no flag that skips it and no long-lived token to publish with.
-      - name: publish with provenance over trusted publishing
-        run: npm publish --provenance --access public
+      # Staging is not publication. `npm stage publish` is npm's own publish command with staging on,
+      # so `prepublishOnly` still runs first: the suite, the drift gate, the self-scan, the packed-file
+      # contract and the pack smoke test. This job holds no credential that can approve the candidate.
+      - name: stage the version and report the stage id
+        # Approval happens after this job ends and needs 2FA, so the id has to leave with the run:
+        # `npm stage list` is the only other way to find it (17.3). `--json` carries `stageId`; in the
+        # human output the id is only prose. No `--provenance`: whether the registry attests is now the
+        # registry's decision, and this contract promises no badge until one is measured.
+        run: |
+          set -euo pipefail
+          report="${RUNNER_TEMP}/stage-publish.json"
+          npm stage publish --access public --json > "$report"
+          node -e '
+            const { appendFileSync, readFileSync } = require("node:fs");
+            const staged = JSON.parse(readFileSync(process.argv[1], "utf8"));
+            const id = staged.stageId;
+            if (typeof id !== "string" || id === "") {
+              console.error("release: npm reported no stageId");
+              process.exit(1);
+            }
+            const name = staged.name ?? "funky-secure";
+            const version = staged.version ?? "unknown";
+            const summary = [
+              `## ${name}@${version} is staged`,
+              "",
+              `Stage id: \`${id}\``,
+              "",
+              `Review it with \`npm stage list\`, then approve it with 2FA: \`npm stage approve ${id}\``,
+              "",
+            ].join("\n");
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+            console.log(`staged ${name}@${version} with id ${id}`);
+          ' "$report"

@@ -11,9 +11,13 @@
   "files": [
     "bin/",
     "src/",
-    "docs/",
     "skills/",
-    "README.md",
+    "docs/cli.md",
+    "docs/guide.md",
+    "docs/concept.md",
+    "docs/rules/",
+    "docs/images/diagram.jpg",
+    "./README.md",
     "LICENSE"
   ],
   "engines": {
@@ -41,7 +45,10 @@
       "skills"
     ]
   },
-  "repository": "git+https://github.com/MaxGB23/funky-secure.git",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaxGB23/funky-secure.git"
+  },
   "homepage": "https://github.com/MaxGB23/funky-secure#readme",
   "bugs": {
     "url": "https://github.com/MaxGB23/funky-secure/issues"
