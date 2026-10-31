@@ -76,7 +76,7 @@ npx funky-secure init --apply   # perform exactly that plan
 
 `npx` is deliberate and it is the only place it appears: the quick start cannot assume pnpm, because
 installing pnpm is one of the steps it is about to print. Once pnpm is there, bring the auditor the
-same way as the dependencies it audits — `pnpm dlx funky-secure@0.9.2` — and in CI pin it in your
+same way as the dependencies it audits — `pnpm dlx funky-secure@0.10.0` — and in CI pin it in your
 lockfile instead, as [`docs/guide.md`](docs/guide.md) shows.
 
 `pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the auditor needs
