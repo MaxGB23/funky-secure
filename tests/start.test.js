@@ -853,3 +853,87 @@ test('a printed writer earns one line about what to read if it refuses, and no w
     'a repository with no writer on the list gets no line about refusing one',
   );
 });
+
+/** The lockfile a pnpm repository that already resolved its ranges carries. @param {string} dir */
+function writePnpmLock(dir) {
+  writeFileSync(
+    join(dir, 'pnpm-lock.yaml'),
+    `lockfileVersion: '9.0'
+
+importers:
+  .:
+    dependencies:
+      next:
+        specifier: ^15.5.4
+        version: 15.5.4(react@19.2.0)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.0
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.0(react@19.2.0)
+
+packages:
+  next@15.5.4:
+    resolution: {integrity: sha512-abc}
+  react@19.2.0:
+    resolution: {integrity: sha512-def}
+  react-dom@19.2.0:
+    resolution: {integrity: sha512-ghi}
+`,
+  );
+}
+
+test('the pin commit carries the lockfile the resolve rewrites when it is already tracked', async (t) => {
+  // Field round 4, the pnpm path: `pnpm install --lockfile-only` rewrites the tracked lockfile so its
+  // specifiers match the manifest, and the pin's commit staged `package.json` alone. The path ended
+  // with ` M pnpm-lock.yaml` — seven specifier lines — in the tree it called closed, and the step that
+  // tracks a lockfile prints only for one that is not committed, so no other step covered it.
+  const dir = scratch(t);
+  writeManifest(dir, true);
+  writePnpmLock(dir);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+  writeFileSync(join(dir, 'tracked.txt'), 'package.json\npnpm-lock.yaml\n.gitignore\n');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  const steps = stepLines(stdout);
+  assert.equal(
+    steps.some((line) => line.includes(`git add package.json pnpm-lock.yaml && git commit -m "${PIN_COMMIT}"`)),
+    true,
+    'the commit that follows the resolve stages both files it changed',
+  );
+  assert.equal(
+    steps.some((line) => line.includes(TRACK_COMMIT)),
+    false,
+    'a repository that already tracks its lockfile has no tracking step to fall back on',
+  );
+});
+
+test('the pin commit leaves the lockfile to the step that first records it', async (t) => {
+  // The other half of the same rule: when the lockfile is absent or untracked, the tracking step is
+  // where it is first recorded, so the pin's commit must not claim it — two steps staging one file is
+  // how one of them ends up committing nothing.
+  const dir = scratch(t);
+  writeManifest(dir, true);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+  writeFileSync(join(dir, 'tracked.txt'), 'package.json\n.gitignore\n');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  const steps = stepLines(stdout);
+  assert.equal(
+    steps.some((line) => line.includes(`git add package.json && git commit -m "${PIN_COMMIT}"`)),
+    true,
+    'the pin commit stages the manifest alone',
+  );
+  assert.equal(
+    steps.some((line) => line.includes(`git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`)),
+    true,
+    'the step that records the lockfile is still printed, and it is the one that owns it',
+  );
+});

@@ -131,6 +131,13 @@ stages the lockfile and the removed foreign lockfile, never `package.json`: the 
 the add's own commit are what record the manifest's rewrites, so a manifest in that `git add` would be
 a path staged but never changed.
 
+One addition to the pin's commit, measured on the pnpm path in field round 4: when the repository already
+tracks a `pnpm-lock.yaml`, the resolve above it rewrites that lockfile's specifiers, and the step that
+records a lockfile prints only for one that is not committed — so the pin's commit stages both
+`package.json` and `pnpm-lock.yaml`. Without it the path ended green with ` M pnpm-lock.yaml` in a tree
+it had just called closed. When the lockfile is absent or untracked, the tracking step owns it and the
+pin's commit stages the manifest alone.
+
 The add has a commit of its own for the same reason. `pnpm add` records the dependency in
 `package.json`, so a scaffold that carries a manifest and no lockfile reaches `pin --apply` with the
 manifest dirty: the pin refuses to write over uncommitted changes, and a repository with no range to

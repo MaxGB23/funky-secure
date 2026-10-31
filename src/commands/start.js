@@ -85,7 +85,24 @@ const TRACK_MESSAGE = 'chore: track the lockfile';
  * nothing else, for the reason 0016 gives: a generated repository's untracked tool cache stays out.
  */
 const PIN_MESSAGE = 'chore: pin the ranges';
-const PIN_STEP = `git add package.json && git commit -m "${PIN_MESSAGE}"`;
+/**
+ * The pin's own commit (0028).
+ *
+ * It runs after the resolve, which rewrites `pnpm-lock.yaml` so the specifiers the manifest now
+ * records are the ones it holds. When that lockfile is already tracked, that rewrite belongs to this
+ * commit, because the step that tracks a lockfile prints only for one that is not committed — a
+ * repository that tracks its own never sees it, and the rewrite is left in the tree the path calls
+ * closed (field round 4: ` M pnpm-lock.yaml`, seven specifier lines, on the pnpm path only). When the
+ * lockfile is absent or untracked it is first recorded by the step that tracks it, so this commit
+ * stages the manifest alone and does not claim a file that step owns.
+ *
+ * @param {boolean} trackedLockfile
+ * @returns {string}
+ */
+function pinStep(trackedLockfile) {
+  const stage = trackedLockfile ? 'package.json pnpm-lock.yaml' : 'package.json';
+  return `git add ${stage} && git commit -m "${PIN_MESSAGE}"`;
+}
 /**
  * The commit that records the first dependency, immediately after the add that wrote it (11.7 row 13).
  *
@@ -234,7 +251,10 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     // The pin has a commit of its own, immediately after the resolve it requires: it leaves the
     // manifest dirty and the next writer refuses that state (0028). It prints only where `pin`
     // printed, because a commit that stages nothing is never printed.
-    steps.push(PIN_STEP);
+    // The step that tracks a lockfile prints for one that is not committed; a repository that
+    // already tracks its own has no such step, so this commit is the only one that can carry the
+    // resolve's rewrite of it.
+    steps.push(pinStep(present.includes('pnpm-lock.yaml') && !trackLockfile));
   }
   if (foreign.length > 0) {
     steps.push(`git switch -c ${FEATURE_BRANCH}`);
