@@ -474,6 +474,18 @@ funky-secure explain --list [--format human|json]
 module does not declare prints `(not documented)`. `--list` prints one line per catalog rule,
 `id  baseline/strict  title`.
 
+A rule whose severity follows the state of its finding states one `state` line under the severity
+line: the state, the pair that state answers, and the evidence that selects it — generated from the
+rule's `severityWhen`, so a second rule with a state table needs no second code path. `foreign-lockfile`
+answers `warn / warn` alone and `error / error` in coexistence, and its page says so:
+
+```text
+friction 0 · severity warn / warn (baseline / strict)
+state       coexistence error / error (baseline / strict) when pnpmLockfile is true
+```
+
+A rule that declares no state table prints exactly the lines it always printed.
+
 A missing rule id is not an error. `explain` with no id prints the same catalog `--list` prints,
 byte for byte, and exits `0`; `--list` stays as the explicit synonym, including under `--format json`,
 where both routes print the same document. The catalog is what the command is for, and a human who
