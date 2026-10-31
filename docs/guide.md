@@ -143,10 +143,13 @@ manager's lockfile is still there it names `init --apply` first, then one `pnpm 
 block that was just written, then `funky-secure migrate --apply` — the removal needs the
 `pnpm-lock.yaml` the install creates, and the install needs the block that governs it to exist first.
 It does not name the first add at all, because adding now would write a second lockfile beside the npm
-one. Where the manifest still carries a range it names `pin --apply` and, right after the resolve that
-follows it, the commit that carries the pin, so a reader who stops between the two is not left with a
-dirty tree nothing explains. It writes nothing itself — `init --apply` is still the only writer — and
-it exits `0` in every state, because it is advice and not a gate.
+one. Where the manifest declares another manager — the `npm@11.13.0` pin `create-t3-app` writes — the
+pnpm steps carry `--pm-on-fail=ignore` and one line says why: the declaration is a decision, and the
+tool does not rewrite it to make its own advice run. Where the manifest still carries a range it names
+`pin --apply` and, right after the resolve that follows it, the commit that carries the pin, so a
+reader who stops between the two is not left with a dirty tree nothing explains. It writes nothing
+itself — `init --apply` is still the only writer — and it exits `0` in every state, because it is
+advice and not a gate.
 
 `scan` is the product. `init` exists because a diagnosis you cannot act on is half useful: it runs the
 same scan and turns the fixable findings into writes — the package-manager pin, the quarantine gate,
@@ -158,7 +161,10 @@ mixing its edits with yours.
 installs, resolves or reaches the network) and `git add` of what it just wrote.
 
 `migrate` is the way out of npm. It prints five steps and performs only the removal of the foreign
-lockfile, and only after a `pnpm-lock.yaml` exists and you are not on the default branch.
+lockfile, and only after a `pnpm-lock.yaml` exists and you are not on the default branch. Under a
+declared npm or yarn pin its human step and the command its refusal names carry
+`--pm-on-fail=ignore`, so the route it prints runs under the declaration instead of asking you to
+remove it.
 
 `explain <rule-id>` prints one rule in depth, and `explain` with no rule prints the catalog — `--list`
 is the explicit way to ask for the same bytes. `--help` prints

@@ -40,6 +40,12 @@ dependency>` when it is not, and `funky-secure scan --preset starter` last. Each
 its condition holds: a repository that already has a manifest, a lockfile and a commit, but no managed
 block, is told to run `init --apply` and then `scan`, numbered from `1`.
 
+When `package.json` declares a package manager other than pnpm — the `npm@11.13.0` a `create-t3-app`
+project writes — every pnpm step carries `--pm-on-fail=ignore`, and `why this order` gains one line
+naming the declaration: pnpm refuses every command under such a pin, and the tool never rewrites a
+declaration a human made. A manifest that declares pnpm, and one that declares nothing, print the same
+steps without the flag.
+
 A directory that is not a repository yet is the exception, and it is deliberate: the write plan is
 derived from facts only a repository can answer — the ignore rule asks `git check-ignore` and skips
 outside one, and the clean-tree question has no git to ask — so the first run prints only the steps that
@@ -443,16 +449,18 @@ Prints the five steps of RFC 11.3 in order:
 1. **evidence** — foreign lockfiles, `package.json` `packageManager`, `.npmrc` manager lines;
 2. **report-only** — `.npmrc` keys pnpm no longer reads, each with where the setting does work;
 3. **human step** — `pnpm import`, which reads the foreign lockfile and keeps its versions (never
-   executed);
+   executed); under a `packageManager` naming another manager it is `pnpm import --pm-on-fail=ignore`,
+   and a line below it names the declaration, because the tool does not rewrite one a human made;
 4. **removal** — the foreign lockfile(s), only after `pnpm-lock.yaml` exists;
 5. **CI follow-up** — workflow lines that mention npm or yarn, quoted as `file:line` suggestions.
 
 `migrate` refuses outside a git repository, because step 4 needs a tree and a branch. `--apply`
 performs step 4 only, and refuses — naming the reason — when `pnpm-lock.yaml` is absent (never delete
 the only lockfile), when the tree is dirty for the files it would remove (unless `--allow-dirty`),
-when the branch is the default one, when `HEAD` is detached, or when git cannot report the tree. A
-repository with no foreign lockfile prints `nothing to remove` and exits `0`. There is no `--format`
-for `migrate`; its output is always the human plan.
+when the branch is the default one, when `HEAD` is detached, or when git cannot report the tree. Under
+a declared npm or yarn pin the command it names carries the same flag. A repository with no foreign
+lockfile prints `nothing to remove` and exits `0`. There is no `--format` for `migrate`; its output is
+always the human plan.
 
 ### `explain`
 
