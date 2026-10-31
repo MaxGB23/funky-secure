@@ -6,7 +6,7 @@
  */
 
 import { readdir, stat } from 'node:fs/promises';
-import { join, relative as relativePath } from 'node:path';
+import { dirname, join, relative as relativePath, resolve } from 'node:path';
 
 import { currentBranch, ignoredPaths, trackedFiles } from './git.js';
 import { validateWriteTarget } from './paths.js';
@@ -104,6 +104,42 @@ async function exists(path) {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * The nearest directory above `root` that carries a `pnpm-workspace.yaml`, named relative to `root`, or
+ * `null` when no ancestor does (issue 113).
+ *
+ * pnpm installs into the directory that has a workspace file of its own: when the project root carries
+ * none, pnpm walks up, adopts the nearest enclosing workspace and writes **that** root's
+ * `pnpm-lock.yaml`. The path has to name that fact, so the answer is a path and not a boolean, spelled
+ * the way every other path this tool prints is spelled — never an absolute one.
+ *
+ * This walk is a filesystem read **outside** the repository: any tool that reads above its own root
+ * says so. It asks whether one file name exists in each ancestor and reads nothing else — not that
+ * file's content, not any other entry — and it follows no path the walk did not construct. It stops at
+ * the first ancestor that carries the file, and at the filesystem root. The root's own file is not its
+ * business: the collector already resolved that presence, and a project that carries one is the root
+ * pnpm installs for.
+ *
+ * @param {string | null | undefined} root the repository root
+ * @returns {Promise<string | null>} a `../..`-style path from the root to the ancestor, or `null`
+ */
+export async function enclosingWorkspace(root) {
+  if (typeof root !== 'string' || root === '') return null;
+  const from = resolve(root);
+  let at = dirname(from);
+  // The filesystem root is the end of the walk, and it is also where there is no ancestor at all.
+  if (at === from) return null;
+
+  for (;;) {
+    if (await exists(join(at, 'pnpm-workspace.yaml'))) {
+      return relativePath(from, at).replaceAll('\\', '/');
+    }
+    const parent = dirname(at);
+    if (parent === at) return null;
+    at = parent;
   }
 }
 

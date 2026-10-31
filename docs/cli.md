@@ -46,6 +46,16 @@ naming the declaration: pnpm refuses every command under such a pin, and the too
 declaration a human made. A manifest that declares pnpm, and one that declares nothing, print the same
 steps without the flag.
 
+A project that carries no `pnpm-workspace.yaml` of its own but sits below a directory that does is not
+the root pnpm installs for: pnpm walks up, adopts that workspace and writes **its** `pnpm-lock.yaml`,
+so the steps that write a lockfile leave this repository's own absent and the lockfile finding will not
+clear. `--ignore-workspace` does not prevent the escape, so the commands are printed unchanged and
+`why this order` gains one line naming the ancestor — relative to the repository root, `../..` — and
+that consequence. Finding it is one existence question asked of each directory above the root, down to
+the filesystem root; the file's content is never read, and no write happens anywhere. A project that
+carries its own `pnpm-workspace.yaml`, and one with no ancestor that does, print the same steps and the
+same reasons without that line.
+
 A directory that is not a repository yet is the exception, and it is deliberate: the write plan is
 derived from facts only a repository can answer — the ignore rule asks `git check-ignore` and skips
 outside one, and the clean-tree question has no git to ask — so the first run prints only the steps that
@@ -130,8 +140,9 @@ never handed a stale checklist; `why this order` and the `not run` block follow 
 they describe the command and the preset rather than the repository.
 
 `start` derives everything from the same collection and the same write plan `scan` and `init` use, so
-it cannot contradict the report about the same repository (RFC 11.7). Exit `0` in every state,
-including a repository at policy; `2` only for a usage error.
+it cannot contradict the report about the same repository (RFC 11.7). The one fact it resolves itself
+is whether `pnpm-workspace.yaml` exists in a directory above the repository root, and it reads nothing
+else there. Exit `0` in every state, including a repository at policy; `2` only for a usage error.
 
 ```text
 funky-secure --version
