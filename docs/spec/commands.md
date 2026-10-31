@@ -234,8 +234,10 @@ the preset it recommends is named in the answer itself.
 
 It derives everything from the same collection and the same write plan that `scan` and `init` use
 (11.1, 11.2): the repository facts the collector already resolved, and the `would-write` items of the
-plan `init` derives from the same report. It measures no fact of its own, so it cannot contradict the
-report about the same repository.
+plan `init` derives from the same report. It measures no fact of its own — the one probe it runs
+itself, whether `pnpm-workspace.yaml` exists in the directories above the root, is a filesystem read
+stated where the line it produces is defined — so it cannot contradict the report about the same
+repository.
 
 The steps are ordered by cause and only the ones that still apply are printed, numbered from `1`:
 
@@ -246,13 +248,13 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 3 | `git add -A && git commit -m "<message>"` | the plan has a `would-write` item and any of its target paths already carries uncommitted work, because `init --apply` refuses to write over a tree whose state is not recorded |
 | 4 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
 | 5 | `git add <the paths the plan wrote> && git commit -m "<message>"` | step 4 printed: it leaves the manifest dirty, and the next writer refuses that state. The step names those paths instead of staging everything, so an untracked tool cache beside them stays out of the commit. The commit appears twice in a repository whose tree already carried work, because it answers two questions, and each carries a line of its own in `why this order` |
-| 6 | `pnpm import` | a lockfile another package manager produced is present: it reads that lockfile and writes `pnpm-lock.yaml` with the versions it recorded, under the block step 4 wrote. `pnpm install` never reads a foreign lockfile, so it would resolve from the manifest and discard the pins the repository already has (11.3, 0021). The command carries `--pm-on-fail=ignore` when `package.json` declares a manager other than pnpm, because pnpm otherwise exits `1` with `ERR_PNPM_OTHER_PM_EXPECTED` and this tool never rewrites a declaration a human made (0018) |
+| 6 | `pnpm import` | a lockfile another package manager produced is present: it reads that lockfile and writes `pnpm-lock.yaml` with the versions it recorded, under the block step 4 wrote. `pnpm install` never reads a foreign lockfile, so it would resolve from the manifest and discard the pins the repository already has (11.3, 0021). The command carries `--pm-on-fail=ignore` when `package.json` declares a manager other than pnpm, because pnpm otherwise exits `1` with `ERR_PNPM_OTHER_PM_EXPECTED` and this tool never rewrites a declaration a human made (0018). When the project root carries no `pnpm-workspace.yaml` and an ancestor directory does, `why this order` gains one line naming that ancestor, because this resolve writes the lockfile of the workspace pnpm adopts and not the one this repository is read for |
 | 7 | `funky-secure pin --apply` | the report carries a `floating-range` finding, printed with its count: the block governs the dependencies added next, and nothing else clears the ranges the manifest already has (11.9) |
-| 8 | `pnpm install --lockfile-only` | step 7 printed: `pin` writes exact specifiers over a lockfile that recorded a range, which is a desync by construction (11.9), and this is the resolve that re-syncs it without touching `node_modules`. It carries `--pm-on-fail=ignore` under the same condition as step 6, because the resolve meets the same refusal |
+| 8 | `pnpm install --lockfile-only` | step 7 printed: `pin` writes exact specifiers over a lockfile that recorded a range, which is a desync by construction (11.9), and this is the resolve that re-syncs it without touching `node_modules`. It carries `--pm-on-fail=ignore` and the enclosing-workspace line under the same conditions as step 6, because the resolve meets the same refusal and writes the same lockfile |
 | 9 | `git add package.json && git commit -m "<message>"` | step 8 printed: the pin leaves the manifest dirty and the next writer refuses that state, so the path prints the commit that produces the clean tree the steps after it require (0018, 0028). It stages the manifest and nothing else, because a commit names what it covers and a generated repository's untracked tool cache stays out of it (0016) |
 | 10 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
 | 11 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The refusal names the same `git switch -c` command this step prints, because it refuses to remove a lockfile on `main` (10.4) |
-| 12 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add. It carries `--pm-on-fail=ignore` under the same condition as step 6, because the add meets the same refusal |
+| 12 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add. It carries `--pm-on-fail=ignore` and the enclosing-workspace line under the same conditions as step 6, because the add meets the same refusal and writes the same lockfile |
 | 13 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest, because after the pin's own commit nothing else on the path writes one (0028) |
 | 14 | `funky-secure scan --preset starter` | always, and last |
 
@@ -281,6 +283,22 @@ never edited to remove the declaration: a `packageManager` a human wrote is a de
 exists because that human decided to leave the manager it names. A manifest that declares pnpm, and a
 manifest that declares nothing, print the steps above without the flag and without that line.
 
+The enclosing workspace is the other fact the path names instead of changing. A project that carries no
+`pnpm-workspace.yaml` of its own but sits below a directory that does is not the root pnpm installs
+for: pnpm walks up, adopts that workspace, and writes **its** `pnpm-lock.yaml`, so the steps that write
+a lockfile leave this repository's own `pnpm-lock.yaml` absent and the finding that reads it cannot
+clear. Changing the printed commands is not the answer, because `--ignore-workspace` does not prevent
+the escape; the path names the fact instead, and `why this order` gains one line naming the ancestor
+directory and that consequence. The ancestor is found by an upward walk bounded from the project root
+and stopping at the filesystem root, and that walk is a filesystem read outside the repository: it asks
+whether one file name exists in each ancestor, never reads that file's content or anything else there,
+and follows no path it did not construct. The line names the ancestor relative to the repository root
+(`../..`), the way every other path this tool prints is named, so no absolute path reaches the steps.
+It is printed only while a step that writes a lockfile is printed, and never when the project root
+carries its own `pnpm-workspace.yaml` or when no ancestor does. Nothing else moves with it: no rule's
+status, severity or remediation changes, because `scan` reporting the absent lockfile is correct, and
+the line is guidance at the step that causes it.
+
 The same rule gives the pin a commit of its own: step 7 leaves `package.json` dirty and the next writer
 refuses that state, so the step that requires a clean tree prints the command that produces it (0018).
 Step 9 is that command, and its message names the pin, because the message outlives this tool's output
@@ -302,10 +320,10 @@ prints one line saying it is past the start and naming `scan`, never a stale che
 
 The list is followed by `why this order` — the reason above, two lines, plus one line when a foreign
 lockfile moves `migrate` ahead of the block, plus one line when the manifest declares another
-manager — and then, when the recommended preset disables rules, by the same `not run` block the report
-carries (10.3). That block describes `starter` (9.1), the preset step 6 runs, and it is produced by the
-same helper as the report's, so the two cannot disagree about what the recommended preset leaves
-unrun.
+manager, plus one line when an enclosing workspace adopts the lockfile the steps write — and then,
+when the recommended preset disables rules, by the same `not run` block the report carries (10.3). That
+block describes `starter` (9.1), the preset step 6 runs, and it is produced by the same helper as the
+report's, so the two cannot disagree about what the recommended preset leaves unrun.
 
 Exit: `0` in every state, including a repository already past the start; `2` for a usage error only.
 
