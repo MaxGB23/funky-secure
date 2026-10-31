@@ -403,6 +403,14 @@ manifest already carries when it does not. A plan whose pin is a conflict establ
 plans no guard, so the two declarations can never be written disagreeing with each other; and a
 repository that already carries both gets no `package.json` item at all.
 
+A human plan ends with the steps `init` will not take: `funky-secure migrate --apply` when a foreign
+lockfile coexists with the pnpm one, `git add` of the paths it wrote, and `funky-secure start` last. It
+names **no** install command, because the resolve a reader needs next depends on facts `init` does not
+own — a foreign lockfile, a manifest with no lockfile, a range the `pin` step has to clear first — and
+`start` derives that step from the same report, so the plan it prints is the plan `init` applied
+(RFC 11.2.2, issue 132). A plan with no human step prints no `next steps` heading, and `--format json`
+carries no prose at all.
+
 ### `pin`
 
 ```text
@@ -433,6 +441,12 @@ pins
 next steps
   pnpm install --lockfile-only
 ```
+
+Under a `packageManager` that names another manager — the `npm@11.13.0` a `create-t3-app` project
+writes — that line is `pnpm install --lockfile-only --pm-on-fail=ignore`. It is the command `start`
+prints, from the same predicate, because pnpm exits `1` with `ERR_PNPM_OTHER_PM_EXPECTED` under such a
+pin and the tool never rewrites a declaration a human made (RFC 11.2.2, 0018). A manifest that declares
+pnpm, and one that declares nothing, print the line unchanged.
 
 Three properties are the whole contract:
 

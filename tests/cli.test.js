@@ -366,8 +366,10 @@ test('init prints a non-empty plan and writes nothing without --apply', async (t
   assert.match(streams.stdout.text, /would write/);
   assert.ok(streams.stdout.text.includes('pnpm-workspace.yaml'));
   assert.equal(streams.stdout.text.includes('nothing to apply'), false);
-  // The steps the tool refuses to take are printed, never executed (RFC 11.2.2).
-  assert.match(streams.stdout.text, /next steps\n {2}pnpm install\n/);
+  // The steps the tool refuses to take are printed, never executed (RFC 11.2.2). `init` names no
+  // install: the one the reader needs depends on facts it does not own, so it ends on the command that
+  // prints the plan derived from the same report (0003, issue 132).
+  assert.match(streams.stdout.text, /next steps\n {2}git add [^\n]+\n {2}funky-secure start\n/);
   assert.deepEqual(readdirSync(dir), [], 'the plan wrote nothing');
 });
 

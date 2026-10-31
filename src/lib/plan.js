@@ -11,10 +11,14 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, relative } from 'node:path';
 
 import { RefusalError } from './errors.js';
+import { resolveLockfileStep } from './foreign-pin.js';
 import { statusPorcelain } from './git.js';
 import { FOREIGN_LOCKFILES } from './targets.js';
 
 export const PLAN_STATES = ['would-write', 'would-skip', 'conflict'];
+
+/** The command that prints the rest of the path: the plan `start` derives from the same report (11.7). */
+export const START_STEP = 'funky-secure start';
 
 /** @param {string} content */
 export function digestOf(content) {
@@ -101,10 +105,12 @@ export function writtenPaths(plan, root) {
  * The steps only a human can run (RFC 11.2.2), in the order they must run. This tool never runs an
  * install, never migrates and never stages (RFC 11.6), so each step is printed and left alone.
  *
- * `pnpm install` comes first because a repository with no lockfile has nothing to verify;
- * `migrate --apply` needs the pnpm lockfile to exist first, which is why it is the case where the
- * foreign lockfile coexists with the pnpm one; `git add` closes the sequence so the next `--apply`
- * over the same state is not refused as dirty.
+ * `init` names **no** install command, because it cannot derive one. The resolve a reader needs next
+ * depends on facts `init` does not own — a foreign lockfile, a manifest with no lockfile, a range the
+ * `pin` step has not cleared yet — and a subcommand's own line that contradicts the ordered path it
+ * was reached from leaves the reader with two commands and no way to tell which is authoritative
+ * (issue 132). The block therefore ends by naming `start`, which prints the plan it derives from the
+ * same report and the same write plan (0003, 0018).
  *
  * `--from` is deliberately omitted from the migrate step: the plan names the command, and `migrate`
  * names the manager it actually finds. A `yarn.lock` needs `pnpm import`, not `pnpm install`, so
@@ -120,13 +126,30 @@ export function deriveNextSteps({ plan = [], repo = null } = {}) {
   const foreign = present.filter((name) => FOREIGN_LOCKFILES.includes(name));
 
   const steps = [];
-  if (!hasLockfile) steps.push('pnpm install');
   if (hasLockfile && foreign.length > 0) steps.push('funky-secure migrate --apply');
 
   const written = writtenPaths(plan, repo.root ?? null);
   if (written.length > 0) steps.push(`git add ${written.join(' ')}`);
 
+  // The install this repository needs is derived from the facts above, so the block names the command
+  // that derives it instead of guessing one: a plan with no human step still prints no heading.
+  if (steps.length > 0) steps.push(START_STEP);
+
   return steps;
+}
+
+/**
+ * `pin`'s next step (11.9): the resolve that re-records the `specifier` field the write desynced, and
+ * the flag the manifest's own declaration requires. It is the same string `start` prints in its path
+ * (11.7 step 8), read from the same module, because two spellings of one step ten lines apart is the
+ * defect issue 132 reports.
+ *
+ * @param {{ repo?: object | null }} [options]
+ * @returns {string[]}
+ */
+export function derivePinNextSteps({ repo = null } = {}) {
+  if (repo === null || repo === undefined) return [];
+  return [resolveLockfileStep(repo)];
 }
 
 /**
