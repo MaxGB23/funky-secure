@@ -30,10 +30,10 @@ credential and without an unattended publication. Branch `ci/npm-stage-only-rele
 
 | ID | Specs | Route | What | Commit |
 |---|---|---|---|---|
-| T1 | S1, S3, S4, S5 | inline | `docs/spec/layout.md` §14 packed set; `docs/spec/delivery.md` §17.2/§17.3 stage-only; dated erratum in the record | |
-| T2 | S3, S4 | inline | `release.yml`: npm ≥ 11.15 step, `npm stage publish --json`, stage id into the step summary; `tests/release-workflow.test.js` follows | |
-| T3 | S1, S5 | inline | `package.json` `files` + `repository` object; `release-guard.js` catalog assertion; test for it | |
-| T4 | S1-S5 | inline | Gate: suite, self-scan, release-guard, pack-smoke; measured packed set | |
+| T1 | S1, S3, S4, S5 | inline | `docs/spec/layout.md` §14.1 packed set; `docs/delivery.md` §17.2/§17.3 stage-only; RFC 0032 amends 0001 §14 and §17, registered in the amendment table | `d0d6845` |
+| T2 | S3, S4 | delegated | `release.yml`: npm ≥ 11.15 step, `npm stage publish --json`, stage id into the step summary; `tests/release-workflow.test.js` follows | `887f037` |
+| T3 | S1, S5 | delegated | `package.json` `files` + `repository` object; `release-guard.js` catalog assertion; test for it | `887f037` |
+| T4 | S1-S5 | inline | Gate: suite 591/590/0/1, self-scan exit 0, release-guard exit 0, pack 65 files / 335.570 B | `887f037` |
 | T5 | S3, S4 | owner | Bootstrap, stage, approve, trusted publisher, provenance measurement | — |
 
 ## Log
@@ -64,3 +64,9 @@ basename glob and packs `docs/README.md` and `docs/images/README.md` with it (67
 so the gate could not pass. The root entry is `./README.md` and `checkPackList` normalizes a
 root-anchored entry; §14.1 and §17.4 now say so. The packed set is 10 entries, not 13 — T1 said 13 and
 was wrong; the enumerated list was always 10. Measured after the change: 65 files, 335.570 B tarball.
+
+**L6.** Slice boundary: two commits, `d0d6845` (spec, record, feature doc) and `887f037` (workflow,
+manifest, guard, tests), 573 authored changed lines together and past the ~400-line budget. The split
+is by concern and reviewable commit by commit; most of the excess is the new record, which cannot be
+separated from the contract it establishes without leaving the repository citing a record that does
+not exist. One pull request, two commits, and the chained-PR strategy is not applied.
