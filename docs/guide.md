@@ -145,12 +145,10 @@ block that was just written, then `funky-secure migrate --apply` — the removal
 It does not name the first add at all, because adding now would write a second lockfile beside the npm
 one. Where the manifest declares another manager — the `npm@11.13.0` pin `create-t3-app` writes — the
 pnpm steps carry `--pm-on-fail=ignore` and one line says why: the declaration is a decision, and the
-tool does not rewrite it to make its own advice run. Where the project is not the root pnpm installs
-for — no `pnpm-workspace.yaml` of its own, one in a directory above it — the steps stay exactly as they
-are and one more line of `why this order` names that directory: pnpm adopts that workspace and writes
-its lockfile, so this project's own `pnpm-lock.yaml` stays absent and the lockfile finding cannot clear
-until the project is its own workspace root. `--ignore-workspace` does not stop the install from
-leaving, so no printed command pretends it does. Where the manifest still carries a range it names
+tool does not rewrite it to make its own advice run. Where the project has no `pnpm-workspace.yaml` of
+its own it is told to write one before any install, so that install writes this project's own
+lockfile: the path never predicts an ancestor root, because its own write is what decides the question
+(issue 144). Where the manifest still carries a range it names
 `pin --apply` and, right after the resolve that follows it, the commit that carries the pin, so a
 reader who stops between the two is not left with a dirty tree nothing explains. Where the manifest is
 there but no lockfile is, it names the first `pnpm add` and the commit that follows it, because the
@@ -166,8 +164,10 @@ digest of the exact bytes before it happens. It refuses a file with uncommitted 
 mixing its edits with yours.
 
 `init` also ends with the steps it will not take for you, in order: the `migrate --apply` that removes a
-foreign lockfile left beside the pnpm one, `git add` of the paths it just wrote, and `funky-secure
-start` last. It names no install command at all — not `pnpm install`, not `pnpm import` — because the
+foreign lockfile left beside the pnpm one, the commit that stages the paths it just wrote and records
+them — `git add … && git commit -m "chore: apply funky-secure"`, the command the path prints, because a
+staging step without its commit leaves exactly the tree a writer refuses — and `funky-secure start`
+last. It names no install command at all — not `pnpm install`, not `pnpm import` — because the
 resolve you need next is derived from facts `init` does not own, and `start` prints the plan it derives
 from the same report. `pin` ends with the one step its own write requires, `pnpm install
 --lockfile-only`, which carries `--pm-on-fail=ignore` under a `packageManager` naming another manager,

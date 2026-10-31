@@ -47,15 +47,13 @@ naming the declaration: pnpm refuses every command under such a pin, and the too
 declaration a human made. A manifest that declares pnpm, and one that declares nothing, print the same
 steps without the flag.
 
-A project that carries no `pnpm-workspace.yaml` of its own but sits below a directory that does is not
-the root pnpm installs for: pnpm walks up, adopts that workspace and writes **its** `pnpm-lock.yaml`,
-so the steps that write a lockfile leave this repository's own absent and the lockfile finding will not
-clear. `--ignore-workspace` does not prevent the escape, so the commands are printed unchanged and
-`why this order` gains one line naming the ancestor — relative to the repository root, `../..` — and
-that consequence. Finding it is one existence question asked of each directory above the root, down to
-the filesystem root; the file's content is never read, and no write happens anywhere. A project that
-carries its own `pnpm-workspace.yaml`, and one with no ancestor that does, print the same steps and the
-same reasons without that line.
+The workspace root is the one thing the path does not predict, because the path changes it. A project
+with no `pnpm-workspace.yaml` of its own sits below whatever directory does, but the first step is
+`init --apply`, and that writes this project's own `pnpm-workspace.yaml` — which makes this project the
+root before any install runs, so the install writes this project's own lockfile. No line names an
+ancestor, and `start` reads nothing above the repository root; a lockfile missing from disk is
+`scan`'s finding to report from the bytes it read, not something an install is predicted to do
+(issue 144).
 
 A directory that is not a repository yet is the exception, and it is deliberate: the write plan is
 derived from facts only a repository can answer — the ignore rule asks `git check-ignore` and skips
@@ -150,9 +148,8 @@ never handed a stale checklist; `why this order` and the `not run` block follow 
 they describe the command and the preset rather than the repository.
 
 `start` derives everything from the same collection and the same write plan `scan` and `init` use, so
-it cannot contradict the report about the same repository (RFC 11.7). The one fact it resolves itself
-is whether `pnpm-workspace.yaml` exists in a directory above the repository root, and it reads nothing
-else there. Exit `0` in every state, including a repository at policy; `2` only for a usage error.
+it cannot contradict the report about the same repository (RFC 11.7). It reads nothing above the
+repository root. Exit `0` in every state, including a repository at policy; `2` only for a usage error.
 
 ```text
 funky-secure --version
@@ -404,9 +401,13 @@ plans no guard, so the two declarations can never be written disagreeing with ea
 repository that already carries both gets no `package.json` item at all.
 
 A human plan ends with the steps `init` will not take: `funky-secure migrate --apply` when a foreign
-lockfile coexists with the pnpm one, `git add` of the paths it wrote, and `funky-secure start` last. It
-names **no** install command, because the resolve a reader needs next depends on facts `init` does not
-own — a foreign lockfile, a manifest with no lockfile, a range the `pin` step has to clear first — and
+lockfile coexists with the pnpm one, the commit that stages the paths it wrote and records them
+(`git add <paths> && git commit -m "chore: apply funky-secure"`), and `funky-secure start` last. The
+commit is the command `start` prints, built from the same constant and the same list of written paths,
+because a block that stages without committing hands the reader to `start` holding the state the next
+writer refuses (issue 145). It names **no** install command, because the resolve a reader needs next
+depends on facts `init` does not own — a foreign lockfile, a manifest with no lockfile, a range the
+`pin` step has to clear first — and
 `start` derives that step from the same report, so the plan it prints is the plan `init` applied
 (RFC 11.2.2, issue 132). A plan with no human step prints no `next steps` heading, and `--format json`
 carries no prose at all.

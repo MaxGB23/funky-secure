@@ -17,7 +17,7 @@
  * repository past the start is told so in one line instead of being handed a stale checklist.
  */
 
-import { derivePlan, writtenPaths, START_STEP } from '../lib/plan.js';
+import { commitWritesStep, derivePlan, writtenPaths, START_STEP } from '../lib/plan.js';
 import {
   FOREIGN_PIN_FLAG,
   declaredForeignManager,
@@ -30,7 +30,7 @@ import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { createCollector } from '../lib/probes.js';
 import { collectScan } from '../lib/scan.js';
-import { FOREIGN_LOCKFILES, enclosingWorkspace } from '../lib/targets.js';
+import { FOREIGN_LOCKFILES } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
 /** The preset this command recommends (S5): the last step names it, and the honesty line states it. */
@@ -75,8 +75,6 @@ function pendingBootSteps({ repo }) {
   return steps;
 }
 
-/** The commit that closes the writes: it names them, so an untracked cache beside them stays out. */
-const APPLY_MESSAGE = 'chore: apply funky-secure';
 /** The commit that puts the lockfile under version control, which is what the last scan reads. */
 const TRACK_MESSAGE = 'chore: track the lockfile';
 /**
@@ -141,34 +139,6 @@ function whyForeignPin(declared) {
   return `package.json declares ${declared}, and the tool never rewrites it, so the pnpm steps carry ${FOREIGN_PIN_FLAG}`;
 }
 
-/**
- * The step that writes a lockfile: `pnpm import`, `pnpm add` and `pnpm install --lockfile-only`.
- *
- * They are the ones an enclosing workspace takes away from this repository, so the line that names it
- * is printed beside them and nowhere else. `pnpm init` writes a manifest and no lockfile, so it is not
- * one of them.
- *
- * @param {string} step
- * @returns {boolean}
- */
-function writesLockfile(step) {
-  return step.startsWith('pnpm ') && !step.startsWith('pnpm init');
-}
-
-/**
- * The one line an enclosing workspace adds to `why this order` (issue 113).
- *
- * The steps that write a lockfile cannot write this repository's own when pnpm adopts a workspace
- * above it, and `--ignore-workspace` does not prevent the escape, so the commands stay as they are
- * and the line names the ancestor and the consequence the reader will meet on the next `scan`.
- *
- * @param {string} ancestor the workspace root, relative to the repository root
- * @returns {string}
- */
-function whyEnclosingWorkspace(ancestor) {
-  return `the install resolves to the workspace at ${ancestor}, so this repository keeps no pnpm-lock.yaml and the lockfile finding will not clear`;
-}
-
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
@@ -201,10 +171,9 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // that runs it under that declaration. A pnpm pin and no pin at all print the plain commands.
   const flag = pnpmFlag(repo);
   const tracked = (paths ?? []).filter((path) => typeof path === 'string' && path !== '');
-  const commitWrites =
-    tracked.length > 0
-      ? `git add ${tracked.join(' ')} && git commit -m "${APPLY_MESSAGE}"`
-      : COMMIT_STEP;
+  // The paths are the plan's own, and the command is the one `init`'s next steps print: both come from
+  // `commitWritesStep`, so neither can stage without the commit the next writer requires (issue 145).
+  const commitWrites = tracked.length > 0 ? commitWritesStep(tracked) : COMMIT_STEP;
   // The closing commit names what it covers: the lockfile the install writes and the foreign one the
   // migration removes. It stages no manifest: the pin and the add each have a commit of their own, and
   // a commit that stages nothing is not a step (0016, 0028).
@@ -292,10 +261,10 @@ async function hasUncommitted({ plan, ctx, collector }) {
 }
 
 /**
- * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean, foreignPin?: string | null, workspaceAncestor?: string | null, boot?: boolean }} options
+ * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean, foreignPin?: string | null, boot?: boolean }} options
  * @returns {string}
  */
-function renderStart({ off, catalog, pending, migrate, foreignPin = null, workspaceAncestor = null, boot = false }) {
+function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot = false }) {
   const lines = ['funky-secure start  ·  guidance, nothing is written', ''];
 
   if (pending.length === 0) {
@@ -322,11 +291,12 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, worksp
       if (foreignPin !== null && pending.some((step) => step.includes(FOREIGN_PIN_FLAG))) {
         lines.push(`  ${whyForeignPin(foreignPin)}`);
       }
-      // Printed only where a step that writes a lockfile is, because that is the step the enclosing
-      // workspace takes away from this repository. A project that is past the start prints nothing.
-      if (workspaceAncestor !== null && pending.some(writesLockfile)) {
-        lines.push(`  ${whyEnclosingWorkspace(workspaceAncestor)}`);
-      }
+      // No line predicts which root an install resolves to. The project's own `pnpm-workspace.yaml` is
+      // what makes it the workspace root, and a project that carries none is one whose own plan writes
+      // it before any step that writes a lockfile — so that write decides the answer, not the walk that
+      // read the tree. Predicting it from the tree was false in every field session that watched
+      // `pnpm add` write this repository's own lockfile (issue 144); `scan`'s lockfile finding reports
+      // what is on disk instead.
     }
   }
 
@@ -408,13 +378,6 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     paths: writtenPaths(plan, ctx.cwd ?? ctx.repo.root),
   });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
-  // The workspace pnpm would adopt instead of this repository. This is a filesystem read above the
-  // repository root — existence of one file name per ancestor, nothing else — and it is asked only
-  // when a step that writes a lockfile is printed. A root with a `pnpm-workspace.yaml` of its own is
-  // the root pnpm installs for, so nothing is read for it (issue 113).
-  const ownWorkspace = (ctx.repo?.present ?? []).includes('pnpm-workspace.yaml');
-  const workspaceAncestor =
-    !ownWorkspace && pending.some(writesLockfile) ? await enclosingWorkspace(ctx.repo?.root) : null;
   stdout.write(
     renderStart({
       off: offByPolicy(starter),
@@ -422,7 +385,6 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
       pending,
       migrate,
       foreignPin: declaredForeignManager(declaredPackageManager(ctx.repo)),
-      workspaceAncestor,
     }),
   );
   return 0;

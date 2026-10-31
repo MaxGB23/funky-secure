@@ -102,6 +102,31 @@ export function writtenPaths(plan, root) {
 }
 
 /**
+ * The message the commit that closes the writes carries. It is deliberately dull and deliberately
+ * shared: `init`'s next steps and `start`'s step print one string, so the two commands cannot spell the
+ * same commit differently (11.2.2, 11.7 row 5).
+ */
+export const APPLY_MESSAGE = 'chore: apply funky-secure';
+
+/**
+ * The command that closes the writes: a `git add` of the paths the plan wrote, and the commit that
+ * records them.
+ *
+ * It is one command and not two steps. `git add` alone is the staging half of a commit, and a reader
+ * who follows a block that stops there leaves the tree in exactly the state `applyPlan` refuses — so
+ * the writer reached next refuses the writes the block just told the reader to leave behind (issue 145).
+ * The paths are the plan's own (`writtenPaths`), one entry per file and in plan order, so an untracked
+ * tool cache beside them stays out of the commit and every file the plan wrote is staged, including a
+ * `package.json` that two items touch.
+ *
+ * @param {string[]} paths
+ * @returns {string}
+ */
+export function commitWritesStep(paths) {
+  return `git add ${paths.join(' ')} && git commit -m "${APPLY_MESSAGE}"`;
+}
+
+/**
  * The steps only a human can run (RFC 11.2.2), in the order they must run. This tool never runs an
  * install, never migrates and never stages (RFC 11.6), so each step is printed and left alone.
  *
@@ -129,7 +154,7 @@ export function deriveNextSteps({ plan = [], repo = null } = {}) {
   if (hasLockfile && foreign.length > 0) steps.push('funky-secure migrate --apply');
 
   const written = writtenPaths(plan, repo.root ?? null);
-  if (written.length > 0) steps.push(`git add ${written.join(' ')}`);
+  if (written.length > 0) steps.push(commitWritesStep(written));
 
   // The install this repository needs is derived from the facts above, so the block names the command
   // that derives it instead of guessing one: a plan with no human step still prints no heading.
