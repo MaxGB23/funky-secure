@@ -89,6 +89,35 @@ const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
 const LOCKFILE_ONLY_STEP = 'pnpm install --lockfile-only';
 
 /**
+ * The flag that lets pnpm run under a `packageManager` that names another manager (issue 111).
+ *
+ * pnpm refuses every command with `ERR_PNPM_OTHER_PM_EXPECTED` when the manifest declares another
+ * manager, and this tool never rewrites a declaration a human made (W3 refuses with a conflict). The
+ * flag is the one pnpm answers to, measured on pnpm 12.3.4 under `"packageManager": "npm@11.13.0"`:
+ * `pnpm --pm-on-fail=ignore import` and `pnpm --pm-on-fail=ignore install --lockfile-only` both exit
+ * `0` where the same commands without it exit `1`.
+ */
+const FOREIGN_PIN_FLAG = '--pm-on-fail=ignore';
+
+/**
+ * The manager `package.json` declares, when it is not pnpm.
+ *
+ * Read from the manifest the collector already resolved (L10), so the question costs no probe. A
+ * declared pnpm pin, a declaration this reader cannot parse, and an absent declaration all yield
+ * `null`: no step gains a flag for the manager the steps already name, and none pretends a pin exists.
+ *
+ * @param {object | null} repo
+ * @returns {string | null}
+ */
+function declaredForeignManager(repo) {
+  const declared = repo?.files?.packageJson?.json?.packageManager;
+  if (typeof declared !== 'string' || declared === '') return null;
+  const name = declared.split('@')[0];
+  if (name === '' || name === 'pnpm') return null;
+  return declared;
+}
+
+/**
  * Why the same step appears twice, and what each appearance is for.
  *
  * One before `init --apply`, because the writer refuses to land on work someone else left uncommitted.
@@ -114,6 +143,17 @@ const WHY_ORDER = [
 /** The one line a foreign lockfile adds to `why this order` (L10): one short sentence, never a block. */
 const WHY_MIGRATE_AFTER =
   'migrate comes after the install, because the install is what writes the lockfile it keeps';
+
+/**
+ * The one line a foreign pin adds: why a pnpm step carries a flag. A step that needs a state prints the
+ * command that produces it (0018), and a declaration a human made is never rewritten to make it pass.
+ *
+ * @param {string} declared
+ * @returns {string}
+ */
+function whyForeignPin(declared) {
+  return `package.json declares ${declared}, and the tool never rewrites it, so the pnpm steps carry ${FOREIGN_PIN_FLAG}`;
+}
 
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
@@ -143,6 +183,9 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   const present = Array.isArray(repo?.present) ? repo.present : [];
   const foreign = foreignLockfiles(repo);
   const steps = [];
+  // A manifest that declares another manager blocks every pnpm command, so each one carries the flag
+  // that runs it under that declaration. A pnpm pin and no pin at all print the plain commands.
+  const pnpmFlag = declaredForeignManager(repo) === null ? '' : ` ${FOREIGN_PIN_FLAG}`;
   const tracked = (paths ?? []).filter((path) => typeof path === 'string' && path !== '');
   const commitWrites =
     tracked.length > 0
@@ -176,11 +219,11 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     // `pnpm import` reads the foreign lockfile and writes `pnpm-lock.yaml` with the versions it
     // recorded. `pnpm install` never reads it: it resolves from the manifest, so the pins the user
     // migrated from are gone before `migrate` deletes the file that held them (0021).
-    steps.push('pnpm import');
+    steps.push(`pnpm import${pnpmFlag}`);
   }
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
-    steps.push('pnpm add <your first dependency>');
+    steps.push(`pnpm add${pnpmFlag} <your first dependency>`);
   }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.
@@ -190,7 +233,7 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     );
   }
   if (pins > 0) {
-    steps.push(LOCKFILE_ONLY_STEP);
+    steps.push(`${LOCKFILE_ONLY_STEP}${pnpmFlag}`);
     // The pin has a commit of its own, immediately after the resolve it requires: it leaves the
     // manifest dirty and the next writer refuses that state (0028). It prints only where `pin`
     // printed, because a commit that stages nothing is never printed.
@@ -232,10 +275,10 @@ async function hasUncommitted({ plan, ctx, collector }) {
 }
 
 /**
- * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean }} options
+ * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean, foreignPin?: string | null, boot?: boolean }} options
  * @returns {string}
  */
-function renderStart({ off, catalog, pending, migrate, boot = false }) {
+function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot = false }) {
   const lines = ['funky-secure start  ·  guidance, nothing is written', ''];
 
   if (pending.length === 0) {
@@ -257,6 +300,11 @@ function renderStart({ off, catalog, pending, migrate, boot = false }) {
       if (pending.some((step) => step.includes('git commit'))) lines.push(`  ${WHY_COMMIT_AFTER}`);
       if (pending.some((step) => step.includes('pin --apply'))) lines.push(`  ${WHY_PIN}`);
       if (migrate) lines.push(`  ${WHY_MIGRATE_AFTER}`);
+      // The reason is printed only where a step carries the flag, so the block never argues for a
+      // condition no printed command meets.
+      if (foreignPin !== null && pending.some((step) => step.includes(FOREIGN_PIN_FLAG))) {
+        lines.push(`  ${whyForeignPin(foreignPin)}`);
+      }
     }
   }
 
@@ -338,6 +386,14 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     paths: writtenPaths(plan, ctx.cwd ?? ctx.repo.root),
   });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
-  stdout.write(renderStart({ off: offByPolicy(starter), catalog, pending, migrate }));
+  stdout.write(
+    renderStart({
+      off: offByPolicy(starter),
+      catalog,
+      pending,
+      migrate,
+      foreignPin: declaredForeignManager(ctx.repo),
+    }),
+  );
   return 0;
 }

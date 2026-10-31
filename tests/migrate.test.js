@@ -150,9 +150,54 @@ test('apply refuses without pnpm-lock.yaml and keeps the only lockfile', async (
 
   assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
-  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --pm-on-fail=ignore), then re-run migrate --apply');
   assert.equal(reason, 'refusing to remove package-lock.json: pnpm-lock.yaml is absent (never delete the only lockfile)');
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json']);
+});
+
+test('the refusal under a foreign pin names a pnpm command that runs', async (t) => {
+  // Issue 111: under `packageManager: npm@11.13.0`, every printed pnpm command exited 1 with
+  // ERR_PNPM_OTHER_PM_EXPECTED, including this refusal's repair line. The flag is what runs, and the
+  // tool never rewrites a declaration a human made.
+  const dir = repository(t, {
+    'package.json': JSON.stringify({ name: 'fixture', packageManager: 'npm@11.13.0' }),
+    'package-lock.json': '{"lockfileVersion": 3}',
+  });
+
+  const result = await migrate(t, ['migrate', '--apply'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(result.code, 3);
+  const { action, reason } = refusal(result.stderr);
+  assert.equal(
+    action,
+    'create pnpm-lock.yaml first (run pnpm install --pm-on-fail=ignore), then re-run migrate --apply',
+  );
+  assert.equal(
+    reason,
+    'refusing to remove package-lock.json: pnpm-lock.yaml is absent (never delete the only lockfile)',
+  );
+  assert.match(result.stdout, /3\. human step[\s\S]*pnpm import --pm-on-fail=ignore/);
+  assert.ok(
+    result.stdout.includes('package.json declares npm@11.13.0'),
+    'the plan names the declaration the flag answers',
+  );
+  assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json']);
+});
+
+// PRESERVE: a repository pinned to pnpm keeps its refusal byte for byte; the flag is not a general
+// decoration.
+test('a pnpm pin keeps the unflagged refusal', async (t) => {
+  const dir = repository(t, {
+    'package.json': JSON.stringify({ name: 'fixture', packageManager: 'pnpm@12.3.4' }),
+    'package-lock.json': '{"lockfileVersion": 3}',
+  });
+
+  const result = await migrate(t, ['migrate', '--apply'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(result.code, 3);
+  const { action } = refusal(result.stderr);
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
+  assert.equal(result.stdout.includes('--pm-on-fail=ignore'), false);
 });
 
 test('apply refuses on the default branch read from origin/HEAD', async (t) => {
@@ -398,7 +443,7 @@ test('a bun-only repository is refused for the missing pnpm lockfile, not remove
 
   assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
-  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --pm-on-fail=ignore), then re-run migrate --apply');
   assert.equal(reason, 'refusing to remove bun.lock: pnpm-lock.yaml is absent (never delete the only lockfile)');
   assert.deepEqual(readdirSync(dir).sort(), ['bun.lock', 'package.json']);
 });

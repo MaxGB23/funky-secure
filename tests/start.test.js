@@ -431,6 +431,62 @@ test('an npm-generated project installs once, and the gate exists before that in
   );
 });
 
+/**
+ * Declares a `packageManager` in the manifest the way a framework generator does (`create-t3-app`
+ * writes `npm@11.13.0`), and records the tree so the next writer lands on a clean one.
+ * @param {string} dir
+ * @param {string} packageManager
+ */
+function pinManager(dir, packageManager) {
+  const path = join(dir, 'package.json');
+  const json = JSON.parse(readFileSync(path, 'utf8'));
+  json.packageManager = packageManager;
+  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
+  commitAll(dir, 'pin the manager');
+}
+
+test('a foreign pin makes the pnpm steps carry the flag that lets them run, and says why', async (t) => {
+  // Field report F3 (issue 111): a `create-t3-app` project declares `packageManager: npm@11.13.0`, and
+  // both printed pnpm steps exit 1 with ERR_PNPM_OTHER_PM_EXPECTED under it. The tool never rewrites a
+  // declaration a human made, so the step carries the flag that runs pnpm under it instead, and the
+  // reason names the declaration (0018).
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'package-lock.json' });
+  pinManager(dir, 'npm@11.13.0');
+
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0, 'a declared foreign manager is guidance, not a refusal');
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+    '  3  pnpm import --pm-on-fail=ignore',
+    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  5  pnpm install --lockfile-only --pm-on-fail=ignore',
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git switch -c ${FEATURE_BRANCH}`,
+    '  8  funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
+    `  9  git add pnpm-lock.yaml package-lock.json && git commit -m "${TRACK_COMMIT}"`,
+    `  10  ${SCAN_STEP}`,
+  ]);
+  const explained = whyBlock(stdout).filter((line) => line.includes('--pm-on-fail=ignore'));
+  assert.equal(explained.length, 1, 'the flag is explained once, in why this order');
+  assert.match(explained[0], /package\.json declares npm@11\.13\.0/);
+});
+
+test('a pnpm pin prints no flag, because pnpm is the manager the steps already name', async (t) => {
+  const dir = scratch(t);
+  generatedBy(dir, { lockfile: 'package-lock.json' });
+  pinManager(dir, 'pnpm@12.3.4');
+
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.equal(stdout.includes('--pm-on-fail=ignore'), false, 'the flag never leaks into a pnpm pin');
+  const pnpmSteps = stepLines(stdout).filter((line) => line.includes('pnpm '));
+  assert.deepEqual(pnpmSteps, ['  3  pnpm import', '  5  pnpm install --lockfile-only']);
+});
+
 test('an uncommitted repository is told to commit before it is told to apply', async (t) => {
   // Remediation conformance sweep, the worst of the three: the canonical first-run path could not be
   // completed. `start` printed `init --apply` as step 1, and `init --apply` refuses to write over

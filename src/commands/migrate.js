@@ -35,6 +35,31 @@ const REPORT_ONLY_KEYS = Object.freeze([
 const SECRET_LINE = /(?:^|[\s"'=])(?:[A-Za-z0-9_]*?(?:TOKEN|SECRET|PASSWORD|_AUTH)[A-Za-z0-9_]*)\s*[:=]/i;
 
 /**
+ * The flag that lets pnpm run under a `packageManager` naming another manager (issue 111).
+ *
+ * pnpm refuses every command with `ERR_PNPM_OTHER_PM_EXPECTED` when the manifest declares another
+ * manager, and this tool never rewrites a declaration a human made. Measured on pnpm 12.3.4 under
+ * `"packageManager": "npm@11.13.0"`: `pnpm --pm-on-fail=ignore import` and
+ * `pnpm --pm-on-fail=ignore install --lockfile-only` both exit `0` where the same commands without it
+ * exit `1`.
+ */
+const FOREIGN_PIN_FLAG = '--pm-on-fail=ignore';
+
+/**
+ * The manager `package.json` declares, when it is not pnpm: the declaration the printed pnpm commands
+ * have to run under. A pnpm pin, an unparseable declaration and an absent one all yield `null`.
+ *
+ * @param {string | null} declared the `packageManager` string the manifest carries, if any
+ * @returns {string | null}
+ */
+function declaredForeignManager(declared) {
+  if (typeof declared !== 'string' || declared === '') return null;
+  const name = declared.split('@')[0];
+  if (name === '' || name === 'pnpm') return null;
+  return declared;
+}
+
+/**
  * The branch names the RFC 11.3 fallback treats as a default branch when no remote HEAD can be read.
  * Matching one of them is a refusal, and the refusal says that the check is a fallback.
  */
@@ -135,11 +160,22 @@ function workflowSuggestions(workflows) {
  * @param {boolean} options.hasPnpmLock
  * @param {string | null} options.branch the current branch, as `repoFacts` resolved it
  * @param {boolean} options.allowDirty
+ * @param {string} options.pnpmFlag the flag the printed pnpm commands carry, or the empty string
  * @param {object} options.collector
  * @param {object} options.stdout
  * @returns {Promise<number>} exit code
  */
-async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirty, collector, stdout }) {
+async function applyRemoval({
+  root,
+  cwd,
+  foreign,
+  hasPnpmLock,
+  branch,
+  allowDirty,
+  pnpmFlag = '',
+  collector,
+  stdout,
+}) {
   if (foreign.length === 0) {
     // Nothing is at risk, so this is not a refusal: it is the honest answer for an already-migrated
     // repository. It is printed, so it is never a silent no-op.
@@ -151,7 +187,7 @@ async function applyRemoval({ root, cwd, foreign, hasPnpmLock, branch, allowDirt
 
   if (!hasPnpmLock) {
     throw refusal(
-      'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply',
+      `create pnpm-lock.yaml first (run pnpm install${pnpmFlag}), then re-run migrate --apply`,
       `refusing to remove ${names}: pnpm-lock.yaml is absent (never delete the only lockfile)`,
     );
   }
@@ -287,6 +323,10 @@ export async function run({
   const packageJson = ctx.repo.files?.packageJson?.json ?? null;
   const packageManager =
     typeof packageJson?.packageManager === 'string' ? packageJson.packageManager : null;
+  // A declaration naming another manager blocks every pnpm command, so the commands this plan prints
+  // carry the flag that runs them under it. The declaration itself is never rewritten.
+  const foreignPin = declaredForeignManager(packageManager);
+  const pnpmFlag = foreignPin === null ? '' : ` ${FOREIGN_PIN_FLAG}`;
   const npmrc = npmrcLines(ctx.repo.files?.npmrc?.text ?? '');
   const managerLines = npmrc.filter((line) =>
     /^(?:package-manager|package_manager|packageManager)\b/i.test(line),
@@ -341,8 +381,17 @@ export async function run({
     '',
     '3. human step (this tool never runs it)',
     foreign.length > 0
-      ? `   pnpm import   # reads ${foreign[0]} and writes pnpm-lock.yaml`
-      : '   pnpm install   # resolves and downloads; writes pnpm-lock.yaml',
+      ? `   pnpm import${pnpmFlag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
+      : `   pnpm install${pnpmFlag}   # resolves and downloads; writes pnpm-lock.yaml`,
+  );
+  // A command that carries a flag says why it does, so the reader knows the declaration is a decision
+  // the tool leaves to them and not a setting it failed to correct.
+  if (foreignPin !== null) {
+    lines.push(
+      `   package.json declares ${foreignPin}, and the tool never rewrites it, so the pnpm commands carry ${FOREIGN_PIN_FLAG}`,
+    );
+  }
+  lines.push(
     '',
     '4. removal (only after pnpm-lock.yaml exists)',
     `   pnpm-lock.yaml      ${hasPnpmLock ? 'present' : 'absent — finish step 3 first'}`,
@@ -371,6 +420,7 @@ export async function run({
     hasPnpmLock,
     branch: ctx.repo.branch ?? null,
     allowDirty,
+    pnpmFlag,
     collector: probes,
     stdout,
   });
