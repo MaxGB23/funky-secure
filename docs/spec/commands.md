@@ -161,7 +161,10 @@ Plan steps, printed in order:
 
 `--apply` performs step 4 only. It refuses when `pnpm-lock.yaml` is absent (never delete the only
 lockfile), when the tree is dirty for those files, or when the current branch is the default branch.
-Every refusal is exit `3` with the reason, never a silent no-op. The default branch is read from
+Every refusal is exit `3` with the reason, never a silent no-op. When `package.json` declares a manager
+other than pnpm, the human step and the refusal command carry `--pm-on-fail=ignore`, and step 3 names
+the declaration the flag answers, because pnpm otherwise exits `1` with `ERR_PNPM_OTHER_PM_EXPECTED`;
+the declaration itself is never rewritten (0018). The default branch is read from
 `refs/remotes/origin/HEAD` (12.1); a repository without a remote cannot resolve it, and the fallback
 is a literal `main`/`master` match, stated as a fallback in the refusal message.
 
@@ -243,13 +246,13 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 3 | `git add -A && git commit -m "<message>"` | the plan has a `would-write` item and any of its target paths already carries uncommitted work, because `init --apply` refuses to write over a tree whose state is not recorded |
 | 4 | `funky-secure init --apply` | the plan has at least one `would-write` item, printed with its count and the fact that nothing is written yet |
 | 5 | `git add <the paths the plan wrote> && git commit -m "<message>"` | step 4 printed: it leaves the manifest dirty, and the next writer refuses that state. The step names those paths instead of staging everything, so an untracked tool cache beside them stays out of the commit. The commit appears twice in a repository whose tree already carried work, because it answers two questions, and each carries a line of its own in `why this order` |
-| 6 | `pnpm import` | a lockfile another package manager produced is present: it reads that lockfile and writes `pnpm-lock.yaml` with the versions it recorded, under the block step 4 wrote. `pnpm install` never reads a foreign lockfile, so it would resolve from the manifest and discard the pins the repository already has (11.3, 0021) |
+| 6 | `pnpm import` | a lockfile another package manager produced is present: it reads that lockfile and writes `pnpm-lock.yaml` with the versions it recorded, under the block step 4 wrote. `pnpm install` never reads a foreign lockfile, so it would resolve from the manifest and discard the pins the repository already has (11.3, 0021). The command carries `--pm-on-fail=ignore` when `package.json` declares a manager other than pnpm, because pnpm otherwise exits `1` with `ERR_PNPM_OTHER_PM_EXPECTED` and this tool never rewrites a declaration a human made (0018) |
 | 7 | `funky-secure pin --apply` | the report carries a `floating-range` finding, printed with its count: the block governs the dependencies added next, and nothing else clears the ranges the manifest already has (11.9) |
-| 8 | `pnpm install --lockfile-only` | step 7 printed: `pin` writes exact specifiers over a lockfile that recorded a range, which is a desync by construction (11.9), and this is the resolve that re-syncs it without touching `node_modules` |
+| 8 | `pnpm install --lockfile-only` | step 7 printed: `pin` writes exact specifiers over a lockfile that recorded a range, which is a desync by construction (11.9), and this is the resolve that re-syncs it without touching `node_modules`. It carries `--pm-on-fail=ignore` under the same condition as step 6, because the resolve meets the same refusal |
 | 9 | `git add package.json && git commit -m "<message>"` | step 8 printed: the pin leaves the manifest dirty and the next writer refuses that state, so the path prints the commit that produces the clean tree the steps after it require (0018, 0028). It stages the manifest and nothing else, because a commit names what it covers and a generated repository's untracked tool cache stays out of it (0016) |
 | 10 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
 | 11 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The refusal names the same `git switch -c` command this step prints, because it refuses to remove a lockfile on `main` (10.4) |
-| 12 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add |
+| 12 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add. It carries `--pm-on-fail=ignore` under the same condition as step 6, because the add meets the same refusal |
 | 13 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest, because after the pin's own commit nothing else on the path writes one (0028) |
 | 14 | `funky-secure scan --preset starter` | always, and last |
 
@@ -269,6 +272,14 @@ foreign lockfile while `pnpm-lock.yaml` is absent, and the branch it needs has t
 The earlier order — `migrate` before the block — could not honour the first rule in any repository
 arriving from npm or yarn: the first resolve happened before the policy that governs it. Steps 4 and 5
 therefore run in that order, and step 3 is asked for before them.
+
+The declaration is the one fact the path does not answer by rewriting. When `package.json` declares a
+package manager other than pnpm, every pnpm step in the table carries `--pm-on-fail=ignore`, and `why
+this order` gains one line naming the declaration, because pnpm otherwise exits `1` with
+`ERR_PNPM_OTHER_PM_EXPECTED` and the printed path would be a loop with no exit (0018). The manifest is
+never edited to remove the declaration: a `packageManager` a human wrote is a decision, and `migrate`
+exists because that human decided to leave the manager it names. A manifest that declares pnpm, and a
+manifest that declares nothing, print the steps above without the flag and without that line.
 
 The same rule gives the pin a commit of its own: step 7 leaves `package.json` dirty and the next writer
 refuses that state, so the step that requires a clean tree prints the command that produces it (0018).
@@ -290,10 +301,11 @@ The numbering follows the printed steps, so a repository that is missing only th
 prints one line saying it is past the start and naming `scan`, never a stale checklist.
 
 The list is followed by `why this order` — the reason above, two lines, plus one line when a foreign
-lockfile moves `migrate` ahead of the block — and then, when the recommended preset disables rules,
-by the same `not run` block the report carries (10.3). That block describes `starter` (9.1), the
-preset step 6 runs, and it is produced by the same helper as the report's, so the two cannot disagree
-about what the recommended preset leaves unrun.
+lockfile moves `migrate` ahead of the block, plus one line when the manifest declares another
+manager — and then, when the recommended preset disables rules, by the same `not run` block the report
+carries (10.3). That block describes `starter` (9.1), the preset step 6 runs, and it is produced by the
+same helper as the report's, so the two cannot disagree about what the recommended preset leaves
+unrun.
 
 Exit: `0` in every state, including a repository already past the start; `2` for a usage error only.
 
