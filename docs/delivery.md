@@ -30,6 +30,23 @@ what was tested. Each has a structural answer, and none of them is a policy docu
   requirement, not a marketing choice (`odd/tasks/funky-secure-v0.2.md`, L4).
 - The account requires 2FA for writes. The OIDC path never uses an interactive session.
 
+**First publication, measured 2026-10-31.** npm has no trusted publisher for a name that does not
+ exist yet: the settings page lives on the package, and the package only exists after a first
+ publish. There is no pending-publisher mechanism (npm/cli#8544, open). So a version-1 release has one
+ step this section cannot perform, and the bootstrap is stated instead of assumed:
+
+1. The owner publishes the **first** version once, from the commit the gate passed, out of band
+   (`npm login`, `npm publish`). That artifact carries no provenance — the one release for which that
+   is true, and the reason it is spelled out here.
+2. The owner then configures the trusted publisher for the package: GitHub Actions, repository
+   `MaxGB23/funky-secure`, workflow `release.yml`.
+3. Every version after it follows §17.2 unchanged, with `--provenance`, and no credential exists
+   anywhere again.
+
+For that first version only, §17.3's order inverts: publish first, then push the tag, because the tag
+runs a job that cannot authenticate until step 2 exists. From the second version on the order stands
+as written — green gate, tag, publication — and a tag is still never moved.
+
 ### 17.3 Tag-driven, immutable releases
 
 - A release is triggered by pushing a `vX.Y.Z` tag. The tag string and `package.json` `version` must
