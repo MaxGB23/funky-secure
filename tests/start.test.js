@@ -472,6 +472,129 @@ test('a pnpm pin prints no flag, because pnpm is the manager the steps already n
   assert.deepEqual(pnpmSteps, ['  3  pnpm import', '  5  pnpm install --lockfile-only']);
 });
 
+/**
+ * The one line an enclosing workspace adds to `why this order` (issue 113).
+ *
+ * A project that carries no `pnpm-workspace.yaml` of its own and sits below one is not the root pnpm
+ * installs for: pnpm walks up, adopts that workspace and writes **its** lockfile, so the steps that
+ * write a lockfile leave this repository's own absent and the lockfile finding cannot clear. Changing
+ * the printed commands is not the answer — `--ignore-workspace` does not prevent the escape — so the
+ * path names the ancestor, relative to the repository root, and nothing else moves.
+ */
+const WORKSPACE_LINE =
+  'the install resolves to the workspace at ../.., so this repository keeps no pnpm-lock.yaml and the lockfile finding will not clear';
+
+/**
+ * A repository placed at the end of a path the upward walk travels, with the workspace files the shape
+ * needs written above it. Nothing above the scratch root is written, and the operating system's
+ * temporary directory is assumed to carry no `pnpm-workspace.yaml`: if it did, the walk would stop
+ * there and every shape would be the ancestor shape.
+ *
+ * @param {import('node:test').TestContext} t
+ * @param {{ ancestorAt?: string | null, own?: boolean }} options `ancestorAt` is the depth below the
+ *   scratch root that carries the `pnpm-workspace.yaml` the walk meets first — `''` for the scratch
+ *   root itself, `'work'` for one level above the project — and `null` for a tree that carries none
+ * @returns {{ base: string, root: string }} the scratch root and the repository `start` runs in
+ */
+function insideATree(t, { ancestorAt = null, own = false } = {}) {
+  const base = scratch(t);
+  const root = join(base, 'work', 'apps');
+  mkdirSync(root, { recursive: true });
+  if (ancestorAt !== null) {
+    writeFileSync(join(base, ancestorAt, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+  }
+  if (own) writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - apps/other\n');
+  generatedBy(root, { lockfile: 'pnpm-lock.yaml' });
+  return { base, root };
+}
+
+test('a project inside an enclosing workspace is told which root its installs write', async (t) => {
+  // Issue 113, measured twice on pnpm 12.3.4: the install leaves the project, so the lockfile the last
+  // scan reads is never written here and the remedy the finding prints cannot write it either.
+  const { base, root } = insideATree(t, { ancestorAt: '' });
+  const { code, stdout } = await start(root);
+
+  assert.equal(code, 0, 'an enclosing workspace is guidance, not a refusal');
+  assert.deepEqual(
+    stepLines(stdout),
+    [
+      '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+      `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+      '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
+      '  4  pnpm install --lockfile-only',
+      `  5  git add package.json && git commit -m "${PIN_COMMIT}"`,
+      `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+      `  7  ${SCAN_STEP}`,
+    ],
+    'the steps a repository at this state is at do not move',
+  );
+  assert.equal(
+    stdout.split(WORKSPACE_LINE).length - 1,
+    1,
+    'one line names the workspace the install resolves to, and the lockfile this repository keeps absent',
+  );
+  assert.deepEqual(
+    whyBlock(stdout).filter((line) => line.includes(WORKSPACE_LINE)),
+    [`  ${WORKSPACE_LINE}`],
+    'it is a line of why this order and not a step',
+  );
+  assert.equal(stdout.includes(base), false, 'the ancestor is named relative to the repository root');
+  assert.equal(stdout.includes(root), false, 'no absolute path reaches the output');
+});
+
+test('a project that carries its own workspace file prints no line', async (t) => {
+  const { base, root } = insideATree(t, { ancestorAt: '', own: true });
+  const { code, stdout } = await start(root);
+
+  assert.equal(code, 0);
+  assert.equal(
+    stdout.includes(WORKSPACE_LINE),
+    false,
+    'the project root is the root pnpm installs for, so there is nothing to name',
+  );
+  assert.equal(stdout.includes('workspace at'), false, 'no ancestor is named either');
+  assert.equal(stdout.includes(base), false, 'no absolute path reaches the output');
+});
+
+test('a project with no workspace above it prints no line', async (t) => {
+  const { root } = insideATree(t);
+  const { code, stdout } = await start(root);
+
+  assert.equal(code, 0);
+  assert.equal(stdout.includes(WORKSPACE_LINE), false, 'there is no ancestor to name');
+  assert.equal(stdout.includes('workspace at'), false);
+});
+
+test('the enclosing-workspace line is the only difference the ancestor makes', async (t) => {
+  // The two shapes that print nothing have to render the same bytes as a tree with no workspace above
+  // it, and the shape that prints something may differ by the line and nothing else: the read above the
+  // repository root adds guidance, and it moves no step, count or reason (issue 113).
+  const own = await start(insideATree(t, { ancestorAt: '', own: true }).root);
+  const none = await start(insideATree(t).root);
+  const ancestor = await start(insideATree(t, { ancestorAt: '' }).root);
+
+  assert.equal(
+    own.stdout,
+    none.stdout,
+    'a root with its own workspace file renders like one with no workspace above it',
+  );
+  assert.deepEqual(stepLines(own.stdout), stepLines(none.stdout), 'and prints the same steps');
+  assert.deepEqual(
+    stepLines(ancestor.stdout),
+    stepLines(none.stdout),
+    'the ancestor shape prints the same steps too',
+  );
+
+  const plain = none.stdout.split('\n');
+  const rendered = ancestor.stdout.split('\n');
+  assert.deepEqual(
+    rendered.filter((line) => !plain.includes(line)),
+    [`  ${WORKSPACE_LINE}`],
+    'one added line, and it is the enclosing-workspace line',
+  );
+  assert.equal(rendered.length, plain.length + 1, 'nothing was removed or reordered');
+});
+
 test('an uncommitted repository is told to commit before it is told to apply', async (t) => {
   // Remediation conformance sweep, the worst of the three: the canonical first-run path could not be
   // completed. `start` printed `init --apply` as step 1, and `init --apply` refuses to write over

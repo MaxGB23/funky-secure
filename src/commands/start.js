@@ -23,7 +23,7 @@ import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { createCollector } from '../lib/probes.js';
 import { collectScan } from '../lib/scan.js';
-import { FOREIGN_LOCKFILES } from '../lib/targets.js';
+import { FOREIGN_LOCKFILES, enclosingWorkspace } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
 /** The preset this command recommends (S5): the last step names it, and the honesty line states it. */
@@ -155,6 +155,34 @@ function whyForeignPin(declared) {
   return `package.json declares ${declared}, and the tool never rewrites it, so the pnpm steps carry ${FOREIGN_PIN_FLAG}`;
 }
 
+/**
+ * The step that writes a lockfile: `pnpm import`, `pnpm add` and `pnpm install --lockfile-only`.
+ *
+ * They are the ones an enclosing workspace takes away from this repository, so the line that names it
+ * is printed beside them and nowhere else. `pnpm init` writes a manifest and no lockfile, so it is not
+ * one of them.
+ *
+ * @param {string} step
+ * @returns {boolean}
+ */
+function writesLockfile(step) {
+  return step.startsWith('pnpm ') && !step.startsWith('pnpm init');
+}
+
+/**
+ * The one line an enclosing workspace adds to `why this order` (issue 113).
+ *
+ * The steps that write a lockfile cannot write this repository's own when pnpm adopts a workspace
+ * above it, and `--ignore-workspace` does not prevent the escape, so the commands stay as they are
+ * and the line names the ancestor and the consequence the reader will meet on the next `scan`.
+ *
+ * @param {string} ancestor the workspace root, relative to the repository root
+ * @returns {string}
+ */
+function whyEnclosingWorkspace(ancestor) {
+  return `the install resolves to the workspace at ${ancestor}, so this repository keeps no pnpm-lock.yaml and the lockfile finding will not clear`;
+}
+
 function plural(count, singular, pluralForm) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
@@ -275,10 +303,10 @@ async function hasUncommitted({ plan, ctx, collector }) {
 }
 
 /**
- * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean, foreignPin?: string | null, boot?: boolean }} options
+ * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean, foreignPin?: string | null, workspaceAncestor?: string | null, boot?: boolean }} options
  * @returns {string}
  */
-function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot = false }) {
+function renderStart({ off, catalog, pending, migrate, foreignPin = null, workspaceAncestor = null, boot = false }) {
   const lines = ['funky-secure start  ·  guidance, nothing is written', ''];
 
   if (pending.length === 0) {
@@ -304,6 +332,11 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
       // condition no printed command meets.
       if (foreignPin !== null && pending.some((step) => step.includes(FOREIGN_PIN_FLAG))) {
         lines.push(`  ${whyForeignPin(foreignPin)}`);
+      }
+      // Printed only where a step that writes a lockfile is, because that is the step the enclosing
+      // workspace takes away from this repository. A project that is past the start prints nothing.
+      if (workspaceAncestor !== null && pending.some(writesLockfile)) {
+        lines.push(`  ${whyEnclosingWorkspace(workspaceAncestor)}`);
       }
     }
   }
@@ -386,6 +419,13 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     paths: writtenPaths(plan, ctx.cwd ?? ctx.repo.root),
   });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
+  // The workspace pnpm would adopt instead of this repository. This is a filesystem read above the
+  // repository root — existence of one file name per ancestor, nothing else — and it is asked only
+  // when a step that writes a lockfile is printed. A root with a `pnpm-workspace.yaml` of its own is
+  // the root pnpm installs for, so nothing is read for it (issue 113).
+  const ownWorkspace = (ctx.repo?.present ?? []).includes('pnpm-workspace.yaml');
+  const workspaceAncestor =
+    !ownWorkspace && pending.some(writesLockfile) ? await enclosingWorkspace(ctx.repo?.root) : null;
   stdout.write(
     renderStart({
       off: offByPolicy(starter),
@@ -393,6 +433,7 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
       pending,
       migrate,
       foreignPin: declaredForeignManager(ctx.repo),
+      workspaceAncestor,
     }),
   );
   return 0;

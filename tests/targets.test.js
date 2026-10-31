@@ -4,7 +4,14 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { machineFacts, majorOf, manifestProblem, repoFacts, workspacePackageEntries } from '../src/lib/targets.js';
+import {
+  enclosingWorkspace,
+  machineFacts,
+  majorOf,
+  manifestProblem,
+  repoFacts,
+  workspacePackageEntries,
+} from '../src/lib/targets.js';
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'funky-secure-targets-'));
@@ -76,8 +83,7 @@ test('reports a machine without pnpm as unavailable instead of failing', async (
   assert.deepEqual(targets, [{ kind: 'machine', detail: 'pnpm unavailable on this machine' }]);
 });
 
-test('reports the version, the store and the version ambiguity as separate facts', async () => {
-  const agreeing = await machineFacts(
+test('reports the version, the store and the version ambiguity as separate facts', async () => {  const agreeing = await machineFacts(
     collectorOver({ config: { storeDir: 'M:/.pnpm-store', userAgent: 'pnpm/12.3.4 npm/? node/? win32 x64' } }),
   );
   const disagreeing = await machineFacts(
@@ -313,4 +319,61 @@ test('resolves whether a root .npmrc is tracked without a token', async (t) => {
   });
 
   assert.deepEqual(withToken.facts.npmrc, { tracked: true, hasToken: true, tokenlessTracked: false });
+});
+
+/**
+ * The upward walk `start` runs before it prints the steps that write a lockfile (issue 113).
+ *
+ * It reads existence only, above a root the tool does not own, so every case here is about what the
+ * walk must not do as much as about the path it returns: the answer is relative to the root the way
+ * every other printed path is, the content of the file it finds is never read, and the walk stops at
+ * the first ancestor that carries one.
+ */
+
+test('names the enclosing workspace relative to the root, the way every printed path is named', async (t) => {
+  const base = scratch(t);
+  write(base, 'pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+  const root = join(base, 'work', 'apps');
+  mkdirSync(root, { recursive: true });
+
+  assert.equal(await enclosingWorkspace(root), '../..');
+  assert.equal(await enclosingWorkspace(join(base, 'work')), '..');
+});
+
+test('stops at the first ancestor that carries the file', async (t) => {
+  const base = scratch(t);
+  write(base, 'pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+  write(base, 'work/pnpm-workspace.yaml', 'packages:\n  - .\n');
+  const root = join(base, 'work', 'apps');
+  mkdirSync(root, { recursive: true });
+
+  assert.equal(await enclosingWorkspace(root), '..', 'the nearest ancestor wins, not the outermost');
+});
+
+test('a root that carries the file itself has no enclosing workspace to name', async (t) => {
+  // The walk starts above the root on purpose: whether the root carries one is a fact the collector
+  // already resolved, and the project root is the root pnpm installs for.
+  const base = scratch(t);
+  const root = join(base, 'work');
+  write(root, 'pnpm-workspace.yaml', 'packages:\n  - .\n');
+
+  assert.equal(await enclosingWorkspace(root), null);
+});
+
+test('answers null when no ancestor carries the file', async (t) => {
+  const base = scratch(t);
+  const root = join(base, 'work', 'apps');
+  mkdirSync(root, { recursive: true });
+
+  assert.equal(await enclosingWorkspace(root), null);
+  assert.equal(await enclosingWorkspace(join(base, 'work')), null);
+});
+
+test('reads existence only: a workspace file it could not parse is still the ancestor', async (t) => {
+  const base = scratch(t);
+  writeFileSync(join(base, 'pnpm-workspace.yaml'), Buffer.from([0xff, 0xfe, 0x00, 0x01]));
+  const root = join(base, 'work');
+  mkdirSync(root, { recursive: true });
+
+  assert.equal(await enclosingWorkspace(root), '..', 'the walk never reads the bytes it finds');
 });
