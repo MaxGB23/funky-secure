@@ -93,6 +93,16 @@ the parser — a fixture written by the same hand only exercises the shape its a
 before and after, a tree state, a byte-identical file;
 - if the defect was in a promise the product makes, the test is named after the promise, not the code.
 
+The loop is also the cheapest source of new test shapes this project has, and the reason is structural:
+every scenario is a repository **nobody on the implementation side chose**. Three findings in one round
+became tests that no author would have imagined from reading the code — a directory that is not a git
+repository at all (0031), a manifest whose `packageManager` says npm while its `devEngines.packageManager`
+names pnpm, and a project that sits inside an enclosing workspace. None of those shapes existed in any
+test before an agent met one, and each now fails loudly if the behaviour regresses.
+
+So a finding has two outputs and the fix is only the first: the fix, and the case. A round that produces
+fixes without cases has left the product exactly as exposed as before, one commit later.
+
 Then the release ships and the record says which shape of repository has now been through the tool, and
 which has not. That last part matters: coverage claimed is coverage that will not be tested again.
 
