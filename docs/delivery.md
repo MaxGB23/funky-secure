@@ -78,6 +78,12 @@ release must not discover in public.
   every severity deviation from 9.1, and every user-visible message that changed.
 - `version` and the tag are checked against each other, and the tag is the only source of the
   published version string.
+- **A version is defined by the commit its tag points at.** Before that tag exists, the number in
+  `package.json` is a name for work in progress and may move under it; after the tag, it names one
+  byte sequence and never moves again. Two consequences that a field session met and no flow test can
+  see: a source change landing after a version's number was set is part of that version only if the
+  tag comes after it, and a tarball built before the tag is **not** that version — rebuild it from the
+  tagged commit, and reinstall any local copy from that tarball, before checking what a user will get.
 
 ### 17.6 What automation does not decide
 
