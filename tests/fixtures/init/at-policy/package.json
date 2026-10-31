@@ -1,5 +1,11 @@
 {
   "name": "fixture-at-policy",
   "private": true,
-  "packageManager": "pnpm@12.3.4"
+  "packageManager": "pnpm@12.3.4",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.3.4"
+    }
+  }
 }
