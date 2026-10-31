@@ -373,11 +373,13 @@ test('init prints a non-empty plan and writes nothing without --apply', async (t
 
 test('init --apply on an empty plan writes nothing', async (t) => {
   const dir = scratch(t);
-  // A repository already at policy: the pin is declared, the managed block carries the gate and
-  // savePrefix, a pnpm lockfile exists and nothing else is left to plan.
+  // A repository already at policy: the pin is declared **with the guard 0030 made part of the same
+  // policy** — a manifest carrying `packageManager` alone still has `devEngines.packageManager` to
+  // write (W3b), so it is not at policy and the plan would hold one item — the managed block carries
+  // the gate and savePrefix, a pnpm lockfile exists and nothing else is left to plan.
   writeFileSync(
     join(dir, 'package.json'),
-    '{\n  "name": "at-policy",\n  "private": true,\n  "packageManager": "pnpm@12.3.4"\n}\n',
+    '{\n  "name": "at-policy",\n  "private": true,\n  "packageManager": "pnpm@12.3.4",\n  "devEngines": {\n    "packageManager": {\n      "name": "pnpm",\n      "version": "12.3.4"\n    }\n  }\n}\n',
   );
   writeFileSync(
     join(dir, 'pnpm-workspace.yaml'),
