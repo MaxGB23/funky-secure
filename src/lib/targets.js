@@ -113,8 +113,13 @@ async function exists(path) {
  *
  * pnpm installs into the directory that has a workspace file of its own: when the project root carries
  * none, pnpm walks up, adopts the nearest enclosing workspace and writes **that** root's
- * `pnpm-lock.yaml`. The path has to name that fact, so the answer is a path and not a boolean, spelled
- * the way every other path this tool prints is spelled — never an absolute one.
+ * `pnpm-lock.yaml`.
+ *
+ * No command calls this since issue 144. `start` printed the answer it gives, and that line predicted a
+ * resolution the same path's own `init --apply` prevents: W1a/W1b/W1c write this repository's
+ * `pnpm-workspace.yaml`, which makes it the root before any step that writes a lockfile runs. The walk
+ * is left in place, unchanged and still tested, until its removal is decided; the paragraph below is
+ * the record of what it was for.
  *
  * This walk is a filesystem read **outside** the repository: any tool that reads above its own root
  * says so. It asks whether one file name exists in each ancestor and reads nothing else — not that

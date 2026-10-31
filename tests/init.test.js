@@ -762,11 +762,40 @@ test('next steps name the commit and funky-secure start, never an install it can
 
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n',
+      'next steps\n  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"\n  funky-secure start\n',
     ),
     preview.stdout.text,
   );
   assert.equal(preview.stdout.text.includes('pnpm install'), false, preview.stdout.text);
+});
+
+test('the next steps commit exactly the paths the plan wrote, from the constant the path prints (11.2.2, issue 145)', async (t) => {
+  // Issue 145: the block staged the writes and handed the reader to `start` without recording them —
+  // the state `init --apply` refuses to land on — and it named fewer paths than the plan wrote,
+  // because the staging half was spelled by hand instead of built from the constant `start` prints.
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "committed",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+
+  const preview = runner(dir, { tracked: ['package.json'] });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const written = JSON.parse(preview.stdout.text)
+    .plan.filter((item) => item.state === 'would-write')
+    .map((item) => item.path.slice(dir.length + 1).replaceAll('\\', '/'));
+
+  const { APPLY_MESSAGE, commitWritesStep } = await import('../src/lib/plan.js');
+  assert.equal(
+    commitWritesStep(written),
+    'git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"',
+    'the staged paths are the plan\'s own written paths, in plan order, package.json included',
+  );
+
+  const human = runner(dir, { tracked: ['package.json'] });
+  assert.equal(await human.run(['init']), 0);
+  assert.ok(
+    human.stdout.text.endsWith(`next steps\n  ${commitWritesStep(written)}\n  funky-secure start\n`),
+    human.stdout.text,
+  );
+  assert.ok(human.stdout.text.includes(APPLY_MESSAGE), 'the block names the message the path prints');
 });
 
 test('init --apply ends on the commit and funky-secure start (11.2.2, 0132)', async (t) => {
@@ -779,7 +808,7 @@ test('init --apply ends on the commit and funky-secure start (11.2.2, 0132)', as
   assert.ok(
     applied.stdout.text
       .slice(applied.stdout.text.indexOf('next steps'))
-      .startsWith('next steps\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n'),
+      .startsWith('next steps\n  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"\n  funky-secure start\n'),
     applied.stdout.text,
   );
   assert.equal(/\bpnpm install\b/.test(applied.stdout.text), false, applied.stdout.text);
@@ -796,7 +825,7 @@ test('next steps names the migrate command when a foreign lockfile coexists with
 
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n',
+      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"\n  funky-secure start\n',
     ),
     preview.stdout.text,
   );
@@ -815,7 +844,7 @@ test('the migrate step carries no --from, so a yarn lockfile is not forced throu
   // otherwise. Naming `--from npm` here would force the wrong step (RFC 11.2.2, 11.3).
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n',
+      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"\n  funky-secure start\n',
     ),
     preview.stdout.text,
   );
