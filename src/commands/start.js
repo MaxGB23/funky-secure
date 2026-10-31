@@ -192,7 +192,7 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // to read a block that already exists.
   if (writes > 0) {
     steps.push(
-      `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')} (nothing is written)`,
+      `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')}`,
     );
     // `init --apply` leaves the manifest dirty, and `pin --apply` refuses that state. The commit names
     // the files the plan wrote, so an untracked tool cache beside them is not swept in.
