@@ -19,9 +19,9 @@ and the version on the machine's `PATH` is evidence rather than a verdict (0024)
 | `packageManager` names a versioned pnpm | `pass` | `pin-differs-from-machine` when the machine answers another version |
 | `packageManager` is absent | `fail` | `pin-missing` |
 | `packageManager` names pnpm and declares no version (`"pnpm"`, `"pnpm@"`) | `fail` | `pin-unversioned` |
-| `packageManager` names npm, yarn or bun | `skip` | `not-pnpm` |
+| `packageManager` names a manager other than pnpm | `skip` | `not-pnpm`, whatever `devEngines.packageManager` declares |
 | `packageManager` names pnpm in a shape this rule cannot compare | `fail` | `pin-conflict` |
-| `packageManager` differs and the project manages its own pnpm (`devEngines.packageManager`) | `skip` | `self-managed-pin` |
+| `devEngines.packageManager` names another manager or another version than the pin | `skip` | `self-managed-pin`, whatever pnpm answers |
 | `pnpm --version` did not answer | `skip` | `no-pnpm` |
 | Machine facts are out of scope (`--scope repo`) | `skip` | `no-pnpm` |
 | The root `package.json` is missing | `skip` | `no-package-json` |
@@ -43,15 +43,22 @@ value that names pnpm is not evidence that the repository is on another manager,
 finds; that is a property of the remediation, not of the verdict.
 
 `devEngines.packageManager` — the field npm enforces, where `packageManager` is the one npm ignores —
-has three states, and this page names all three (0030). Declared and **equal to the pin** is a fact
-this tool owns: `init --apply` writes the pin as W3 and the field as W3b in one plan (11.2), so the
-rule can state that the two declarations agree — and when the answering pnpm matches the pin too, that
-agreement is a `pass` instead of a skip. When the answering pnpm is another version the skip stands:
-the probe runs outside the project, so it describes the machine while the project re-executes with
-what it declares, and no remediation is offered, because rewriting a working pin to the auditing
-machine's version is a downgrade (0020). Declared and **different** is `skip` with
-`self-managed-pin`, because the project manages its own pnpm and the machine's pnpm is not evidence
-about it. **Absent** is unchanged: the pin alone is the declaration, and nothing about it is skipped.
+has three states, and this page names all three (0030). The guard is compared with the pin before the
+pin is compared with the answering pnpm. The pin and the guard are compared by name and by version,
+the two keys the field is measured by (W3b), so a
+guard that names another manager is different and a guard that declares no `version` is not equal to a
+pin that declares one. The answer belongs to the two declarations and not to the answering pnpm: a
+guard that differs is `skip` with `self-managed-pin` whatever pnpm answers, including when the pnpm
+answering happens to equal the pin, because the pin is not the whole of what the project declares. A
+pin that names a manager other than pnpm is `not-pnpm` before the guard is read, because a guard does
+not make that repository a pnpm one. Declared and **equal to the pin** in both keys is a fact this
+tool owns: `init --apply` writes the pin as W3 and the field as W3b in one plan (11.2), so the rule can
+state that the two declarations agree — and when the answering pnpm matches the pin too, that
+agreement is a `pass` instead of a skip. Equal in both keys, with the answering pnpm on another
+version, keeps the skip: the probe runs outside the project, so it describes the machine while the
+project re-executes with what it declares, and no remediation is offered, because rewriting a working
+pin to the auditing machine's version is a downgrade (0020). **Absent** is unchanged: the pin alone is
+the declaration, and nothing about it is skipped.
 
 An unverifiable pin is not a wrong pin, so an unavailable version probe is a skip rather than a
 failure; under `--strict-probes` the engine turns that skip into an error. A `--scope repo` scan

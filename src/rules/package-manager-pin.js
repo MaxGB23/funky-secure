@@ -12,16 +12,60 @@ const DOC = 'docs/rules/package-manager-pin.md';
 const PATH = 'package.json';
 
 /**
- * Whether the project pins the manager it runs with, through `devEngines.packageManager`.
+ * The `devEngines.packageManager` the manifest declares — the field npm enforces (0030) — as the two
+ * keys it is measured by. Anything that is not an object declares no guard this rule can compare.
  *
  * @param {object} ctx resolved context
+ * @returns {object|null} the guard, or `null` when the manifest declares none
+ */
+function declaredGuard(ctx) {
+  const json = ctx.repo?.files?.packageJson?.json ?? null;
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) return null;
+  const engine = json.devEngines?.packageManager;
+  if (engine === null || typeof engine !== 'object' || Array.isArray(engine)) return null;
+  return engine;
+}
+
+/**
+ * Whether the guard declares the pair the pin declares, compared by name **and** by version — the same
+ * comparison W3b applies to the field it writes (`isGuardFor`, 11.2/0030).
+ *
+ * Only those two keys are compared: `onFail` is a key `pnpm init` writes, the tool never touches it,
+ * and it makes no declaration equal or different. A guard that declares no `version` is not equal to a
+ * pin that declares one, and a guard that names another manager is not equal to a pnpm pin.
+ *
+ * @param {object|null} guard the declared guard
+ * @param {string} declared the `packageManager` string
  * @returns {boolean}
  */
-function managesOwnVersion(ctx) {
-  const json = ctx.repo?.files?.packageJson?.json ?? null;
-  if (json === null || typeof json !== 'object') return false;
-  const engine = json.devEngines?.packageManager;
-  return engine !== null && typeof engine === 'object' && engine.name === 'pnpm';
+function guardMatchesPin(guard, declared) {
+  if (guard === null || typeof guard.name !== 'string') return false;
+  if (typeof guard.version !== 'string') return false;
+  return `${guard.name}@${guard.version}` === declared;
+}
+
+/**
+ * The guard as the message names it: the pair when it declares both keys, the name when it declares no
+ * version, because the sentence must not invent a version the manifest does not carry.
+ *
+ * @param {object} guard the declared guard
+ * @returns {string}
+ */
+function guardLabel(guard) {
+  if (typeof guard.name !== 'string') return 'a guard this rule cannot compare';
+  return typeof guard.version === 'string' ? `${guard.name}@${guard.version}` : guard.name;
+}
+
+/**
+ * Whether the declaration names another manager, which is answered before the guard is read (#104): a
+ * guard does not make an npm repository a pnpm one, and the skip this rule used to print for that
+ * state said the project "manages its own pnpm" — false on its face.
+ *
+ * @param {string} declared the `packageManager` string
+ * @returns {boolean}
+ */
+function namesAnotherManager(declared) {
+  return !declared.startsWith('pnpm@') && !namesPnpmWithoutVersion(declared);
 }
 
 /**
@@ -85,7 +129,7 @@ export default {
   question:
     'Does package.json declare the package manager, and does the declaration match the pnpm actually answering?',
   detection:
-    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a declaration that names pnpm and no version fails with its own code (pin-unversioned), because naming the manager and no version is the state pin-missing describes — there is no pin — while the declaration itself is kept and never rewritten, so the fix is manual; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. A devEngines.packageManager equal to the pin, with the answering pnpm matching it, is the pair the tool writes itself: the declarations agree and the machine agrees, so the pin is verified and not skipped. The same declaration with a pnpm that answers another version is a skip (self-managed-pin), and so is one that names a different version, because the probe runs outside the project and its version describes the machine. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing package.json is a skip (no-package-json), and a package.json that exists but cannot be interpreted is a failure (unparseable-package-json) that names the file and what is wrong with it, whatever the scope.',
+    'Reads packageManager from the root package.json. A versioned pnpm declaration is the authority: it passes, and the pnpm answering on the machine rides along as evidence rather than as a verdict, because pnpm re-executes itself to honour the declaration inside the project. An absent declaration fails with pin-missing; a declaration that names another manager is a skip (not-pnpm), since the pnpm question does not apply to it; a declaration that names pnpm and no version fails with its own code (pin-unversioned), because naming the manager and no version is the state pin-missing describes — there is no pin — while the declaration itself is kept and never rewritten, so the fix is manual; a pnpm declaration this rule cannot compare with the answering binary keeps pin-conflict. A devEngines.packageManager is read before the answering pnpm and compared with the pin by name and by version: one that names another manager or another version is a skip (self-managed-pin) whatever pnpm answers, including when the answering pnpm happens to equal the pin. Equal in both keys, with the answering pnpm matching it, is the pair the tool writes itself: the declarations agree and the machine agrees, so the pin is verified and not skipped. Equal in both keys and answered by another pnpm is the skip that stands, because the probe runs outside the project and its version describes the machine. A pin that names another manager is a skip (not-pnpm) before the guard is read, because a guard does not make that repository a pnpm one. An unavailable pnpm version is a skip (no-pnpm), never a wrong pin; a missing package.json is a skip (no-package-json), and a package.json that exists but cannot be interpreted is a failure (unparseable-package-json) that names the file and what is wrong with it, whatever the scope.',
   evidence: '{ declared, observed, executable }',
   remediation:
     'auto — funky-secure init --apply writes packageManager when it is missing, and only then; a pin that is already declared is never rewritten, whatever the machine runs.',
@@ -175,6 +219,41 @@ export default {
       ];
     }
 
+    if (namesAnotherManager(declared)) {
+      return [
+        {
+          status: 'skip',
+          code: 'not-pnpm',
+          path: PATH,
+          message: `skipped: package.json declares ${declared}, so this repository is not on pnpm and the pin question does not apply`,
+          evidence,
+          remediation: { kind: 'none' },
+        },
+      ];
+    }
+
+    // The guard is compared with the pin before the pin is compared with the answering pnpm (#104,
+    // 0030), and it is compared by name and by version — the pair W3b writes — so a guard that differs
+    // is the declared-and-different state whatever pnpm answers, including when the answering pnpm
+    // happens to equal the pin: the pin is not the whole of what the project declares. A project that
+    // declares its own pin re-executes with it, so the probe, which runs outside the repository (0019),
+    // describes the machine and not the project (0020). No branch names
+    // `corepack use pnpm@<machine version>`: rewriting a working project's pin to whatever the auditing
+    // machine runs is the downgrade 0020 removed.
+    const guard = declaredGuard(ctx);
+    if (guard !== null && !guardMatchesPin(guard, declared)) {
+      return [
+        {
+          status: 'skip',
+          code: 'self-managed-pin',
+          path: PATH,
+          message: `package.json declares ${declared} and devEngines.packageManager declares ${guardLabel(guard)}, which is not the same pin, so the pnpm answering (pnpm@${observed}) does not describe this project; run pnpm --version inside the project to confirm the pin`,
+          evidence,
+          remediation: { kind: 'none' },
+        },
+      ];
+    }
+
     if (declared !== `pnpm@${observed}`) {
       // A repository that declares a versioned pnpm is the authority for that question: pnpm
       // re-executes itself to honour `packageManager`, so from inside the project the answering
@@ -184,21 +263,15 @@ export default {
       // rewrite a deliberate pin to whatever the auditor happens to run — measured on three real
       // repositories (shadcn-ui/ui pnpm@10.33.4, create-t3-app pnpm@10.8.0, primevue pnpm@9.6.0).
       // It is information, and it carries no remediation (0024, S9).
-      if (managesOwnVersion(ctx)) {
-        // The three states of `devEngines.packageManager` (0030). Declared and equal to the pin, with
-        // the answering pnpm matching it, never reaches this branch: the declarations agree and the
-        // machine agrees, so the pin passes on its own value and there is nothing left to skip. A
-        // declaration that differs from the pin — and an equal one the machine does not confirm — is a
-        // skip, because a project that declares its own pnpm re-executes with it: the probe that
-        // answered here runs outside the repository (0019), so its version describes the machine and
-        // not the project (0020). No branch names `corepack use pnpm@<machine version>`; rewriting a
-        // working project's pin to whatever the auditing machine runs is the downgrade 0020 removed.
+      if (guard !== null) {
+        // The declarations agree and the machine does not: the skip stands for the reason above, since
+        // the answering pnpm is still the machine's and not the project's (0020, 0030).
         return [
           {
             status: 'skip',
             code: 'self-managed-pin',
             path: PATH,
-            message: `package.json declares ${declared} and manages its own pnpm through devEngines.packageManager, so the pnpm answering (pnpm@${observed}) does not describe it; run pnpm --version inside the project to confirm the pin`,
+            message: `package.json declares ${declared} and devEngines.packageManager declares ${guardLabel(guard)}, which the pnpm answering (pnpm@${observed}) does not confirm; run pnpm --version inside the project to confirm the pin`,
             evidence,
             remediation: { kind: 'none' },
           },
@@ -245,22 +318,9 @@ export default {
         ];
       }
 
-      // A declaration that is not a versioned pnpm: another manager, or a shape this rule cannot
-      // compare. The pnpm question does not apply to it, and the rules that need a pnpm repository
-      // already report the consequence (lockfile-committed, foreign-lockfile).
-      if (!declared.startsWith('pnpm@')) {
-        return [
-          {
-            status: 'skip',
-            code: 'not-pnpm',
-            path: PATH,
-            message: `skipped: package.json declares ${declared}, so this repository is not on pnpm and the pin question does not apply`,
-            evidence,
-            remediation: { kind: 'none' },
-          },
-        ];
-      }
-
+      // A declaration that is not a versioned pnpm: a shape this rule cannot compare. The pnpm question
+      // does not apply to it, and the rules that need a pnpm repository already report the consequence
+      // (lockfile-committed, foreign-lockfile).
       return [
         {
           status: 'fail',
