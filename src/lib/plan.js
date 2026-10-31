@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, relative } from 'node:path';
 
-import { RefusalError } from './errors.js';
+import { ConfigError, RefusalError } from './errors.js';
 import { resolveLockfileStep } from './foreign-pin.js';
 import { statusPorcelain } from './git.js';
 import { FOREIGN_LOCKFILES } from './targets.js';
