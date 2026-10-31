@@ -3,6 +3,9 @@ node_modules/
 *.log
 .atl/
 
+# release scratch — the notes are passed to `gh release create --notes-file` and never versioned
+RELEASE_NOTES.md
+
 # secrets — required by funky-secure own sensitive-ignored rule (R7)
 .env
 .env.*

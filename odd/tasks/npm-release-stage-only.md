@@ -25,6 +25,13 @@ credential and without an unattended publication. Branch `ci/npm-stage-only-rele
 - **S5.** The packed set is enforced, not merely declared: every `docs/rules/<id>.md` the catalog
   declares must appear in the list npm would pack, so narrowing `files` cannot silently drop a page
   the binary promises.
+- **S6.** The GitHub Release is a human step **after** the staged candidate is approved, never a CI
+  step, and the repository enables release immutability so the tag of a released version cannot be
+  moved or deleted. The body records the commit the tag points at and the `dist.integrity` the
+  registry returns (SHA-512 SRI) — the registry publishes no `sha256` of the tarball — so a later audit
+  can bind the published bytes to the commit. The procedure a maintainer follows is the runbook at
+  `.agents/skills/release/SKILL.md`. Owner: *"el release es post aprobacion humano, cumple tus
+  recomendaciones y corrije el dist integrity."*
 
 ## Tasks
 
@@ -35,6 +42,7 @@ credential and without an unattended publication. Branch `ci/npm-stage-only-rele
 | T3 | S1, S5 | delegated | `package.json` `files` + `repository` object; `release-guard.js` catalog assertion; test for it | `887f037` |
 | T4 | S1-S5 | inline | Gate: suite 591/590/0/1, self-scan exit 0, release-guard exit 0, pack 65 files / 335.570 B | `887f037` |
 | T5 | S3, S4 | owner | Bootstrap, stage, approve, trusted publisher, provenance measurement | — |
+| T6 | S6 | delegated | `.agents/skills/release/SKILL.md` runbook; `docs/delivery.md` §17.3/§17.5, `RELEASE_NOTES.md` in `.gitignore`, RFC 0032 errata | — |
 
 ## Log
 
@@ -70,3 +78,26 @@ manifest, guard, tests), 573 authored changed lines together and past the ~400-l
 is by concern and reviewable commit by commit; most of the excess is the new record, which cannot be
 separated from the contract it establishes without leaving the repository citing a record that does
 not exist. One pull request, two commits, and the chained-PR strategy is not applied.
+
+**L7.** Owner: `debemos crear una skill de release con lo necesario. Esto ya lo hago en
+funky-theme-vscode M:/vscode-themes/funky-theme-vscode/.agents/skills/release/SKILL.md y en su
+agents.md se menciona llenar el changelog acorde, debemos adaptarlo a este proyecto conciso, solo lo
+necesario. el release es post aprobacion humano, cumple tus recomendaciones y corrije el dist
+integrity.` The sibling's runbook carries VS Code, Zed, vsix and marketplace machinery, none of which
+applies here, so what this repository keeps is the order of a release plus the rules that order
+enforces. The changelog accumulator was dropped for a measured reason: the sibling commits
+`CHANGELOG.md` because its vsix embeds that file and a marketplace renders it, while npm embeds
+nothing from the tree, so the GitHub Release body is the only place the notes of a version are read —
+and a file committed after the tag would be a commit outside the version it describes. The `sha256`
+clause became `dist.integrity` because the registry publishes `dist.integrity` and `dist.shasum` and
+no `sha256` of the tarball, and the Release became a post-approval human step because release
+immutability freezes the tag a Release names.
+
+**L8.** Measured against the live registry on 2026-10-31 (`npm view vite dist --json`), because the
+official registry-API page documents `dist` as "a `shasum` and `tarball` url" and never mentions
+`integrity`, so the contract could not rest on that page: `dist.shasum` is a sha1 hex string,
+`dist.integrity` is `sha512-…` SRI and `npm view <pkg> dist.integrity` returns it, and `dist.attestations`
+is `{ url, provenance: { predicateType: "https://slsa.dev/provenance/v1" } }`. The only `sha256` in
+`dist` is the `keyid` of the registry's `signatures`, never a tarball digest. `dist.attestations` is
+therefore the exact probe for the one claim still unverified: whether a provenance attestation survives
+a staged approval.

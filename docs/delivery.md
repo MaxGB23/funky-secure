@@ -76,9 +76,16 @@ fallback in step 4 costs at most the number nobody could download yet.
 - The ordering is fixed: green gate on the commit, then the tag, then the staged candidate, then the
   approval. A red gate means no tag, and a tag is never moved afterwards — a correction is a new patch
   version. A rejected candidate leaves its tag in place as the record of what was not released.
-- The release body records the tarball `sha256` and, when the registry returns one, the provenance
-  URL, so a later audit can bind the published bytes to the commit that produced them without trusting
-  this document.
+- The release body records the commit the tag points at, the `dist.integrity` the registry returns and,
+  when the registry returns one, the provenance URL, so a later audit can bind the published bytes to
+  the commit without trusting this document. The registry publishes `dist.integrity` (SHA-512 SRI) and
+  `dist.shasum` and never a `sha256` of the tarball, so no such hash is claimed.
+- The GitHub Release is created by the maintainer **after** the approval, never by the workflow that
+  staged, and the repository enables release immutability so the tag of a released version cannot be
+  moved or deleted.
+
+The steps a maintainer runs are the runbook at
+[`../.agents/skills/release/SKILL.md`](../.agents/skills/release/SKILL.md).
 
 ### 17.4 The prepublish gate is the product running on itself
 
@@ -103,6 +110,9 @@ the smoke test all run before anything is queued.
   `type:breaking-change` label and a migration note in the release body.
 - The release body is the changelog of that version: it names every rule added, changed or removed,
   every severity deviation from 9.1, and every user-visible message that changed.
+- The body lives at release time: the maintainer writes it after the approval and it becomes the
+  GitHub Release body. This repository keeps no `CHANGELOG.md`, because npm embeds nothing from the
+  tree and an accumulated file would need a commit after the tag, outside the version it describes.
 - `version` and the tag are checked against each other, and the tag is the only source of the
   published version string.
 - **A version is defined by the commit its tag points at.** Before that tag exists, the number in

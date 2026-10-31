@@ -88,3 +88,15 @@ A contract that no test reads is a comment, so each obligation has one:
 Delivery mechanics remain the owner's: commit, tag, approval and release notes are human decisions,
 and the review lifecycle is not a publication gate. The public package name, the first tag and the
 moment of publication are not automated by anything in this repository.
+
+## Errata
+
+**2026-10-31.** Two clauses above are corrected here; the body stays as written.
+
+- **§17.3, the Release.** The GitHub Release is a post-approval human step, never a CI step. With
+  release immutability enabled a release freezes its tag, so a Release created before the approval
+  would turn a candidate that can still be rejected into a permanent record. The repository enables
+  release immutability so the tag binding is enforced rather than promised.
+- **§17.3, the integrity.** The integrity recorded in the body is `dist.integrity` (SHA-512 SRI),
+  because the registry publishes no `sha256` of the tarball. The step-by-step procedure is the
+  runbook at `.agents/skills/release/SKILL.md`.
