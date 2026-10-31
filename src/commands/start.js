@@ -127,6 +127,17 @@ const WHY_ORDER = [
 /** The one line a foreign lockfile adds to `why this order` (L10): one short sentence, never a block. */
 const WHY_MIGRATE_AFTER =
   'migrate comes after the install, because the install is what writes the lockfile it keeps';
+/**
+ * The one line a refusing writer earns, printed last and only when a printed step writes.
+ *
+ * A writer refuses with exit `3` and its own sentence names the way out (`commit X or pass
+ * --allow-dirty`), so this line is not the error message: it is what to read before taking that way
+ * out. The path teaches how to start; a reader who meets a refusal here would otherwise have nothing
+ * but the refusal's own advice, and `--allow-dirty` is an escape a stranger can misuse (a field
+ * session asked for exactly this pointer: it knew how to start and not how to react).
+ */
+const WHEN_A_WRITER_REFUSES =
+  'if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it';
 
 /**
  * The one line a foreign pin adds: why a pnpm step carries a flag. A step that needs a state prints the
@@ -304,6 +315,11 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
   // what the starter preset left unrun.
   const notRun = notRunLines({ off, catalog });
   if (notRun.length > 0) lines.push('', ...notRun);
+
+  // A refusal is the one thing the path cannot demonstrate, so it names what to read instead. It is
+  // printed only where a step writes, for the same reason every other reason is: a line that argues
+  // for a step the reader does not have is a line about nothing.
+  if (pending.some((step) => step.includes('--apply'))) lines.push('', `  ${WHEN_A_WRITER_REFUSES}`);
 
   return `${lines.join('\n')}\n`;
 }

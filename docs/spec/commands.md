@@ -346,6 +346,11 @@ The numbering follows the printed steps, so a repository that is missing only th
 `3`. A repository whose steps all apply prints the numbered list; one that has taken all of them
 prints one line saying it is past the start and naming `scan`, never a stale checklist.
 
+Last, when a printed step writes, one line says what to read if a writer refuses it: `funky-secure
+explain <rule>` for the reason, and `--allow-dirty` only for a tree the reader understands. The
+refusal is not this line — it is the writer's, it exits `3`, and it names its own way out — so the two
+cannot contradict each other: this one is what to read before taking that way out.
+
 The list is followed by `why this order` — the reason above, two lines, plus one line when a foreign
 lockfile moves `migrate` ahead of the block, plus one line when the manifest declares another
 manager — and then,

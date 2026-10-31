@@ -141,6 +141,11 @@ This tool is part of the supply chain it audits, so it carries nothing it does n
 Node `>= 22`, ESM, no install step for the tool itself. pnpm is recommended and npm or yarn are
 migrated, never required.
 
+Linux and Windows are the supported platforms: the suite runs on both in CI. macOS is **not** a
+supported target — it is never executed, and the owner decided it stays that way, so nothing here
+claims it works there. On macOS you are on your own, and a bug report about it is read as a report
+from an unsupported platform rather than as a regression.
+
 ## 📚 Documentation
 
 - [Guide](docs/guide.md) — how to read the output, basic and advanced usage, and what to do per rule.

@@ -828,3 +828,28 @@ test('start takes no flag beyond --help, so --preset is a usage error', async (t
   assert.equal(helped.code, 0);
   assert.match(helped.stdout, /^usage: funky-secure <command> \[options\]$/m);
 });
+
+test('a printed writer earns one line about what to read if it refuses, and no writer earns none', async (t) => {
+  const writing = await start(scratch(t));
+  const lines = writing.stdout.split('\n');
+  const printed = lines.filter((line) => line.includes('if a writer refuses'));
+
+  assert.equal(printed.length, 1, 'one line, never a block');
+  assert.equal(
+    printed[0],
+    '  if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it',
+    'the line names what to read and qualifies the escape, because the refusal already names the escape',
+  );
+  assert.equal(
+    lines.filter((line) => line.trim() !== '').at(-1),
+    printed[0],
+    'it is the last thing printed, after the not run block',
+  );
+
+  const past = await start(scratch(t, 'at-policy'));
+  assert.equal(
+    past.stdout.includes('if a writer refuses'),
+    false,
+    'a repository with no writer on the list gets no line about refusing one',
+  );
+});

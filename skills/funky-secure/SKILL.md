@@ -103,6 +103,9 @@ These are the ways a "fix" makes a repository worse. None of them is a valid res
   you were asked to fix.
 - **Do not remove a file from the index (`git rm --cached`) without saying that history keeps it.**
   A committed secret stays committed; rotation is the only remedy.
+- **Do not treat a refusal (`exit 3`) as a wall to route around.** It names its own way out —
+  `commit <paths> or pass --allow-dirty` — and `funky-secure explain <rule>` says why it refused.
+  `--allow-dirty` is for a tree whose state you understand, never for one you were told to clean up.
 - **Do not resolve a `conflict`.** A conflict means the tool refused to overwrite a file that says
   something else. Stop and ask the human.
 - **Do not run a writer because it looked like the next step.** `init --apply` and `pin --apply` are

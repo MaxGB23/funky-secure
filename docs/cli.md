@@ -74,6 +74,7 @@ not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions
 ```
 
+  if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 A repository a generator left behind turns the order on, in both of its shapes. With a foreign lockfile
 present, the migration resolves once under the block the first step writes, and the ranges the generator
 brought are cleared before the foreign lockfile goes; the branch is named in the step, because that is
