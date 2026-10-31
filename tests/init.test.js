@@ -174,23 +174,8 @@ function blockCount(text) {
   return (text.match(/funky-secure:begin/g) ?? []).length;
 }
 
-/**
- * The `at-policy` fixture carries the pin and nothing else, which stopped being "at policy" the day the
- * plan started writing the guard beside an existing pin (0030). The guard belongs in that fixture; it
- * lives here because `tests/fixtures/` is outside this task's surfaces.
- * @param {string} dir
- * @returns {string}
- */
-function withGuard(dir) {
-  const path = join(dir, 'package.json');
-  const json = JSON.parse(readFileSync(path, 'utf8'));
-  json.devEngines = { packageManager: { name: 'pnpm', version: '12.3.4' } };
-  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
-  return dir;
-}
-
 test('a repository already at policy plans nothing and --apply writes nothing', async (t) => {
-  const dir = withGuard(scratch(t, 'at-policy'));
+  const dir = scratch(t, 'at-policy');
   const before = snapshot(dir);
   const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
 
@@ -207,7 +192,7 @@ test('a repository already at policy plans nothing and --apply writes nothing', 
 });
 
 test('the JSON plan document of a repository at policy is empty (previous behavior preserved)', async (t) => {
-  const dir = withGuard(scratch(t, 'at-policy'));
+  const dir = scratch(t, 'at-policy');
   const before = snapshot(dir);
 
   const preview = runner(dir, {
@@ -817,7 +802,7 @@ test('the migrate step carries no --from, so a yarn lockfile is not forced throu
 });
 
 test('a plan with no human step prints no next steps heading (S3)', async (t) => {
-  const dir = withGuard(scratch(t, 'at-policy'));
+  const dir = scratch(t, 'at-policy');
 
   const preview = runner(dir, {
     tracked: ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'],

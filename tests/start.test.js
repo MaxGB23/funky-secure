@@ -234,21 +234,6 @@ const PIN_COMMIT = 'chore: pin the ranges';
 const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
 
-/**
- * The `at-policy` fixture carries the pin and nothing else, which stopped being "at policy" the day the
- * plan started writing the guard beside an existing pin (0030). The guard belongs in that fixture; it
- * lives here because `tests/fixtures/` is outside this task's surfaces.
- * @param {string} dir
- * @returns {string}
- */
-function withGuard(dir) {
-  const path = join(dir, 'package.json');
-  const json = JSON.parse(readFileSync(path, 'utf8'));
-  json.devEngines = { packageManager: { name: 'pnpm', version: '12.3.4' } };
-  writeFileSync(path, `${JSON.stringify(json, null, 2)}\n`);
-  return dir;
-}
-
 test('a directory that is not a repository stops at the step that asks again', async (t) => {
   const dir = scratch(t);
   const { code, stdout } = await start(dir, { inGit: false });
@@ -311,7 +296,7 @@ test('a repository with a plan to write names init --apply and how many writes',
 });
 
 test('a repository missing only the lockfile starts at the first dependency', async (t) => {
-  const dir = withGuard(scratch(t, 'at-policy'));
+  const dir = scratch(t, 'at-policy');
   unlinkSync(join(dir, 'pnpm-lock.yaml'));
   const { code, stdout } = await start(dir);
 
@@ -327,7 +312,7 @@ test('a repository missing only the lockfile starts at the first dependency', as
 });
 
 test('a repository past the start says so in one line and names the scan', async (t) => {
-  const dir = withGuard(scratch(t, 'at-policy'));
+  const dir = scratch(t, 'at-policy');
   const { code, stdout } = await start(dir);
 
   assert.equal(code, 0);
@@ -652,8 +637,8 @@ test('renders the same bytes twice over the same state, in every state', async (
     ['empty', scratch(t)],
     ['no manifest', scratch(t)],
     ['writes waiting', scratch(t, 'below-policy')],
-    ['no lockfile', withGuard(scratch(t, 'at-policy'))],
-    ['past the start', withGuard(scratch(t, 'at-policy'))],
+    ['no lockfile', scratch(t, 'at-policy')],
+    ['past the start', scratch(t, 'at-policy')],
   ];
   unlinkSync(join(states[3][1], 'pnpm-lock.yaml'));
 
