@@ -2147,3 +2147,33 @@ do I run next". Everything in this RFC follows from moving that answer from *wri
 and from refusing to own a setting the package manager already owns.
 
 Nine rules, one engine, two scopes, zero writes unless asked.
+
+---
+
+## Errata
+
+Dated corrections. The body above is history and is not edited; where this section and the body
+disagree, the body is what was decided then and the errata is what holds now.
+
+### 2026-10-31 — 17.2 and 17.3: the publication path is stage-only
+
+The record decided direct publication over OIDC, with one out-of-band `npm publish` for a first
+version. Two facts about npm, not about this product, make that no longer the best available path:
+
+- Staged publishing became generally available on 2026-05-22. `npm stage publish` queues a version and
+  `npm stage approve` publishes it under 2FA, and no OIDC token can approve.
+- Trust relationships became granular. A trusted publisher can be granted `npm stage publish` alone,
+  so a compromised workflow can queue a release and cannot make one installable. npm documents
+  stage-only plus "disallow tokens" as the maximum available posture.
+
+The amendment is recorded as [`0032`](../0032-stage-only-release/rfc.md), and the contract lives in
+[`docs/delivery.md`](../../docs/delivery.md) §17.2 and §17.3: the tag stages, a human approves, and the
+first version is bootstrapped by claiming the name with a staged placeholder instead of an out-of-band
+publish.
+
+### 2026-10-31 — 14: the packed set is stated explicitly
+
+Section 14 described the repository layout and left the package contents to `package.json`, which let
+the development record ship to every user. [`docs/spec/layout.md`](../../docs/spec/layout.md) §14.1
+now names the packed set and the three rules that decide membership. Recorded as
+[`0032`](../0032-stage-only-release/rfc.md).

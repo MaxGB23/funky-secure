@@ -38,6 +38,7 @@ document that changes without a new record.
 | [0029](0029-two-trees-are-not-a-warning/rfc.md) | Two trees are not a warning | `implemented` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R3, [`docs/spec/policy.md`](../docs/spec/policy.md) §9.1 |
 | [0030](0030-the-guard-both-managers-read/rfc.md) | The guard both managers read | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2, [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R1 |
 | [0031](0031-the-path-needs-a-repository/rfc.md) | The path needs a repository | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
+| [0032](0032-stage-only-release/rfc.md) | Stage-only publication and the packed set | `accepted` | — | — | [`docs/spec/layout.md`](../docs/spec/layout.md) §14.1, [`docs/delivery.md`](../docs/delivery.md) §17.2, §17.3 |
 
 ## Layout
 

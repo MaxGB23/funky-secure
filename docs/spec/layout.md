@@ -49,6 +49,36 @@ funky-secure/
 └── README.md
 ```
 
+### 14.1 The packed set is smaller than the repository
+
+The layout above is what the repository holds, not what the package ships. `files` in `package.json`
+is the whole list, and a path outside it does not reach a user:
+
+```
+bin/  src/  skills/
+docs/cli.md  docs/guide.md  docs/concept.md  docs/rules/  docs/images/diagram.jpg
+./README.md  LICENSE
+```
+
+Three rules decide membership.
+
+- **What the tool names must exist.** Every rule module declares `docs/rules/<id>.md`, and `explain`
+  prints that path in its human output and carries it as `docs` in its JSON. `docs/rules/` therefore
+  ships whole, and a release whose packed list is missing a catalogued page fails: a report that names
+  a document the package does not contain is a broken promise with a valid exit code.
+- **User documentation ships; the development record does not.** `docs/spec/`, `docs/decisions.md`,
+  `docs/architecture.md`, `docs/validation.md`, `docs/field-loop.md` and `docs/delivery.md` record how
+  the tool was built and what it owes. They stay in the repository, which is public, and are not part
+  of the artifact.
+- **What the README renders ships.** npm shows the README on the package page, so a relative path it
+  references has to resolve inside the tarball. `docs/images/diagram.jpg` is published for that reason
+  and is not recompressed to buy bytes.
+- **A bare basename in `files` is a glob, not a path.** npm matches `README.md` against every
+  directory, which pulled `docs/README.md` and `docs/images/README.md` into the tarball — measured on
+  npm 11.15.0, 67 files instead of 65. The root entry is therefore written `./README.md`, and the
+  guard normalizes a root-anchored entry before comparing it with a packed path. A negative pattern
+  (`!docs/README.md`) does not fix it: the entry that matches them is the one to anchor.
+
 Deliberate absences: no `src/utils/` dumping ground, no state directory, no `.funky/`, no config
 generator, no `dist/`, no build step, no devDependency.
 
