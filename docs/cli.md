@@ -36,7 +36,8 @@ The steps are `git init`, `pnpm init`, `funky-secure init --apply` with the numb
 holding, `pnpm import` and `funky-secure migrate --apply` when another manager's lockfile is still
 there, `funky-secure pin --apply` with the resolve that re-syncs the lockfile and the commit that
 carries its rewrite of the manifest when the repository still has a range, `pnpm add <your first
-dependency>` when it is not, and `funky-secure scan --preset starter` last. Each one prints only while
+dependency>` with the commit that carries its rewrite of the manifest when it is not, and
+`funky-secure scan --preset starter` last. Each one prints only while
 its condition holds: a repository that already has a manifest, a lockfile and a commit, but no managed
 block, is told to run `init --apply` and then `scan`, numbered from `1`.
 
@@ -126,9 +127,18 @@ produces the clean tree the steps below it require, while the dirty window in be
 nothing else, so a generated repository's untracked tool cache stays out of the commit, and its message
 names the pin: months later, in `git log`, the commit that cleared the ranges is `chore: pin the ranges`
 and not a lockfile commit that happened to carry a manifest. For the same reason the closing commit
-stages the lockfile and the removed foreign lockfile, never `package.json`: after the pin's own commit
-nothing else on the path writes the manifest, so a manifest in that `git add` would be a path staged but
-never changed.
+stages the lockfile and the removed foreign lockfile, never `package.json`: the pin's own commit and
+the add's own commit are what record the manifest's rewrites, so a manifest in that `git add` would be
+a path staged but never changed.
+
+The add has a commit of its own for the same reason. `pnpm add` records the dependency in
+`package.json`, so a scaffold that carries a manifest and no lockfile reaches `pin --apply` with the
+manifest dirty: the pin refuses to write over uncommitted changes, and a repository with no range to
+clear used to end with the manifest uncommitted under a closing commit that stages only the lockfile.
+The commit printed right after the add is what produces the clean tree — `git add package.json && git
+commit -m "chore: add the first dependency"` — and it stages the manifest and nothing else, because
+the `pnpm-lock.yaml` the add also writes is carried by the closing commit, which already names it. It
+prints only where the add prints, so a repository that already carries its lockfile gains no step.
 
 `why this order` is the reason the sequence is not a list: the managed block has to exist before the
 install that reads it, a lockfile can only exist after the first add, and a migration puts the block
