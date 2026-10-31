@@ -165,8 +165,13 @@ the `.gitignore` block, the strict config — and it prints every write with its
 digest of the exact bytes before it happens. It refuses a file with uncommitted changes instead of
 mixing its edits with yours.
 
-`init` also ends with the steps it will not take for you, in order, such as `pnpm install` (it never
-installs, resolves or reaches the network) and `git add` of what it just wrote.
+`init` also ends with the steps it will not take for you, in order: the `migrate --apply` that removes a
+foreign lockfile left beside the pnpm one, `git add` of the paths it just wrote, and `funky-secure
+start` last. It names no install command at all — not `pnpm install`, not `pnpm import` — because the
+resolve you need next is derived from facts `init` does not own, and `start` prints the plan it derives
+from the same report. `pin` ends with the one step its own write requires, `pnpm install
+--lockfile-only`, which carries `--pm-on-fail=ignore` under a `packageManager` naming another manager,
+exactly as the path prints it (issue 132).
 
 `migrate` is the way out of npm. It prints five steps and performs only the removal of the foreign
 lockfile, and only after a `pnpm-lock.yaml` exists and you are not on the default branch. Under a

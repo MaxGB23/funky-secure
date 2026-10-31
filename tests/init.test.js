@@ -749,7 +749,11 @@ test('a savePrefix declared outside the managed block is a conflict, never a sec
   assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), "savePrefix: '^'\n");
 });
 
-test('next steps names pnpm install first when the repository has no pnpm-lock.yaml (S3)', async (t) => {
+test('next steps name the commit and funky-secure start, never an install it cannot derive (11.2.2, 0132)', async (t) => {
+  // Issue 132: `init` printed `pnpm install` while the path it was reached from printed `pnpm import`
+  // or `pnpm add`, and three field sessions could not tell which was authoritative. The resolve a
+  // reader needs depends on facts `init` does not own, so the block defers to the command that
+  // derives it from the same report.
   const dir = scratch(t);
   writeFileSync(join(dir, 'package.json'), '{\n  "name": "no-lockfile",\n  "packageManager": "pnpm@12.3.4"\n}\n');
 
@@ -758,10 +762,27 @@ test('next steps names pnpm install first when the repository has no pnpm-lock.y
 
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  pnpm install\n  git add package.json pnpm-workspace.yaml .gitignore\n',
+      'next steps\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n',
     ),
     preview.stdout.text,
   );
+  assert.equal(preview.stdout.text.includes('pnpm install'), false, preview.stdout.text);
+});
+
+test('init --apply ends on the commit and funky-secure start (11.2.2, 0132)', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "applied",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+
+  const applied = runner(dir, { tracked: ['package.json'] });
+  assert.equal(await applied.run(['init', '--apply']), 0);
+
+  assert.ok(
+    applied.stdout.text
+      .slice(applied.stdout.text.indexOf('next steps'))
+      .startsWith('next steps\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n'),
+    applied.stdout.text,
+  );
+  assert.equal(/\bpnpm install\b/.test(applied.stdout.text), false, applied.stdout.text);
 });
 
 test('next steps names the migrate command when a foreign lockfile coexists with the pnpm one (S3)', async (t) => {
@@ -775,7 +796,7 @@ test('next steps names the migrate command when a foreign lockfile coexists with
 
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n',
+      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n',
     ),
     preview.stdout.text,
   );
@@ -794,7 +815,7 @@ test('the migrate step carries no --from, so a yarn lockfile is not forced throu
   // otherwise. Naming `--from npm` here would force the wrong step (RFC 11.2.2, 11.3).
   assert.ok(
     preview.stdout.text.endsWith(
-      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n',
+      'next steps\n  funky-secure migrate --apply\n  git add package.json pnpm-workspace.yaml .gitignore\n  funky-secure start\n',
     ),
     preview.stdout.text,
   );

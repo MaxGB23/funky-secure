@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, sep } from 'node:path';
 
+import { run } from '../src/cli.js';
+import { FOREIGN_PIN_FLAG } from '../src/lib/foreign-pin.js';
 import { BEGIN, END } from '../src/lib/managed-block.js';
+import { derivePinNextSteps } from '../src/lib/plan.js';
 import {
   trackedNpmrcFacts,
   workspaceBlockFacts,
@@ -303,4 +309,106 @@ test('a token written with spaces around the equals sign is not a tokenless file
   });
 
   assert.deepEqual(facts, { tracked: true, hasToken: true, tokenlessTracked: false });
+});
+
+/**
+ * The injected collector for the drift test below: reads the real files the test placed and answers
+ * the closed git probes from the test's declared state. Nothing is spawned.
+ */
+function fakeCollector({ root, tracked = [] }) {
+  const ok = (stdout) => ({ ok: true, code: 0, stdout, stderr: '' });
+  return {
+    read: async (path) => {
+      try {
+        return { ok: true, value: readFileSync(path, 'utf8') };
+      } catch (error) {
+        return { ok: false, error };
+      }
+    },
+    git: async (args) => {
+      if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return ok(`${root}\n`);
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return ok('feat/test\n');
+      if (args[0] === 'ls-files') return ok(tracked.map((path) => `${path}\0`).join(''));
+      if (args[0] === 'status') return ok('');
+      return { ok: true, code: 1, stdout: '', stderr: '' };
+    },
+    pnpmVersion: async () => ({ ok: false, reason: 'not-on-path', installations: [] }),
+    pnpmConfig: async () => ({ ok: false, reason: 'not-on-path' }),
+  };
+}
+
+function capture() {
+  return {
+    text: '',
+    write(chunk) {
+      this.text += chunk;
+      return true;
+    },
+    isTTY: false,
+  };
+}
+
+/** Every pnpm command a rendering prints, without the trailing comment `migrate` adds. */
+function pnpmCommands(text) {
+  return [...text.matchAll(/pnpm (?:import|add|install)[^\n]*/g)].map((match) =>
+    match[0].split(/\s{2,}#/)[0].trim(),
+  );
+}
+
+test('one module owns the foreign-pin flag, so the three producers cannot disagree (issue 132)', async (t) => {
+  // The flag was defined twice — once in `start` and once in `migrate` — and the two writers' next
+  // steps printed the resolve without it. Two copies of a predicate is how the answers drift apart,
+  // so the literal is allowed in exactly one module and every producer imports that one.
+  const src = join(import.meta.dirname, '..', 'src');
+  const offenders = [];
+  for (const entry of readdirSync(src, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
+    const path = join(entry.parentPath ?? entry.path, entry.name);
+    if (entry.name === 'foreign-pin.js') continue;
+    if (readFileSync(path, 'utf8').includes(FOREIGN_PIN_FLAG)) {
+      offenders.push(path.slice(src.length + 1).split(sep).join('/'));
+    }
+  }
+  assert.deepEqual(offenders, [], 'the flag is written in more than one module, so two copies can drift');
+
+  for (const manager of ['npm@11.13.0', 'pnpm@12.3.4']) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-foreign-pin-')));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const manifest = `${JSON.stringify(
+      { name: 'app', private: true, packageManager: manager, dependencies: { next: '^15.5.4' } },
+      null,
+      2,
+    )}\n`;
+    writeFileSync(join(dir, 'package.json'), manifest);
+    writeFileSync(join(dir, 'package-lock.json'), '{"lockfileVersion": 3}\n');
+
+    const repo = {
+      root: dir,
+      present: ['package.json', 'package-lock.json'],
+      files: { packageJson: { json: JSON.parse(manifest) } },
+    };
+    const [pinStep] = derivePinNextSteps({ repo });
+    assert.equal(pinStep, `pnpm install --lockfile-only${manager === 'npm@11.13.0' ? ` ${FOREIGN_PIN_FLAG}` : ''}`);
+
+    for (const argv of [['start'], ['migrate']]) {
+      const stdout = capture();
+      const collector = fakeCollector({ root: dir, tracked: ['package.json', 'package-lock.json'] });
+      assert.equal(await run(argv, { cwd: dir, env: {}, stdout, stderr: capture(), collector }), 0);
+      const printed = pnpmCommands(stdout.text);
+      assert.ok(printed.length > 0, `${argv[0]} printed no pnpm command over ${manager}`);
+      // Every pnpm command the two commands print carries the same suffix the pin step carries: one
+      // manifest, one answer, whichever line the reader obeys.
+      const suffix = pinStep.slice('pnpm install --lockfile-only'.length);
+      for (const command of printed) {
+        assert.equal(
+          command.endsWith(suffix),
+          true,
+          `${argv[0]} printed "${command}" where the pin step is "${pinStep}"`,
+        );
+      }
+      if (argv[0] === 'start') {
+        assert.ok(printed.includes(pinStep), `start does not print the resolve "${pinStep}"`);
+      }
+    }
+  }
 });

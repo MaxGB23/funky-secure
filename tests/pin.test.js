@@ -99,6 +99,45 @@ test('the plan names the install that re-records the lockfile', async (t) => {
   assert.match(nextSteps, /pnpm install --lockfile-only/);
 });
 
+/**
+ * The manifest a framework generator writes when it pins another manager: `create-t3-app` writes
+ * `packageManager: npm@11.13.0`, and pnpm refuses every command under it (issue 111).
+ * @param {string} manager
+ */
+const MANAGED = (manager) =>
+  `${JSON.stringify(
+    { name: 'fixture', private: true, packageManager: manager, dependencies: { left: '^1.3.0' } },
+    null,
+    2,
+  )}\n`;
+
+test('a foreign pin makes the resolve carry the flag that lets it run (issue 132)', async (t) => {
+  // The path prints `pnpm install --lockfile-only --pm-on-fail=ignore` here, and `pin`'s own block
+  // printed the same command without the flag: obeying the nearer line hits
+  // ERR_PNPM_OTHER_PM_EXPECTED, the error the flag exists to avoid.
+  const { code, stdout } = await pin(t, ['pin', '--apply'], {
+    'package.json': MANAGED('npm@11.13.0'),
+    'package-lock.json': '{"lockfileVersion": 3}',
+    'pnpm-lock.yaml': LOCK,
+  });
+
+  assert.equal(code, 0);
+  const nextSteps = stdout.slice(stdout.indexOf('next steps'));
+  assert.match(nextSteps, /pnpm install --lockfile-only --pm-on-fail=ignore/);
+});
+
+test('a pnpm pin prints the resolve without the flag, so the flag never leaks', async (t) => {
+  const { code, stdout } = await pin(t, ['pin', '--apply'], {
+    'package.json': MANAGED('pnpm@12.3.4'),
+    'pnpm-lock.yaml': LOCK,
+  });
+
+  assert.equal(code, 0);
+  const nextSteps = stdout.slice(stdout.indexOf('next steps'));
+  assert.match(nextSteps, /pnpm install --lockfile-only\n/);
+  assert.equal(stdout.includes('--pm-on-fail=ignore'), false);
+});
+
 test('a second --apply performs no write, so the command is idempotent', async (t) => {
   const first = await pin(t, ['pin', '--apply'], { 'package.json': MANIFEST(), 'pnpm-lock.yaml': LOCK });
   assert.equal(first.code, 0);

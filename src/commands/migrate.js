@@ -10,6 +10,12 @@ import { lstat, rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 import { ConfigError, RefusalError } from '../lib/errors.js';
+import {
+  FOREIGN_PIN_FLAG,
+  declaredForeignManager,
+  declaredPackageManager,
+  pnpmFlag,
+} from '../lib/foreign-pin.js';
 import { defaultBranch, statusPorcelain } from '../lib/git.js';
 import { validateWriteTarget } from '../lib/paths.js';
 import { collectScan } from '../lib/scan.js';
@@ -35,29 +41,10 @@ const REPORT_ONLY_KEYS = Object.freeze([
 const SECRET_LINE = /(?:^|[\s"'=])(?:[A-Za-z0-9_]*?(?:TOKEN|SECRET|PASSWORD|_AUTH)[A-Za-z0-9_]*)\s*[:=]/i;
 
 /**
- * The flag that lets pnpm run under a `packageManager` naming another manager (issue 111).
- *
- * pnpm refuses every command with `ERR_PNPM_OTHER_PM_EXPECTED` when the manifest declares another
- * manager, and this tool never rewrites a declaration a human made. Measured on pnpm 12.3.4 under
- * `"packageManager": "npm@11.13.0"`: `pnpm --pm-on-fail=ignore import` and
- * `pnpm --pm-on-fail=ignore install --lockfile-only` both exit `0` where the same commands without it
- * exit `1`.
+ * The flag the printed pnpm commands carry, and the predicate that decides it, live in
+ * `lib/foreign-pin.js`: `start`, `migrate` and the writers' next steps print one answer instead of
+ * three (issue 132).
  */
-const FOREIGN_PIN_FLAG = '--pm-on-fail=ignore';
-
-/**
- * The manager `package.json` declares, when it is not pnpm: the declaration the printed pnpm commands
- * have to run under. A pnpm pin, an unparseable declaration and an absent one all yield `null`.
- *
- * @param {string | null} declared the `packageManager` string the manifest carries, if any
- * @returns {string | null}
- */
-function declaredForeignManager(declared) {
-  if (typeof declared !== 'string' || declared === '') return null;
-  const name = declared.split('@')[0];
-  if (name === '' || name === 'pnpm') return null;
-  return declared;
-}
 
 /**
  * The branch names the RFC 11.3 fallback treats as a default branch when no remote HEAD can be read.
@@ -320,13 +307,11 @@ export async function run({
 
   const present = ctx.repo.present ?? [];
   const foreign = present.filter((name) => FOREIGN_LOCKFILES.includes(name));
-  const packageJson = ctx.repo.files?.packageJson?.json ?? null;
-  const packageManager =
-    typeof packageJson?.packageManager === 'string' ? packageJson.packageManager : null;
+  const packageManager = declaredPackageManager(ctx.repo);
   // A declaration naming another manager blocks every pnpm command, so the commands this plan prints
   // carry the flag that runs them under it. The declaration itself is never rewritten.
   const foreignPin = declaredForeignManager(packageManager);
-  const pnpmFlag = foreignPin === null ? '' : ` ${FOREIGN_PIN_FLAG}`;
+  const flag = pnpmFlag(ctx.repo);
   const npmrc = npmrcLines(ctx.repo.files?.npmrc?.text ?? '');
   const managerLines = npmrc.filter((line) =>
     /^(?:package-manager|package_manager|packageManager)\b/i.test(line),
@@ -381,8 +366,8 @@ export async function run({
     '',
     '3. human step (this tool never runs it)',
     foreign.length > 0
-      ? `   pnpm import${pnpmFlag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
-      : `   pnpm install${pnpmFlag}   # resolves and downloads; writes pnpm-lock.yaml`,
+      ? `   pnpm import${flag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
+      : `   pnpm install${flag}   # resolves and downloads; writes pnpm-lock.yaml`,
   );
   // A command that carries a flag says why it does, so the reader knows the declaration is a decision
   // the tool leaves to them and not a setting it failed to correct.
@@ -420,7 +405,7 @@ export async function run({
     hasPnpmLock,
     branch: ctx.repo.branch ?? null,
     allowDirty,
-    pnpmFlag,
+    pnpmFlag: flag,
     collector: probes,
     stdout,
   });
