@@ -35,6 +35,8 @@ what was tested. Each has a structural answer, and none of them is a policy docu
   `npm view <name>@<version> dist.attestations` returns one.
 - The account requires 2FA for writes, and the package is set to "Require two-factor authentication
   and disallow tokens". The OIDC path never uses an interactive session.
+- A local session is a **two-hour** credential that expires on its own and appears in no token list.
+  There is no logout step, because there is nothing left behind to log out of.
 - The release job installs npm 11.15.0 or later explicitly: `npm stage` does not exist before it, and
   the npm bundled with Node 24.16 is 11.13.0.
 
@@ -48,15 +50,25 @@ what was tested. Each has a structural answer, and none of them is a policy docu
    `npm stage publish --access public`. This claims the name and queues the version. A local session
    cannot produce provenance, which is what makes step 3 safe.
 2. The owner configures the trusted publisher for the package: GitHub Actions, repository
-   `MaxGB23/funky-secure`, workflow `release.yml`, `npm stage publish` only. The local session is ended
-   afterwards, and no credential survives it.
-3. The owner rejects the locally staged candidate with 2FA (`npm stage reject <id>`) and pushes the
-   tag. The release job stages the same version over OIDC, so the version that ships is the one the
-   pipeline produced, and §17.3's order holds from the first release.
-4. If the trusted-publisher page does not appear for a package whose only published version is the
-   placeholder, step 3 is skipped: the local candidate from step 1 is approved with 2FA instead. That
-   version is then the one release in this project's history published without OIDC, it carries no
-   tag, and the tag convention starts at the next version.
+   `MaxGB23/funky-secure`, workflow `release.yml`, `npm stage publish` only. The session expires on its
+   own within two hours; no step removes it.
+3. The **next** version is staged by the release workflow over OIDC and approved with 2FA. The
+   candidate from step 1 is **not** rejected before that. Rejecting the only content of a
+   placeholder-only package unpublishes the package and takes its trusted publisher with it: measured
+   on 2026-10-31, where a reject at `20:17:24Z` left `npm view funky-secure` answering
+   `404 Unpublished on 2026-10-31T20:17:24.166Z` and the next tagged run failing with
+   `E401 Unable to authenticate`. The leftover candidate is rejected only once a real version is
+   published, and that reject then frees a version slot and nothing else.
+4. If the trusted-publisher page does not appear for a package whose only version is the placeholder,
+   step 3 is unavailable: the candidate from step 1 is approved with 2FA instead. That version is then
+   the one release in this project's history published without OIDC, it carries no tag, and the tag
+   convention starts at the next version.
+
+**What the registry does not forgive.** `name@version` is immutable even after an unpublish, and an
+ unpublish locks the whole name: `403 "<name>" cannot be republished until 24 hours have passed`.
+ Measured 2026-10-31. A first publication is therefore one attempt with a recovery window, not a
+ retry loop, and the claim in step 1 is made from a tag that already exists so that a failed attempt
+ costs no version number.
 
 Re-staging a rejected version is not guaranteed when the rejected candidate carried a provenance
 attestation: the number can be burned. Step 1 carries none, which is why the sequence is safe, and the
