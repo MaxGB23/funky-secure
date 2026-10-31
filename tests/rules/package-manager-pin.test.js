@@ -175,6 +175,68 @@ test('a guard equal to a pin the answering pnpm does not match stays a skip (002
   assert.deepEqual(finding.remediation, { kind: 'none' });
 });
 
+test('a guard that names another version than the pin is a skip, whatever pnpm answers (#104)', () => {
+  // The defect in #104: the pin equalled the answering pnpm, so the pair passed and the guard was
+  // never compared. The guard is read before the machine, and it is compared by name and by version,
+  // so a declaration that differs is the declared-and-different state even when the pin matches.
+  const json = {
+    packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'pnpm', version: '11.0.0' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'skip', 'the guard differs from the pin, so the pin is not verified');
+  assert.equal(finding.code, 'self-managed-pin');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
+test('a guard that names another manager than the pin is a skip, whatever pnpm answers (#104)', () => {
+  // The two declarations name different managers, which is the declared-and-different state: the pin
+  // matching the answering pnpm says nothing about a project whose guard declares another manager.
+  const json = {
+    packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'npm', version: '11.13.0' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'skip', 'the guard names another manager, so the pin is not verified');
+  assert.equal(finding.code, 'self-managed-pin');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
+test('a pin that names another manager is not-pnpm before the guard is read (#104)', () => {
+  // A guard does not make an npm repository a pnpm one, and the sentence the rule printed for this
+  // state — "declares npm@11.13.0 and manages its own pnpm" — is false on its face.
+  const json = {
+    packageManager: 'npm@11.13.0',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'not-pnpm', 'the pin names another manager, which the guard cannot change');
+  assert.match(finding.message, /npm@11\.13\.0/);
+  assert.doesNotMatch(
+    finding.message,
+    /manages its own pnpm/,
+    'the project is on npm: the guard does not make it a pnpm repository',
+  );
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
+test('a guard equal to the pin is still verified when the answering pnpm matches (#104)', () => {
+  // The pair `init --apply` writes, unchanged: equal in name and in version, and the machine agrees.
+  const json = {
+    packageManager: 'pnpm@12.3.4',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'pass');
+  assert.equal(finding.code, undefined);
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
 test('another pnpm version passes, and never carries a remediation', () => {
   const [finding] = rule.detect(context({ packageManager: 'pnpm@11.0.0' }));
 
