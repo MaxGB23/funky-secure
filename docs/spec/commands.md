@@ -125,16 +125,28 @@ suppress a write.
 
 #### 11.2.2 `next steps`: the steps the tool refuses to take
 
-A human plan ends with the steps only a human can run, in the order they must run, printed and never
-executed:
+A plan made by a writer — `init`, and the `pin` command of 11.9 — ends with the steps only a human
+can run, in the order they must run, printed and never executed. `init` prints:
 
-- `pnpm install` when the repository has no `pnpm-lock.yaml`, because the tool never resolves or
-  installs (4.7, 11.6).
 - `funky-secure migrate --apply` when a foreign lockfile coexists with the pnpm one; `--from` is
   omitted so the plan names the manager it actually finds — a foreign lockfile needs `pnpm import`,
   because `pnpm install` never reads one (11.3, 0021).
 - `git add` for the paths the plan wrote, so the next `--apply` over the same state is not refused as
   dirty (11.2, safety rules).
+- `funky-secure start` last, whenever one of the steps above printed, and never an install command.
+
+`init` names no install step because it cannot derive one: the resolve a reader needs next depends on
+facts `init` does not own — a foreign lockfile, a manifest with no lockfile, a range the `pin` step has
+not cleared yet — and a subcommand's line that contradicts the ordered path it was reached from leaves
+the reader holding two commands with no way to tell which is authoritative (issue 132). The plan
+`start` prints is the plan `init` applied, because both are derived from the same report and the same
+write plan (11.7, 0003), so the last line names the command that prints it.
+
+`pin` prints the one step its own write requires, the resolve that re-records the `specifier` field it
+desynced on purpose (11.9): `pnpm install --lockfile-only`, followed by ` --pm-on-fail=ignore` when
+`package.json` declares a manager other than pnpm. That is the condition of 11.7 step 8 and the flag
+that step carries (0018), read from the same predicate of `package.json`'s `packageManager` the path
+reads, because two answers ten lines apart is the defect this section closes (issue 132).
 
 The block is part of the human rendering only. `--format json` carries the plan document of 10.5 and
 no prose, and a plan with no human step prints no `next steps` heading.
@@ -435,7 +447,9 @@ key order and line endings survive and only the specifiers change.
 Three limits are part of the contract. It writes the repository-root `package.json` only; a workspace
 importer is named as not pinned, with its count, because reading another manifest would need a probe
 this command alone would use. It never runs an install (11.6), so the plan ends by naming the
-`pnpm install --lockfile-only` that re-records the `specifier` field the write desynced on purpose. It
+`pnpm install --lockfile-only` that re-records the `specifier` field the write desynced on purpose —
+carrying `--pm-on-fail=ignore` when `package.json` declares a manager other than pnpm, under the
+condition of 11.7 step 8 and from the predicate that step reads (0018, 11.2.2). It
 keeps no allowlist: a specifier edited back to a range is reported by the next scan like any other, and
 a per-package exception is the user's decision in the diff (8.2 R5). A `catalog:` or `catalog:<name>`
 reference is neither floating nor exact: the plan counts it as left alone, with the reason, and never
