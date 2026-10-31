@@ -73,7 +73,17 @@ remediation is named, because rewriting a working project's pin to whatever the 
 is the downgrade 0020 removed. Declared and **different**
 is `skip` with `self-managed-pin`: the project manages its own pnpm, the probe runs outside the
 repository (7.3, 0019), and the pnpm that answers there describes the machine, not that project (0020).
-**Absent** is unchanged: the pin alone is the declaration, and nothing about it is skipped.
+
+The guard is compared with the pin before the pin is compared with the answering pnpm. The pin and
+the guard are compared by name and by version, the two keys the field is measured by (W3b), so a guard
+that names another manager is different and a guard that declares no `version` is not equal to a pin
+that declares one. The answer belongs to the
+two declarations and not to the answering pnpm: a guard that differs is `skip` with
+`self-managed-pin` whatever pnpm answers, including when the pnpm answering happens to equal the pin,
+because the pin is not the whole of what the project declares. A pin that names a manager other than
+pnpm is `not-pnpm` before the guard is read, because a guard does not make that repository a pnpm one,
+and a skip that said such a project manages its own pnpm would be false. **Absent** is unchanged:
+the pin alone is the declaration, and nothing about it is skipped.
 
 #### R2 — `lockfile-committed` · friction 0 · sev `error`/`error` · fix `none`
 
