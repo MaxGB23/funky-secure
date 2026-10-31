@@ -44,7 +44,14 @@ a path that is not on disk.
   `skill --install` (11.5 point 7). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full hard rules.
 - CLI output carries symbols (`✖ ⚠ ℹ ✓ –`), never emoji: double-width glyphs break alignment and
   determinism. Color only on a TTY.
-- The JSON report is the machine contract; the human text is presentation and may change.
+- **The JSON report is the machine contract; the human text is presentation and may change.**
+- **A pull request passes `pr-policy` or it does not count, and every part of it is knowable before
+  the push**: the body links an issue (`Closes #N`, `Fixes #N` or `Refs #N`), exactly one `type:*`
+  label is applied, and the branch is `type/description`, where `type` is one of `feat fix chore docs
+  style refactor perf test build ci revert`. The rule lives in
+  [`CONTRIBUTING.md`](CONTRIBUTING.md) and in `scripts/check-pr-policy.js`; the script is the same one
+  CI runs, so run it first, not after the failure notice. `main` requires no status checks, so nothing
+  stops a red pull request from merging: the check is only as real as the run before it.
 
 ## Commands
 
@@ -52,4 +59,6 @@ a path that is not on disk.
 node --test                    # the suite: rules, commands, drift gate, goldens, self-scan
 node scripts/gen-golden.js     # regenerate goldens after an intended report change
 node bin/funky-secure.js scan --scope repo --fail-on warn   # self-scan, what CI runs
+PR_BODY="$(cat body.md)" PR_LABELS=type:docs PR_HEAD_REF="$(git branch --show-current)" \\
+  node scripts/check-pr-policy.js   # the pull request policy, before the push
 ```
