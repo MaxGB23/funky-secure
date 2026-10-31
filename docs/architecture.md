@@ -226,6 +226,13 @@ fail-closed code for a run that could not answer.
   names one rule to read next from the findings the report carries (RFC 10.3).
 - **The machine is read-only, permanently.** No probe writes an environment variable, a global
   config or a store.
+- **The tool reads nothing above the repository root.** Every target, probe and context fact is
+  resolved inside the tree it was pointed at. One walk violated this by naming an enclosing
+  `pnpm-workspace.yaml`, and it is gone (#144, #148): the path's own `init --apply` writes that file
+  and makes the repository the root before any step that writes a lockfile runs, so the prediction it
+  fed could not hold, and one sentence was all it ever bought. A repository the tool did not prepare —
+  a package inside somebody else's monorepo — may still install higher; that is pnpm's resolution, and
+  the tool makes no claim about it either way.
 - **There are three write paths, and each is a plan.** `init --apply` writes only through
   `applyPlan`, `pin --apply` writes only the manifests its plan item carries, `migrate --apply` removes
   only through its step-4 function, and each writes only to the closed target catalog, after printing

@@ -51,7 +51,8 @@ The workspace root is the one thing the path does not predict, because the path 
 with no `pnpm-workspace.yaml` of its own sits below whatever directory does, but the first step is
 `init --apply`, and that writes this project's own `pnpm-workspace.yaml` — which makes this project the
 root before any install runs, so the install writes this project's own lockfile. No line names an
-ancestor, and `start` reads nothing above the repository root; a lockfile missing from disk is
+ancestor, and the tool reads nothing above the repository root — the walk that answered it is gone,
+not merely unused (issues 144, 148); a lockfile missing from disk is
 `scan`'s finding to report from the bytes it read, not something an install is predicted to do
 (issue 144).
 
