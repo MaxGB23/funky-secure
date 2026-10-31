@@ -101,3 +101,8 @@ is `{ url, provenance: { predicateType: "https://slsa.dev/provenance/v1" } }`. T
 `dist` is the `keyid` of the registry's `signatures`, never a tarball digest. `dist.attestations` is
 therefore the exact probe for the one claim still unverified: whether a provenance attestation survives
 a staged approval.
+
+**L9.** Delivery strategy, decided by the owner: `unico` — one pull request carrying all four commits
+rather than a chained pair. The slice boundary is therefore recorded here instead of in a branch
+structure: 713 authored changed lines, of which most is normative prose (RFC 0032, §14.1, §17, the
+78-line runbook), and the commits stay separable by concern so the record can be read before the code.
