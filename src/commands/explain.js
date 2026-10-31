@@ -37,6 +37,25 @@ function shown(value) {
   return String(value);
 }
 
+/**
+ * The state severities of a rule whose severity follows the state of its finding (0029).
+ *
+ * `explain` is the complete reference a human has (I-33), so the pair a state answers and the evidence
+ * that selects it are printed beside the base pair. It is generated from the rule's own `severityWhen`,
+ * never from a rule id: a second rule that needs a state table would otherwise have to pay for this
+ * again. A rule that declares no state table contributes no line, so its rendering is unchanged.
+ * @param {object} rule
+ * @returns {string[]}
+ */
+function stateLines(rule) {
+  const states = Array.isArray(rule.severityWhen) ? rule.severityWhen : [];
+  return states.map((entry) => {
+    const { baseline, strict } = severityOf({ severity: entry.severity });
+    const selects = `${entry.evidence} is ${shown(entry.is)}`;
+    return `${'state'.padEnd(12)}${entry.state} ${baseline} / ${strict} (baseline / strict) when ${selects}`;
+  });
+}
+
 /** The JSON document of one rule: the same fields the text rendering prints. */
 function ruleDocument(rule) {
   const { baseline, strict } = severityOf(rule);
@@ -69,6 +88,7 @@ function renderRule(rule) {
     `${rule.id} — ${rule.title ?? ''}`,
     '',
     `friction ${rule.friction ?? 0} · severity ${baseline} / ${strict} (baseline / strict)`,
+    ...stateLines(rule),
     '',
   ];
   for (const [label, value] of fields) {
