@@ -104,6 +104,11 @@ Staging does not weaken this gate: `npm stage publish` is `npm publish` with `st
 `prepublishOnly` runs exactly as it does for a direct publish. The suite, the self-scan, the guard and
 the smoke test all run before anything is queued.
 
+The smoke test reads the tarball name from `npm pack --json`, never from npm's human output. A
+lifecycle script inherits the npm configuration of the command that invoked it, and
+`npm stage publish --json` exports `npm_config_json=true`: `npm pack` then prints a JSON array, and a
+parser of the human output looked for a file named `]`.
+
 ### 17.5 Version and release notes
 
 - Semantic versioning. `0.x` may break in a minor, and a break is declared with the
