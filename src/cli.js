@@ -23,7 +23,11 @@ import { catalog as defaultCatalog } from './rules/index.js';
 
 /** Commands in help order (RFC 11, 13.1, record 0003 11.7). */
 export const COMMANDS = Object.freeze([
-  { name: 'start', summary: 'Print the ordered steps from an empty directory to a first scan. Read-only, exits 0.' },
+  {
+    name: 'start',
+    summary:
+      'Print the ordered steps to a first scan; a directory that is not a repository stops at the boot steps and asks again. Read-only, exits 0.',
+  },
   { name: 'scan', summary: 'Read-only audit: report findings and the verdict. Exits 0, 1 or 2.' },
   { name: 'init', summary: 'Print the write plan; --apply performs it.' },
   {
