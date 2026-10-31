@@ -82,7 +82,7 @@ where the refusal would have taught it. From a real run:
 funky-secure start  ·  guidance, nothing is written
 
   1  git add -A && git commit -m "chore: baseline before funky-secure"
-  2  funky-secure init --apply  plan the 4 writes (nothing is written)
+  2  funky-secure init --apply  plan the 4 writes
   3  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"
   4  pnpm import
   5  funky-secure pin --apply  pin the 3 ranges this repository already has

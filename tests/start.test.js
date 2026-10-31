@@ -274,7 +274,7 @@ test('a repository without a manifest starts at pnpm init', async (t) => {
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     '  1  pnpm init',
-    '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  2  funky-secure init --apply  plan the 2 writes',
     `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  4  ${ADD_STEP}`,
     `  5  ${ADD_COMMIT_STEP}`,
@@ -290,7 +290,7 @@ test('a repository with a plan to write names init --apply and how many writes',
 
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  3  ${SCAN_STEP}`,
   ]);
@@ -341,7 +341,7 @@ test('a manifest with no lockfile commits the add before it is told to pin', asy
 
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  3  ${ADD_STEP}`,
     `  4  ${ADD_COMMIT_STEP}`,
@@ -433,7 +433,7 @@ test('an npm-generated project installs once, and the gate exists before that in
 
   assert.equal(code, 0, 'a second package manager is guidance, not a refusal');
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import',
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
@@ -503,7 +503,7 @@ test('a foreign pin makes the pnpm steps carry the flag that lets them run, and 
 
   assert.equal(code, 0, 'a declared foreign manager is guidance, not a refusal');
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import --pm-on-fail=ignore',
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
@@ -576,7 +576,7 @@ test('the canonical path prints no line about an enclosing workspace, because it
   assert.deepEqual(
     stepLines(stdout),
     [
-      '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+      '  1  funky-secure init --apply  plan the 2 writes',
       `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
       '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
       '  4  pnpm install --lockfile-only',
@@ -645,7 +645,7 @@ test('an uncommitted repository is told to commit before it is told to apply', a
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     `  1  git add -A && git commit -m "${BASELINE_COMMIT}"`,
-    '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  2  funky-secure init --apply  plan the 2 writes',
     `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  5  pnpm install --lockfile-only',
@@ -684,7 +684,7 @@ test('a repository the pin can be written into counts the two writes over its ma
 
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 4 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 4 writes',
     `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import',
     '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
@@ -717,7 +717,7 @@ test('a repository that already carries the pin counts the guard as a write', as
 
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 3 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 3 writes',
     `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  4  pnpm install --lockfile-only',
@@ -742,7 +742,7 @@ test('nothing to pin means no pin commit, and the closing commit stages no manif
 
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import',
     `  4  git switch -c ${FEATURE_BRANCH}`,
@@ -770,7 +770,7 @@ test('a pnpm-generated project is told neither to migrate nor to add', async (t)
 
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
-    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
     '  4  pnpm install --lockfile-only',
