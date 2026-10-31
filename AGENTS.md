@@ -52,6 +52,17 @@ a path that is not on disk.
   [`CONTRIBUTING.md`](CONTRIBUTING.md) and in `scripts/check-pr-policy.js`; the script is the same one
   CI runs, so run it first, not after the failure notice. `main` requires no status checks, so nothing
   stops a red pull request from merging: the check is only as real as the run before it.
+- **A pull request merges only when its checks have finished, and "finished" is a state list, not a
+  feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
+  `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
+  and that exit code does not mean failure — and `mergeStateStatus: CLEAN` is not that gate either,
+  because it reports mergeability, not the matrix. After the merge, the push run on `main` must be
+  green too: the merge commit is the one that ships.
+- **A `pr-policy` failure with the matrix green is the label race, not a violation.** The label is
+  attached after the pull request exists, so the `opened` run reads `PR_LABELS` empty. Re-run it
+  (`gh run rerun --failed`) and do not change the code; creating the pull request as a draft,
+  labelling it, then marking it ready avoids the race entirely, which is what the `pr-policy` job's
+  draft guard in `.github/workflows/ci.yml` expects.
 
 ## Commands
 

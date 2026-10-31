@@ -14,9 +14,10 @@ on:
   push:
     branches: [main]
   # `labeled` and `edited` matter: the policy reads the labels and the body, and both can change
-  # after the pull request exists.
+  # after the pull request exists. `ready_for_review` matters for the same reason: the policy job is
+  # guarded on a draft, so the run that decides is the one that fires when the draft becomes ready.
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited, ready_for_review]
 
 permissions:
   contents: read
@@ -49,7 +50,11 @@ jobs:
         run: node bin/funky-secure.js scan --scope repo --fail-on warn
 
   pr-policy:
-    if: github.event_name == 'pull_request'
+    # A draft is not a candidate yet, and the policy reads a label that `gh pr create --label` attaches
+    # after the pull request exists — so the `opened` run of a draft reads it empty and reports a
+    # failure nobody caused. Guarding the job on a non-draft pull request removes that false red, and
+    # `ready_for_review` above is what fires the run that decides.
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
