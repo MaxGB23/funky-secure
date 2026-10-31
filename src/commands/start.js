@@ -81,6 +81,17 @@ const TRACK_MESSAGE = 'chore: track the lockfile';
  */
 const PIN_MESSAGE = 'chore: pin the ranges';
 const PIN_STEP = `git add package.json && git commit -m "${PIN_MESSAGE}"`;
+/**
+ * The commit that records the first dependency, immediately after the add that wrote it (11.7 row 13).
+ *
+ * `pnpm add` records the dependency in the manifest and leaves it dirty, so the very next writer on the
+ * path — `pin --apply` — refuses that state, and a path with no range to clear ended with ` M
+ * package.json` under a closing commit that stages only the lockfile. It stages the manifest and
+ * nothing else, because the lockfile the add also writes is carried by the closing commit, which
+ * already names it (0016).
+ */
+export const ADD_MESSAGE = 'chore: add the first dependency';
+const ADD_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
 
 /** The branch the migration step names. A step that requires a state prints how to reach it (0018). */
 const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
@@ -220,8 +231,8 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
       ? `git add ${tracked.join(' ')} && git commit -m "${APPLY_MESSAGE}"`
       : COMMIT_STEP;
   // The closing commit names what it covers: the lockfile the install writes and the foreign one the
-  // migration removes. It stages no manifest, because after the pin's own commit nothing else on the
-  // path writes one (0028), and a commit that stages nothing is not a step.
+  // migration removes. It stages no manifest: the pin and the add each have a commit of their own, and
+  // a commit that stages nothing is not a step (0016, 0028).
   const lockfileAtEnd = foreign.length > 0 || trackLockfile;
   const trackFiles = ['pnpm-lock.yaml', ...foreign];
   const trackStep = `git add ${trackFiles.join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
@@ -252,6 +263,9 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
     steps.push(`pnpm add${pnpmFlag} <your first dependency>`);
+    // The add records the dependency in the manifest and the next writer refuses that state, so the
+    // commit that produces the clean tree follows it (0018). It prints only where the add printed.
+    steps.push(ADD_STEP);
   }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.

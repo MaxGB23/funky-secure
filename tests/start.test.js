@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { run } from '../src/cli.js';
-import { START_AGAIN_STEP } from '../src/commands/start.js';
+import { ADD_MESSAGE, START_AGAIN_STEP } from '../src/commands/start.js';
 
 /**
  * `start` (record 0003, 11.7): the ordered path from an empty directory to a first scan. One test per
@@ -233,6 +233,7 @@ const APPLY_COMMIT = 'chore: apply funky-secure';
 const PIN_COMMIT = 'chore: pin the ranges';
 const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
+const ADD_COMMIT_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
 
 test('a directory that is not a repository stops at the step that asks again', async (t) => {
   const dir = scratch(t);
@@ -276,8 +277,9 @@ test('a repository without a manifest starts at pnpm init', async (t) => {
     '  2  funky-secure init --apply  plan the 2 writes (nothing is written)',
     `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  4  ${ADD_STEP}`,
-    `  5  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-    `  6  ${SCAN_STEP}`,
+    `  5  ${ADD_COMMIT_STEP}`,
+    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  7  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes('git init'), false, 'it is already a repository');
 });
@@ -296,6 +298,10 @@ test('a repository with a plan to write names init --apply and how many writes',
 });
 
 test('a repository missing only the lockfile starts at the first dependency', async (t) => {
+  // Issue 131, the second half: the add rewrites `package.json`, and the closing commit stages only the
+  // lockfile, so the path used to end with ` M package.json` in the tree it called closed. The add has
+  // a commit of its own, and there is no range to clear here, so the closing commit still stages the
+  // lockfile and nothing else (11.7 rows 13 and 14).
   const dir = scratch(t, 'at-policy');
   unlinkSync(join(dir, 'pnpm-lock.yaml'));
   const { code, stdout } = await start(dir);
@@ -303,12 +309,66 @@ test('a repository missing only the lockfile starts at the first dependency', as
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), [
     `  1  ${ADD_STEP}`,
-    `  2  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-    `  3  ${SCAN_STEP}`,
+    `  2  ${ADD_COMMIT_STEP}`,
+    `  3  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  4  ${SCAN_STEP}`,
   ]);
   assert.equal(stdout.includes('init --apply'), false, 'nothing is left to write');
   assert.equal(stdout.includes('git init'), false);
   assert.equal(stdout.includes('pnpm init'), false);
+  assert.equal(stdout.includes('pin --apply'), false, 'an exact manifest has no range to clear');
+  assert.equal(stdout.includes(PIN_COMMIT), false, 'so no pin commit is printed either');
+  assert.equal(
+    stdout.includes('git add pnpm-lock.yaml package.json'),
+    false,
+    'the add commit carries the manifest, so the closing commit stages only the lockfile (0016)',
+  );
+});
+
+test('a manifest with no lockfile commits the add before it is told to pin', async (t) => {
+  // Issue 131, the first half, as the field met it: `pnpm add` records the dependency in the manifest
+  // and no step committed it, so the very next writer on the path — `pin --apply` — refused the tree
+  // the path itself had just made, and the printed plan offered no way out. A step that requires a
+  // clean tree prints the command that produces it (0018), so the add gets a commit of its own, exactly
+  // where the pin got one (0028, 11.7 row 13).
+  const dir = scratch(t);
+  writeManifest(dir, true);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  commitAll(dir, 'scaffold');
+
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [
+    '  1  funky-secure init --apply  plan the 2 writes (nothing is written)',
+    `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
+    `  3  ${ADD_STEP}`,
+    `  4  ${ADD_COMMIT_STEP}`,
+    '  5  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  6  pnpm install --lockfile-only',
+    `  7  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  8  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  9  ${SCAN_STEP}`,
+  ]);
+  assert.ok(stdout.indexOf(ADD_STEP) < stdout.indexOf(ADD_MESSAGE), 'the commit follows the add it covers');
+  assert.ok(
+    stdout.indexOf(ADD_MESSAGE) < stdout.indexOf('pin --apply'),
+    'and precedes the writer that refuses a dirty tree',
+  );
+});
+
+test('the add commit message is one constant, not a literal written twice', async () => {
+  // The message belongs to the repository and outlives this tool's output, so it is pinned like the
+  // other three: one constant, and the step spelled from it. A second hand-written copy would drift.
+  assert.equal(ADD_MESSAGE, 'chore: add the first dependency', 'the message the record names');
+
+  const source = readFileSync(join(import.meta.dirname, '..', 'src', 'commands', 'start.js'), 'utf8');
+  assert.equal(
+    source.split('chore: add the first dependency').length - 1,
+    1,
+    'the literal lives once, in the constant the step is spelled from',
+  );
 });
 
 test('a repository past the start says so in one line and names the scan', async (t) => {
@@ -743,6 +803,7 @@ test('a pnpm-generated project is told neither to migrate nor to add', async (t)
   assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7], 'the numbering stays continuous');
   assert.equal(stdout.includes('funky-secure migrate'), false, 'no foreign lockfile to leave behind');
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile the generator wrote is the one to keep');
+  assert.equal(stdout.includes(ADD_MESSAGE), false, 'no add means no add commit either');
   assert.equal(
     whyBlock(stdout).filter((line) => line.includes('migrate')).length,
     0,

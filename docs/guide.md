@@ -152,7 +152,10 @@ its lockfile, so this project's own `pnpm-lock.yaml` stays absent and the lockfi
 until the project is its own workspace root. `--ignore-workspace` does not stop the install from
 leaving, so no printed command pretends it does. Where the manifest still carries a range it names
 `pin --apply` and, right after the resolve that follows it, the commit that carries the pin, so a
-reader who stops between the two is not left with a dirty tree nothing explains. It writes nothing
+reader who stops between the two is not left with a dirty tree nothing explains. Where the manifest is
+there but no lockfile is, it names the first `pnpm add` and the commit that follows it, because the
+add records the dependency in `package.json` and the pin that comes next refuses a dirty tree. It
+writes nothing
 itself — `init --apply` is still the only writer — and it exits `0` in every state, because it is
 advice and not a gate.
 
