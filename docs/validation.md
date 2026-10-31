@@ -10,7 +10,7 @@ number becomes wrong at the next release, and the suite itself is the authority 
 
 | Claim | How | Where |
 |---|---|---|
-580 tests, 579 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
+587 tests, 586 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
 The repository passes its own audit | `node bin/funky-secure.js scan --scope repo --fail-on warn`, exit 0 | CI |
 Every documented flag is accepted by the command the document names | `tests/docs-contract.test.js` | documentation contract |
 The spec stays a true slice of the record, and every amendment names a shipped record | `tests/drift.test.js` | the drift gate |
@@ -72,7 +72,8 @@ The `onFail` value is not a free choice | with `onFail: "error"` pnpm 11.28.10 r
 The manifest writer loses nothing it was not asked to change | 28 manifest shapes (indentation, tabs, CRLF, no trailing newline, `devEngines.runtime`, uninterpretable declarations) compared item by item against the base commit: the pin's item is identical in state, content, reason and digest, and every key survives | differential against `git archive`, not committed |
 The guard is read before the machine, and compared by name and by version | four combinations of pin and `devEngines.packageManager` on the wire, before and after: a guard naming another version answered `pass` while the pin equalled the machine, and a pin naming another manager answered `self-managed-pin` with the sentence "declares npm@11.13.0 and manages its own pnpm". After: `skip` / `self-managed-pin` and `skip` / `not-pnpm`, and a repository with an agreeing guard still passes | `tests/rules/package-manager-pin.test.js`, plus a differential over 5 manifests against `git archive` |
 pnpm's escape from a foreign `packageManager` is `--pm-on-fail=ignore`, and no other flag does it | pnpm 12.3.4: `pnpm config get package-manager-strict` answers `undefined`; `--config.package-manager-strict=false`, an `.npmrc` key, `npm_config_…` and `COREPACK_ENABLE_STRICT=0` all leave `ERR_PNPM_OTHER_PM_EXPECTED` (exit 1). `--pm-on-fail=ignore` makes `import`, `install --lockfile-only` and `add` exit 0 and write the lockfile | measured, then confirmed in the field in a `create-t3-app` repository |
-The enclosing-workspace walk reads existence only, and the line it prints moves nothing else | the ancestor shape differs from the base tree by exactly one added line; the no-ancestor shape and `scan --scope repo` are byte-identical in stdout and stderr; the walk stats one file name per ancestor, never its content, and returns a relative path | `tests/targets.test.js`, `tests/start.test.js`, and a differential against `git archive` |
+The path prints no prediction about a workspace it is about to create | on an ancestor-workspace shape `start` prints no workspace line and its six steps are byte-identical to the no-ancestor shape; a project at `apps/demo` under an enclosing workspace, followed literally, wrote its lockfile **in the project**, scanned `PASS` with `REPO-ROOT all 5 rules pass`, and ended with `git status --porcelain` empty | `tests/start.test.js`, and a demonstration outside the repository in round 3 |
+The writers' next steps and the path print one commit, from one constant | `init`'s block equals `commitWritesStep(writtenPaths(plan))` for the same plan — `package.json` included, no bare `git add` — and the literal `chore: apply funky-secure` lives in one module | `tests/init.test.js`, `tests/start.test.js` |
 `explain` prints the state severity a rule declares, generated and not hardcoded | a rule with `severityWhen` gains one `state` line naming the pair and the evidence that selects it; a rule without one renders byte for byte as before — the whole document is compared, and `explain --list` and `explain --format json` are identical by hash | `tests/explain.test.js` |
 An `at-policy` fixture is at policy for the reason its name claims | the fixture with the old manifest plans 1 item (`package.json · set devEngines.packageManager`); restored, it plans 0. The empty-plan test in `tests/cli.test.js` had the same defect one directory away: without the guard and under a git root its plan held 3 items | `tests/init.test.js`, `tests/start.test.js`, `tests/cli.test.js` |
 `start`'s plan outside a repository is not the plan `init` applies inside one | the same directory before and after `git init`: `init --format json` plans 3 items, then 4, the fourth being the `.gitignore` block, because R7 declares `outside git, skip`; the consequence was `init --apply` refusing the untracked tree while `start` printed the smaller count | `rfcs/0031`, and the two tests over that state in `tests/start.test.js` |
@@ -87,22 +88,20 @@ macOS | never executed, locally or in CI. The code branches on `win32` against P
 The published tarball on another machine | The tarball was installed and exercised locally only |
 The correctness of every remediation that needs an install (`pnpm install --lockfile-only`, `pnpm pkg set`) | Following one would change a repository; the commands were verified for shape, not for effect |
 The three changes of the paths-and-guards release, as a fresh agent meets them | **closed.** The first round (0 of 4 sessions reached the end) found the defect that blocked it (#110, `start` planned a path from a directory that was not yet a repository); after the fix, the second round reached the last step in all four scenarios with `verdict PASS` and exit 0. See *The field rounds* below; what stays unverified is macOS and the Actions runtime, in the rows that follow |
-A field round outside a pnpm workspace | still open, and narrower than it looked. The second round's installs never escaped, because `init --apply` writes `pnpm-workspace.yaml` before any step runs pnpm — so the line `rfcs/0031` added cannot fire through the canonical path, which is recorded on #113. The escape is real for a package of a monorepo where the tool is not the one ordering the installs |
+A field round outside a pnpm workspace | **closed by removing the claim.** The second round's installs never escaped, because `init --apply` writes `pnpm-workspace.yaml` before any step runs pnpm — so the line `rfcs/0031` added could not fire through the canonical path (#113), and three blind sessions in round 3 watched it print and be false. The line and its probe are gone (#144); `start` no longer says anything about a workspace it is about to create. The escape itself is still real for a package of a monorepo where the tool is not the one ordering the installs, and nothing in the tool claims otherwise now |
 
 ## The field rounds
 
 A field round is four blind sessions, one per repository shape, each given nothing but the tool's own
-output ([`docs/field-loop.md`](field-loop.md)). Two rounds have run, both on Windows.
+output ([`docs/field-loop.md`](field-loop.md)). Three rounds have run, all on Windows.
 
 | Round | Scenarios | Reached the last step | Findings |
 |---|---|---|---|
 | 1 | `create-next-app` with npm, `vite`, `create-t3-app`, a directory holding only a `package.json` | **0 of 4**, all stopped at step 2 | #110 (fixed in `rfcs/0031`), #111, #112, #113 |
 | 2 | the same four shapes, regenerated | **4 of 4**, `verdict PASS` and exit 0 in each; three of four ended with a clean tree | #131, #132, #133, #134, #135 |
+| 3 | `vite` and a directory holding only a `package.json`, the two shapes that ended dirty or refused in round 2 | **3 of 3** sessions ended with `git status` empty and the add's commit in the log | #139, #144, #145, #146 |
 
-What the rounds left behind beyond the fixes: three of those findings became test shapes nobody had
-imagined while reading the code — a directory that is not a repository at all, a manifest whose
-`packageManager` says npm while its `devEngines.packageManager` names pnpm, and a project that sits
-inside an enclosing workspace. A finding whose fix ships without its case leaves the same exposure one
+What the rounds left behind beyond the fixes: two findings became test shapes nobody had imagined while reading the code — a directory that is not a repository at all, and a manifest whose `packageManager` says npm while its `devEngines.packageManager` names pnpm. Round 3 added a third kind of value: it watched a line the tool had just been taught to print, and found it false, which no test could have done because the line was true of the moment it was computed from. A finding whose fix ships without its case leaves the same exposure one
 commit later, which is the rule [`docs/field-loop.md`](field-loop.md) states in its third step.
 
 Two caveats, because without them the rounds read as broader than they are. `GIT_CEILING_DIRECTORIES`

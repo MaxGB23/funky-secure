@@ -94,11 +94,16 @@ before and after, a tree state, a byte-identical file;
 - if the defect was in a promise the product makes, the test is named after the promise, not the code.
 
 The loop is also the cheapest source of new test shapes this project has, and the reason is structural:
-every scenario is a repository **nobody on the implementation side chose**. Three findings in one round
+every scenario is a repository **nobody on the implementation side chose**. Two findings in one round
 became tests that no author would have imagined from reading the code — a directory that is not a git
-repository at all (0031), a manifest whose `packageManager` says npm while its `devEngines.packageManager`
-names pnpm, and a project that sits inside an enclosing workspace. None of those shapes existed in any
-test before an agent met one, and each now fails loudly if the behaviour regresses.
+repository at all (0031), and a manifest whose `packageManager` says npm while its
+`devEngines.packageManager` names pnpm. None of those shapes existed in any test before an agent met
+one, and each now fails loudly if the behaviour regresses.
+
+A later round added a second kind of value that no test can produce: it watched a line the tool had just
+been taught to print and found it false. The line was true of the moment it was computed from and wrong
+by the time the step it described ran, because the path itself changed the fact in between. A suite
+cannot see that; a reader following the printed steps sees nothing else.
 
 So a finding has two outputs and the fix is only the first: the fix, and the case. A round that produces
 fixes without cases has left the product exactly as exposed as before, one commit later.
