@@ -58,11 +58,14 @@ a path that is not on disk.
   and that exit code does not mean failure — and `mergeStateStatus: CLEAN` is not that gate either,
   because it reports mergeability, not the matrix. After the merge, the push run on `main` must be
   green too: the merge commit is the one that ships.
-- **A `pr-policy` failure with the matrix green is the label race, not a violation.** The label is
-  attached after the pull request exists, so the `opened` run reads `PR_LABELS` empty. Re-run it
-  (`gh run rerun --failed`) and do not change the code; creating the pull request as a draft,
-  labelling it, then marking it ready avoids the race entirely, which is what the `pr-policy` job's
-  draft guard in `.github/workflows/ci.yml` expects.
+- **A `pr-policy` failure with the matrix green is read before it is re-run.** The race is one
+  diagnosis and not the only one: the label is attached after the pull request exists, so the `opened`
+  run reads `PR_LABELS` empty, and creating the pull request as a draft, labelling it, then marking it
+  ready avoids it entirely — which is what the job's draft guard in `.github/workflows/ci.yml`
+  expects. But a body that does not link an issue and a branch that is not `type/description` fail the
+  same job, and re-running those changes nothing: `gh run rerun --failed` on a real violation is an
+  infinite loop that costs minutes per turn and reads as progress. Read the failed log first and let it
+  name the cause; re-run only when the cause was the label, and fix the body or the branch otherwise.
 
 ## Commands
 
