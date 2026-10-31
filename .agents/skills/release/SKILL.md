@@ -20,6 +20,22 @@ candidate, never moves a tag and never runs `npm publish`.
 - `npm --version` is 11.15.0 or higher: `npm stage` does not exist before it.
 - The account has 2FA enabled for writes.
 - The trusted publisher for the package allows `npm stage publish` only.
+- No unpublish in the last 24 hours: the registry locks the name and answers `403 "<name>" cannot be
+  republished until 24 hours have passed`.
+
+## First publication
+
+One release in a package's life cannot follow the sequence below, because a trusted publisher is
+configured on a package and a package exists only after a first publish.
+
+1. From the commit the tag names, stage the first candidate locally: `npm login`, then
+   `npm stage publish --access public`. This claims the name and queues a candidate.
+2. Configure the trusted publisher, then let the session expire; it is a two-hour credential and there
+   is nothing to log out of.
+3. Stage the next version from CI over OIDC and approve it with 2FA. **Do not reject the candidate from
+   step 1 first**: rejecting the only content of a placeholder-only package unpublishes the package and
+   destroys its trusted publisher, and the next run then fails with `E401`. Reject it only after a real
+   version is published.
 
 ## The sequence
 
@@ -36,6 +52,8 @@ candidate, never moves a tag and never runs `npm publish`.
    of §17.4. A file that should not ship is a reject, not a note.
 5. **Approves or rejects** — the maintainer, under 2FA. `npm stage approve <id>` publishes; nothing is
    installable before it. `npm stage reject <id>` discards the candidate and leaves the tag in place.
+   On a package whose only content is the bootstrap placeholder, a reject unpublishes the package and
+   its trusted publisher with it: reject only once a real version is published.
 6. **Verifies what users get** — the maintainer. `npm view funky-secure@<version>`,
    `npm view funky-secure@<version> dist.integrity`; the second value is what the body records.
 7. **Publishes the Release** — the maintainer, after the approval in step 5 and never before. Write
@@ -68,6 +86,8 @@ the change of a version.
   queued candidate and never an installable version.
 - The integrity recorded is `dist.integrity`, never a sha256 hash of the tarball, which the registry
   does not publish.
+- An unpublish is not reversible: `name@version` never comes back and the name is locked for 24 hours.
+  A first publication is one attempt with a recovery window, not a retry loop.
 - Enable "release immutability" in the repository settings, so the tag binding is enforced rather
   than promised.
 
