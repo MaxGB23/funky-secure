@@ -3,7 +3,10 @@
   "version": "0.10.2",
   "description": "Supply-chain auditor and initializer for pnpm repositories: stateless rules, a read-only scan, and a write plan you review before anything is applied.",
   "license": "MIT",
-  "author": "MaxGB23",
+  "author": {
+    "name": "Maximiliano González Ballesteros",
+    "url": "https://github.com/MaxGB23"
+  },
   "type": "module",
   "bin": {
     "funky-secure": "bin/funky-secure.js"
