@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { catalog } from '../src/rules/index.js';
 import { parseWorkflow } from '../src/lib/workflows.js';
 import { checkPackList, checkRuleDocs, checkTag } from '../scripts/release-guard.js';
+import { readStage, stageSummary } from '../scripts/stage-report.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const RELEASE = join(ROOT, '.github', 'workflows', 'release.yml');
@@ -105,13 +106,69 @@ test('the release stages the version, and cannot publish it directly', () => {
 });
 
 test('the stage id reaches the step summary, because approval happens after the job (S4)', () => {
-  const stage = releaseSteps().find((step) => (step.run ?? '').includes('npm stage publish'));
+  const steps = releaseSteps();
+  const stage = steps.find((step) => (step.run ?? '').includes('npm stage publish'));
   assert.ok(stage, 'no step runs `npm stage publish`');
 
   assert.match(stage.run, /--json/, 'the stage id is machine-readable only in the --json output');
-  assert.match(stage.run, /stageId/, 'the summary must carry the id npm reports');
-  assert.match(stage.run, /GITHUB_STEP_SUMMARY/, 'approval happens after the job: the id must outlive it in the summary');
   assert.doesNotMatch(stage.run, /--provenance/, 'provenance is the registry decision now, not a flag this job passes');
+
+  const reported = steps.find((step) => (step.run ?? '').includes('scripts/stage-report.js'));
+  assert.ok(reported, 'the same step must read the id out of the report it wrote');
+  assert.ok(
+    reported.run.indexOf('stage-report.js') > reported.run.indexOf('npm stage publish'),
+    'the report is read after the stage that produced it',
+  );
+  const script = readFileSync(join(ROOT, 'scripts', 'stage-report.js'), 'utf8');
+  assert.match(
+    script,
+    /GITHUB_STEP_SUMMARY/,
+    'approval happens after the job: the id must outlive it in the summary',
+  );
+});
+
+test('the id npm reports is read where npm writes it, under the package name', () => {
+  const measured = JSON.stringify({
+    'funky-secure': {
+      id: 'funky-secure@0.10.2',
+      name: 'funky-secure',
+      version: '0.10.2',
+      filename: 'funky-secure-0.10.2.tgz',
+      stageId: '775c451f-46d5-4d77-b420-e40f0300d829',
+    },
+  });
+
+  const read = readStage(measured);
+  assert.equal(read.ok, true, read.problems.join('; '));
+  assert.equal(read.id, '775c451f-46d5-4d77-b420-e40f0300d829', 'the id is one level down, under the name');
+  assert.equal(read.name, 'funky-secure');
+  assert.equal(read.version, '0.10.2');
+
+  const flat = readStage(JSON.stringify({ name: 'p', version: '1.0.0', stageId: 'abc' }));
+  assert.equal(flat.ok, true, 'a flattened report is read, so a future npm cannot silence the id');
+  assert.equal(flat.id, 'abc');
+});
+
+test('a report without an id is refused, naming what it could not find', () => {
+  const missing = readStage(JSON.stringify({ 'funky-secure': { name: 'funky-secure', version: '0.10.2' } }));
+  assert.equal(missing.ok, false, 'an unreported stage must not reach the summary');
+  assert.match(missing.problems[0], /stageId/, 'the problem names what is missing');
+
+  const notJson = readStage('not json');
+  assert.equal(notJson.ok, false);
+  assert.match(notJson.problems[0], /not JSON/);
+});
+
+test('the summary is the one a maintainer needs to approve, and it outlives the job', () => {
+  const text = stageSummary({
+    name: 'funky-secure',
+    version: '0.10.2',
+    id: '775c451f-46d5-4d77-b420-e40f0300d829',
+  });
+
+  assert.match(text, /funky-secure@0\.10\.2 is staged/);
+  assert.match(text, /775c451f-46d5-4d77-b420-e40f0300d829/);
+  assert.match(text, /npm stage approve 775c451f-46d5-4d77-b420-e40f0300d829/, 'the approve command is copied, not retyped');
 });
 
 test('the job installs the npm that has a stage command, before it stages (S3)', () => {

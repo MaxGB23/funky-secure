@@ -40,31 +40,13 @@ jobs:
       # contract and the pack smoke test. This job holds no credential that can approve the candidate.
       - name: stage the version and report the stage id
         # Approval happens after this job ends and needs 2FA, so the id has to leave with the run:
-        # `npm stage list` is the only other way to find it (17.3). `--json` carries `stageId`; in the
-        # human output the id is only prose. No `--provenance`: whether the registry attests is now the
-        # registry's decision, and this contract promises no badge until one is measured.
+        # `npm stage list` is the only other way to find it (17.3). `--json` carries the id, one level
+        # down under the package name — `scripts/stage-report.js` reads that envelope, because a step
+        # that guessed at its shape would fail after the package was already staged. No `--provenance`:
+        # whether the registry attests is now the registry's decision, and this contract promises no
+        # badge until one is measured.
         run: |
           set -euo pipefail
           report="${RUNNER_TEMP}/stage-publish.json"
           npm stage publish --access public --json > "$report"
-          node -e '
-            const { appendFileSync, readFileSync } = require("node:fs");
-            const staged = JSON.parse(readFileSync(process.argv[1], "utf8"));
-            const id = staged.stageId;
-            if (typeof id !== "string" || id === "") {
-              console.error("release: npm reported no stageId");
-              process.exit(1);
-            }
-            const name = staged.name ?? "funky-secure";
-            const version = staged.version ?? "unknown";
-            const summary = [
-              `## ${name}@${version} is staged`,
-              "",
-              `Stage id: \`${id}\``,
-              "",
-              `Review it with \`npm stage list\`, then approve it with 2FA: \`npm stage approve ${id}\``,
-              "",
-            ].join("\n");
-            appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-            console.log(`staged ${name}@${version} with id ${id}`);
-          ' "$report"
+          node scripts/stage-report.js --report "$report"
