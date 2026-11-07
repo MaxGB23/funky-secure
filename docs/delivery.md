@@ -94,7 +94,9 @@ and the tag of a staged candidate is immutable, so a candidate staged with `late
 - The workflow stages; it does not publish. `npm stage publish` queues the tarball and the job ends
   with the stage id in its step summary, because approval happens after the job. A maintainer reviews
   it with `npm stage list` and `npm stage download`, and publishes it with `npm stage approve <id>`
-  under 2FA. Until that approval the version is not installable.
+  under 2FA. Until that approval the version is not installable. A report step that fails does not
+  undo the stage: the candidate is still queued, `npm stage list` returns its id, and the tag is never
+  re-pushed — it does not move, and the version it names is already spent.
 - The ordering is fixed: green gate on the commit, then the tag, then the staged candidate, then the
   approval. A red gate means no tag, and a tag is never moved afterwards — a correction is a new patch
   version. A rejected candidate leaves its tag in place as the record of what was not released.
