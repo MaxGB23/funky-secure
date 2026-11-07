@@ -73,15 +73,21 @@ Both readers get the same product, and neither gets a different rule set. A begi
 `starter` preset, which is these twelve rules with six of them `off` by policy for day zero, and the
 report says so on its own line instead of claiming coverage it does not have.
 
-**You are starting out.** Run `funky-secure scan` and do what the `→` lines say. You do not need to
-know why a 72-hour quarantine matters to benefit from it, though every rule page explains the attack it
-prevents. [`docs/guide.md`](docs/guide.md) has a "if you see this, do this" table for the twelve rules
-and explains what each symbol and verdict means.
+**You are starting out.** In a new project run `funky-secure start` and follow the ordered steps; in
+an existing one, `funky-secure scan` and do what the `→` lines say. You do not need to know why a
+72-hour quarantine matters to benefit from it, though every rule page explains the attack it prevents.
+[`docs/guide.md`](docs/guide.md) has a "if you see this, do this" table for the twelve rules and
+explains what each symbol and verdict means.
 
 **You already do this for a living.** `--scope` separates repository facts from machine facts,
 `--format json` and the exit codes are a stable contract for CI and agents, and
 `funky-secure.config.json` moves the policy into the repository — preset, quarantine floor and per-rule
 severity — instead of into whoever happened to run the command.
+
+**You are delegating to an agent.** `funky-secure skill --install` places the instructions the binary
+already prints, so an agent starts from what the tool will check: the ordered steps, the writes it may
+perform only with `--apply`, and the exit code that means it refused. The skill is the same bytes the
+binary answers with, so a delegation cannot drift from the binary it was given.
 
 ## 🚦 The commands
 
@@ -102,6 +108,7 @@ npx funky-secure start          # a new repository: the ordered steps, ending at
 npx funky-secure scan           # audit: read the report, follow the → lines
 npx funky-secure init           # the plan, with paths and digests; writes nothing
 npx funky-secure init --apply   # perform exactly that plan
+npx funky-secure skill --install   # the same rules, for an agent, before it touches the repository
 ```
 
 `npx` is deliberate and it is the only place it appears: the quick start cannot assume pnpm, because
