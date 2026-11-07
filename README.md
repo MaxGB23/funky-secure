@@ -1,10 +1,8 @@
 # Funky Secure 👻
 
 [![ci](https://img.shields.io/github/actions/workflow/status/MaxGB23/funky-secure/ci.yml?branch=main&label=ci&logo=githubactions&logoColor=white&style=flat-square)](https://github.com/MaxGB23/funky-secure/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/funky-secure?label=npm&logo=npm&logoColor=white&style=flat-square&color=cb3837)](https://www.npmjs.com/package/funky-secure)
-[![license](https://img.shields.io/npm/l/funky-secure?label=license&style=flat-square&color=3da639)](LICENSE)
-[![node](https://img.shields.io/badge/node-%3E%3D22-3c873a?logo=nodedotjs&logoColor=white&style=flat-square)](package.json)
-[![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square)](https://www.npmjs.com/package/funky-secure?activeTab=dependencies)
+[![npm](https://img.shields.io/npm/v/funky-secure?label=npm&logo=npm&logoColor=white&style=flat-square&color=6b7280)](https://www.npmjs.com/package/funky-secure)
+[![license](https://img.shields.io/npm/l/funky-secure?label=license&style=flat-square&color=6b7280)](LICENSE)
 [![provenance](https://img.shields.io/badge/provenance-SLSA%20v1-8a2be2?logo=sigstore&logoColor=white&style=flat-square)](https://registry.npmjs.org/-/npm/v1/attestations/funky-secure@0.10.2)
 
 `funky-secure` audits a pnpm repository and answers one question: **is this project — and the machine
