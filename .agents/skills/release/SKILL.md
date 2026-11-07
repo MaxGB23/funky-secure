@@ -44,8 +44,8 @@ configured on a package and a package exists only after a first publish.
 ## The sequence
 
 1. **Green gate on that commit** — the owner. `node --test`,
-   `node bin/funky-secure.js scan --scope repo --fail-on warn`, `node scripts/release-guard.js`,
-   `node scripts/pack-smoke.js`. All of it runs again inside `prepublishOnly` at stage time.
+   `node bin/funky-secure.js scan --scope repo --fail-on warn`, `node scripts/release-guard.js --tag
+   vX.Y.Z`, `node scripts/pack-smoke.js`. All of it runs again inside `prepublishOnly` at stage time.
 2. **Push the tag** — the owner. `git tag vX.Y.Z && git push origin vX.Y.Z`, on the commit from
    step 1. `release-guard` compares the tag with `package.json`; a mismatch exits `2` and stages
    nothing.
@@ -60,7 +60,10 @@ configured on a package and a package exists only after a first publish.
    `npm stage download <id>`, then `tar -tzf <tarball>` and read the file set against the packed set
    of §17.4. A file that should not ship is a reject, not a note.
 5. **Approves or rejects** — the maintainer, under 2FA. `npm stage approve <id>` publishes; nothing is
-   installable before it. `npm stage reject <id>` discards the candidate and leaves the tag in place.
+   installable before it. A fresh candidate reports `validating` before `staged`: approve only once it
+   reads `staged`. And an unapproved candidate is not free — the semver index treats that version as
+   taken — so decide: approve it, or reject it deliberately. `npm stage reject <id>` discards the
+   candidate and leaves the tag in place.
    On a package whose only content is the bootstrap placeholder, a reject unpublishes the package and
    its trusted publisher with it: reject only once a real version is published.
 6. **Verifies what users get** — the maintainer. `npm view funky-secure@<version>`,
@@ -68,8 +71,9 @@ configured on a package and a package exists only after a first publish.
    `dist.attestations` too: staged approval keeps the provenance, and its `resolvedDependencies` names
    the tag and commit the job built from, which is the only link between that commit and the bytes a
    user installs.
-7. **Publishes the Release** — the maintainer, after the approval in step 5 and never before. Write
-   `RELEASE_NOTES.md`, run
+7. **Publishes the Release** — the maintainer, after the approval in step 5 and never before. Release
+   immutability is enabled **first** (Settings → Releases), because GitHub applies it only to releases
+   published after the setting is on. Write `RELEASE_NOTES.md`, run
    `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file RELEASE_NOTES.md`, then delete the file.
 
 A prerelease version is staged with `--tag next` and its Release takes `--prerelease`; both are off by
