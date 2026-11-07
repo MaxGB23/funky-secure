@@ -35,7 +35,11 @@ configured on a package and a package exists only after a first publish.
 3. Stage the next version from CI over OIDC and approve it with 2FA. **Do not reject the candidate from
    step 1 first**: rejecting the only content of a placeholder-only package unpublishes the package and
    destroys its trusted publisher, and the next run then fails with `E401`. Reject it only after a real
-   version is published.
+   version is published, and remember that `reject` asks for 2FA like `approve`, so it needs a live
+   two-hour session: log in again if the first one expired.
+4. If the package was unpublished by that mistake, it is recoverable: after the 24-hour window, stage
+   from a worktree of an **old tag whose number is already spent** — never the release version, which
+   the claim would occupy — and the package page and trusted publisher come back.
 
 ## The sequence
 
@@ -55,7 +59,10 @@ configured on a package and a package exists only after a first publish.
    On a package whose only content is the bootstrap placeholder, a reject unpublishes the package and
    its trusted publisher with it: reject only once a real version is published.
 6. **Verifies what users get** — the maintainer. `npm view funky-secure@<version>`,
-   `npm view funky-secure@<version> dist.integrity`; the second value is what the body records.
+   `npm view funky-secure@<version> dist.integrity`; the second value is what the body records. Check
+   `dist.attestations` too: staged approval keeps the provenance, and its `resolvedDependencies` names
+   the tag and commit the job built from, which is the only link between that commit and the bytes a
+   user installs.
 7. **Publishes the Release** — the maintainer, after the approval in step 5 and never before. Write
    `RELEASE_NOTES.md`, run
    `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file RELEASE_NOTES.md`, then delete the file.
