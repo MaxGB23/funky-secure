@@ -7,20 +7,21 @@
 
 `funky-secure` audits a pnpm repository and answers one question: **is this project — and the machine
 that builds it — configured the way we decided?** Twelve stateless rules, the evidence each one read,
-one verdict, and a write plan you read before anything is applied. It never installs, never resolves a
-version, never touches the network and never keeps state.
+one verdict, and a write plan you read before anything is applied. For a new repository it starts
+earlier: `start` prints the ordered steps that make the answer `yes`, and writes nothing itself. It
+never installs, never resolves a version, never touches the network and never keeps state.
 
-The point is a verdict you can defend: every finding names the file and line that produced it, every
-action is a command or an edit, and the report says whether the policy came from this repository or
-from the laptop that ran it.
+The point is a verdict you can defend: every finding names the file it read, and the line where the
+rule can point at one; every action is a command or an edit; and the report says whether the policy
+came from this repository or from the laptop that ran it.
 
 ![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
 ## 📦 What you get
 
-- **A verdict with evidence.** Twelve rules over what actually reaches your install path: the package
-  manager pin, the lockfile, the release-age quarantine, floating ranges, tracked `.env` files, the
-  CI pins, the merge path, the workflow triggers.
+- **A verdict with evidence.** Twelve rules over what decides what your machine installs and what your
+  CI is allowed to do: the package manager pin, the lockfile, the release-age quarantine, floating
+  ranges, tracked `.env` files, the CI pins, the merge path, the workflow triggers.
 - **A plan instead of magic.** `init` prints every write with its absolute path and a digest of the
   exact bytes, and `--apply` performs only those writes. A value that already exists and differs is a
   `conflict` you read, never an edit it makes.
@@ -34,19 +35,34 @@ from the laptop that ran it.
 
 ## 💡 Why this exists
 
-The 2026 supply-chain campaigns stopped stealing source code and started stealing the credentials that
-live on a developer's machine: registry tokens, cloud keys, SSH keys. The delivery mechanism is the
-install path, in the window `npm audit` cannot see — by the time you audit, the lifecycle script has
-already run.
+The campaigns that mattered went after the credentials that live on a developer's machine — registry
+tokens, cloud keys, SSH keys, OIDC tokens — and they arrive by two roads, both of which are files this
+tool reads.
 
-The defenses that stop them are mostly configuration: which manager, which lockfile, which age policy,
-which ignore rules, which CI pins. And a defense nobody verifies is a defense that silently stopped
-working: a `pnpm-workspace.yaml` that used to carry a release-age floor looks exactly like a hardened
-one. That is the gap this tool fills, deterministically, with evidence you can review.
+**The install path is one.** The Shai-Hulud worm spread by compromising npm accounts and inserting
+itself into the packages those accounts maintained; [CISA reported more than 500 affected packages in
+September 2025](https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem),
+and its November follow-on widened pre-install execution. That is the window `npm audit` cannot see:
+by the time you audit, the lifecycle script has already run.
+
+**The pipeline is the other.** In May 2026 the Megalodon campaign pushed malicious GitHub Actions
+workflow files into more than 5,500 repositories in under six hours, harvesting CI secrets and OIDC
+tokens ([SecurityWeek](https://www.securityweek.com/over-5500-github-repositories-infected-in-megalodon-supply-chain-attack/),
+[CSO Online](https://www.csoonline.com/article/4177124/github-actions-abused-by-megalodon-attack-to-slip-malicious-commits-into-5500-repos.html)).
+A workflow file is configuration, and configuration is what this tool audits.
+
+Both roads are paved with the same material: the defenses that stop them are mostly configuration —
+which manager, which lockfile, which age policy, which ignore rules, which CI pins. And a defense
+nobody verifies is a defense that silently stopped working: a `pnpm-workspace.yaml` that used to carry
+a release-age floor looks exactly like a hardened one. That is the gap this tool fills,
+deterministically, with evidence you can review.
 
 ## 🎯 Who this is for
 
-Both readers get the whole product. Neither gets a reduced version of it.
+Both readers get the same product, and neither gets a different rule set. A beginner is pointed at the
+
+`starter` preset, which is these twelve rules with six of them `off` by policy for day zero, and the
+report says so on its own line instead of claiming coverage it does not have.
 
 **You are starting out.** Run `funky-secure scan` and do what the `→` lines say. You do not need to
 know why a 72-hour quarantine matters to benefit from it, though every rule page explains the attack it
@@ -135,9 +151,10 @@ This tool is part of the supply chain it audits, so it carries nothing it does n
   no HTTP client: `node:` built-ins plus your repository's files.
 - **No network, no install, no resolution, no lifecycle script.** It runs a closed list of read-only
   probes and answers from what it read.
-- **Writes only what it printed.** The six declared changes, across four files, each with its path
-  and digest; your pnpm configuration, store and global settings are never written. One command
-  writes outside the repository — `skill --install` places the agent skill, and only when asked.
+- **Writes only what it printed.** Every change carries its path and a digest of the exact bytes, and
+  `--apply` performs only those; your pnpm configuration, store and global settings are never written.
+  One command writes outside the repository — `skill --install` places the agent skill, and only when
+  asked.
 - **Deterministic.** Same repository state, same bytes. `--with-timestamp` is the only exception, and
   it is opt-in.
 
@@ -150,6 +167,29 @@ Linux and Windows are the supported platforms: the suite runs on both in CI. mac
 supported target — it is never executed, and the owner decided it stays that way, so nothing here
 claims it works there. On macOS you are on your own, and a bug report about it is read as a report
 from an unsupported platform rather than as a regression.
+
+## ✅ What is verified, and what is not
+
+A tool that sells evidence owes its reader the same treatment, so [`docs/validation.md`](docs/validation.md)
+keeps the ledger: every claim below, and every one that is missing, with what would close it.
+
+- **The twelve rules are verified against real code** — seven open-source repositories and eleven real
+  workflows — with the findings counted rather than asserted: 53 unpinned actions in `berry`, 64 in
+  `shadcn-ui/ui`, 32 jobs inheriting default permissions in `berry`, a genuine pwn request in
+  `cloud-bulldozer`, and 206 floating ranges in `shadcn-ui/ui` with zero desyncs over 245 specifiers.
+- **The written path was verified by strangers.** Three field rounds of four blind sessions each were
+  given nothing but the tool's own output, and they never read its source. Every defect they found was
+  in the path — a tree left dirty, a step that named no dependency, a pin before the lockfile existed —
+  and none was in a rule's decision.
+- **What no test covers is the Actions runtime.** That a corrected workflow turns green on a real
+  runner, and that `permissions: contents: read` really produces a `403`, is unverified: those rules
+  are checked statically against the eleven workflows above. It would take a runner and a repository.
+- **One hole in the rule set is known and open.** A `workflow_run` workflow that consumes an artifact
+  and carries a write token can pass the CI rules today —
+  [#153](https://github.com/MaxGB23/funky-secure/issues/153) — and it is a hole in what the rules
+  model, not in whether they were tested.
+- **macOS is a decided non-goal, not a gap.** It is never executed anywhere, and the section above
+  says so instead of hedging.
 
 ## 📚 Documentation
 
