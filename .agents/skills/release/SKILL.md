@@ -51,6 +51,11 @@ configured on a package and a package exists only after a first publish.
    nothing.
 3. **Stages the candidate** — the release workflow, on `push: tags: ['v*']` over OIDC with no
    credential. It prints the stage id in its step summary and ends. It does not publish.
+   **A failed report does not undo the stage.** When the step that reads the id dies, the candidate
+   exists: `npm stage list` returns it and `npm stage approve <id>` continues normally. Do not
+   re-push the tag — it does not move, and the version is already queued — and do not reject the
+   candidate to "clean up": on a package whose only content is the placeholder, a reject unpublishes
+   the package and destroys its trusted publisher.
 4. **Reviews the candidate** — the maintainer. `npm stage list`, `npm stage view <id>`,
    `npm stage download <id>`, then `tar -tzf <tarball>` and read the file set against the packed set
    of §17.4. A file that should not ship is a reject, not a note.
