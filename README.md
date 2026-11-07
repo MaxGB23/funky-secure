@@ -171,4 +171,4 @@ the hard rules a change has to satisfy.
 
 ## 📄 License
 
-MIT © 2026 MaxGB23 — see [`LICENSE`](LICENSE).
+MIT © 2026 Maximiliano González Ballesteros — see [LICENSE](LICENSE).
