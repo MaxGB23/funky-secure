@@ -159,6 +159,39 @@ test('a report without an id is refused, naming what it could not find', () => {
   assert.match(notJson.problems[0], /not JSON/);
 });
 
+test('the report is read from the last JSON document, because the gate writes to the same stdout', () => {
+  const polluted = [
+    '> funky-secure@0.10.2 prepublishOnly',
+    '> node --test && node bin/funky-secure.js scan --scope repo --fail-on warn',
+    '',
+    '✔ a rule passes (0.42ms)',
+    'ℹ tests 597',
+    '',
+    JSON.stringify(
+      {
+        'funky-secure': {
+          id: 'funky-secure@0.10.2',
+          name: 'funky-secure',
+          version: '0.10.2',
+          stageId: '757255bf-6422-4c38-97f8-e6c2dcbfa201',
+        },
+      },
+      null,
+      2,
+    ),
+    '',
+  ].join('\n');
+
+  const read = readStage(polluted);
+  assert.equal(read.ok, true, read.problems.join('; '));
+  assert.equal(
+    read.id,
+    '757255bf-6422-4c38-97f8-e6c2dcbfa201',
+    'the id survives the gate output npm inherits onto the same stdout',
+  );
+  assert.equal(read.version, '0.10.2');
+});
+
 test('the summary is the one a maintainer needs to approve, and it outlives the job', () => {
   const text = stageSummary({
     name: 'funky-secure',

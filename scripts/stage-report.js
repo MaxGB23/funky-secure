@@ -20,10 +20,8 @@ const ENVELOPE_PROBLEM = 'npm reported no stageId';
  * @returns {{ ok: boolean, id: string|null, name: string|null, version: string|null, problems: Array<string> }}
  */
 export function readStage(text) {
-  let payload;
-  try {
-    payload = JSON.parse(text);
-  } catch {
+  const payload = report(text);
+  if (payload === undefined) {
     return { ok: false, id: null, name: null, version: null, problems: ['the report is not JSON'] };
   }
 
@@ -44,6 +42,35 @@ export function readStage(text) {
     version: typeof candidate.version === 'string' ? candidate.version : null,
     problems: [],
   };
+}
+
+/**
+ * The document npm wrote, out of a file that also carries the gate. `npm stage publish` runs
+ * `prepublishOnly` with its stdio inherited, so the suite, the self-scan and the pack smoke test write
+ * to the same stdout as npm's JSON and land in this file first: reading the whole file as one document
+ * fails on a release that really staged, which is how v0.10.2 shipped with a red report step. The last
+ * document that starts a line wins, because npm writes its own output after the scripts it ran.
+ * @param {string} text
+ * @returns {unknown}
+ */
+function report(text) {
+  if (typeof text !== 'string') return undefined;
+  const clean = text.trim();
+
+  const starts = [];
+  for (let at = 0; at < clean.length; at += 1) {
+    if (clean[at] === '{' && (at === 0 || clean[at - 1] === '\n')) starts.push(at);
+  }
+
+  for (const at of starts.reverse()) {
+    try {
+      return JSON.parse(clean.slice(at));
+    } catch {
+      // an earlier export of a script that printed its own object; keep looking
+    }
+  }
+
+  return undefined;
 }
 
 /**
