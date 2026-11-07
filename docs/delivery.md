@@ -74,6 +74,16 @@ Re-staging a rejected version is not guaranteed when the rejected candidate carr
 attestation: the number can be burned. Step 1 carries none, which is why the sequence is safe, and the
 fallback in step 4 costs at most the number nobody could download yet.
 
+**Recovery measured 2026-11-07.** The unpublish does not tombstone the name for ever. Once the
+24-hour window closed, `npm stage publish` from a worktree of the existing `v0.10.1` tag recreated the
+public `0.0.0-stage` placeholder and staged `0.10.1`, which restored the package page and made the
+trusted publisher configurable again. Two staging rules make that claim safe, and both are stated here
+because the bootstrap depends on them: a staged version occupies the same semver unique index as a
+published one, so the throwaway claim rides on an old tag whose number is already spent and never on the
+release version; and staged candidates coexist for one package while normal publishing still works, so
+a pending claim does not block the CI stage. `npm stage reject` asks for 2FA exactly like `approve`,
+and the tag of a staged candidate is immutable, so a candidate staged with `latest` needs no re-stage.
+
 ### 17.3 Tag-driven, immutable releases, approved by a human
 
 - A release is triggered by pushing a `vX.Y.Z` tag. The tag string and `package.json` `version` must
@@ -90,7 +100,15 @@ fallback in step 4 costs at most the number nobody could download yet.
   version. A rejected candidate leaves its tag in place as the record of what was not released.
 - The release body records the commit the tag points at, the `dist.integrity` the registry returns and,
   when the registry returns one, the provenance URL, so a later audit can bind the published bytes to
-  the commit without trusting this document. The registry publishes `dist.integrity` (SHA-512 SRI) and
+  the commit without trusting this document. Measured 2026-11-07 on `0.10.2`: the attestation survives
+  staged approval and names what the job built from — `resolvedDependencies` carries
+  `git+https://github.com/MaxGB23/funky-secure@refs/tags/v0.10.2` and its `gitCommit` — so the URL is a
+  fact rather than a hope, and a provenance badge may be promised for a staged package.
+- The stage id is read by `scripts/stage-report.js`, never by a heredoc inside the workflow. Both
+  defects met while shipping `0.10.2` lived in that read — the `--json` envelope is keyed under the
+  package name, and the gate npm runs inside `prepublishOnly` shares that same stdout — and neither was
+  reachable by a test while it was inline. A reporting step that fails after a successful stage spends
+  the tag on a candidate nobody can approve. The registry publishes `dist.integrity` (SHA-512 SRI) and
   `dist.shasum` and never a `sha256` of the tarball, so no such hash is claimed.
 - The GitHub Release is created by the maintainer **after** the approval, never by the workflow that
   staged, and the repository enables release immutability so the tag of a released version cannot be
