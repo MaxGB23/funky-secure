@@ -36,8 +36,8 @@ came from this repository or from the laptop that ran it.
 ## 💡 Why this exists
 
 The campaigns that mattered went after the credentials that live on a developer's machine — registry
-tokens, cloud keys, SSH keys, OIDC tokens — and they arrive by two roads, both of which are files this
-tool reads.
+tokens, cloud keys, SSH keys, OIDC tokens — and they arrive by three routes, each of which is
+decided by something this tool reads.
 
 **The install path is one.** The Shai-Hulud worm spread by compromising npm accounts and inserting
 itself into the packages those accounts maintained; [CISA reported more than 500 affected packages in
@@ -51,7 +51,16 @@ tokens ([SecurityWeek](https://www.securityweek.com/over-5500-github-repositorie
 [CSO Online](https://www.csoonline.com/article/4177124/github-actions-abused-by-megalodon-attack-to-slip-malicious-commits-into-5500-repos.html)).
 A workflow file is configuration, and configuration is what this tool audits.
 
-Both roads are paved with the same material: the defenses that stop them are mostly configuration —
+**A stolen maintainer credential is the third.** In September 2025 a phishing page harvested an npm
+maintainer's login — a fake two-factor notice, a 48-hour deadline — and eighteen packages, `chalk`,
+`debug` and `ansi-styles` among them, published versions carrying code that intercepted wallet
+interactions in the browser ([Vercel's incident
+response](https://vercel.com/blog/critical-npm-supply-chain-attack-response-september-8-2025),
+[GHSA-8mgj-vmr8-frr6](https://github.com/advisories/GHSA-8mgj-vmr8-frr6)). Nothing about those
+releases looked wrong: the right publisher, a normal version bump. What turns that window into a delay
+the ecosystem can use is a release-age floor, which is one of the twelve rules — `quarantine`.
+
+All three routes end in the same place: the defenses that stop them are mostly configuration —
 which manager, which lockfile, which age policy, which ignore rules, which CI pins. And a defense
 nobody verifies is a defense that silently stopped working: a `pnpm-workspace.yaml` that used to carry
 a release-age floor looks exactly like a hardened one. That is the gap this tool fills,
