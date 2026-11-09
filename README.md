@@ -15,6 +15,16 @@ The point is a verdict you can defend: every finding names the file it read, and
 rule can point at one; every action is a command or an edit; and the report says whether the policy
 came from this repository or from the laptop that ran it.
 
+```sh
+npx funky-secure start
+```
+
+That is the whole install: the auditor needs Node 22 and nothing else. Already on pnpm?
+`pnpm dlx funky-secure@0.10.2` runs the same binary, and in CI the auditor belongs in your lockfile
+instead, as [`docs/guide.md`](docs/guide.md) shows. In a repository that already exists,
+`npx funky-secure scan` is the shorter path: the same rules, reported as findings with the `→`
+command that closes each one.
+
 ![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
 ## 📦 What you get
@@ -89,6 +99,10 @@ already prints, so an agent starts from what the tool will check: the ordered st
 perform only with `--apply`, and the exit code that means it refused. The skill is the same bytes the
 binary answers with, so a delegation cannot drift from the binary it was given.
 
+The other half of this pair is [`funky-forge`](https://www.npmjs.com/package/funky-forge): it decides what
+to build and what to charge, with the same rule against trusting its own output. This one audits the
+repository that builds it.
+
 ## 🚦 The commands
 
 | Command | The question it answers | Writes |
@@ -111,10 +125,10 @@ npx funky-secure init --apply   # perform exactly that plan
 npx funky-secure skill --install   # the same rules, for an agent, before it touches the repository
 ```
 
-`npx` is deliberate and it is the only place it appears: the quick start cannot assume pnpm, because
-installing pnpm is one of the steps it is about to print. Once pnpm is there, bring the auditor the
-same way as the dependencies it audits — `pnpm dlx funky-secure@0.10.2` — and in CI pin it in your
-lockfile instead, as [`docs/guide.md`](docs/guide.md) shows.
+`npx` is deliberate: the quick start cannot assume pnpm, because installing pnpm is one of the steps
+it is about to print. The pnpm form is the same command for a reader who already has it, and this page
+carries it once, at the top: a version bump edits that one line and the one in
+[`docs/guide.md`](docs/guide.md).
 
 `pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the auditor needs
 nothing but Node, and installing a package manager is your decision rather than a side effect of an
