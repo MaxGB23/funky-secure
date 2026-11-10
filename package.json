@@ -36,11 +36,12 @@
   "keywords": [
     "supply-chain",
     "pnpm",
-    "audit",
     "lockfile",
+    "audit",
     "quarantine",
-    "actions",
-    "security"
+    "dependency-audit",
+    "funky",
+    "funky-secure"
   ],
   "packageManager": "pnpm@12.3.4",
   "pi": {
