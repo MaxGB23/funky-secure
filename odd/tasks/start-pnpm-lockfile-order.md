@@ -42,7 +42,7 @@ rows 7 and 8, and the record never reasoned about a lockfile with no recorded ve
 | T1 | S1-S4 | inline: RFC 0034 opened as `draft` | `fcf9364` (PR 193, issue 192) |
 | T2 | S1, S2 | inline: spec table rows 7-9, `docs/cli.md`, `skills/funky-secure/SKILL.md` | `65bb42d` (PR 194) |
 | T3 | S1, S2, S4 | inline: RED test first, then `src/commands/start.js` and the nine order assertions | PR 195 |
-| T4 | S3, S4 | inline: full suite, self-scan, RFC flipped to `implemented` | PR 195 |
+| T4 | S3, S4 | inline: full suite, self-scan, RFC flipped to `implemented` | PR 195, verified in the field |
 
 ## Log
 
@@ -163,3 +163,27 @@ three for the order.
    `scripts/check-pr-policy.js` accepts `fix` in the branch and the repository carries `type:bug`.
 3. **Issue 192 was closed by the record pull request.** The record was `Closes`, but the bug is not
    fixed until the code lands, so the issue was reopened and the code closes it.
+
+### L8 — the field verified S3 and S4, from zero
+
+The same outside agent re-ran both paths in fresh projects (`M:/pruebas/funky-nov10b/{npm,pnpm}`),
+from an empty directory and on the published `0.10.2` binary with the fixed working tree:
+
+> pnpm — 9 pasos (antes 8)
+> 4 pnpm install --lockfile-only     EXIT=0   ← NUEVO, va antes del pin
+> 5 pin --apply (5 pins)             EXIT=0
+> 6 pnpm install --lockfile-only     EXIT=0
+> summary  0 errors · 0 warnings · 0 info · 6 passing · 0 skipped
+> verdict  PASS (threshold: error)
+
+and the npm path still at eleven steps, also `0 warnings`. Both projects: `scan --scope all` →
+`PASS 9·0·0 (3 skipped)`, `pnpm build` green, `carets 0`, `git status` empty, four commits each.
+
+That is S4 exactly — the state that ended with five warnings now ends with none — and S3, because the
+migration path did not gain the step and did not lose one. Two details the agent read as fixed: the pin
+label no longer claims the ranges are already there, and the pnpm line no longer reads as an unmet
+prerequisite.
+
+The one number that still looks alarming is the 4116 `insertions` on the lockfile commit, and it is not
+a defect: the lockfile materialises the project's dependencies on the first resolve, which is what the
+new step 4 guarantees.
