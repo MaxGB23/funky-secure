@@ -107,6 +107,11 @@ auditor needs nothing but Node, and installing a package manager is your decisio
 effect of an audit. The version appears once, in the block at the top — a release edits that line and
 the one in [`docs/guide.md`](docs/guide.md).
 
+The block at the top runs `npx` without a pin: it executes whatever the registry serves today. What
+makes that acceptable is outside this tool — every release carries a signed SLSA provenance statement,
+the GitHub Release is immutable, and nothing publishes without a human approval with two factors. In
+CI, pin it, as [`docs/guide.md`](docs/guide.md) shows.
+
 None of this changes what the audit covers. The twelve rules read the repository and its workflows —
 the lockfile, the ranges, the committed ignore rules, the pinned actions, the merge path, the
 permissions — so a project that already uses pnpm gets **fewer findings because there is nothing to
