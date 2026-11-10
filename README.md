@@ -16,14 +16,13 @@ rule can point at one; every action is a command or an edit; and the report says
 came from this repository or from the laptop that ran it.
 
 ```sh
-npx funky-secure start
+npx funky-secure start                 # Node 22 and nothing else: that is the whole install
+pnpm dlx funky-secure@0.10.2 start     # the same command, in a repository already on pnpm
 ```
 
-That is the whole install: the auditor needs Node 22 and nothing else. Already on pnpm?
-`pnpm dlx funky-secure@0.10.2` runs the same binary, and in CI the auditor belongs in your lockfile
-instead, as [`docs/guide.md`](docs/guide.md) shows. In a repository that already exists,
-`npx funky-secure scan` is the shorter path: the same rules, reported as findings with the `→`
-command that closes each one.
+In a repository that already exists, `start` says so in one line and points at
+`npx funky-secure scan`, which reports the same rules as findings with the `→` command that closes
+each one.
 
 ![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
@@ -46,31 +45,13 @@ command that closes each one.
 ## 💡 Why this exists
 
 The campaigns that mattered went after the credentials that live on a developer's machine — registry
-tokens, cloud keys, SSH keys, OIDC tokens — and they arrive by three routes, each of which is
-decided by something this tool reads.
+tokens, cloud keys, SSH keys, OIDC tokens — and they arrive by three routes, each decided by something this tool reads: the install
+path (the Shai-Hulud worm, more than 500 npm packages), the pipeline (Megalodon, more than 5,500
+GitHub Actions workflows in under six hours), and a stolen maintainer credential (eighteen packages,
+`chalk` and `debug` among them, published from the right account with a normal version bump).
+[`docs/concept.md`](docs/concept.md#the-three-routes-in) has each case with its dates and sources.
 
-**The install path is one.** The Shai-Hulud worm spread by compromising npm accounts and inserting
-itself into the packages those accounts maintained; [CISA reported more than 500 affected packages in
-September 2025](https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem),
-and its November follow-on widened pre-install execution. That is the window `npm audit` cannot see:
-by the time you audit, the lifecycle script has already run.
-
-**The pipeline is the other.** In May 2026 the Megalodon campaign pushed malicious GitHub Actions
-workflow files into more than 5,500 repositories in under six hours, harvesting CI secrets and OIDC
-tokens ([SecurityWeek](https://www.securityweek.com/over-5500-github-repositories-infected-in-megalodon-supply-chain-attack/),
-[CSO Online](https://www.csoonline.com/article/4177124/github-actions-abused-by-megalodon-attack-to-slip-malicious-commits-into-5500-repos.html)).
-A workflow file is configuration, and configuration is what this tool audits.
-
-**A stolen maintainer credential is the third.** In September 2025 a phishing page harvested an npm
-maintainer's login — a fake two-factor notice, a 48-hour deadline — and eighteen packages, `chalk`,
-`debug` and `ansi-styles` among them, published versions carrying code that intercepted wallet
-interactions in the browser ([Vercel's incident
-response](https://vercel.com/blog/critical-npm-supply-chain-attack-response-september-8-2025),
-[GHSA-8mgj-vmr8-frr6](https://github.com/advisories/GHSA-8mgj-vmr8-frr6)). Nothing about those
-releases looked wrong: the right publisher, a normal version bump. What turns that window into a delay
-the ecosystem can use is a release-age floor, which is one of the twelve rules — `quarantine`.
-
-All three routes end in the same place: the defenses that stop them are mostly configuration —
+All three end in the same place: the defenses that stop them are mostly configuration —
 which manager, which lockfile, which age policy, which ignore rules, which CI pins. And a defense
 nobody verifies is a defense that silently stopped working: a `pnpm-workspace.yaml` that used to carry
 a release-age floor looks exactly like a hardened one. That is the gap this tool fills,
@@ -79,7 +60,6 @@ deterministically, with evidence you can review.
 ## 🎯 Who this is for
 
 Both readers get the same product, and neither gets a different rule set. A beginner is pointed at the
-
 `starter` preset, which is these twelve rules with six of them `off` by policy for day zero, and the
 report says so on its own line instead of claiming coverage it does not have.
 
@@ -98,10 +78,6 @@ severity — instead of into whoever happened to run the command.
 already prints, so an agent starts from what the tool will check: the ordered steps, the writes it may
 perform only with `--apply`, and the exit code that means it refused. The skill is the same bytes the
 binary answers with, so a delegation cannot drift from the binary it was given.
-
-The other half of this pair is [`funky-forge`](https://www.npmjs.com/package/funky-forge): it decides what
-to build and what to charge, with the same rule against trusting its own output. This one audits the
-repository that builds it.
 
 ## 🚦 The commands
 
@@ -126,13 +102,10 @@ npx funky-secure skill --install   # the same rules, for an agent, before it tou
 ```
 
 `npx` is deliberate: the quick start cannot assume pnpm, because installing pnpm is one of the steps
-it is about to print. The pnpm form is the same command for a reader who already has it, and this page
-carries it once, at the top: a version bump edits that one line and the one in
-[`docs/guide.md`](docs/guide.md).
-
-`pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the auditor needs
-nothing but Node, and installing a package manager is your decision rather than a side effect of an
-audit.
+it is about to print. `pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the
+auditor needs nothing but Node, and installing a package manager is your decision rather than a side
+effect of an audit. The version appears once, in the block at the top — a release edits that line and
+the one in [`docs/guide.md`](docs/guide.md).
 
 None of this changes what the audit covers. The twelve rules read the repository and its workflows —
 the lockfile, the ranges, the committed ignore rules, the pinned actions, the merge path, the
