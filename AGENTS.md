@@ -56,7 +56,11 @@ a path that is not on disk.
   feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
   `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
   and that exit code does not mean failure — and `mergeStateStatus: CLEAN` is not that gate either,
-  because it reports mergeability, not the matrix. After the merge, the push run on `main` must be
+  because it reports mergeability, not the matrix. A state string can also be **stale**: `pr-policy`
+  has been seen reporting `IN_PROGRESS` while `gh run view <run> --json jobs` showed it concluded
+  `success` on a run that had already completed. When the state is stuck and the conclusion says
+  otherwise, the conclusion is the authority; a watcher keyed on the state list never converges and has
+  to be stopped by hand. After the merge, the push run on `main` must be
   green too: the merge commit is the one that ships.
 - **A `pr-policy` failure with the matrix green is read before it is re-run.** The race is one
   diagnosis and not the only one: the label is attached after the pull request exists, so the `opened`
@@ -66,6 +70,10 @@ a path that is not on disk.
   same job, and re-running those changes nothing: `gh run rerun --failed` on a real violation is an
   infinite loop that costs minutes per turn and reads as progress. Read the failed log first and let it
   name the cause; re-run only when the cause was the label, and fix the body or the branch otherwise.
+  That ritual has a price: a pull request marked ready shows **three** runs of `ci`, because `opened`
+  and `labeled` fire while it is still a draft. In those two, `pr-policy` reads `completed/skipped`,
+  which is the guard working and never a failure to investigate; the `ready_for_review` run is the one
+  that decides.
 
 ## Commands
 
