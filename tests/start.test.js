@@ -234,6 +234,14 @@ const PIN_COMMIT = 'chore: pin the ranges';
 const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
 const ADD_COMMIT_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
+// The one line a path that runs pnpm earns: where pnpm comes from, named and never installed (0033).
+const PNPM_REFERENCE =
+  'pnpm is not part of Node, and the steps above need it: https://pnpm.io/installation';
+
+/** The pnpm reference lines of one rendering, exactly as printed, indentation included. */
+function referenceLines(text) {
+  return text.split('\n').filter((line) => line.trim() === PNPM_REFERENCE);
+}
 
 test('a directory that is not a repository stops at the step that asks again', async (t) => {
   const dir = scratch(t);
@@ -265,6 +273,79 @@ test('a directory with a manifest and no repository is git init, then start agai
   assert.equal(code, 0);
   assert.deepEqual(stepLines(stdout), ['  1  git init', `  2  ${START_AGAIN_STEP}`]);
   assert.equal(stdout.includes('pnpm init'), false, 'the manifest is already there');
+});
+
+test('a directory that runs pnpm names where pnpm comes from, in one line and not a command', async (t) => {
+  // Record 0033: `pnpm init` is the first step a new user meets, pnpm does not ship with Node, and the
+  // one command that would produce it is an installation this tool will not choose for the reader. So
+  // the list is followed by a reference and never by an install command (0018, narrowed here).
+  const dir = scratch(t);
+  const { code, stdout } = await start(dir, { inGit: false });
+
+  assert.equal(code, 0);
+  assert.deepEqual(referenceLines(stdout), [`  ${PNPM_REFERENCE}`], 'one line, indented like every other one');
+  const lines = stdout.split('\n');
+  const reference = lines.indexOf(`  ${PNPM_REFERENCE}`);
+  const lastStep = lines.indexOf(`  3  ${START_AGAIN_STEP}`);
+  assert.ok(lastStep < reference, 'the line follows the numbered list it is a footnote to');
+  assert.ok(
+    reference < lines.findIndex((line) => line.includes('the plan is derived from a repository')),
+    'and precedes the reason the path stops here',
+  );
+  for (const command of ['npm install', 'corepack', 'curl', 'npm i ', 'brew install']) {
+    assert.equal(stdout.includes(command), false, `no install command is printed: ${command}`);
+  }
+});
+
+test('the pnpm reference is a function of the printed steps, never of the machine', async (t) => {
+  // A `pnpm --version` probe would make these bytes depend on the reader's PATH, and would tell a
+  // reader whose pnpm comes from a version manager that they have none. The condition is the step list
+  // (0033), so a collector that answers with a pnpm and one that answers with none print the same bytes.
+  const withPnpm = await start(scratch(t), { inGit: false, version: '12.3.4' });
+  const withoutPnpm = await start(scratch(t), { inGit: false });
+
+  assert.equal(withPnpm.stdout, withoutPnpm.stdout, 'the reported version changes nothing');
+  assert.deepEqual(referenceLines(withPnpm.stdout), [`  ${PNPM_REFERENCE}`]);
+});
+
+test('a repository at the start prints the reference between its list and why this order', async (t) => {
+  const dir = scratch(t);
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.equal(stepLines(stdout).some((line) => line.trim().startsWith('1  pnpm init')), true);
+  assert.deepEqual(referenceLines(stdout), [`  ${PNPM_REFERENCE}`]);
+  const lines = stdout.split('\n');
+  assert.ok(
+    lines.indexOf(`  ${PNPM_REFERENCE}`) > lines.indexOf(`  7  ${SCAN_STEP}`),
+    'it follows the whole numbered list, the scan included',
+  );
+  assert.ok(
+    lines.indexOf(`  ${PNPM_REFERENCE}`) < lines.indexOf('why this order'),
+    'and it is read before the order is explained',
+  );
+});
+
+test('a path with no pnpm step prints no reference line', async (t) => {
+  // Writes waiting, a lockfile already present and nothing to pin: every printed step is funky-secure's
+  // own, so the reference would argue for a step the reader does not have.
+  const dir = scratch(t, 'below-policy');
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.notEqual(stepLines(stdout).length, 0, 'a numbered list is printed');
+  assert.deepEqual(referenceLines(stdout), [], 'and it carries no reference');
+  assert.equal(stdout.includes('pnpm.io'), false, 'no installation is named where no pnpm step prints');
+});
+
+test('a repository past the start prints no reference line', async (t) => {
+  const dir = scratch(t, 'at-policy');
+  const { code, stdout } = await start(dir);
+
+  assert.equal(code, 0);
+  assert.deepEqual(stepLines(stdout), [], 'the single line carries no list');
+  assert.deepEqual(referenceLines(stdout), [], 'and therefore no reference either');
+  assert.equal(stdout.includes('pnpm.io'), false);
 });
 
 test('a repository without a manifest starts at pnpm init', async (t) => {

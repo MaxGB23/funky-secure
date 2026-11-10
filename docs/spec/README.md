@@ -108,6 +108,7 @@ number keeps resolving.
 | 11 | [`0030`](../../rfcs/0030-the-guard-both-managers-read/rfc.md) | 11.2: writer W3b, so `init --apply` writes the `devEngines.packageManager` npm enforces beside the `packageManager` pin W3 writes, without `onFail` |
 | 14 | [`0032`](../../rfcs/0032-stage-only-release/rfc.md) | 14.1: the packed set stated instead of implied — `docs/rules/` mandatory because `explain` names those pages, the development record kept in the repository, and the README image published because npm renders it |
 | 17 | [`0032`](../../rfcs/0032-stage-only-release/rfc.md) | 17.2 and 17.3: a trusted publisher granted `npm stage publish` only, the tag stages instead of publishing, approval by a human with 2FA, and the first version bootstrapped off a staged placeholder instead of an out-of-band `npm publish` |
+| 11.7 | [`0033`](../../rfcs/0033-start-points-at-pnpm/rfc.md) | 11.7: the reference line naming where pnpm's installation is documented, printed when the path carries a step that runs pnpm, and the one place 0018 is narrowed — a reference where the tool cannot name a command safely |
 
 ## Changing the contract
 
