@@ -16,13 +16,13 @@ rule can point at one; every action is a command or an edit; and the report says
 came from this repository or from the laptop that ran it.
 
 ```sh
-npx funky-secure start                 # Node 22 and nothing else: that is the whole install
+npx funky-secure start                 # Node 22 or newer and nothing else: that is the whole install
 pnpm dlx funky-secure@0.10.2 start     # the same command, in a repository already on pnpm
 ```
 
 In a repository that already exists, `start` says so in one line and points at
-`npx funky-secure scan`, which reports the same rules as findings with the `→` command that closes
-each one.
+`npx funky-secure scan --preset starter`, which turns the same rules into findings, each with the `→`
+command that closes it.
 
 ![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
@@ -31,9 +31,9 @@ each one.
 - **A verdict with evidence.** Twelve rules over what decides what your machine installs and what your
   CI is allowed to do: the package manager pin, the lockfile, the release-age quarantine, floating
   ranges, tracked `.env` files, the CI pins, the merge path, the workflow triggers.
-- **A plan instead of magic.** `init` prints every write with its absolute path and a digest of the
-  exact bytes, and `--apply` performs only those writes. A value that already exists and differs is a
-  `conflict` you read, never an edit it makes.
+- **A plan instead of magic.** `init` prints every write with its absolute path and its reason, and
+  `--format json` adds the digest of the exact bytes; `--apply` performs only those writes. A value
+  that already exists and differs is a `conflict` you read, never an edit it makes.
 - **A way out of npm.** `migrate` prints the five steps and performs only the removal of the foreign
   lockfile, and only when that cannot delete your only lockfile.
 - **A contract for CI and agents.** One JSON document and four exit codes — `0` nothing to report,
@@ -89,14 +89,14 @@ binary answers with, so a delegation cannot drift from the binary it was given.
 | `migrate` | how do I leave npm or yarn | the foreign lockfile's removal, only with `--apply` |
 | `pin` | how do I pin the ranges this repository already has | the specifiers it pins, with `--apply` |
 | `explain` | what does one rule actually check | nothing |
-| `skill` | what does an agent need to know before it acts | nothing: it prints the shipped skill on stdout |
+| `skill` | what does an agent need to know before it acts | the skill file, only with `--install` |
 
 ## ⚡ Quick start
 
 ```sh
 npx funky-secure start          # a new repository: the ordered steps, ending at --preset starter
 npx funky-secure scan           # audit: read the report, follow the → lines
-npx funky-secure init           # the plan, with paths and digests; writes nothing
+npx funky-secure init           # the plan, with paths; --format json adds digests; writes nothing
 npx funky-secure init --apply   # perform exactly that plan
 npx funky-secure skill --install   # the same rules, for an agent, before it touches the repository
 ```
@@ -107,10 +107,8 @@ auditor needs nothing but Node, and installing a package manager is your decisio
 effect of an audit. The version appears once, in the block at the top — a release edits that line and
 the one in [`docs/guide.md`](docs/guide.md).
 
-The block at the top runs `npx` without a pin: it executes whatever the registry serves today. What
-makes that acceptable is outside this tool — every release carries a signed SLSA provenance statement,
-the GitHub Release is immutable, and nothing publishes without a human approval with two factors. In
-CI, pin it, as [`docs/guide.md`](docs/guide.md) shows.
+`npx` is the first-run convenience and nothing more. For anything repeatable — CI, a gate, a script —
+pin it, exactly as the tool asks of the repositories it audits.
 
 None of this changes what the audit covers. The twelve rules read the repository and its workflows —
 the lockfile, the ranges, the committed ignore rules, the pinned actions, the merge path, the
@@ -159,8 +157,9 @@ This tool is part of the supply chain it audits, so it carries nothing it does n
   no HTTP client: `node:` built-ins plus your repository's files.
 - **No network, no install, no resolution, no lifecycle script.** It runs a closed list of read-only
   probes and answers from what it read.
-- **Writes only what it printed.** Every change carries its path and a digest of the exact bytes, and
-  `--apply` performs only those; your pnpm configuration, store and global settings are never written.
+- **Writes only what it printed.** Every change carries its path, `--format json` adds a digest of the
+  exact bytes, and `--apply` performs only those; your pnpm configuration, store and global settings
+  are never written.
   One command writes outside the repository — `skill --install` places the agent skill, and only when
   asked.
 - **Deterministic.** Same repository state, same bytes. `--with-timestamp` is the only exception, and
@@ -181,17 +180,19 @@ from an unsupported platform rather than as a regression.
 A tool that sells evidence owes its reader the same treatment, so [`docs/validation.md`](docs/validation.md)
 keeps the ledger: every claim below, and every one that is missing, with what would close it.
 
-- **The twelve rules are verified against real code** — seven open-source repositories and eleven real
-  workflows — with the findings counted rather than asserted: 53 unpinned actions in `berry`, 64 in
-  `shadcn-ui/ui`, 32 jobs inheriting default permissions in `berry`, a genuine pwn request in
-  `cloud-bulldozer`, and 206 floating ranges in `shadcn-ui/ui` with zero desyncs over 245 specifiers.
-- **The written path was verified by strangers.** Three field rounds of four blind sessions each were
-  given nothing but the tool's own output, and they never read its source. Every defect they found was
-  in the path — a tree left dirty, a step that named no dependency, a pin before the lockfile existed —
-  and none was in a rule's decision.
+- **The twelve rules are verified against real code** — five cloned open-source repositories, two more
+  read for one rule each, and eleven real workflows — with the findings counted rather than asserted:
+  53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 32 jobs inheriting default permissions in
+  `berry`, a genuine pwn request in `cloud-bulldozer`, and 206 floating ranges in `shadcn-ui/ui` with
+  zero desyncs over 245 specifiers.
+- **The written path was verified by strangers.** Three field rounds totalling eleven blind sessions
+  were given nothing but the tool's own output, and they never read its source. Every defect they found
+  was in the path — a tree left dirty, a step that named no dependency, a pin before the lockfile
+  existed — and none was in a rule's decision.
 - **What no test covers is the Actions runtime.** That a corrected workflow turns green on a real
   runner, and that `permissions: contents: read` really produces a `403`, is unverified: those rules
-  are checked statically against the eleven workflows above. It would take a runner and a repository.
+  are checked statically against the eleven real workflows recorded in
+  [`docs/validation.md`](docs/validation.md). It would take a runner and a repository.
 - **One hole in the rule set is known and open.** A `workflow_run` workflow that consumes an artifact
   and carries a write token can pass the CI rules today —
   [#153](https://github.com/MaxGB23/funky-secure/issues/153) — and it is a hole in what the rules
