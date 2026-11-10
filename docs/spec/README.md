@@ -110,6 +110,7 @@ number keeps resolving.
 | 17 | [`0032`](../../rfcs/0032-stage-only-release/rfc.md) | 17.2 and 17.3: a trusted publisher granted `npm stage publish` only, the tag stages instead of publishing, approval by a human with 2FA, and the first version bootstrapped off a staged placeholder instead of an out-of-band `npm publish` |
 | 11.7 | [`0033`](../../rfcs/0033-start-points-at-pnpm/rfc.md) | 11.7: the reference line naming where pnpm's installation is documented, printed when the path carries a step that runs pnpm, and the one place 0018 is narrowed — a reference where the tool cannot name a command safely |
 | 11.7 | [`0033`](../../rfcs/0033-start-points-at-pnpm/rfc.md) | 11.7: the reference line names the condition it answers — pnpm not being on the `PATH` — instead of stating the fact alone, which read as an unmet prerequisite at the foot of a plan |
+| 11.7 | [`0034`](../../rfcs/0034-the-resolve-comes-before-the-pin/rfc.md) | 11.7: `pnpm install --lockfile-only` prints before `pin --apply` when no foreign lockfile produced one, because `pin` copies the version from `pnpm-lock.yaml` and a lockfile that records none gives it nothing to copy; the table gains that row and renumbers from 7 up, and the pin's label names the ranges `package.json` declares instead of an outcome the write may not reach |
 
 ## Changing the contract
 
