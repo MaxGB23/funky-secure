@@ -43,12 +43,14 @@ block, is told to run `init --apply` and then `scan`, numbered from `1`.
 
 pnpm does not ship with Node, and most of those steps run it. So when the printed list carries any step
 that begins with `pnpm` — `pnpm init`, `pnpm import`, the resolve that follows `pin`, the first add — the
-list is followed by one unnumbered line saying that pnpm is not part of Node and naming
-`https://pnpm.io/installation`, where its installation is documented. It is a reference and not a
-command: the only command that would produce pnpm is an installation, and this tool does not choose one
-for the reader (RFC 0033). The condition is the printed steps and nothing else — nothing is probed — so a
-path that needs no pnpm step prints no line, and a reader whose pnpm comes from a version manager is
-never told they do not have it.
+list is followed by one unnumbered line saying that pnpm does not come with Node, and naming
+`https://pnpm.io/installation` for the case where pnpm is not on the reader's `PATH`. It is a reference
+and not a command: the only command that would produce pnpm is an installation, and this tool does not
+choose one for the reader (RFC 0033). The condition is the printed steps and nothing else — nothing is
+probed — so a path that needs no pnpm step prints no line, and a reader whose pnpm comes from a version
+manager is never told they do not have it. The line names the condition it answers rather than stating
+the fact alone, because a URL at the foot of a plan reads as a remedy for an unmet prerequisite, and a
+reader who already has pnpm on the `PATH` should read the line as not addressed to them.
 
 When `package.json` declares a package manager other than pnpm — the `npm@11.13.0` a `create-t3-app`
 project writes — every pnpm step carries `--pm-on-fail=ignore`, and `why this order` gains one line
@@ -77,7 +79,7 @@ funky-secure start  ·  guidance, nothing is written
   2  pnpm init
   3  funky-secure start
 
-  pnpm is not part of Node, and the steps above need it: https://pnpm.io/installation
+  pnpm does not come with Node; if it is not on your PATH, see https://pnpm.io/installation
 
   the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git
 
@@ -105,7 +107,7 @@ funky-secure start  ·  guidance, nothing is written
   10  git add pnpm-lock.yaml package-lock.json && git commit -m "chore: track the lockfile"
   11  funky-secure scan --preset starter
 
-  pnpm is not part of Node, and the steps above need it: https://pnpm.io/installation
+  pnpm does not come with Node; if it is not on your PATH, see https://pnpm.io/installation
 
 why this order
   the workspace block has to exist before the install that reads it, and a lockfile can

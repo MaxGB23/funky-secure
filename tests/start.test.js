@@ -234,9 +234,9 @@ const PIN_COMMIT = 'chore: pin the ranges';
 const TRACK_COMMIT = 'chore: track the lockfile';
 const ADD_STEP = 'pnpm add <your first dependency>';
 const ADD_COMMIT_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
-// The one line a path that runs pnpm earns: where pnpm comes from, named and never installed (0033).
+// The one line a path that runs pnpm earns: the condition it answers, named and never probed (0033).
 const PNPM_REFERENCE =
-  'pnpm is not part of Node, and the steps above need it: https://pnpm.io/installation';
+  'pnpm does not come with Node; if it is not on your PATH, see https://pnpm.io/installation';
 
 /** The pnpm reference lines of one rendering, exactly as printed, indentation included. */
 function referenceLines(text) {

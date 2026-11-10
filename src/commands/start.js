@@ -142,16 +142,19 @@ const WHY_ORDER = [
   'only exist after the first add',
 ];
 /**
- * The one line a path that runs pnpm earns: where pnpm comes from, named and never chosen.
+ * The one line a path that runs pnpm earns: the condition it answers, named and never chosen.
  *
  * pnpm does not ship with Node, and `pnpm init` is the first step a reader without it meets, so the
- * path says where its installation is documented. It is a reference and not a command because the only
- * command that produces this state is an installation, and this tool does not choose one for the
- * reader; the condition is the printed step list and not a probe, so two machines that see the same
- * repository print the same bytes (0033, which narrows 0018 here).
+ * line names the condition — pnpm not being on the PATH — before it names where the installation is
+ * documented, and a reader who already has pnpm reads it as not addressed to them. Naming the fact
+ * alone read as an unmet prerequisite at the foot of a plan, where a URL reads as a remedy (0033, with
+ * its errata). It is a reference and not a command because the only command that produces this state
+ * is an installation, and this tool does not choose one for the reader; the condition is the printed
+ * step list and not a probe, so two machines that see the same repository print the same bytes (0033,
+ * which narrows 0018 here).
  */
 const PNPM_REFERENCE =
-  'pnpm is not part of Node, and the steps above need it: https://pnpm.io/installation';
+  'pnpm does not come with Node; if it is not on your PATH, see https://pnpm.io/installation';
 /** The one line a foreign lockfile adds to `why this order` (L10): one short sentence, never a block. */
 const WHY_MIGRATE_AFTER =
   'migrate comes after the install, because the install is what writes the lockfile it keeps';

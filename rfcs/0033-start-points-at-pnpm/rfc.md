@@ -104,3 +104,20 @@ Two more tests pin the conditions that keep it from becoming decoration: a path 
 prints it exactly once, and a path that carries none prints no reference at all. The suite also proves
 the line is not a probe by rendering the same state twice, once with a pnpm reporting a version and once
 with none, and comparing the bytes.
+
+## Errata
+
+**2026-11-10 — the wording of the line.** The reference line this record fixed was true and was read as
+an unmet prerequisite, so its text is corrected here; the body stays as written.
+
+- **What was wrong.** The line read `pnpm is not part of Node, and the steps above need it:
+  https://pnpm.io/installation`. A field session on a machine where pnpm 12.3.4 was installed and on the
+  `PATH` read it as "something is missing": at the foot of a plan a URL reads as a remedy for a problem,
+  so a reader who already had pnpm took the line as an instruction to install what they had.
+- **What replaced it.** The line now reads `pnpm does not come with Node; if it is not on your PATH, see
+  https://pnpm.io/installation`. The conditional clause names the condition the line answers, so a reader
+  whose pnpm is on the `PATH` reads it as not addressed to them and a reader whose pnpm is not gets the
+  way out. No probe was added: the condition is spoken, not detected, for the reason §3 gives — a
+  `pnpm --version` probe cannot tell "absent" from "not on this shell's `PATH`". §6's limit, §7's
+  enforcement and the rest of the record are unaffected, and the test that pins the exact text still
+  pins it.

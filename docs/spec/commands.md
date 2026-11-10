@@ -347,13 +347,13 @@ The numbering follows the printed steps, so a repository that is missing only th
 prints one line saying it is past the start and naming `scan`, never a stale checklist.
 
 Every step that runs pnpm needs it on the machine, and pnpm does not ship with Node. So when the printed
-path carries any step that runs it, the list is followed by one unnumbered line saying that pnpm is not
-part of Node and naming `https://pnpm.io/installation`, where its installation is documented. The line is
-a reference and not a command, and it is the one place this contract narrows 0018: a step that requires
-a state prints how to reach it, and the only command that would produce this state is an installation
-this tool will not choose for the reader. The condition is derived from the steps already printed and
-measures nothing about the machine, so a path that needs no pnpm step prints no line and two machines
-that see the same repository print the same bytes (0033).
+path carries any step that runs it, the list is followed by one unnumbered line saying that pnpm does not
+come with Node and naming `https://pnpm.io/installation` for the case where pnpm is not on the `PATH`. The
+line is a reference and not a command, and it is the one place this contract narrows 0018: a step that
+requires a state prints how to reach it, and the only command that would produce this state is an
+installation this tool will not choose for the reader. The condition is derived from the steps already
+printed and measures nothing about the machine, so a path that needs no pnpm step prints no line and two
+machines that see the same repository print the same bytes (0033).
 
 Last, when a printed step writes, one line says what to read if a writer refuses it: `funky-secure
 explain <rule>` for the reason, and `--allow-dirty` only for a tree the reader understands. The
