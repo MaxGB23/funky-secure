@@ -70,6 +70,12 @@ a path that is not on disk.
   same job, and re-running those changes nothing: `gh run rerun --failed` on a real violation is an
   infinite loop that costs minutes per turn and reads as progress. Read the failed log first and let it
   name the cause; re-run only when the cause was the label, and fix the body or the branch otherwise.
+- **Waiting for CI is `node scripts/wait-for-ci.js <commit>`.** It exits `0` passed, `1` failed and `2`
+  unknown, and `2` never means failure: no run yet, still running, or the timeout ran out. A loop written
+  by hand is how a green run gets reported as a problem — twice in one day, once on a stale status field
+  and once on a separator that did not match what the loop printed. The gate it reads is the matrix: a
+  run whose summary says success and whose jobs do not is a failure. On a push to `main` `pr-policy`
+  reads `skipped`, because that job is guarded to pull request events.
   That ritual has a price: a pull request marked ready shows **three** runs of `ci`, because `opened`
   and `labeled` fire while it is still a draft. In those two, `pr-policy` reads `completed/skipped`,
   which is the guard working and never a failure to investigate; the `ready_for_review` run is the one
