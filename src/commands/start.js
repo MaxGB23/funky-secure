@@ -141,6 +141,17 @@ const WHY_ORDER = [
   'the workspace block has to exist before the install that reads it, and a lockfile can',
   'only exist after the first add',
 ];
+/**
+ * The one line a path that runs pnpm earns: where pnpm comes from, named and never chosen.
+ *
+ * pnpm does not ship with Node, and `pnpm init` is the first step a reader without it meets, so the
+ * path says where its installation is documented. It is a reference and not a command because the only
+ * command that produces this state is an installation, and this tool does not choose one for the
+ * reader; the condition is the printed step list and not a probe, so two machines that see the same
+ * repository print the same bytes (0033, which narrows 0018 here).
+ */
+const PNPM_REFERENCE =
+  'pnpm is not part of Node, and the steps above need it: https://pnpm.io/installation';
 /** The one line a foreign lockfile adds to `why this order` (L10): one short sentence, never a block. */
 const WHY_MIGRATE_AFTER =
   'migrate comes after the install, because the install is what writes the lockfile it keeps';
@@ -307,6 +318,10 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
     for (const [index, step] of printed.entries()) {
       lines.push(`  ${index + 1}  ${step}`);
     }
+
+    // Every pnpm step begins with `pnpm `, so the reference is derived from the list that was just
+    // printed: no probe decides it, and a path that needs no pnpm step argues for nothing (0033).
+    if (printed.some((step) => step.startsWith('pnpm '))) lines.push('', `  ${PNPM_REFERENCE}`);
 
     if (boot) {
       lines.push('', `  ${WHY_START_AGAIN}`);
