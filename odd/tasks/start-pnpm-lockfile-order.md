@@ -39,10 +39,10 @@ rows 7 and 8, and the record never reasoned about a lockfile with no recorded ve
 
 | ID | Spec | Route | Commit |
 |---|---|---|---|
-| T1 | S1-S4 | inline: RFC 0034 opened as `draft` | — |
-| T2 | S1, S2 | inline: spec table rows 7-9, `docs/cli.md`, `skills/funky-secure/SKILL.md` | — |
-| T3 | S1, S2, S4 | inline: RED test first, then `src/commands/start.js` and the nine order assertions | — |
-| T4 | S3, S4 | inline: full suite, self-scan, RFC flipped to `implemented` | — |
+| T1 | S1-S4 | inline: RFC 0034 opened as `draft` | `fcf9364` (PR 193, issue 192) |
+| T2 | S1, S2 | inline: spec table rows 7-9, `docs/cli.md`, `skills/funky-secure/SKILL.md` | `65bb42d` (PR 194) |
+| T3 | S1, S2, S4 | inline: RED test first, then `src/commands/start.js` and the nine order assertions | PR 195 |
+| T4 | S3, S4 | inline: full suite, self-scan, RFC flipped to `implemented` | PR 195 |
 
 ## Log
 
@@ -145,3 +145,21 @@ expected output, because the expectation was read from the code and not from the
 
 Nine tests assert the step order with a full `deepEqual` and the same nine assert the old wording:
 `tests/start.test.js:409, 504, 574, 603, 647, 717, 758, 786, 847`.
+
+### L6 — the red came first, and it showed exactly the field report
+
+The order assertion in the canonical pnpm fixture failed with the diff the report describes — pin at 3,
+resolve at 4 — before the code changed. Seven fixtures then needed updating, and they split the way the
+condition predicts: three for the wording only (no lockfile, foreign lockfile, foreign manager) and
+three for the order.
+
+### L7 — two corrections found while building
+
+1. **The spec row was one clause short.** RFC 0034 §2 said "no `pnpm import` produced the lockfile",
+   but the code also needs a `pnpm-lock.yaml` to be present: without one the add step above is the
+   resolve, and printing another would put two resolves around nothing. Row 7 now names presence as
+   well as origin, so the contract and the code agree rather than the code quietly narrowing it.
+2. **`type:fix` is not a label.** The branch type (`fix/`) and the `type:*` label are two lists:
+   `scripts/check-pr-policy.js` accepts `fix` in the branch and the repository carries `type:bug`.
+3. **Issue 192 was closed by the record pull request.** The record was `Closes`, but the bug is not
+   fixed until the code lands, so the issue was reopened and the code closes it.
