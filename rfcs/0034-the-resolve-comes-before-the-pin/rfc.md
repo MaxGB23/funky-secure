@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | `accepted` |
+| **Status** | `implemented` |
 | **Revision** | 1 |
 | **Present contract** | [`docs/spec/commands.md`](../../docs/spec/commands.md) §11.7 |
 | **Supersedes** | none |
