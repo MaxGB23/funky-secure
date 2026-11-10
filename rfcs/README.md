@@ -40,7 +40,7 @@ document that changes without a new record.
 | [0031](0031-the-path-needs-a-repository/rfc.md) | The path needs a repository | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0032](0032-stage-only-release/rfc.md) | Stage-only publication and the packed set | `accepted` | — | — | [`docs/spec/layout.md`](../docs/spec/layout.md) §14.1, [`docs/delivery.md`](../docs/delivery.md) §17.2, §17.3 |
 | [0033](0033-start-points-at-pnpm/rfc.md) | The path says where pnpm comes from | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
-| [0034](0034-the-resolve-comes-before-the-pin/rfc.md) | The resolve comes before the pin | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
+| [0034](0034-the-resolve-comes-before-the-pin/rfc.md) | The resolve comes before the pin | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 
 ## Layout
 

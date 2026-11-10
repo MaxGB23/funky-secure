@@ -43,9 +43,14 @@ It prints the applicable steps in order, and the order is the contract:
 5. `pnpm import` — when another manager's lockfile is still present. Import reads that lockfile and
    keeps the versions it pins; `pnpm install` never reads one, so it would resolve from the manifest.
 6. `funky-secure pin --apply` — when the manifest still carries ranges; the workspace block governs
-   the dependencies added next, and nothing else clears the ones already there.
-7. `pnpm install --lockfile-only` — after `pin`, when it wrote: exact specifiers over a lockfile that
-   recorded a range are a desync, and this is what re-resolves it without touching `node_modules`.
+   the dependencies added next, and nothing else clears the ones already there. It names the ranges
+   `package.json` declares, not the ones it will manage to write: a range the lockfile records no
+   version for is listed as not pinned, with its reason.
+7. `pnpm install --lockfile-only` — before `pin` when a `pnpm-lock.yaml` is already present and no
+   foreign lockfile produced it, because `pin` reads the version it writes from the lockfile and one
+   that records none gives it nothing to copy; and again after `pin`, when it wrote, because exact
+   specifiers over a lockfile that recorded a range are a desync and this is what re-resolves it
+   without touching `node_modules`.
 8. `git switch -c chore/supply-chain-bootstrap` — when a foreign lockfile is present, because the next
    step refuses to remove one on the default branch. The command is printed, not just the requirement.
 9. `funky-secure migrate --apply` — on that feature branch: it refuses to remove a lockfile on `main`.

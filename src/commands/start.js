@@ -253,11 +253,20 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     // commit that produces the clean tree follows it (0018). It prints only where the add printed.
     steps.push(ADD_STEP);
   }
+  // `pin` copies the version it writes from `pnpm-lock.yaml`, so a lockfile that records none gives it
+  // nothing to copy and the path would announce the ranges and write none of them (0034). The resolve
+  // prints before the pin for the same reason it prints after it: this is the command that records a
+  // version. It is printed only where a lockfile is already present — without one the add above is the
+  // resolve, and a foreign lockfile was resolved by `pnpm import` — so the step answers the state the
+  // field measured, a lockfile whose only entries are the managed pnpm and its platform packages.
+  if (pins > 0 && foreign.length === 0 && present.includes('pnpm-lock.yaml')) {
+    steps.push(resolveLockfileStep(repo));
+  }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.
   if (pins > 0) {
     steps.push(
-      `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} this repository already has`,
+      `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} package.json declares`,
     );
   }
   if (pins > 0) {

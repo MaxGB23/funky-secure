@@ -426,7 +426,7 @@ test('a manifest with no lockfile commits the add before it is told to pin', asy
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     `  3  ${ADD_STEP}`,
     `  4  ${ADD_COMMIT_STEP}`,
-    '  5  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  5  funky-secure pin --apply  pin the 3 ranges package.json declares',
     '  6  pnpm install --lockfile-only',
     `  7  git add package.json && git commit -m "${PIN_COMMIT}"`,
     `  8  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
@@ -517,7 +517,7 @@ test('an npm-generated project installs once, and the gate exists before that in
     '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import',
-    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  4  funky-secure pin --apply  pin the 3 ranges package.json declares',
     '  5  pnpm install --lockfile-only',
     `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
     `  7  git switch -c ${FEATURE_BRANCH}`,
@@ -587,7 +587,7 @@ test('a foreign pin makes the pnpm steps carry the flag that lets them run, and 
     '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import --pm-on-fail=ignore',
-    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  4  funky-secure pin --apply  pin the 3 ranges package.json declares',
     '  5  pnpm install --lockfile-only --pm-on-fail=ignore',
     `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
     `  7  git switch -c ${FEATURE_BRANCH}`,
@@ -659,11 +659,12 @@ test('the canonical path prints no line about an enclosing workspace, because it
     [
       '  1  funky-secure init --apply  plan the 2 writes',
       `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
-      '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
-      '  4  pnpm install --lockfile-only',
-      `  5  git add package.json && git commit -m "${PIN_COMMIT}"`,
-      `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-      `  7  ${SCAN_STEP}`,
+      '  3  pnpm install --lockfile-only',
+      '  4  funky-secure pin --apply  pin the 3 ranges package.json declares',
+      '  5  pnpm install --lockfile-only',
+      `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+      `  7  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+      `  8  ${SCAN_STEP}`,
     ],
     'the steps a repository at this state is at do not move',
   );
@@ -728,11 +729,12 @@ test('an uncommitted repository is told to commit before it is told to apply', a
     `  1  git add -A && git commit -m "${BASELINE_COMMIT}"`,
     '  2  funky-secure init --apply  plan the 2 writes',
     `  3  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
-    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
-    '  5  pnpm install --lockfile-only',
-    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
-    `  7  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-    `  8  ${SCAN_STEP}`,
+    '  4  pnpm install --lockfile-only',
+    '  5  funky-secure pin --apply  pin the 3 ranges package.json declares',
+    '  6  pnpm install --lockfile-only',
+    `  7  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  8  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  9  ${SCAN_STEP}`,
   ]);
   assert.ok(
     stdout.indexOf('git commit') < stdout.indexOf('init --apply'),
@@ -768,7 +770,7 @@ test('a repository the pin can be written into counts the two writes over its ma
     '  1  funky-secure init --apply  plan the 4 writes',
     `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
     '  3  pnpm import',
-    '  4  funky-secure pin --apply  pin the 3 ranges this repository already has',
+    '  4  funky-secure pin --apply  pin the 3 ranges package.json declares',
     '  5  pnpm install --lockfile-only',
     `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
     `  7  git switch -c ${FEATURE_BRANCH}`,
@@ -800,11 +802,12 @@ test('a repository that already carries the pin counts the guard as a write', as
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 3 writes',
     `  2  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
-    '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
-    '  4  pnpm install --lockfile-only',
-    `  5  git add package.json && git commit -m "${PIN_COMMIT}"`,
-    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-    `  7  ${SCAN_STEP}`,
+    '  3  pnpm install --lockfile-only',
+    '  4  funky-secure pin --apply  pin the 3 ranges package.json declares',
+    '  5  pnpm install --lockfile-only',
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  8  ${SCAN_STEP}`,
   ]);
   assert.equal(
     stdout.split('git add package.json pnpm-workspace.yaml').length - 1,
@@ -853,13 +856,14 @@ test('a pnpm-generated project is told neither to migrate nor to add', async (t)
   assert.deepEqual(stepLines(stdout), [
     '  1  funky-secure init --apply  plan the 2 writes',
     `  2  git add pnpm-workspace.yaml .gitignore && git commit -m "${APPLY_COMMIT}"`,
-    '  3  funky-secure pin --apply  pin the 3 ranges this repository already has',
-    '  4  pnpm install --lockfile-only',
-    `  5  git add package.json && git commit -m "${PIN_COMMIT}"`,
-    `  6  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
-    `  7  ${SCAN_STEP}`,
+    '  3  pnpm install --lockfile-only',
+    '  4  funky-secure pin --apply  pin the 3 ranges package.json declares',
+    '  5  pnpm install --lockfile-only',
+    `  6  git add package.json && git commit -m "${PIN_COMMIT}"`,
+    `  7  git add pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  8  ${SCAN_STEP}`,
   ]);
-  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7], 'the numbering stays continuous');
+  assert.deepEqual(stepNumbers(stdout), [1, 2, 3, 4, 5, 6, 7, 8], 'the numbering stays continuous');
   assert.equal(stdout.includes('funky-secure migrate'), false, 'no foreign lockfile to leave behind');
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile the generator wrote is the one to keep');
   assert.equal(stdout.includes(ADD_MESSAGE), false, 'no add means no add commit either');

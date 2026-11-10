@@ -99,7 +99,7 @@ funky-secure start  ·  guidance, nothing is written
   2  funky-secure init --apply  plan the 4 writes
   3  git add package.json pnpm-workspace.yaml .gitignore && git commit -m "chore: apply funky-secure"
   4  pnpm import
-  5  funky-secure pin --apply  pin the 3 ranges this repository already has
+  5  funky-secure pin --apply  pin the 3 ranges package.json declares
   6  pnpm install --lockfile-only
   7  git add package.json && git commit -m "chore: pin the ranges"
   8  git switch -c chore/supply-chain-bootstrap
