@@ -101,9 +101,9 @@ npx funky-secure init --apply   # perform exactly that plan
 npx funky-secure skill --install   # the same rules, for an agent, before it touches the repository
 ```
 
-`npx` is deliberate: the quick start cannot assume pnpm, because installing pnpm is one of the steps
-it is about to print. `pnpm dlx` is for a reader who already has pnpm, not a reason to install it: the
-auditor needs nothing but Node, and installing a package manager is your decision rather than a side
+`npx` is deliberate: the auditor needs Node and nothing else, so it runs before any package manager
+decision is made — including the ones it is about to print. `pnpm dlx` is for a reader who already has
+pnpm, not a reason to install it: installing a package manager is your decision rather than a side
 effect of an audit. The version appears once, in the block at the top — a release edits that line and
 the one in [`docs/guide.md`](docs/guide.md).
 
