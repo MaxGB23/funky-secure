@@ -251,6 +251,23 @@ test('the published version appears where a reader copies it, and nowhere older'
   }
 });
 
+/// The shipped skill restates the manifest's version in its frontmatter. The install tests compare a
+/// copy against that same file, so a stale number there was validated by the test meant to catch it:
+/// bump the manifest, forget this line, and the tarball ships a skill labelled with the old version
+/// while the suite stays green.
+
+test('the shipped skill declares the version the manifest owns', () => {
+  const version = JSON.parse(read('package.json')).version;
+  const declared = /^version:\s*(\S+)\s*$/m.exec(read('skills', 'funky-secure', 'SKILL.md'));
+
+  assert.ok(declared, 'skills/funky-secure/SKILL.md carries no version in its frontmatter');
+  assert.equal(
+    declared[1],
+    version,
+    `skills/funky-secure/SKILL.md declares version ${declared[1]}, and the manifest says ${version}`,
+  );
+});
+
 /// The catalogue (RFC 8.2, 0024). Three rules entered it without a section, and nothing compared the
 /// two counts, so the spec went on saying nine while twelve ran.
 
