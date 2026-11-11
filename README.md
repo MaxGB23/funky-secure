@@ -16,13 +16,10 @@ rule can point at one; every action is a command or an edit; and the report says
 came from this repository or from the laptop that ran it.
 
 ```sh
-npx funky-secure start                 # Node 22 or newer and nothing else: that is the whole install
-pnpm dlx funky-secure@0.11.0 start     # the same command, in a repository already on pnpm
+npx funky-secure start                  # Node 22 or newer and nothing else: that is the whole install
+pnpm dlx funky-secure@0.11.0 start      # the same command, in a repository already on pnpm
+npx funky-secure scan --preset starter  # past the start: the same rules as findings, each with a → command
 ```
-
-In a repository that already exists, `start` says so in one line and points at
-`npx funky-secure scan --preset starter`, which turns the same rules into findings, each with the `→`
-command that closes it.
 
 ![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
