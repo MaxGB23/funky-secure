@@ -16,7 +16,10 @@ candidate, never moves a tag and never runs `npm publish`.
 ## Preconditions
 
 - A clean tree on `main`, and a gate that was green for the commit the tag will point at.
-- `package.json` `version` equals the tag without its `v`; a mismatch exits `2` and stages nothing.
+- `package.json` `version` equals the tag without its `v`; a mismatch exits `2` and stages nothing. The
+  suite names every other place the version lives: bump the manifest, then let it fail until each copy
+  agrees. In this repository that is fifteen occurrences across six documents plus the six golden
+  reports, which is more than a maintainer finds by grepping from memory.
 - `npm --version` is 11.15.0 or higher: `npm stage` does not exist before it.
 - The account has 2FA enabled for writes.
 - The trusted publisher for the package allows `npm stage publish` only.
@@ -56,9 +59,14 @@ configured on a package and a package exists only after a first publish.
    re-push the tag — it does not move, and the version is already queued — and do not reject the
    candidate to "clean up": on a package whose only content is the placeholder, a reject unpublishes
    the package and destroys its trusted publisher.
-4. **Reviews the candidate** — the maintainer. `npm stage list`, `npm stage view <id>`,
-   `npm stage download <id>`, then `tar -tzf <tarball>` and read the file set against the packed set
-   of §17.4. A file that should not ship is a reject, not a note.
+4. **Reviews the candidate** — the maintainer, and **with a live `npm login` session**: `npm stage`
+   authenticates, so a review begun without one answers `E401`, and the two-hour session step 5 needs
+   does not exist yet. `npm stage list`, `npm stage view <id>`, `npm stage download <id>` — which writes
+   the tarball into the working directory, because it ignores a destination argument — then
+   `tar -tzf <tarball>` and read the file set against the packed set of §17.4. **Compare the artifact's
+   `sha1` with the `shasum` in `npm stage list`**: that is the difference between having reviewed a
+   tarball and having reviewed *the* tarball the registry will serve. A file that should not ship is a
+   reject, not a note.
 5. **Approves or rejects** — the maintainer, under 2FA. `npm stage approve <id>` publishes; nothing is
    installable before it. A fresh candidate reports `validating` before `staged`: approve only once it
    reads `staged`. And an unapproved candidate is not free — the semver index treats that version as
@@ -75,6 +83,9 @@ configured on a package and a package exists only after a first publish.
    immutability is enabled **first** (Settings → Releases), because GitHub applies it only to releases
    published after the setting is on. Write `RELEASE_NOTES.md`, run
    `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file RELEASE_NOTES.md`, then delete the file.
+   When the tag already exists, `gh release create` records `target_commitish` as the default branch
+   rather than the commit: the binding an auditor should compare is the immutable tag and the
+   provenance, both of which name the SHA.
 
 A prerelease version is staged with `--tag next` and its Release takes `--prerelease`; both are off by
 default.
