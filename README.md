@@ -17,7 +17,7 @@ came from this repository or from the laptop that ran it.
 
 ```sh
 npx funky-secure start                 # Node 22 or newer and nothing else: that is the whole install
-pnpm dlx funky-secure@0.10.2 start     # the same command, in a repository already on pnpm
+pnpm dlx funky-secure@0.11.0 start     # the same command, in a repository already on pnpm
 ```
 
 In a repository that already exists, `start` says so in one line and points at
