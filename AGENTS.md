@@ -53,8 +53,9 @@ a path that is not on disk.
   CI runs, so run it first, not after the failure notice. `main` requires no status checks, so nothing
   stops a red pull request from merging: the check is only as real as the run before it.
   The whole ritual is one command — `node scripts/open-pr.js --base main --title "<title>" --body-file
-  <path> --label type:docs` — which refuses a red suite and a policy violation, then creates a labelled
-  draft, marks it ready and reports the run of this commit.
+  <path> --label type:docs` — which refuses a red suite and a policy violation, then creates a
+  **labelled pull request that is ready from birth** and reports the set of runs of this commit. The
+  set is not fussiness: `opened` and `labeled` both fire, so two runs evaluate the same content.
 - **A pull request merges only when its checks have finished, and "finished" is a state list, not a
   feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
   `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
@@ -68,7 +69,9 @@ a path that is not on disk.
 - **A `pr-policy` failure with the matrix green is read before it is re-run.** The race is one
   diagnosis and not the only one: the label is attached after the pull request exists, so the `opened`
   run reads `PR_LABELS` empty. `gh pr create --label type:<t> --draft` puts the label in the creation
-  itself, so the `opened` run sees it, and a draft matches the guard in `.github/workflows/ci.yml`.
+  itself, so the `opened` run sees it. The draft guard in `.github/workflows/ci.yml` still earns its
+  place for a pull request made by hand; `open-pr.js` no longer creates one, because a draft is a second
+  event for the same commit and the API has nothing that tells the two runs apart afterwards.
   **A rerun does not cure it**: `gh run rerun --failed` replays the event payload, so an empty
   `PR_LABELS` stays empty and the job fails identically — measured on 2026-11-12, attempt 2 against
   attempt 1. A fresh event does, and turning the pull request back into a draft and ready again is the
@@ -82,10 +85,12 @@ a path that is not on disk.
   instead of the commit can read an earlier commit's run. The gate it reads is the matrix: a
   run whose summary says success and whose jobs do not is a failure. On a push to `main` `pr-policy`
   reads `skipped`, because that job is guarded to pull request events.
-  That ritual has a price: a pull request marked ready shows **three** runs of `ci`, because `opened`
-  and `labeled` fire while it is still a draft. In those two, `pr-policy` reads `completed/skipped`,
-  which is the guard working and never a failure to investigate; the `ready_for_review` run is the one
-  that decides.
+  That ritual has a price. `open-pr.js` creates the pull request **ready**, so `opened` and `labeled`
+  both fire and a pull request shows **two** runs of `ci` on the same commit, both of them running
+  `pr-policy` rather than skipping it. They evaluate the same commit and the same content, so taking one
+  of them is a coin toss: the tool reads the **set**, answers red if any run is red, green only when all
+  of them are, and unknown when they disagree. A hand-made draft that is later marked ready still shows
+  three, and there the `ready_for_review` run is the one that decides.
 
 ## Commands
 

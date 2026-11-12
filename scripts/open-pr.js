@@ -6,8 +6,13 @@
  * label, so the `opened` run reads `PR_LABELS` empty; a `gh run rerun --failed` that replays the frozen
  * event payload and fails identically; a wait loop keyed on the branch, so it answers with an earlier
  * commit's run; and a branch pushed with a suite that does not parse. Every one of those is cheap to
- * prevent and easy to forget, so the order lives here instead: the suite, the policy, a labelled draft,
- * ready, and then the run of *this* commit.
+ * prevent and easy to forget, so the order lives here instead: the suite, the policy, the floor of the
+ * head commit, a labelled creation, and then the answer the set of runs past that floor gives.
+ *
+ * The floor is what a snapshot of "runs that already existed" could not be. A run at or below it belongs
+ * to an event fired before the creation and can never decide this pull request; the runs past it are the
+ * candidates, they are polled until two consecutive reads agree, and any red candidate makes the answer
+ * red because a real failure is never averaged away by a green sibling.
  *
  * The decisions are pure functions and every `gh` invocation goes through one injected `exec`, so the
  * tests read a verdict without a network, a repository or a pull request.
@@ -114,21 +119,51 @@ export function decideVerdict(answer) {
 }
 
 /**
- * The run of one commit, never the newest run of the branch: `gh run list --branch` answers the newest
- * run first, and while the run for the new commit is still queued that answer belongs to the previous
- * one. `exclude` carries the runs that already existed before the deciding event, because a run that
- * finished before the pull request was ready cannot decide it.
+ * The floor: the greatest run id of one commit, read **before** the pull request is created. Every run
+ * at or below it belongs to an event fired before that read, so none of them can decide this pull
+ * request. `0` when the commit has no run yet, which is the honest zero: an empty list is a
+ * measurement, while a failed read is not and never reaches here.
  *
- * @param {Array<{ databaseId?: number|string, headSha?: string, conclusion?: string }>} runs
+ * The decision is by commit, never by being the newest run of the branch: `gh run list --branch`
+ * answers the newest run first, and while the run of the new commit is still queued, that answer
+ * belongs to the previous one.
+ *
+ * @param {Array<{ databaseId?: number|string, headSha?: string }>} runs
  * @param {string} sha
- * @param {Iterable<string|number>} [exclude]
- * @returns {{ databaseId?: number|string, headSha?: string, conclusion?: string } | null}
+ * @returns {number}
  */
-export function selectRun(runs, sha, exclude = []) {
-  if (!Array.isArray(runs)) return null;
+export function floorOf(runs, sha) {
+  if (!Array.isArray(runs)) return 0;
 
-  const skipped = new Set([...exclude].map(String));
-  return runs.find((run) => run?.headSha === sha && !skipped.has(String(run.databaseId))) ?? null;
+  let floor = 0;
+  for (const run of runs) {
+    if (run?.headSha !== sha) continue;
+    const id = Number(run?.databaseId);
+    if (Number.isFinite(id) && id > floor) floor = id;
+  }
+
+  return floor;
+}
+
+/**
+ * The candidates: the runs of one commit past the floor. More than one is normal — a creation carrying
+ * its label fires both `opened` and `labeled` — and every one of them has a say in the answer.
+ *
+ * @param {Array<{ databaseId?: number|string, headSha?: string }>} runs
+ * @param {string} sha
+ * @param {number} [floor]
+ * @returns {Array<{ databaseId?: number|string, headSha?: string, status?: string, conclusion?: string }>}
+ */
+export function runsPastFloor(runs, sha, floor = 0) {
+  if (!Array.isArray(runs)) return [];
+
+  const reading = Number(floor);
+  const threshold = Number.isFinite(reading) ? reading : 0;
+
+  return runs.filter((run) => {
+    const id = Number(run?.databaseId);
+    return run?.headSha === sha && Number.isFinite(id) && id > threshold;
+  });
 }
 
 /**
@@ -157,18 +192,28 @@ export function failingCount(output) {
 }
 
 /**
- * Polls for the run of one commit until it appears or the attempts run out. The bound is a count of
- * attempts rather than a clock, so a test drives it without waiting and a real wait still stops.
+ * The candidate set, once it stops moving. Each attempt reads twice and compares those two reads, so
+ * consecutiveness is a property of the shape and not of a variable that has to be cleared: an empty
+ * read is never half of an agreement, because it is never compared with the read before it.
  *
- * @param {{ exec: Function, head: string, repo?: string|null, sha: string, exclude?: Array<string|number>, sleep: (ms: number) => Promise<void>, timeoutSeconds?: number, intervalSeconds?: number }} options
- * @returns {Promise<{ run: object | null, sha: string, spentSeconds: number }>}
+ * An empty read resets by construction and the attempt sleeps. A non-empty set that differs between its
+ * two reads grew while it was read, so a third read is owed, not a refusal — `opened` and `labeled`
+ * arrive one poll apart on every real pull request, and refusing at the first growth would answer `2`
+ * on all of them. The budget, not the first disagreement, decides when to stop looking.
+ *
+ * The bound is a count of attempts rather than a clock, so a test drives it without waiting and a real
+ * wait still stops.
+ *
+ * @param {{ exec: Function, head: string, repo?: string|null, sha: string, floor: number, sleep: (ms: number) => Promise<void>, timeoutSeconds?: number, intervalSeconds?: number }} options
+ * @returns {Promise<{ runs: Array<object> | null, spentSeconds: number, grown: string[] }>} the set that
+ * held still, or nothing and every id seen on the way, in the order it was first seen.
  */
-export async function findRun({
+async function waitForCandidates({
   exec,
   head,
   repo = null,
   sha,
-  exclude = [],
+  floor,
   sleep,
   timeoutSeconds = DEFAULT_TIMEOUT_SECONDS,
   intervalSeconds = DEFAULT_INTERVAL_SECONDS,
@@ -176,14 +221,43 @@ export async function findRun({
   const interval = Math.max(1, intervalSeconds);
   const attempts = Math.max(0, Math.ceil(Math.max(1, timeoutSeconds) / interval));
 
+  const grown = [];
+  const poll = () => {
+    const answer = readRuns(exec, { head, repo });
+    return answer.runs === null ? [] : runsPastFloor(answer.runs, sha, floor);
+  };
+  const remember = (candidates) => {
+    for (const run of candidates) {
+      const id = String(run.databaseId);
+      if (!grown.includes(id)) grown.push(id);
+    }
+    return candidates.map((run) => String(run.databaseId));
+  };
+
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
-    const run = selectRun(listRuns(exec, { head, repo }), sha, exclude);
-    if (run !== null) return { run, sha, spentSeconds: attempt * interval };
+    const first = remember(poll());
+
+    if (first.length > 0) {
+      // Read immediately after the first, so the two are consecutive by construction.
+      const candidates = poll();
+      if (sameIds(first, remember(candidates))) {
+        return { runs: candidates, spentSeconds: attempt * interval, grown };
+      }
+    }
 
     if (attempt < attempts) await sleep(interval * 1000);
   }
 
-  return { run: null, sha, spentSeconds: attempts * interval };
+  return { runs: null, spentSeconds: attempts * interval, grown };
+}
+
+/**
+ * @param {string[]} left
+ * @param {string[]} right
+ * @returns {boolean} the two reads name the same ids, in the same order
+ */
+function sameIds(left, right) {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 /**
@@ -250,13 +324,24 @@ export async function run(deps = {}) {
     return RED;
   }
 
-  // 3. The label travels in the creation itself, which is the whole point: the `opened` run then reads
-  // `PR_LABELS` filled, and a label attached afterwards never achieves that.
+  // 3. The floor, read before the creation. A floor nobody could read is not zero: creating on top of
+  // an unknown floor is how a run of an earlier event gets to decide this pull request. So a read that
+  // cannot answer refuses here, before anything exists, and names itself with what `gh` printed.
+  const sha = resolveSha();
+  const floorAnswer = readRuns(exec, { head, repo: options.repo });
+  if (floorAnswer.runs === null) {
+    err.write(`open-pr: refusing: ${floorAnswer.problem}; the floor is unknown, so nothing was created\n`);
+    return UNKNOWN;
+  }
+  const floor = floorOf(floorAnswer.runs, sha);
+
+  // 4. The label travels in the creation itself, which is the whole point: the `opened` run then reads
+  // `PR_LABELS` filled, and a label attached afterwards never achieves that. The creation is also the
+  // only event: no draft, so there is no `pr ready` to fire a second run for the same commit.
   const created = exec(
     withRepo(options.repo, [
       'pr',
       'create',
-      '--draft',
       '--label',
       options.label,
       '--base',
@@ -280,85 +365,95 @@ export async function run(deps = {}) {
   }
   out.write(`open-pr: ${pullRequest.url}\n`);
 
-  // The runs that exist before `gh pr ready` belong to the events of the draft, and the
-  // `ready_for_review` run is the one that decides. Their ids are snapshotted instead of their times,
-  // because this clock is not the API's clock.
-  const before = listRuns(exec, { head, repo: options.repo }).map((entry) => String(entry?.databaseId));
+  // 5. The runs of this commit past the floor, polled until the set stops moving. A wait that prints
+  // nothing is indistinguishable from a hang, so the line is written before the first poll.
+  out.write(`open-pr: waiting for the runs of ${sha} (up to ${options.timeout}s)\n`);
 
-  // 4. This fires the event that decides.
-  const ready = exec(withRepo(options.repo, ['pr', 'ready', String(pullRequest.number)]));
-  if (ready?.ok !== true) {
-    err.write(`open-pr: gh pr ready ${pullRequest.number} failed: the deciding run never fired\n`);
-    return RED;
-  }
-
-  // 5. The run of this commit, polled until it exists. A wait that prints nothing is indistinguishable
-  // from a hang, so the line is written before the first poll and not after the last.
-  const sha = resolveSha();
-  out.write(`open-pr: waiting for the run of ${sha} (up to ${options.timeout}s)\n`);
-
-  const found = await findRun({
+  const found = await waitForCandidates({
     exec,
     head,
     repo: options.repo,
     sha,
-    exclude: before,
+    floor,
     sleep,
     timeoutSeconds: options.timeout,
     intervalSeconds: DEFAULT_INTERVAL_SECONDS,
   });
 
-  if (found.run === null) {
-    out.write(
-      `open-pr: unknown — no run of ${sha} appeared within ${options.timeout}s; this is not a failure\n`,
+  if (found.runs === null) {
+    if (found.grown.length > 0) {
+      out.write(
+        `open-pr: unknown — the set of runs of ${sha} was still changing (${found.grown.join(', ')}); this is not a failure\n`,
+      );
+    } else {
+      out.write(
+        `open-pr: unknown — no run of ${sha} appeared within ${options.timeout}s; this is not a failure\n`,
+      );
+    }
+    return UNKNOWN;
+  }
+
+  // 6. Every candidate answers for itself. A watch is bounded by what is left of the budget, because a
+  // command that never returns is how the wait it replaces got skipped in the first place.
+  const verdicts = [];
+  for (const candidate of found.runs) {
+    const id = String(candidate.databaseId);
+
+    if (candidate.status !== 'completed') {
+      const remaining = Math.max(1, Math.round(options.timeout - found.spentSeconds));
+      const watched = exec(
+        withRepo(options.repo, [
+          'run',
+          'watch',
+          id,
+          '--exit-status',
+          '--interval',
+          String(DEFAULT_INTERVAL_SECONDS),
+        ]),
+        { timeoutMs: remaining * 1000 },
+      );
+
+      if (watched?.timedOut === true) {
+        out.write(`open-pr: run ${id}  ·  unknown\n`);
+        out.write(
+          `open-pr: unknown — the run did not conclude within ${options.timeout}s; this is not a failure\n`,
+        );
+        return UNKNOWN;
+      }
+    }
+
+    // The watch says whether it is over; the run's own answer says what it was, and the verdict comes
+    // from the matrix inside that answer. A cancelled run is not a failed one, and a summary is not a
+    // gate.
+    const viewed = exec(
+      withRepo(options.repo, ['run', 'view', id, '--json', 'status,conclusion,jobs']),
     );
-    return UNKNOWN;
+    const answer = parseJson(viewed?.stdout);
+    if (answer === null) {
+      out.write(`open-pr: run ${id}  ·  unknown\n`);
+      out.write('open-pr: unknown — the run concluded but its conclusion could not be read\n');
+      return UNKNOWN;
+    }
+
+    // The matrix travels with the verdict, because a verdict nobody can audit is the reading this
+    // script exists to replace. The id travels too: more than one run can decide, and a failure names
+    // the run it is about.
+    const verdict = decideVerdict({ ...answer, databaseId: id });
+    const reason = verdict.code === RED ? ` — ${verdict.reason}` : '';
+    out.write(`open-pr: run ${id}  ·  ${verdict.state}${reason}\n`);
+    for (const line of verdict.lines ?? []) out.write(`${line}\n`);
+    verdicts.push(verdict);
   }
 
-  const id = String(found.run.databaseId);
+  // 7. The set, combined. Any red candidate makes the whole answer red — a green sibling never
+  // averages a real failure away — and agreement that is not green is not a verdict either.
+  const red = verdicts.find((verdict) => verdict.code === RED) ?? null;
+  const allGreen = verdicts.length > 0 && verdicts.every((verdict) => verdict.code === GREEN);
+  const code = red !== null ? RED : allGreen ? GREEN : UNKNOWN;
+  const state = red !== null ? 'failed' : allGreen ? 'passed' : 'unknown';
 
-  // 6. The watch is bounded, because a command that never returns is how the wait it replaces got
-  // skipped in the first place.
-  const remaining = Math.max(1, Math.round(options.timeout - found.spentSeconds));
-  const watched = exec(
-    withRepo(options.repo, [
-      'run',
-      'watch',
-      id,
-      '--exit-status',
-      '--interval',
-      String(DEFAULT_INTERVAL_SECONDS),
-    ]),
-    { timeoutMs: remaining * 1000 },
-  );
-
-  if (watched?.timedOut === true) {
-    out.write(`open-pr: run ${id}\n`);
-    out.write(`open-pr: unknown — the run did not conclude within ${remaining}s; this is not a failure\n`);
-    return UNKNOWN;
-  }
-
-  // The watch says whether it is over; the run's own answer says what it was, and the verdict comes
-  // from the matrix inside that answer. A cancelled run is not a failed one, and a summary is not a
-  // gate.
-  const viewed = exec(
-    withRepo(options.repo, ['run', 'view', id, '--json', 'status,conclusion,jobs']),
-  );
-  const answer = parseJson(viewed?.stdout);
-  if (answer === null) {
-    out.write(`open-pr: run ${id}\n`);
-    out.write('open-pr: unknown — the run concluded but its conclusion could not be read\n');
-    return UNKNOWN;
-  }
-
-  // The matrix travels with the verdict, because a verdict nobody can audit is the reading this
-  // script exists to replace. The id travels too, so a failure names the run it is about.
-  const verdict = decideVerdict({ ...answer, databaseId: id });
-  for (const line of verdict.lines ?? []) out.write(`${line}\n`);
-  const reason = verdict.code === RED ? ` — ${verdict.reason}` : '';
-  out.write(`open-pr: run ${id}  ·  ${verdict.state}${reason}\n`);
-  out.write(`open-pr: ${pullRequest.url}  ·  ${verdict.state}\n`);
-  return verdict.code;
+  out.write(`open-pr: ${pullRequest.url}  ·  ${state}\n`);
+  return code;
 }
 
 /**
@@ -436,16 +531,33 @@ function withRepo(repo, args) {
 }
 
 /**
- * @param {(args: string[], options?: object) => { ok: boolean, stdout?: string }} exec
+ * @param {(args: string[], options?: object) => { ok: boolean, stdout?: string, stderr?: string }} exec
  * @param {{ head: string, repo?: string|null }} target
- * @returns {Array<object>} the runs of that branch, newest first, or none when the API cannot answer
+ * @returns {{ runs: Array<object> | null, problem: string | null }} the runs of that branch, or why the
+ * API could not answer. An answer that is not a list is a failure and not an empty list: a floor read
+ * from a broken answer is a floor nobody read.
  */
-function listRuns(exec, { head, repo = null }) {
+function readRuns(exec, { head, repo = null }) {
   const answer = exec(withRepo(repo, ['run', 'list', '--branch', head, '--json', RUN_FIELDS]));
-  if (answer?.ok !== true) return [];
+  if (answer?.ok !== true) return { runs: null, problem: describe('gh run list', answer) };
 
   const runs = parseJson(answer.stdout);
-  return Array.isArray(runs) ? runs : [];
+  if (!Array.isArray(runs)) return { runs: null, problem: 'gh run list printed something that is not JSON' };
+
+  return { runs, problem: null };
+}
+
+/**
+ * One line naming what a `gh` call could not do, taken from what it printed. A failure that says only
+ * "not ok" leaves the reader to guess between a missing run, a missing login and a broken network.
+ *
+ * @param {string} step
+ * @param {{ stderr?: string } | undefined} answer
+ * @returns {string}
+ */
+function describe(step, answer) {
+  const detail = String(answer?.stderr ?? '').trim().split('\n')[0];
+  return detail === '' ? `${step} failed` : `${step} failed: ${detail}`;
 }
 
 /**
