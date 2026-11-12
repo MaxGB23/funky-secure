@@ -281,27 +281,21 @@ test('a run that existed before the pull request was created cannot decide it', 
 });
 
 test('a watch that runs out of time is unknown, never a failure', async (t) => {
-  const out = capture();
-  const err = capture();
-  const { exec, calls } = gh({
-    snapshot: [],
-    runs: [{ databaseId: 22, headSha: SHA, status: 'in_progress', conclusion: null }],
-    watch: { ok: false, timedOut: true },
+  const { exec, calls } = ghFloor({
+    polls: [[runOf(22, { status: 'in_progress', conclusion: null })]],
+    watches: { 22: { ok: false, timedOut: true } },
+    views: { 22: { status: 'in_progress', conclusion: null, jobs: [] } },
   });
 
-  const code = await run({
-    argv: argvFor(bodyFile(t, BODY)),
-    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
-    exec,
-    resolveSha: () => SHA,
-    sleep: async () => {},
-    out,
-    err,
-  });
+  const { code, out } = await runWith(t, exec);
 
   assert.equal(code, UNKNOWN, 'a timeout is not a red check');
-  assert.equal(calls.filter((call) => call.startsWith('run view')).length, 0, 'an unfinished run has no conclusion to read');
-  assert.match(out.text, /unknown — the run did not conclude within 30s; this is not a failure/);
+  assert.equal(
+    calls.filter((call) => call.startsWith('run view')).length,
+    1,
+    'the run is read once the wait gives up: the wait says nothing about the conclusion',
+  );
+  assert.match(out, /unknown — the run did not conclude within 30s; this is not a failure/);
 });
 
 test('a run that concluded failure exits 1 and still names the pull request', async (t) => {
@@ -418,10 +412,16 @@ const runOf = (id, extra = {}) => ({
  * A `gh` for the design that replaces the snapshot: the floor is read **before** the creation, so the
  * first `run list` is the floor and every later one is a poll. Each candidate answers its own matrix,
  * because the verdict stops being about one run and starts being about a set of them.
+ *
+ * A `run watch` answers per id — `watches[id]`, or `watch` for an id nobody named — and a `run view`
+ * answers per id and per read: `views[id]` is one answer for every read of that id, or an array served
+ * in order and then repeated, which is how a run that concluded while its wait was giving up is told
+ * apart from one that did not.
  */
-function ghFloor({ floor = [], polls = [[]], views = {}, watch = {}, createOk = true } = {}) {
+function ghFloor({ floor = [], polls = [[]], views = {}, watch = {}, watches = {}, createOk = true } = {}) {
   const calls = [];
-  let reads = 0;
+  const reads = new Map();
+  let lists = 0;
 
   const exec = (args) => {
     calls.push(args.join(' '));
@@ -433,21 +433,27 @@ function ghFloor({ floor = [], polls = [[]], views = {}, watch = {}, createOk = 
         : { ok: false, stdout: '', stderr: 'a pull request for branch "feat/open-pr" already exists' };
     }
     if (group === 'run' && action === 'list') {
-      const answer = reads === 0 ? floor : polls[Math.min(reads - 1, polls.length - 1)];
-      reads += 1;
+      const answer = lists === 0 ? floor : polls[Math.min(lists - 1, polls.length - 1)];
+      lists += 1;
       return { ok: true, stdout: JSON.stringify(answer), stderr: '' };
     }
     if (group === 'run' && action === 'watch') {
-      return { ok: watch.ok ?? true, timedOut: watch.timedOut === true, stdout: '', stderr: '' };
+      const answer = watches[String(args[2])] ?? watch;
+      return { ok: answer.ok ?? true, timedOut: answer.timedOut === true, stdout: '', stderr: '' };
     }
     if (group === 'run' && action === 'view') {
-      return { ok: true, stdout: JSON.stringify(views[String(args[2])] ?? completedGreen()), stderr: '' };
+      const id = String(args[2]);
+      const read = (reads.get(id) ?? 0) + 1;
+      reads.set(id, read);
+      const planned = views[id] ?? completedGreen();
+      const answer = Array.isArray(planned) ? planned[Math.min(read - 1, planned.length - 1)] : planned;
+      return { ok: true, stdout: JSON.stringify(answer), stderr: '' };
     }
 
     return { ok: false, stdout: '', stderr: `unexpected gh ${args.join(' ')}` };
   };
 
-  return { exec, calls };
+  return { exec, calls, reads };
 }
 
 /** One `run()` with the suite green and no waiting, whatever `gh` answers. */
@@ -568,6 +574,63 @@ test('two reads separated by an empty read are not consecutive agreement', async
   );
   assert.equal(calls.filter((call) => call.startsWith('run watch')).length, 0, 'and nothing is watched');
   assert.equal(calls.filter((call) => call.startsWith('run view')).length, 0, 'and nothing is judged');
+});
+
+test('a red candidate survives a sibling whose watch runs out of time', async (t) => {
+  // The ceiling is a fact about one candidate's wait, never about the set: a red already judged must
+  // not be thrown away because the next wait gave up.
+  const red = runOf(21);
+  const slow = runOf(22, { status: 'in_progress', conclusion: null });
+  const { exec } = ghFloor({
+    polls: [[red, slow], [red, slow]],
+    watches: { 22: { ok: false, timedOut: true } },
+    views: {
+      21: { status: 'completed', conclusion: 'failure', jobs: [{ name: 'test', conclusion: 'failure' }] },
+      22: { status: 'in_progress', conclusion: null, jobs: [] },
+    },
+  });
+
+  const { code, out } = await runWith(t, exec);
+
+  assert.equal(code, RED, 'a red run is not averaged away by a wait that gave up');
+  assert.match(out.trimEnd().split('\n').pop(), /failed$/);
+  assert.match(out, /pull\/42 {2}· {2}failed/);
+});
+
+test('a run whose watch ran out is read again, and its failure decides', async (t) => {
+  // Giving up on the wait is not a conclusion about the run: the run may have finished, red, while the
+  // wait was running out. So the read after the wait decides.
+  const slow = runOf(22, { status: 'in_progress', conclusion: null });
+  const { exec, calls } = ghFloor({
+    polls: [[slow], [slow]],
+    watches: { 22: { ok: false, timedOut: true } },
+    views: { 22: { status: 'completed', conclusion: 'failure', jobs: [{ name: 'test', conclusion: 'failure' }] } },
+  });
+
+  const { code, out } = await runWith(t, exec);
+
+  assert.equal(code, RED, 'the read after the wait decides, and it found a failure');
+  assert.match(out.trimEnd().split('\n').pop(), /failed$/);
+  const watchedAt = calls.findIndex((call) => call.startsWith('run watch 22'));
+  const viewedAt = calls.findIndex((call) => call.startsWith('run view 22'));
+  assert.ok(watchedAt !== -1 && viewedAt > watchedAt, 'the run is read after the wait, not instead of it');
+  assert.doesNotMatch(out, /did not conclude within/, 'the ceiling is not the answer: the read is');
+});
+
+test('green plus an undecided candidate is unknown and names the undecided run', async (t) => {
+  const green = runOf(21);
+  const slow = runOf(22, { status: 'in_progress', conclusion: null });
+  const { exec } = ghFloor({
+    polls: [[green, slow], [green, slow]],
+    watches: { 22: { ok: false, timedOut: true } },
+    views: { 22: { status: 'in_progress', conclusion: null, jobs: [] } },
+  });
+
+  const { code, out } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'green plus undecided is not green');
+  assert.match(out, /open-pr: unknown — run 22 stayed undecided; this is not a failure/);
+  assert.match(out.trimEnd().split('\n').pop(), /unknown$/, 'and the pull request is still named last');
 });
 
 test('a floor that cannot be read refuses before anything is created', async (t) => {

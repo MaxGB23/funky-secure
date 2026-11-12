@@ -403,10 +403,14 @@ export async function run(deps = {}) {
   }
 
   // 6. Every candidate answers for itself. A watch is bounded by what is left of the budget, because a
-  // command that never returns is how the wait it replaces got skipped in the first place.
-  const verdicts = [];
+  // command that never returns is how the wait it replaces got skipped in the first place. A ceiling
+  // reached is a fact about the wait, not about the run: the candidate is undecided so far, never the
+  // answer, because another candidate may already be red and this run may have concluded while the wait
+  // ran out. So the loop carries on and the read below decides, for every candidate, always.
+  const judged = [];
   for (const candidate of found.runs) {
     const id = String(candidate.databaseId);
+    let ceiling = false;
 
     if (candidate.status !== 'completed') {
       const remaining = Math.max(1, Math.round(options.timeout - found.spentSeconds));
@@ -421,19 +425,12 @@ export async function run(deps = {}) {
         ]),
         { timeoutMs: remaining * 1000 },
       );
-
-      if (watched?.timedOut === true) {
-        out.write(`open-pr: run ${id}  ·  unknown\n`);
-        out.write(
-          `open-pr: unknown — the run did not conclude within ${options.timeout}s; this is not a failure\n`,
-        );
-        return UNKNOWN;
-      }
+      ceiling = watched?.timedOut === true;
     }
 
-    // The watch says whether it is over; the run's own answer says what it was, and the verdict comes
-    // from the matrix inside that answer. A cancelled run is not a failed one, and a summary is not a
-    // gate.
+    // The watch says whether it stopped waiting; the run's own answer says what it was, and the verdict
+    // comes from the matrix inside that answer. A cancelled run is not a failed one, and a summary is
+    // not a gate.
     const viewed = exec(
       withRepo(options.repo, ['run', 'view', id, '--json', 'status,conclusion,jobs']),
       { timeoutMs: options.timeout * 1000 },
@@ -442,7 +439,8 @@ export async function run(deps = {}) {
     if (answer === null) {
       out.write(`open-pr: run ${id}  ·  unknown\n`);
       out.write('open-pr: unknown — the run concluded but its conclusion could not be read\n');
-      return UNKNOWN;
+      judged.push({ id, code: UNKNOWN, state: 'unknown', lines: [], reason: 'unreadable' });
+      continue;
     }
 
     // The matrix travels with the verdict, because a verdict nobody can audit is the reading this
@@ -451,14 +449,30 @@ export async function run(deps = {}) {
     const verdict = decideVerdict({ ...answer, databaseId: id });
     const reason = verdict.code === RED ? ` — ${verdict.reason}` : '';
     out.write(`open-pr: run ${id}  ·  ${verdict.state}${reason}\n`);
+    if (verdict.code === UNKNOWN && ceiling) {
+      out.write(
+        `open-pr: unknown — the run did not conclude within ${options.timeout}s; this is not a failure\n`,
+      );
+    }
     for (const line of verdict.lines ?? []) out.write(`${line}\n`);
-    verdicts.push(verdict);
+    judged.push({ id, ...verdict });
   }
 
-  // 7. The set, combined. Any red candidate makes the whole answer red — a green sibling never
-  // averages a real failure away — and agreement that is not green is not a verdict either.
-  const red = verdicts.find((verdict) => verdict.code === RED) ?? null;
-  const allGreen = verdicts.length > 0 && verdicts.every((verdict) => verdict.code === GREEN);
+  // 7. The set, combined. Any red candidate makes the whole answer red — a green sibling never averages
+  // a real failure away, and neither does a wait that gave up — and agreement that is not green is not
+  // a verdict either, so each candidate that stayed undecided is named.
+  const red = judged.find((entry) => entry.code === RED) ?? null;
+  const allGreen = judged.length > 0 && judged.every((entry) => entry.code === GREEN);
+
+  if (red === null && !allGreen) {
+    const undecided = judged.filter((entry) => entry.code !== GREEN).map((entry) => entry.id);
+    const named =
+      undecided.length === 1
+        ? `run ${undecided[0]} stayed undecided`
+        : `runs ${undecided.join(', ')} stayed undecided`;
+    out.write(`open-pr: unknown — ${named}; this is not a failure\n`);
+  }
+
   const code = red !== null ? RED : allGreen ? GREEN : UNKNOWN;
   const state = red !== null ? 'failed' : allGreen ? 'passed' : 'unknown';
 
