@@ -15,6 +15,21 @@ const ROOT = join(import.meta.dirname, '..');
 const TAG = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const ALWAYS_PACKED = 'package.json';
 
+/** A pack that runs longer than this is not slow: the registry is not answering. */
+const PACK_TIMEOUT_MS = 300_000;
+
+/**
+ * How the pack child is started. The timeout is the point: `npm pack --dry-run` can reach the
+ * registry, and a network stall must not hold the job that decides whether a tag may produce a
+ * release.
+ *
+ * @param {object} [extra] options the invocation adds, such as a shell on Windows
+ * @returns {{ cwd: string, encoding: 'utf8', timeout: number }}
+ */
+export function packOptions(extra = {}) {
+  return { cwd: ROOT, encoding: 'utf8', timeout: PACK_TIMEOUT_MS, ...extra };
+}
+
 /**
  * @param {string} tag the `vX.Y.Z` tag that was pushed
  * @param {string} version `package.json` `version`
@@ -105,7 +120,7 @@ function packedFiles() {
       ? { file: process.execPath, args: [candidates[0], 'pack', '--dry-run', '--json'], options: {} }
       : { file: 'npm', args: ['pack', '--dry-run', '--json'], options: { shell: process.platform === 'win32' } };
 
-  const result = spawnSync(invocation.file, invocation.args, { cwd: ROOT, encoding: 'utf8', ...invocation.options });
+  const result = spawnSync(invocation.file, invocation.args, packOptions(invocation.options));
 
   if (result.error !== undefined || result.status !== 0) {
     const detail = result.error?.message ?? (result.stderr ?? '').trim();
