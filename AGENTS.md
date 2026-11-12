@@ -73,7 +73,8 @@ a path that is not on disk.
 - **Waiting for CI is `node scripts/wait-for-ci.js <commit>`.** It exits `0` passed, `1` failed and `2`
   unknown, and `2` never means failure: no run yet, still running, or the timeout ran out. A loop written
   by hand is how a green run gets reported as a problem — twice in one day, once on a stale status field
-  and once on a separator that did not match what the loop printed. The gate it reads is the matrix: a
+  and once on a separator that did not match what the loop printed. A watcher keyed on the branch
+  instead of the commit can read an earlier commit's run. The gate it reads is the matrix: a
   run whose summary says success and whose jobs do not is a failure. On a push to `main` `pr-policy`
   reads `skipped`, because that job is guarded to pull request events.
   That ritual has a price: a pull request marked ready shows **three** runs of `ci`, because `opened`
@@ -85,6 +86,7 @@ a path that is not on disk.
 
 ```sh
 node --test                    # the suite: rules, commands, drift gate, goldens, self-scan
+                               # fewer tests than the last run has not run faster
 node scripts/gen-golden.js     # regenerate goldens after an intended report change
 node bin/funky-secure.js scan --scope repo --fail-on warn   # self-scan, what CI runs
 PR_BODY="$(cat body.md)" PR_LABELS=type:docs PR_HEAD_REF="$(git branch --show-current)" \\

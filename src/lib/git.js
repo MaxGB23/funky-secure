@@ -61,10 +61,23 @@ export async function ignoredPaths(collector, paths) {
  * @param {string[]} paths
  * @returns {Promise<string[] | null>} porcelain entries limited to those paths
  */
-export async function statusPorcelain(collector, paths) {
+/**
+ * The porcelain entries for these paths, or `null` when git could not answer.
+ *
+ * `paths` are repository-relative, which is the form the entries come back in: porcelain reports from
+ * the worktree root whatever the cwd is. A pathspec, on the other hand, git reads relative to the cwd,
+ * so the call runs from `cwd` and the caller names the root. Asking in one coordinate system while
+ * reading the answer in another is how a dirty tree was called clean (issue 210).
+ *
+ * @param {ReturnType<import('./probes.js').createCollector>} collector
+ * @param {string[]} paths repository-relative paths
+ * @param {string} [cwd] the directory git runs in; the repository root, for the reason above
+ * @returns {Promise<string[] | null>} porcelain entries limited to those paths
+ */
+export async function statusPorcelain(collector, paths, cwd) {
   const args = ['status', '--porcelain', '-z'];
   if (paths.length > 0) args.push('--', ...paths);
-  const result = await collector.git(args);
+  const result = cwd === undefined ? await collector.git(args) : await collector.git(args, { cwd });
   if (!result.ok || result.code !== 0) return null;
   return nul(result.stdout ?? '');
 }

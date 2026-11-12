@@ -17,7 +17,7 @@
  * repository past the start is told so in one line instead of being handed a stale checklist.
  */
 
-import { commitWritesStep, derivePlan, writtenPaths, START_STEP } from '../lib/plan.js';
+import { commitWritesStep, declaredPaths, derivePlan, dirtyPaths, writtenPaths, START_STEP } from '../lib/plan.js';
 import {
   FOREIGN_PIN_FLAG,
   declaredForeignManager,
@@ -29,6 +29,7 @@ import { statusPorcelain } from '../lib/git.js';
 import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { createCollector } from '../lib/probes.js';
+import { sameDirectory } from '../lib/paths.js';
 import { collectScan } from '../lib/scan.js';
 import { FOREIGN_LOCKFILES } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
@@ -304,14 +305,15 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
 async function hasUncommitted({ plan, ctx, collector }) {
   const root = ctx?.repo?.root;
   if (typeof root !== 'string' || root === '') return false;
-  const cwd = typeof ctx?.cwd === 'string' && ctx.cwd !== '' ? ctx.cwd : root;
-  // The same spelling `applyPlan` uses: the plan carries absolute paths, and `git status` is asked for
-  // repository-relative ones, one entry per file (`writtenPaths`, shared with `init`'s next steps).
-  const paths = writtenPaths(plan, cwd);
+  // The names the catalog declared are repository-relative, which is the coordinate system `git status`
+  // answers in, and the probe runs from the root so its pathspec means the same thing. Subtracting the
+  // cwd from an absolute path mixed two spellings of one directory and lost the fact that the tree
+  // carried work (issue 210).
+  const paths = declaredPaths(plan);
   if (paths.length === 0) return false;
-  const dirty = await statusPorcelain(collector, paths);
+  const dirty = await statusPorcelain(collector, paths, root);
   if (dirty === null) return false;
-  return dirty.some((entry) => paths.includes(entry.slice(3)));
+  return dirtyPaths(dirty, paths).length > 0;
 }
 
 /**
@@ -438,7 +440,12 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     // The plan's own targets, spelled the way git wants them: the same paths `applyPlan` writes, one
     // entry per file. Two plan items over one file (W3 and W3b) are one path to stage, which is why
     // this is `writtenPaths` and not a map over the items.
-    paths: writtenPaths(plan, ctx.cwd ?? ctx.repo.root),
+    // A step a reader pastes has to work where the reader stands. At the repository root the names the
+    // catalog declared are already pasteable and do not depend on how the directory is spelled; below
+    // it, the path is computed against the cwd, because `../` is what works there (issue 210).
+    paths: sameDirectory(ctx.cwd ?? ctx.repo.root, ctx.repo.root)
+      ? declaredPaths(plan)
+      : writtenPaths(plan, ctx.cwd ?? ctx.repo.root),
   });
   const migrate = foreignLockfiles(ctx.repo).length > 0;
   stdout.write(
