@@ -300,8 +300,7 @@ export async function applyPlan({ plan, allowDirty = false, cwd, collector, stdo
       );
     }
     if (process.env.FUNKY_DEBUG_PATHS === '1') {
-      process.stderr.write('T1 ' + JSON.stringify({ cwd, root, paths, dirty }) + '
-');
+      process.stderr.write('T1 ' + JSON.stringify({ cwd, root, paths, dirty }) + String.fromCharCode(10));
     }
     const touched = dirtyPaths(dirty, paths);
     if (touched.length > 0) {
