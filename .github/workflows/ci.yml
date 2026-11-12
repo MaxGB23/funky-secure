@@ -73,7 +73,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          names=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | join(",")')
+          names=$(timeout 60 gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | join(",")')
           echo "names=$names" >> "$GITHUB_OUTPUT"
       - name: pull request policy
         run: node scripts/check-pr-policy.js
