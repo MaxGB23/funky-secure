@@ -342,8 +342,12 @@ export async function run(deps = {}) {
     return UNKNOWN;
   }
 
-  const verdict = decideVerdict(answer);
-  out.write(`open-pr: run ${id}  ·  ${verdict.reason}\n`);
+  // The matrix travels with the verdict, because a verdict nobody can audit is the reading this
+  // script exists to replace. The id travels too, so a failure names the run it is about.
+  const verdict = decideVerdict({ ...answer, databaseId: id });
+  for (const line of verdict.lines ?? []) out.write(`${line}\n`);
+  const reason = verdict.code === RED ? ` — ${verdict.reason}` : '';
+  out.write(`open-pr: run ${id}  ·  ${verdict.state}${reason}\n`);
   out.write(`open-pr: ${pullRequest.url}  ·  ${verdict.state}\n`);
   return verdict.code;
 }

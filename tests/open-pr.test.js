@@ -248,6 +248,7 @@ test('creates a labelled draft, marks it ready and returns the run of this commi
   assert.match(out.text, /https:\/\/github\.com\/MaxGB23\/funky-secure\/pull\/42/, 'the URL is printed');
   assert.match(out.text, /open-pr: run 22 {2}·/, 'the run id is printed');
   assert.match(out.text.trimEnd().split('\n').pop(), /passed$/);
+  assert.match(out.text, /^ {2}test: success$/m, 'the matrix is printed, so the verdict can be audited');
   assert.match(out.text, /pull\/42 {2}· {2}passed/, 'the verdict is printed');
 });
 
