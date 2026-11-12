@@ -243,7 +243,7 @@ bytes.
 **In CI.** Pin the gate, so it cannot change without a change in your diff:
 
 ```sh
-pnpm add -D funky-secure@0.11.0 --save-exact
+pnpm add -D funky-secure@0.11.1 --save-exact
 ```
 
 ```yaml
