@@ -160,7 +160,9 @@ export async function wait({
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
     const answer = query(exec, sha);
     verdict = decideGate(answer);
-    if (answer.problem !== null && answer.problem !== undefined) lastProblem = answer.problem;
+    // The last attempt is the one the answer is about, so this is assigned rather than accumulated:
+    // a transient failure at the start of a long wait must not be reported as if it covered the window.
+    lastProblem = answer.problem ?? null;
 
     if (verdict.code !== UNKNOWN) {
       out.write(`wait-for-ci  ${sha}  ·  ${verdict.reason}\n`);
@@ -185,7 +187,7 @@ export async function wait({
   // The last answer is kept: a timeout on a run that was still going names the run, and a timeout
   // with no run at all says so instead of blaming the matrix. When a call itself failed, that is what
   // is named: "no run for this commit yet" sends a reader to wait for something that will never come.
-  const exhausted = lastProblem === null ? verdict.reason : `${lastProblem} (every attempt)`;
+  const exhausted = lastProblem === null ? verdict.reason : `${lastProblem} (the last attempt)`;
   out.write(`wait-for-ci  ${sha}  ·  ${exhausted}\n`);
   for (const line of verdict.lines) out.write(`${line}\n`);
   out.write(

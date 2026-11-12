@@ -248,3 +248,26 @@ test('the timeout names the last real failure instead of guessing', async () => 
   assert.match(out.text, /401/, 'the reason names what actually failed');
   assert.doesNotMatch(out.text, /no run for this commit yet/, 'it must not claim a measurement it did not take');
 });
+
+test('a failure on an early attempt is not reported as every attempt', async () => {
+  // The finding the refuter confirmed: `lastProblem` was assigned but never cleared, so one transient
+  // failure at the start of a long wait was printed as `(every attempt)` — a false claim about the
+  // window, in the change whose whole point was to stop making false claims. The last attempt is the
+  // one the answer is about.
+  const answers = [{ ok: false, stdout: '', stderr: 'HTTP 401: Bad credentials' }];
+  const exec = () => {
+    const answer = answers.length > 0 ? answers.shift() : { ok: true, stdout: '[]', stderr: '' };
+    return answer;
+  };
+  const out = capture();
+
+  const code = await wait({ sha: 'a'.repeat(40), exec, sleep: async () => {}, out, timeoutSeconds: 2, intervalSeconds: 1 });
+
+  assert.equal(code, UNKNOWN);
+  // Two halves matter. The attempt that failed said so at the time, because it did fail; the reason
+  // the command ends on must describe the last attempt, not the window.
+  const reasons = out.text.split('\n').filter((line) => line.startsWith('wait-for-ci  '));
+  assert.match(reasons[0], /401/, 'the failing attempt reported itself');
+  assert.doesNotMatch(reasons.at(-1), /401/, 'the last attempt did not fail, so the reason must not say it did');
+  assert.match(reasons.at(-1), /no run for this commit yet/);
+});
