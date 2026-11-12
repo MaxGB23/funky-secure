@@ -28,11 +28,12 @@ export function digestOf(content) {
 /**
  * @param {{ target: string, operation: string, path: string, content?: string | null, state?: string, reason?: string }} item
  */
-export function planItem({ target, operation, path, content = null, state = 'would-write', reason = '' }) {
+export function planItem({ target, operation, path, relative = null, content = null, state = 'would-write', reason = '' }) {
   return {
     target,
     operation,
     path,
+    relative,
     digest: content === null ? null : digestOf(content),
     reason,
     state,
@@ -57,7 +58,9 @@ export function derivePlan({ ctx, policy, catalog = [], report }) {
 }
 
 function serializable(item) {
-  const { content, ...rest } = item;
+  // `relative` is the name the catalog already holds, kept for the writer to compare with git in one
+  // coordinate system; it is not part of the published plan document, which names an absolute path.
+  const { content, relative, ...rest } = item;
   return rest;
 }
 
@@ -114,8 +117,14 @@ export function writtenPaths(plan, root) {
   const paths = [];
   for (const item of plan) {
     if (item.state !== 'would-write') continue;
-    if (typeof item.path !== 'string' || item.path === '') continue;
-    const path = typeof root === 'string' ? relative(root, item.path) : item.path;
+    // The plan carries the name the catalog declared, in the repository's own coordinate system, so no
+    // subtraction happens here. Subtracting an absolute path from a root spelled differently produced
+    // `../../../..` paths and an intersection that was empty by construction (issue 210).
+    const declared = typeof item.relative === 'string' && item.relative !== '' ? item.relative : null;
+    const derived =
+      typeof root === 'string' && typeof item.path === 'string' ? relative(root, item.path) : null;
+    const path = declared ?? derived;
+    if (path === null || path === '') continue;
     const normalized = path.split('\\').join('/');
     if (!paths.includes(normalized)) paths.push(normalized);
   }

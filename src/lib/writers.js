@@ -164,6 +164,7 @@ export function planTarget(ctx, { relative, operation, result }) {
       target,
       operation,
       path: typeof root === 'string' ? resolve(root, relative) : relative,
+      relative,
       state: 'conflict',
       reason: guard.reason,
     });
@@ -173,6 +174,7 @@ export function planTarget(ctx, { relative, operation, result }) {
     target,
     operation,
     path: guard.path,
+    relative,
     content: result.ok ? result.content : null,
     state: result.ok ? result.state : 'conflict',
     reason: result.reason,
