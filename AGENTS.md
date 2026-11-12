@@ -64,12 +64,14 @@ a path that is not on disk.
   green too: the merge commit is the one that ships.
 - **A `pr-policy` failure with the matrix green is read before it is re-run.** The race is one
   diagnosis and not the only one: the label is attached after the pull request exists, so the `opened`
-  run reads `PR_LABELS` empty, and creating the pull request as a draft, labelling it, then marking it
-  ready avoids it entirely — which is what the job's draft guard in `.github/workflows/ci.yml`
-  expects. But a body that does not link an issue and a branch that is not `type/description` fail the
-  same job, and re-running those changes nothing: `gh run rerun --failed` on a real violation is an
-  infinite loop that costs minutes per turn and reads as progress. Read the failed log first and let it
-  name the cause; re-run only when the cause was the label, and fix the body or the branch otherwise.
+  run reads `PR_LABELS` empty. `gh pr create --label type:<t> --draft` puts the label in the creation
+  itself, so the `opened` run sees it, and a draft matches the guard in `.github/workflows/ci.yml`.
+  **A rerun does not cure it**: `gh run rerun --failed` replays the event payload, so an empty
+  `PR_LABELS` stays empty and the job fails identically — measured on 2026-11-12, attempt 2 against
+  attempt 1. A fresh event does, and turning the pull request back into a draft and ready again is the
+  cheapest one. A body that does not link an issue and a branch that is not `type/description` fail the
+  same job, and no retry changes those either. Read the failed log first and let it name the cause: it
+  says which of the three it is.
 - **Waiting for CI is `node scripts/wait-for-ci.js <commit>`.** It exits `0` passed, `1` failed and `2`
   unknown, and `2` never means failure: no run yet, still running, or the timeout ran out. A loop written
   by hand is how a green run gets reported as a problem — twice in one day, once on a stale status field
