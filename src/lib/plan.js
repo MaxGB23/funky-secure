@@ -28,11 +28,12 @@ export function digestOf(content) {
 /**
  * @param {{ target: string, operation: string, path: string, content?: string | null, state?: string, reason?: string }} item
  */
-export function planItem({ target, operation, path, content = null, state = 'would-write', reason = '' }) {
+export function planItem({ target, operation, path, relative = null, content = null, state = 'would-write', reason = '' }) {
   return {
     target,
     operation,
     path,
+    relative,
     digest: content === null ? null : digestOf(content),
     reason,
     state,
@@ -57,7 +58,9 @@ export function derivePlan({ ctx, policy, catalog = [], report }) {
 }
 
 function serializable(item) {
-  const { content, ...rest } = item;
+  // `relative` is the name the catalog declared, kept so the plan can print a path a reader can paste
+  // from the repository root. The published document names an absolute path and nothing else.
+  const { content, relative, ...rest } = item;
   return rest;
 }
 
@@ -89,6 +92,47 @@ export function renderPlanJson({ tool, command, policy, plan, refused = [], time
  * @param {string | null} root
  * @returns {string[]}
  */
+/**
+ * The repository-relative names the plan declares, one per written file.
+ *
+ * These are the names the catalog wrote down, not a value computed by subtracting a root from a path.
+ * A Windows volume can spell one directory two ways, and a subtraction between two spellings answers
+ * `../../../..` instead of a name - which is what printed paths nobody can paste (issue 210).
+ *
+ * @param {Array<object>} plan
+ * @returns {string[]}
+ */
+/**
+ * The `git status` entries that name one of these repository-relative paths.
+ *
+ * Both sides are already in the repository's own coordinate system, so this is a set intersection and
+ * no path arithmetic. Windows keeps one file under more than one spelling, so the comparison folds
+ * case there and only there: on a case-sensitive filesystem two names are two files (issue 210).
+ *
+ * @param {string[]} entries porcelain entries, `XY <root-relative path>`
+ * @param {string[]} paths repository-relative paths
+ * @returns {string[]} the entries that name one of those paths
+ */
+export function dirtyPaths(entries, paths) {
+  const folded = process.platform === 'win32';
+  const wanted = new Set(paths.map((path) => (folded ? path.toLowerCase() : path)));
+  return entries.filter((entry) => {
+    const path = entry.slice(3);
+    return wanted.has(folded ? path.toLowerCase() : path);
+  });
+}
+
+export function declaredPaths(plan) {
+  const paths = [];
+  for (const item of plan) {
+    if (item.state !== 'would-write') continue;
+    if (typeof item.relative !== 'string' || item.relative === '') continue;
+    const name = item.relative.replaceAll('\\', '/');
+    if (!paths.includes(name)) paths.push(name);
+  }
+  return paths;
+}
+
 export function writtenPaths(plan, root) {
   const paths = [];
   for (const item of plan) {
