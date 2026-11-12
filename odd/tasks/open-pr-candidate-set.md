@@ -33,6 +33,10 @@ Decision recorded verbatim by the owner: «candidatos pasados el piso → espera
 | T3 | S1-S7 | inline | `pack-guard.js` as `pack:check`, run by `open-pr` |
 | T4 | S3, S6 | inline | `resume`: adopt an existing pull request instead of failing |
 
+T1 and T2 shipped together as **#231** (merge `34fab04`), because the floor read and the ready-born creation are one behaviour: a floor without the creation it precedes hides nothing, and a creation without a floor cannot say which run it fired. T3 and T4 remain.
+
+The live run is the evidence that matters, and it is recorded here because a stub cannot produce it: the pull request carried two runs (`opened` and `labeled`), both reading `pr-policy: success`, and the verdict was read over both with every id printed. Suite 650 (649 pass, 1 platform skip), self-scan exit 0, and the five check states read by hand before the merge.
+
 ## Log
 
 L1. The owner: «tú solo quiero que trabajes en secure, yo trabajo en forge. Guarda en memoria el plan para forge y dame el ID de la memoria, despues tú guarda en otra memoria el plan de secure, ya que compactaré contexto.»
