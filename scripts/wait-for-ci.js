@@ -89,6 +89,19 @@ export function decideGate({ run = null, jobs = [] } = {}) {
 }
 
 /**
+ * One line naming what a `gh` call could not do, taken from what it printed. A failure that says only
+ * "not ok" leaves the reader to guess between a missing run, a missing login and a broken network.
+ *
+ * @param {string} step
+ * @param {{ stderr?: string } | undefined} answer
+ * @returns {string}
+ */
+function describe(step, answer) {
+  const detail = String(answer?.stderr ?? '').trim().split('\n')[0];
+  return detail === '' ? `${step} failed` : `${step} failed: ${detail}`;
+}
+
+/**
  * Asks the API about one commit, through the answer shapes `decideGate` reads.
  *
  * @param {(args: string[]) => { ok: boolean, stdout: string }} exec
@@ -97,26 +110,28 @@ export function decideGate({ run = null, jobs = [] } = {}) {
  */
 export function query(exec, sha) {
   const listed = exec(['run', 'list', '--commit', sha, '--limit', '1', '--json', 'databaseId,status,conclusion']);
-  if (!listed.ok) return { run: null, jobs: [] };
+  if (!listed.ok) return { run: null, jobs: [], problem: describe('gh run list', listed) };
 
   let runs;
   try {
     runs = JSON.parse(listed.stdout);
   } catch {
-    return { run: null, jobs: [] };
+    return { run: null, jobs: [], problem: 'gh run list printed something that is not JSON' };
   }
-  if (!Array.isArray(runs) || runs.length === 0) return { run: null, jobs: [] };
+  // An empty list is a measurement: the API answered, and this commit has no run. That is the one
+  // case where "no run yet" is true, so it is also the only case with nothing to report.
+  if (!Array.isArray(runs) || runs.length === 0) return { run: null, jobs: [], problem: null };
 
   const run = runs[0];
-  if (run?.status !== 'completed') return { run, jobs: [] };
+  if (run?.status !== 'completed') return { run, jobs: [], problem: null };
 
   const viewed = exec(['run', 'view', String(run.databaseId), '--json', 'jobs']);
-  if (!viewed.ok) return { run, jobs: [] };
+  if (!viewed.ok) return { run, jobs: [], problem: describe('gh run view', viewed) };
   try {
     const parsed = JSON.parse(viewed.stdout);
-    return { run, jobs: Array.isArray(parsed?.jobs) ? parsed.jobs : [] };
+    return { run, jobs: Array.isArray(parsed?.jobs) ? parsed.jobs : [], problem: null };
   } catch {
-    return { run, jobs: [] };
+    return { run, jobs: [], problem: 'gh run view printed something that is not JSON' };
   }
 }
 
@@ -141,9 +156,13 @@ export async function wait({
 
   let verdict = decideGate({ run: null, jobs: [] });
   let lastReason = null;
+  let lastProblem = null;
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
     const answer = query(exec, sha);
     verdict = decideGate(answer);
+    // The last attempt is the one the answer is about, so this is assigned rather than accumulated:
+    // a transient failure at the start of a long wait must not be reported as if it covered the window.
+    lastProblem = answer.problem ?? null;
 
     if (verdict.code !== UNKNOWN) {
       out.write(`wait-for-ci  ${sha}  ·  ${verdict.reason}\n`);
@@ -154,18 +173,22 @@ export async function wait({
 
     // A wait that prints nothing is indistinguishable from a hang, which is how a 15-minute default
     // looked like a stuck command the first time this ran. One line per change of answer, no line for
-    // a repeated one.
-    if (verdict.reason !== lastReason) {
-      out.write(`wait-for-ci  ${sha}  ·  ${verdict.reason}\n`);
-      lastReason = verdict.reason;
+    // a repeated one. When the call itself failed, that is the answer: a progress line saying "no run
+    // yet" while `gh` is answering 401 is the message that sends a reader to wait for nothing.
+    const shown = answer.problem ?? verdict.reason;
+    if (shown !== lastReason) {
+      out.write(`wait-for-ci  ${sha}  ·  ${shown}\n`);
+      lastReason = shown;
     }
 
     if (attempt < attempts) await sleep(interval * 1000);
   }
 
   // The last answer is kept: a timeout on a run that was still going names the run, and a timeout
-  // with no run at all says so instead of blaming the matrix.
-  out.write(`wait-for-ci  ${sha}  ·  ${verdict.reason}\n`);
+  // with no run at all says so instead of blaming the matrix. When a call itself failed, that is what
+  // is named: "no run for this commit yet" sends a reader to wait for something that will never come.
+  const exhausted = lastProblem === null ? verdict.reason : `${lastProblem} (the last attempt)`;
+  out.write(`wait-for-ci  ${sha}  ·  ${exhausted}\n`);
   for (const line of verdict.lines) out.write(`${line}\n`);
   out.write(
     `wait-for-ci: unknown — gave up after ${timeoutSeconds}s; this is not a failure, ask the API again\n`,
@@ -203,7 +226,7 @@ export async function run(deps = {}) {
     deps.exec ??
     ((args) => {
       const result = spawnSync('gh', args, childOptions(childTimeoutMs));
-      return { ok: result.status === 0, stdout: result.stdout ?? '' };
+      return { ok: result.status === 0, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
     });
   const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const resolveSha =
