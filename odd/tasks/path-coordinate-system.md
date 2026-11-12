@@ -8,15 +8,22 @@ at T1, with evidence rather than arithmetic.
 
 ## Specs
 
-### S1 — a dirty target is refused from any spelling of the directory
+### S1 — a target the plan writes is refused from any spelling of the directory
 
 > ⨯ a dirty target is refused from either spelling of the directory
 >   expected: 3
 >   actual: 0
 
-And the refusal has to name the file, which is the string the long spelling already prints:
+Measured in T1, and the premise of this spec was wrong. The guard compares the plan's **own**
+targets, and on the runner one of them is missing:
 
-> refusing to write over uncommitted changes: package.json
+> local:  paths = ["package.json","pnpm-workspace.yaml",".gitignore"]  dirty = [" M package.json"]
+> runner: paths = ["pnpm-workspace.yaml",".gitignore"]                 dirty = []
+
+`package.json` is not written where pnpm is not found, so nothing looks at it and exit 0 is the
+contract working, not failing open. What remains required: the dirty target the plan does write is
+refused, and the refusal names the file — `refusing to write over uncommitted changes: <file>` — from
+either spelling of the directory.
 
 ### S2 — no step names a path outside the repository it was printed for
 
@@ -43,11 +50,11 @@ byte-identical stdout, stderr and exit code against the previous commit. Measure
 
 | ID | Spec | Route | Commit |
 |---|---|---|---|
-| T1 | S1 | inline: temporary diagnostic on a Windows runner — print the plan names and the raw `git status --porcelain -z` for the fixture, then remove it | — |
-| T2 | S1, S4 | inline: RED test that fails on `main` for the right reason, then the comparison `src/lib/plan.js`, `src/lib/git.js`, `src/lib/writers.js` | branch `fix/canonical-working-directory` |
+| T1 | S1 | inline: temporary diagnostic on a Windows runner — print the plan names and both sets | `37d1363` (branch `chore/t1-path-evidence`, PR 214) |
+| ~~T2~~ | — | dropped: T1 shows no fail-open. The comparison over the plan's own targets is correct; `package.json` was absent from the plan on the runner, which is why nothing refused | — |
 | T3 | S2 | inline: presentation from `git rev-parse --show-prefix` instead of subtracting two absolute paths | — |
-| T4 | S1, S2 | inline: the two tests that subtract string lengths travel with T2/T3 (`tests/init.test.js`) | branch `fix/canonical-working-directory` |
-| T5 | S1, S2 | inline: unblock #209 by merging `main` into it; never relax the test | — |
+| T4 | S2 | inline: the two tests that subtract string lengths (`tests/init.test.js`), and a guard whose dirty file is a path the plan always writes | branch `fix/canonical-working-directory` |
+| T5 | S2 | inline: unblock #209 by merging `main` into it; never relax the test | — |
 | T6 | S3, S4 | inline: a `D-n`/`I-n` entry in `docs/decisions.md` recording the coordinate decision | — |
 
 ## Log
@@ -84,3 +91,24 @@ cannot witness the fail-open. The only tests that do are the two added here, and
 With no `realpath` left in the path and the names taken from the catalog, what makes the intersection
 empty on that volume? Measure before changing another line of arithmetic: the plan names and the raw
 porcelain output, printed from inside the runner.
+
+### L6 — T1 measured it, and the premise was wrong
+
+The instrument printed, on both Windows runners and on this machine, the cwd, the root git answers,
+and both sets at the point of comparison:
+
+> local:  {"cwd":"...\FUNKY-~1","root":"C:/Users/.../funky-secure-t1-...","paths":["package.json","pnpm-workspace.yaml",".gitignore"],"dirty":[" M package.json"]}
+> runner: {"cwd":"...\RUNNER~1\...","root":"C:/Users/runneradmin/...","paths":["pnpm-workspace.yaml",".gitignore"],"dirty":[]}
+
+The intersection is not broken. `package.json` is missing from the plan where pnpm is not found, so
+the guard never looks at it, and exit 0 is the contract working. There is no fail-open to close: the
+one the verifier reported was produced by the canonicalization this branch already reverted, which put
+two spellings into the same comparison.
+
+The first instrument was itself broken — a newline inside a string, pushed without the suite being
+run, which is the failure the rule about short suites exists for. `String.fromCharCode(10)` removed
+the escapes.
+
+What survives from the branch is not a fix: it is the removal of a redundant subtraction
+(`writtenPaths` recomputing a name the plan already carries) and three test comparisons that sliced
+strings of different lengths. Both are worth keeping and neither is a defect.
