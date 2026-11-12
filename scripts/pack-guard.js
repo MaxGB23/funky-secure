@@ -18,8 +18,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -92,14 +92,53 @@ export function checkEntriesPresent(files, allowed) {
   return { ok: problems.length === 0, problems };
 }
 
+/**
+ * npm's CLI resolved through the directories on `PATH`, as a file this interpreter can run. `npm_execpath`
+ * exists only when npm started this process, and the bundled CLI only where npm ships with the
+ * interpreter — which is not how npm is installed on most Unix systems. There `npm` on `PATH` is a
+ * symlink to `npm-cli.js`, so resolving the link gives a script rather than a shell shim.
+ *
+ * @param {{ env?: object, exists?: Function, real?: Function }} [probe]
+ * @returns {string[]}
+ */
+export function npmOnPath({
+  env = process.env,
+  exists = existsSync,
+  real = (path) => realpathSync.native(path),
+} = {}) {
+  const found = [];
+
+  for (const directory of String(env.PATH ?? env.Path ?? '').split(delimiter)) {
+    if (directory === '') continue;
+    for (const name of ['npm', 'npm-cli.js', 'npm.cmd']) {
+      const candidate = join(directory, name);
+      if (!exists(candidate)) continue;
+
+      let target;
+      try {
+        target = real(candidate);
+      } catch {
+        continue; // a dangling link is not a candidate
+      }
+      if (typeof target !== 'string' || !target.endsWith('.js') || !exists(target)) continue;
+      if (!found.includes(target)) found.push(target);
+    }
+  }
+
+  return found;
+}
+
 /** npm's own CLI entry point, run by this interpreter: a `.cmd` shim is not spawnable without a shell. */
 function npmCli() {
   const candidates = [
     process.env.npm_execpath,
     join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    ...npmOnPath(),
   ].filter((value) => typeof value === 'string' && existsSync(value));
 
-  if (candidates.length === 0) throw new Error('cannot find npm: neither npm_execpath nor the bundled CLI exists');
+  if (candidates.length === 0) {
+    throw new Error('cannot find npm: neither npm_execpath, the bundled CLI, nor npm on PATH resolves to a script');
+  }
   return candidates[0];
 }
 

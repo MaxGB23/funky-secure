@@ -20,8 +20,8 @@
  * tests read a verdict without a network, a repository or a pull request.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { run as runPolicy } from './check-pr-policy.js';
@@ -575,6 +575,45 @@ export function packOptions(extra = {}) {
 }
 
 /**
+ * npm's CLI resolved through the directories on `PATH`, as a file this interpreter can run.
+ *
+ * The other two sources are not enough on their own: `npm_execpath` exists only when npm started this
+ * process, and the bundled CLI exists only where npm ships with the interpreter — which is not how npm
+ * is installed on most Unix systems. There `npm` on `PATH` is a symlink to `npm-cli.js`, so resolving
+ * the link gives a script rather than a shell shim. The probes are injected so the search is testable
+ * on a machine that has neither case.
+ *
+ * @param {{ env?: object, exists?: Function, real?: Function }} [probe]
+ * @returns {string[]}
+ */
+export function npmOnPath({
+  env = process.env,
+  exists = existsSync,
+  real = (path) => realpathSync.native(path),
+} = {}) {
+  const found = [];
+
+  for (const directory of String(env.PATH ?? env.Path ?? '').split(delimiter)) {
+    if (directory === '') continue;
+    for (const name of ['npm', 'npm-cli.js', 'npm.cmd']) {
+      const candidate = join(directory, name);
+      if (!exists(candidate)) continue;
+
+      let target;
+      try {
+        target = real(candidate);
+      } catch {
+        continue; // a dangling link is not a candidate
+      }
+      if (typeof target !== 'string' || !target.endsWith('.js') || !exists(target)) continue;
+      if (!found.includes(target)) found.push(target);
+    }
+  }
+
+  return found;
+}
+
+/**
  * npm's own CLI entry point, run by this interpreter: `npm` is a `.cmd` shim on Windows and is not
  * spawnable without a shell, which would buy quoting bugs for a command with no arguments.
  *
@@ -584,6 +623,7 @@ function npmCli() {
   const candidates = [
     process.env.npm_execpath,
     join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    ...npmOnPath(),
   ].filter((value) => typeof value === 'string' && existsSync(value));
 
   return candidates[0] ?? null;

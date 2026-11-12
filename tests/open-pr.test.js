@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 import {
   GREEN,
@@ -785,4 +785,31 @@ test('every gh call carries a ceiling, so a hung child cannot hold the ritual op
 
   assert.equal(code, GREEN);
   assert.deepEqual(ceilingless, [], 'these gh calls had no ceiling');
+});
+
+test('npm is found on PATH when npm did not start the process', async () => {
+  const { npmOnPath } = await import('../scripts/open-pr.js');
+  const bin = join('/usr', 'local', 'bin');
+  const link = join(bin, 'npm');
+  const cli = join(bin, 'npm-cli.js');
+
+  // The Unix install: `npm` on PATH is a symlink to `npm-cli.js`. `npm_execpath` is unset when this
+  // script is run directly, and the bundled CLI only exists where npm ships with the interpreter, which
+  // is not how most Unix systems install it.
+  const found = npmOnPath({
+    env: { PATH: [bin, join('/usr', 'bin')].join(delimiter) },
+    exists: (path) => path === link || path === cli,
+    real: (path) => (path === link ? cli : path),
+  });
+  assert.deepEqual(found, [cli], 'the symlink Unix installs must resolve to a script this interpreter can run');
+
+  // A shell shim is not a candidate: it is not a file this interpreter can execute, and resolving it
+  // gives its own path back rather than a script.
+  assert.deepEqual(
+    npmOnPath({ env: { PATH: bin }, exists: () => true, real: () => { throw new Error('dangling link'); } }),
+    [],
+    'a link that resolves to nothing is not a candidate',
+  );
+
+  assert.deepEqual(npmOnPath({ env: {}, exists: () => false }), [], 'no PATH and no npm is no candidate');
 });
