@@ -75,9 +75,18 @@ test('reads the answer the API gives, and treats an unreadable one as no answer'
   const answer = query(exec, '7ddd30d');
   assert.equal(answer.run.databaseId, COMPLETED.databaseId);
   assert.equal(answer.jobs.length, 3);
+  assert.equal(answer.problem, null, 'a readable answer has nothing to report');
 
-  const broken = scripted(['not json at all']);
-  assert.deepEqual(query(broken.exec, '7ddd30d'), { run: null, jobs: [] });
+  const broken = scripted(['boom']);
+  // The shape keeps the failure: the same `run: null, jobs: []` used to mean "no run", "no login"
+  // and "not JSON" at once, and the reader was told the first.
+  const unreadable = query(broken.exec, '7ddd30d');
+  assert.equal(unreadable.run, null);
+  assert.deepEqual(unreadable.jobs, []);
+  assert.match(unreadable.problem, /gh run list failed/);
+
+  const garbled = scripted([{ ok: true, stdout: 'not json at all' }]);
+  assert.match(query(garbled.exec, '7ddd30d').problem, /not JSON/);
 });
 
 test('returns as soon as the run appears, without waiting out the timeout', async () => {
@@ -183,4 +192,59 @@ test('every child process is bounded by the wait budget', async () => {
 
   assert.equal(options.timeout, 30_000, 'an unbounded gh on a network stall never fails, it hangs');
   assert.equal(options.encoding, 'utf8');
+});
+
+/** An exec that answers every call with the same result. */
+const always = (result) => () => result;
+
+/** A `gh` that fails, the way an unauthenticated one does. */
+const failing = always({ ok: false, stdout: '', stderr: 'HTTP 401: Bad credentials' });
+
+test('a query that failed says so instead of claiming no run exists', () => {
+  const answer = query(failing, 'a'.repeat(40));
+
+  // The difference between "there is no run yet" and "I could not ask" is the whole value of the
+  // message: the first tells the reader to wait, the second tells them to log in.
+  assert.equal(answer.run, null);
+  assert.match(answer.problem, /401/, 'the failure travels with the answer');
+});
+
+test('a commit with no run yet has no problem to report', () => {
+  const answer = query(always({ ok: true, stdout: '[]', stderr: '' }), 'a'.repeat(40));
+
+  assert.equal(answer.run, null);
+  assert.equal(answer.problem, null, 'waiting is not a failure');
+});
+
+test('a run whose jobs cannot be read reports that, not "no job"', () => {
+  const exec = (args) => {
+    if (args[0] === 'run' && args[1] === 'list') {
+      return { ok: true, stdout: JSON.stringify([{ databaseId: 7, status: 'completed', conclusion: 'success' }]), stderr: '' };
+    }
+    return { ok: false, stdout: '', stderr: 'gh: Not Found (HTTP 404)' };
+  };
+
+  const answer = query(exec, 'a'.repeat(40));
+
+  assert.equal(answer.run.databaseId, 7);
+  assert.match(answer.problem, /404/);
+});
+
+test('the timeout names the last real failure instead of guessing', async () => {
+  const out = capture();
+
+  const code = await wait({
+    sha: 'a'.repeat(40),
+    exec: failing,
+    sleep: async () => {},
+    out,
+    timeoutSeconds: 1,
+    intervalSeconds: 1,
+  });
+
+  // Exit 2 is right either way; the reason is what a reader acts on. "No run for this commit yet"
+  // sends them to wait for something that will never arrive.
+  assert.equal(code, 2);
+  assert.match(out.text, /401/, 'the reason names what actually failed');
+  assert.doesNotMatch(out.text, /no run for this commit yet/, 'it must not claim a measurement it did not take');
 });
