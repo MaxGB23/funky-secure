@@ -69,7 +69,7 @@ a path that is not on disk.
 - **A `pr-policy` failure with the matrix green is read before it is re-run.** The race is one
   diagnosis and not the only one: the label is attached after the pull request exists, so the `opened`
   run reads `PR_LABELS` empty. `gh pr create --label type:<t> --draft` puts the label in the creation
-  itself, so the `opened` run sees it. The draft guard in `.github/workflows/ci.yml` still earns its
+  itself. **That is not reliable, and it is measured**: on #233 the `opened` run read `PR_LABELS` empty and failed with `pr-policy: no type:* label`, while the `labeled` run for the same commit read it filled and passed — with the same command that passed both runs on #231 minutes earlier. The payload is a snapshot taken before the label is queryable, so nothing may depend on it. The draft guard in `.github/workflows/ci.yml` still earns its
   place for a pull request made by hand; `open-pr.js` no longer creates one, because a draft is a second
   event for the same commit and the API has nothing that tells the two runs apart afterwards.
   **A rerun does not cure it**: `gh run rerun --failed` replays the event payload, so an empty
