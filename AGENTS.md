@@ -98,6 +98,9 @@ a path that is not on disk.
 node --test                    # the suite: rules, commands, drift gate, goldens, self-scan
                                # fewer tests than the last run has not run faster
 node scripts/gen-golden.js     # regenerate goldens after an intended report change
+node scripts/pack-guard.js     # the packed set against the `files` contract, or `npm run pack:check`
+                               # a packed path outside the contract is a leak; an entry that packs
+                               # nothing is a typo. `open-pr.js` runs it before the policy
 node bin/funky-secure.js scan --scope repo --fail-on warn   # self-scan, what CI runs
 PR_BODY="$(cat body.md)" PR_LABELS=type:docs PR_HEAD_REF="$(git branch --show-current)" \\
   node scripts/check-pr-policy.js   # the pull request policy, before the push
