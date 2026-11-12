@@ -299,6 +299,10 @@ export async function applyPlan({ plan, allowDirty = false, cwd, collector, stdo
         'cannot check the working tree: git status failed',
       );
     }
+    if (process.env.FUNKY_DEBUG_PATHS === '1') {
+      process.stderr.write('T1 ' + JSON.stringify({ cwd, root, paths, dirty }) + '
+');
+    }
     const touched = dirtyPaths(dirty, paths);
     if (touched.length > 0) {
       const named = touched.map((entry) => entry.slice(3)).join(', ');
