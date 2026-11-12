@@ -115,3 +115,33 @@ test('no step names a path outside the repository it was printed for', async (t)
     `every path in the plan has to be one a reader can paste:\n${printed}`,
   );
 });
+
+test('a dirty target is refused from either spelling of the directory', async (t) => {
+  // The regression that the first version of this fix caused on the Windows runners: canonicalizing
+  // only the cwd left the repository root in git's spelling, the dirty-tree check compared two
+  // coordinate systems, found no overlap and let `init --apply` write over uncommitted work. Four
+  // existing tests caught it there; this one states the property directly, so it bites wherever the
+  // operating system answers both spellings.
+  if (process.platform !== 'win32') return t.skip('8.3 short names are a feature of Windows volumes');
+
+  const dir = generatorLeftover(t);
+  const short = execFileSync('cmd', ['/c', 'for %I in (.) do @echo %~sfI'], {
+    cwd: dir,
+    encoding: 'utf8',
+  }).trim();
+  if (short.toLowerCase() === dir.toLowerCase()) {
+    return t.skip('this volume gives the fixture no short name to compare with');
+  }
+
+  const exitFrom = (cwd) => {
+    try {
+      execFileSync(process.execPath, [BIN, 'init', '--apply'], { cwd, encoding: 'utf8', stdio: 'pipe' });
+      return 0;
+    } catch (error) {
+      return error.status;
+    }
+  };
+
+  assert.equal(exitFrom(dir), 3, 'an uncommitted target is refused from the long spelling');
+  assert.equal(exitFrom(short), 3, 'and refused from the short one, which is the same directory');
+});
