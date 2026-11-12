@@ -119,6 +119,17 @@ and the tag of a staged candidate is immutable, so a candidate staged with `late
 The steps a maintainer runs are the runbook at
 [`../.agents/skills/release/SKILL.md`](../.agents/skills/release/SKILL.md).
 
+**A published version is not an indexed one.** Measured 2026-11-11: a package live for four days, with
+a complete description, five keywords, a `repository` and a 7.9 kB README in the registry document,
+returned **no result** for its own exact name among the first 250 of the registry's search, while a
+sibling published earlier the same day through the same staged path stood first for its own. One later
+publish created the missing index document and the package returned as the first result. The index can
+therefore miss a publication outright — most plausibly when a name claimed minutes earlier is published
+from CI — and its absence is not evidence that the metadata, the README or the name is wrong. This is
+not a step of the sequence above and changes nothing in it: it is what to measure first when a package
+seems invisible, and publishing again is the remedy that was measured before any metadata gets
+rewritten.
+
 ### 17.4 The prepublish gate is the product running on itself
 
 `prepublishOnly` runs, in this order: the full `node --test` suite, the drift gate, the self-scan at
