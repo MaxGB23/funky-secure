@@ -10,6 +10,27 @@ import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative as relativePath, resolve, sep } from 'node:path';
 
 /**
+ * One spelling for a directory, so that two names for it cannot be subtracted from each other.
+ *
+ * `realpath` alone is not enough. On a Windows volume that assigns 8.3 names, Node's non-native
+ * `realpathSync` answers the short form (`RUNNER~1`) while git answers the long one (`runneradmin`),
+ * and subtracting one from the other printed `../../../..` paths in a plan and lost an uncommitted
+ * tree on the way (issue 210). The native call goes through the operating system and returns the long
+ * form. A directory that cannot be resolved is returned unchanged: a command has to run even when the
+ * filesystem will not answer, and the caller is the one that decides what a failure means.
+ *
+ * @param {string} directory
+ * @returns {string}
+ */
+export function canonicalDirectory(directory) {
+  try {
+    return realpathSync.native(directory);
+  } catch {
+    return directory;
+  }
+}
+
+/**
  * @param {string} root
  * @param {string} target
  * @returns {boolean}
