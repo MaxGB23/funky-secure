@@ -51,6 +51,10 @@ export function parseArgs(argv = []) {
     timeout: DEFAULT_TIMEOUT_SECONDS,
   };
   const problems = [];
+
+  // Asking how it works is not a malformed command line: it answers 0 and creates nothing.
+  if (argv.includes('--help') || argv.includes('-h')) return { options, problems, help: true };
+
   const known = new Set(['base', 'title', 'body-file', 'label', 'head', 'repo', 'timeout']);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -198,7 +202,12 @@ export async function run(deps = {}) {
   const resolveSha = deps.resolveSha ?? defaultResolveSha;
   const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
-  const { options, problems } = parseArgs(argv);
+  const { options, problems, help } = parseArgs(argv);
+  if (help === true) {
+    out.write(`open-pr: ${USAGE}\n`);
+    return 0;
+  }
+
   if (problems.length > 0) {
     for (const problem of problems) err.write(`open-pr: ${problem}\n`);
     err.write(`open-pr: ${USAGE}\n`);
@@ -377,12 +386,22 @@ function defaultExec(args, { timeoutMs } = {}) {
  *
  * @returns {{ ok: boolean, stdout: string }}
  */
+/** A suite that runs longer than this is not slow: a test is holding the event loop open. */
+const SUITE_TIMEOUT_MS = 900_000;
+
+/**
+ * How the suite child is started. The timeout is the point: `node --test` on a test that opens a
+ * server and never closes it does not fail, it hangs, and this script exists so no turn is lost to a
+ * wait that cannot end — including the wait for its own suite.
+ *
+ * @returns {{ cwd: string, encoding: 'utf8', maxBuffer: number, timeout: number }}
+ */
+export function suiteOptions() {
+  return { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: SUITE_TIMEOUT_MS };
+}
+
 function defaultSuite() {
-  const result = spawnSync(process.execPath, ['--test'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const result = spawnSync(process.execPath, ['--test'], suiteOptions());
   return { ok: result.status === 0, stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 

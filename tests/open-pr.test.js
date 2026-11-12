@@ -363,3 +363,28 @@ test('an incomplete command line says what is missing instead of creating anythi
   assert.match(err.text, /open-pr: node scripts\/open-pr\.js --base main/);
   assert.equal(calls.length, 0);
 });
+
+test('the suite is bounded, so a hung test cannot hold the ritual open', async () => {
+  const { suiteOptions } = await import('../scripts/open-pr.js');
+  const options = suiteOptions();
+
+  // `node --test` on a test that opens a server and never closes it does not fail: it hangs. This
+  // script exists so a turn is never lost to a wait that cannot end, and its own suite is a child.
+  assert.equal(typeof options.timeout, 'number');
+  assert.ok(options.timeout > 0, 'an unbounded suite is the eight-minute turn again');
+  assert.equal(options.encoding, 'utf8');
+});
+
+test('--help says how to use it and touches nothing', async () => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+
+  const code = await run({ argv: ['--help'], exec, out, err, sleep: async () => {} });
+
+  assert.equal(code, 0, 'asking how it works is not a failure');
+  assert.match(out.text, /--body-file/, 'the options are named');
+  assert.match(out.text, /--label/, 'including the one that travels in the creation');
+  assert.equal(calls.length, 0, 'a question must not create anything');
+  assert.equal(err.text, '');
+});

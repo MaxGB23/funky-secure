@@ -319,3 +319,15 @@ test('the packed set is the stated one, so the development record stays in the r
     assert.match(problems[0], /must not ship/);
   }
 });
+
+test('npm pack is bounded, because the release guard is the worst place to wait forever', async () => {
+  const { packOptions } = await import('../scripts/release-guard.js');
+  const options = packOptions();
+
+  // `npm pack --dry-run` can reach the registry. Without a ceiling a network stall holds the job that
+  // decides whether a tag may produce a release.
+  assert.equal(typeof options.timeout, 'number');
+  assert.ok(options.timeout > 0);
+  assert.equal(options.encoding, 'utf8');
+  assert.equal(options.cwd, packOptions().cwd, 'the guard packs the repository root');
+});
