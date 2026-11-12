@@ -12,7 +12,6 @@
 import { ConfigError, RefusalError, UsageError } from './lib/errors.js';
 import { CONFIG_FILENAME } from './lib/config.js';
 import { TOOL } from './lib/tool.js';
-import { canonicalDirectory } from './lib/paths.js';
 import { run as explain } from './commands/explain.js';
 import { run as init } from './commands/init.js';
 import { run as migrate } from './commands/migrate.js';
@@ -336,10 +335,7 @@ export function renderHelp({ catalog = defaultCatalog } = {}) {
  * @returns {Promise<number>} exit code
  */
 export async function run(argv, io = {}) {
-  // One spelling per directory. The plan's paths are built from this cwd and the repository root
-  // arrives from git in its own spelling; on a Windows volume with 8.3 names the two differ, and the
-  // difference printed `../../../..` paths while hiding an uncommitted tree (issue 210).
-  const cwd = canonicalDirectory(io.cwd ?? process.cwd());
+  const cwd = io.cwd ?? process.cwd();
   const env = io.env ?? process.env;
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;

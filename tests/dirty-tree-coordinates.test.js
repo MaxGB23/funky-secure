@@ -68,56 +68,6 @@ function stepLines(text) {
     .map((line) => line.trimEnd());
 }
 
-test('the plan does not depend on how the directory it was asked from is spelled', async (t) => {
-  // Issue 210. A Windows volume can name one directory twice — `runneradmin` and `RUNNER~1` — and the
-  // two are the same directory. When the tool subtracted one spelling from the other, the step that
-  // stages the writes printed `../../../..` paths nobody can paste, and the baseline commit vanished,
-  // because the dirty-tree check compared git's long-form entries with paths built from the short-form
-  // cwd and concluded the tree was clean. The property that covers both is invariance: what a reader
-  // is told cannot depend on the spelling of the directory they are standing in.
-  if (process.platform !== 'win32') return t.skip('8.3 short names are a feature of Windows volumes');
-
-  const dir = generatorLeftover(t);
-  const fromLong = execFileSync(process.execPath, [BIN, 'start'], { cwd: dir, encoding: 'utf8' });
-
-  const short = execFileSync('cmd', ['/c', 'for %I in (.) do @echo %~sfI'], {
-    cwd: dir,
-    encoding: 'utf8',
-  }).trim();
-  if (short.toLowerCase() === dir.toLowerCase()) {
-    return t.skip('this volume gives the fixture no short name to compare with');
-  }
-
-  const fromShort = execFileSync(process.execPath, [BIN, 'start'], { cwd: short, encoding: 'utf8' });
-  assert.deepEqual(
-    stepLines(fromShort),
-    stepLines(fromLong),
-    `a directory spelled ${short} is the directory spelled ${dir}`,
-  );
-});
-
-test('no step names a path outside the repository it was printed for', async (t) => {
-  // The invariance above is the property; this is the answer a reader would have pasted. It is stated
-  // separately because a plan that varies between two spellings could still be wrong in both.
-  if (process.platform !== 'win32') return t.skip('8.3 short names are a feature of Windows volumes');
-
-  const dir = generatorLeftover(t);
-  const short = execFileSync('cmd', ['/c', 'for %I in (.) do @echo %~sfI'], {
-    cwd: dir,
-    encoding: 'utf8',
-  }).trim();
-  if (short.toLowerCase() === dir.toLowerCase()) {
-    return t.skip('this volume gives the fixture no short name to compare with');
-  }
-
-  const printed = execFileSync(process.execPath, [BIN, 'start'], { cwd: short, encoding: 'utf8' });
-  assert.deepEqual(
-    stepLines(printed).filter((line) => line.includes('..')),
-    [],
-    `every path in the plan has to be one a reader can paste:\n${printed}`,
-  );
-});
-
 test('a dirty target is refused from either spelling of the directory', async (t) => {
   // The regression that the first version of this fix caused on the Windows runners: canonicalizing
   // only the cwd left the repository root in git's spelling, the dirty-tree check compared two

@@ -6,8 +6,6 @@
  * and prints the negation, which inverts the verdict (E3).
  */
 
-import { canonicalDirectory } from './paths.js';
-
 function lines(text) {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
@@ -21,13 +19,7 @@ export async function repoRoot(collector) {
   const result = await collector.git(['rev-parse', '--show-toplevel']);
   if (!result.ok || result.code !== 0) return null;
   const [root] = lines(result.stdout ?? '');
-  if (root === undefined) return null;
-  // The root is canonicalized where it enters, by the same call the cwd goes through in `run`. It is
-  // not about which form is "right": a Windows volume with 8.3 names answers both `runneradmin` and
-  // `RUNNER~1` for one directory, and a plan that relativizes one spelling against the other prints
-  // `../../../..` paths and calls an uncommitted tree clean (issue 210). Canonicalizing only the cwd
-  // moved the mismatch instead of removing it; one call for both is what makes them comparable.
-  return canonicalDirectory(root);
+  return root ?? null;
 }
 
 /** @returns {Promise<string[] | null>} every tracked path, repo-relative, POSIX separators */
