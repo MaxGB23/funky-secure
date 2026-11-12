@@ -6,8 +6,10 @@
  * label, so the `opened` run reads `PR_LABELS` empty; a `gh run rerun --failed` that replays the frozen
  * event payload and fails identically; a wait loop keyed on the branch, so it answers with an earlier
  * commit's run; and a branch pushed with a suite that does not parse. Every one of those is cheap to
- * prevent and easy to forget, so the order lives here instead: the suite, the policy, the floor of the
- * head commit, a labelled creation, and then the answer the set of runs past that floor gives.
+ * prevent and easy to forget, so the order lives here instead: the suite, the packed set, the policy,
+ * the floor of the head commit, a labelled creation, and then the answer the set of runs past that floor
+ * gives. A branch can be green and still publish the wrong file set, so what npm would pack is gated
+ * before a pull request exists.
  *
  * The floor is what a snapshot of "runs that already existed" could not be. A run at or below it belongs
  * to an event fired before the creation and can never decide this pull request; the runs past it are the
@@ -18,7 +20,8 @@
  * tests read a verdict without a network, a repository or a pull request.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { run as runPolicy } from './check-pr-policy.js';
@@ -267,7 +270,7 @@ function sameIds(left, right) {
 /**
  * The command line, and the ritual it refuses to skip.
  *
- * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, resolveHead?: () => string, resolveSha?: () => string, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
+ * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, pack?: () => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
  * @returns {Promise<number>}
  */
 export async function run(deps = {}) {
@@ -276,6 +279,7 @@ export async function run(deps = {}) {
   const err = deps.err ?? process.stderr;
   const exec = deps.exec ?? defaultExec;
   const suite = deps.suite ?? defaultSuite;
+  const pack = deps.pack ?? defaultPack;
   const resolveHead = deps.resolveHead ?? defaultResolveHead;
   const resolveSha = deps.resolveSha ?? defaultResolveSha;
   const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -312,7 +316,38 @@ export async function run(deps = {}) {
   }
   out.write('open-pr: suite green\n');
 
-  // 2. The policy, through the same function CI runs: its message is the failure message, and a
+  // 2. The packed set, through `npm run pack:check`, the guard that reads what npm would actually
+  // publish. A branch can be green and still publish a tarball that leaks a scratch note or ships less
+  // than the `files` contract promised, and that mistake is found after publication if it is found at
+  // all. Every step below this one comes after it, so a refusal here means nothing was created.
+  const packed = pack();
+  // A gate killed at its ceiling did not fail: it never answered, and nothing about the packed set is
+  // known. Saying red would report a check as broken when it was never made.
+  if (packed?.timedOut === true) {
+    out.write(
+      `open-pr: unknown — the packed-set gate did not answer within its ceiling of ${PACK_TIMEOUT_MS / 1000}s, ` +
+        'so nothing was created and its verdict is unknown; this is not a failure\n',
+    );
+    return UNKNOWN;
+  }
+  // A gate that could not start did not answer either, and it is not evidence about the packed set.
+  if (typeof packed?.problem === 'string') {
+    out.write(`open-pr: unknown — ${packed.problem}, so nothing was created; this is not a failure\n`);
+    return UNKNOWN;
+  }
+  if (packed !== null && packed.ok !== true) {
+    err.write('open-pr: refusing: the packed-set gate is red, so nothing was created\n');
+    // The gate's own words: "the packed set is not the files contract" names nothing without the path
+    // that broke it, and the gate is the one place that knows which path it was.
+    if (typeof packed.stdout === 'string' && packed.stdout.trim() !== '') {
+      err.write(`${packed.stdout.trim()}\n`);
+    }
+    err.write('open-pr: run npm run pack:check and fix it first\n');
+    return RED;
+  }
+  if (packed !== null) out.write(`open-pr: packed set green — ${packedFinding(packed.stdout)}\n`);
+
+  // 3. The policy, through the same function CI runs: its message is the failure message, and a
   // reminder here would be a second description of the rule that can drift from the first.
   let body;
   try {
@@ -328,7 +363,7 @@ export async function run(deps = {}) {
     return RED;
   }
 
-  // 3. The floor, read before the creation. A floor nobody could read is not zero: creating on top of
+  // 4. The floor, read before the creation. A floor nobody could read is not zero: creating on top of
   // an unknown floor is how a run of an earlier event gets to decide this pull request. So a read that
   // cannot answer refuses here, before anything exists, and names itself with what `gh` printed.
   const sha = resolveSha();
@@ -343,7 +378,7 @@ export async function run(deps = {}) {
   }
   const floor = floorOf(floorAnswer.runs, sha);
 
-  // 4. The label travels in the creation itself, which is the whole point: the `opened` run then reads
+  // 5. The label travels in the creation itself, which is the whole point: the `opened` run then reads
   // `PR_LABELS` filled, and a label attached afterwards never achieves that. The creation is also the
   // only event: no draft, so there is no `pr ready` to fire a second run for the same commit.
   const created = exec(
@@ -374,7 +409,7 @@ export async function run(deps = {}) {
   }
   out.write(`open-pr: ${pullRequest.url}\n`);
 
-  // 5. The runs of this commit past the floor, polled until the set stops moving. A wait that prints
+  // 6. The runs of this commit past the floor, polled until the set stops moving. A wait that prints
   // nothing is indistinguishable from a hang, so the line is written before the first poll.
   out.write(`open-pr: waiting for the runs of ${sha} (up to ${options.timeout}s)\n`);
 
@@ -402,7 +437,7 @@ export async function run(deps = {}) {
     return UNKNOWN;
   }
 
-  // 6. Every candidate answers for itself. A watch is bounded by what is left of the budget, because a
+  // 7. Every candidate answers for itself. A watch is bounded by what is left of the budget, because a
   // command that never returns is how the wait it replaces got skipped in the first place. A ceiling
   // reached is a fact about the wait, not about the run: the candidate is undecided so far, never the
   // answer, because another candidate may already be red and this run may have concluded while the wait
@@ -458,7 +493,7 @@ export async function run(deps = {}) {
     judged.push({ id, ...verdict });
   }
 
-  // 7. The set, combined. Any red candidate makes the whole answer red — a green sibling never averages
+  // 8. The set, combined. Any red candidate makes the whole answer red — a green sibling never averages
   // a real failure away, and neither does a wait that gave up — and agreement that is not green is not
   // a verdict either, so each candidate that stayed undecided is named.
   const red = judged.find((entry) => entry.code === RED) ?? null;
@@ -522,6 +557,80 @@ export function suiteOptions() {
 function defaultSuite() {
   const result = spawnSync(process.execPath, ['--test'], suiteOptions());
   return { ok: result.status === 0, stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+}
+
+/** A packed-set gate that runs longer than this is not slow: `npm pack` is stuck on a cache or a lock. */
+const PACK_TIMEOUT_MS = 120_000;
+
+/**
+ * How the packed-set child is started. Its ceiling is its own, next to the suite's and for the same
+ * reason: `npm pack` on a cold cache or behind a held lock can wait, and a step that can wait forever is
+ * the step that gets skipped. `extra` is merged over the defaults so a caller can narrow or add to it.
+ *
+ * @param {object} [extra]
+ * @returns {{ cwd: string, encoding: 'utf8', maxBuffer: number, timeout: number }}
+ */
+export function packOptions(extra = {}) {
+  return { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: PACK_TIMEOUT_MS, ...extra };
+}
+
+/**
+ * npm's own CLI entry point, run by this interpreter: `npm` is a `.cmd` shim on Windows and is not
+ * spawnable without a shell, which would buy quoting bugs for a command with no arguments.
+ *
+ * @returns {string | null}
+ */
+function npmCli() {
+  const candidates = [
+    process.env.npm_execpath,
+    join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ].filter((value) => typeof value === 'string' && existsSync(value));
+
+  return candidates[0] ?? null;
+}
+
+/**
+ * The packed-set gate as the child `npm run pack:check` runs, in the repository root. Both streams are
+ * kept, because a red gate's output is forwarded as the reason and its exit is what the refusal reads.
+ *
+ * @returns {{ ok: boolean, stdout: string, timedOut: boolean, problem?: string }}
+ */
+function defaultPack() {
+  const cli = npmCli();
+  if (cli === null) {
+    return {
+      ok: false,
+      stdout: '',
+      timedOut: false,
+      problem: 'npm could not be found, so the packed-set gate could not start',
+    };
+  }
+
+  const result = spawnSync(process.execPath, [cli, 'run', 'pack:check'], packOptions());
+  return {
+    ok: result.status === 0,
+    stdout: `${result.stdout ?? ''}${result.stderr ?? ''}`,
+    // A kill leaves no status, which is the only evidence that the bound was reached rather than npm
+    // answering with a refusal.
+    timedOut: result.status === null,
+  };
+}
+
+/**
+ * The one line naming what a green gate found, taken from the gate rather than written again here: npm
+ * prints its own banner on stdout, so the gate's line is picked out by its prefix and not by position.
+ *
+ * @param {string} stdout
+ * @returns {string}
+ */
+function packedFinding(stdout) {
+  const prefix = 'pack-guard:';
+  const lines = String(stdout ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(prefix));
+
+  return lines.length === 0 ? 'the packed set answered green' : lines[0].slice(prefix.length).trim();
 }
 
 /** A local git call that takes longer than this is not slow: it is stuck on a lock. */
