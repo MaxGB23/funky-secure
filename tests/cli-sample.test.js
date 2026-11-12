@@ -14,6 +14,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { run } from '../src/cli.js';
+import { createCollector } from '../src/lib/probes.js';
+
 const BIN = fileURLToPath(new URL('../bin/funky-secure.js', import.meta.url));
 // The identity the suite's other commits use: this machine carries a global hook that refuses any
 // other author, and a test that fails on the developer's git config is a test nobody keeps running.
@@ -120,7 +123,29 @@ function generatedProject(t) {
 
 test('the start sample in docs/cli.md is the plan the binary prints, not a transcription of one', async (t) => {
   const dir = generatedProject(t);
-  const printed = execFileSync(process.execPath, [BIN, 'start'], { cwd: dir, encoding: 'utf8' });
+  // The plan this page shows was printed where pnpm is found, and that is an input the plan reads: with
+  // no pnpm there is no version to pin, `package.json` is not written, the staged set is smaller and the
+  // baseline commit disappears. A CI runner has neither pnpm nor a reason to install one, so the answer
+  // is injected instead of inherited - the test controls the one input that changes the plan, rather
+  // than depending on whatever the machine happens to carry.
+  const collector = {
+    ...createCollector({ cwd: dir }),
+    pnpmVersion: async () => ({
+      ok: true,
+      version: '10.0.0',
+      major: 10,
+      executable: '/tools/pnpm',
+      installations: ['/tools/pnpm'],
+    }),
+    // The config probe answers with whatever the machine has configured, and a plan that read it would
+    // differ between machines for a reason the page knows nothing about. Empty is the neutral answer.
+    pnpmConfig: async () => ({ ok: true, config: {} }),
+  };
+  const printed = { text: '' };
+  const stdout = { write: (chunk) => { printed.text += chunk; return true; } };
+  const stderr = { write: () => true };
+  const code = await run(['start'], { cwd: dir, env: {}, stdout, stderr, collector });
+  assert.equal(code, 0, 'the plan is guidance and always exits 0');
 
   const samples = fencedBlocks(readFileSync(new URL('../docs/cli.md', import.meta.url), 'utf8'))
     .filter((block) => block.includes('funky-secure start  ·  guidance, nothing is written'))
@@ -129,7 +154,7 @@ test('the start sample in docs/cli.md is the plan the binary prints, not a trans
 
   assert.equal(samples.length, 1, 'docs/cli.md must carry exactly one migration sample to compare');
   const inThePage = stepLines(samples[0]).map(withoutCounts);
-  const fromTheBinary = stepLines(printed).map(withoutCounts);
+  const fromTheBinary = stepLines(printed.text).map(withoutCounts);
   // Both sides empty would be a green test that compared nothing, which is the failure mode this
   // test exists to prevent in other people's work.
   assert.ok(inThePage.length >= 6 && fromTheBinary.length >= 6, 'both sides have to carry a plan');
@@ -146,7 +171,7 @@ test('the start sample in docs/cli.md is the plan the binary prints, not a trans
       `fixture cwd  = ${dir}`,
       `git toplevel = ${toplevel}`,
       `platform     = ${process.platform} ${process.version}`,
-      `the binary printed:\n${printed}`,
+      `the binary printed:\n${printed.text}`,
     ].join('\n');
   };
   assert.deepEqual(
