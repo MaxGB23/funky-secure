@@ -600,3 +600,24 @@ test('the pull request is created ready, and `pr ready` is never issued', async 
   assert.match(created, /--label type:docs/, 'the label still travels in the creation');
   assert.equal(calls.filter((call) => call.startsWith('pr ready')).length, 0, 'there is no second event to fire');
 });
+
+test('every gh call carries a ceiling, so a hung child cannot hold the ritual open', async (t) => {
+  const first = runOf(21);
+  const second = runOf(22);
+  const ceilingless = [];
+
+  const { exec } = ghFloor({ polls: [[first, second], [first, second]] });
+  // A child with no ceiling does not fail, it hangs: the floor read would stop the ritual with no pull
+  // request and no answer, and the only symptom is a terminal that never comes back.
+  const bounded = (args, options) => {
+    if (!(typeof options?.timeoutMs === 'number' && options.timeoutMs > 0)) {
+      ceilingless.push(args.join(' '));
+    }
+    return exec(args, options);
+  };
+
+  const { code } = await runWith(t, bounded);
+
+  assert.equal(code, GREEN);
+  assert.deepEqual(ceilingless, [], 'these gh calls had no ceiling');
+});

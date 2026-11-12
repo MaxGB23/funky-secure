@@ -222,8 +222,11 @@ async function waitForCandidates({
   const attempts = Math.max(0, Math.ceil(Math.max(1, timeoutSeconds) / interval));
 
   const grown = [];
-  const poll = () => {
-    const answer = readRuns(exec, { head, repo });
+  // Every poll is bounded by what is left of the budget, not by the whole of it: four calls that may
+  // each spend the full --timeout add up to four times it. A child with no ceiling does not fail, it
+  // hangs.
+  const poll = (timeoutMs) => {
+    const answer = readRuns(exec, { head, repo, timeoutMs });
     return answer.runs === null ? [] : runsPastFloor(answer.runs, sha, floor);
   };
   const remember = (candidates) => {
@@ -235,11 +238,12 @@ async function waitForCandidates({
   };
 
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
-    const first = remember(poll());
+    const budget = () => Math.max(1, Math.ceil(timeoutSeconds - attempt * interval)) * 1000;
+    const first = remember(poll(budget()));
 
     if (first.length > 0) {
       // Read immediately after the first, so the two are consecutive by construction.
-      const candidates = poll();
+      const candidates = poll(budget());
       if (sameIds(first, remember(candidates))) {
         return { runs: candidates, spentSeconds: attempt * interval, grown };
       }
@@ -328,7 +332,11 @@ export async function run(deps = {}) {
   // an unknown floor is how a run of an earlier event gets to decide this pull request. So a read that
   // cannot answer refuses here, before anything exists, and names itself with what `gh` printed.
   const sha = resolveSha();
-  const floorAnswer = readRuns(exec, { head, repo: options.repo });
+  const floorAnswer = readRuns(exec, {
+    head,
+    repo: options.repo,
+    timeoutMs: options.timeout * 1000,
+  });
   if (floorAnswer.runs === null) {
     err.write(`open-pr: refusing: ${floorAnswer.problem}; the floor is unknown, so nothing was created\n`);
     return UNKNOWN;
@@ -353,6 +361,7 @@ export async function run(deps = {}) {
       '--body-file',
       options.bodyFile,
     ]),
+    { timeoutMs: options.timeout * 1000 },
   );
 
   const pullRequest = pullRequestFrom(created?.stdout);
@@ -427,6 +436,7 @@ export async function run(deps = {}) {
     // gate.
     const viewed = exec(
       withRepo(options.repo, ['run', 'view', id, '--json', 'status,conclusion,jobs']),
+      { timeoutMs: options.timeout * 1000 },
     );
     const answer = parseJson(viewed?.stdout);
     if (answer === null) {
@@ -537,8 +547,10 @@ function withRepo(repo, args) {
  * API could not answer. An answer that is not a list is a failure and not an empty list: a floor read
  * from a broken answer is a floor nobody read.
  */
-function readRuns(exec, { head, repo = null }) {
-  const answer = exec(withRepo(repo, ['run', 'list', '--branch', head, '--json', RUN_FIELDS]));
+function readRuns(exec, { head, repo = null, timeoutMs }) {
+  const answer = exec(withRepo(repo, ['run', 'list', '--branch', head, '--json', RUN_FIELDS]), {
+    timeoutMs,
+  });
   if (answer?.ok !== true) return { runs: null, problem: describe('gh run list', answer) };
 
   const runs = parseJson(answer.stdout);
