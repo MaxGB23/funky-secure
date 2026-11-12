@@ -162,3 +162,25 @@ test('a wait that is still undecided says so once per change, so it never looks 
   assert.equal(out.text.match(/the run is in_progress/g).length, 1, 'one line, not one per attempt');
   assert.match(out.text, /wait-for-ci: passed/);
 });
+
+test('a green matrix is not vetoed by a summary that disagrees with it', () => {
+  // The matrix is the gate; the summary is the field this command exists to survive. A summary that
+  // says cancelled while every job succeeded is a run nobody can decide yet, never a red check: the
+  // answer used to be 1, which says "it broke" about something that did not.
+  const verdict = decideGate({
+    run: { databaseId: 9, status: 'completed', conclusion: 'cancelled' },
+    jobs: [{ name: 'test (ubuntu-24.04, 22)', conclusion: 'success' }],
+  });
+
+  assert.equal(verdict.code, UNKNOWN);
+  assert.equal(verdict.state, 'unknown');
+  assert.match(verdict.reason, /every job is accepted/);
+});
+
+test('every child process is bounded by the wait budget', async () => {
+  const { childOptions } = await import('../scripts/wait-for-ci.js');
+  const options = childOptions(30_000);
+
+  assert.equal(options.timeout, 30_000, 'an unbounded gh on a network stall never fails, it hangs');
+  assert.equal(options.encoding, 'utf8');
+});
