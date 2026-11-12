@@ -7,7 +7,7 @@
  */
 
 import { lstat, rm } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 
 import { ConfigError, RefusalError } from '../lib/errors.js';
 import {
@@ -142,8 +142,7 @@ function workflowSuggestions(workflows) {
  *
  * @param {object} options
  * @param {string} options.root resolved worktree root
- * @param {string} options.cwd
- * @param {string[]} options.foreign foreign lockfiles present at the root
+ * @param {string[]} options.foreign foreign lockfiles present at the root, repository-relative
  * @param {boolean} options.hasPnpmLock
  * @param {string | null} options.branch the current branch, as `repoFacts` resolved it
  * @param {boolean} options.allowDirty
@@ -154,7 +153,6 @@ function workflowSuggestions(workflows) {
  */
 async function applyRemoval({
   root,
-  cwd,
   foreign,
   hasPnpmLock,
   branch,
@@ -180,8 +178,11 @@ async function applyRemoval({
   }
 
   if (!allowDirty) {
-    const paths = foreign.map((name) => relative(cwd, join(root, name)));
-    const dirty = await statusPorcelain(collector, paths);
+    // `foreign` is already repository-relative, which is the coordinate system `git status` answers in,
+    // so the names are passed as they are: subtracting a cwd from them gave a second spelling of the
+    // same path and an intersection that was empty by construction (issue 210).
+    const paths = foreign;
+    const dirty = await statusPorcelain(collector, paths, root);
     if (dirty === null) {
       throw unanswered(
         'pass --allow-dirty, or fix git so git status answers, then re-run',
@@ -400,7 +401,6 @@ export async function run({
 
   return applyRemoval({
     root: ctx.repo.root,
-    cwd,
     foreign,
     hasPnpmLock,
     branch: ctx.repo.branch ?? null,

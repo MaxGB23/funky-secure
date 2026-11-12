@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 
 import { run } from '../src/cli.js';
 
@@ -129,7 +129,14 @@ test('apply on a clean feature branch removes exactly the foreign lockfile', asy
   assert.equal(result.stderr, '');
   assert.match(result.stdout, STEPS);
   assert.match(result.stdout, /4\. removal[\s\S]*would remove\s+package-lock\.json/);
-  assert.ok(result.stdout.includes(join(dir, 'package-lock.json')), 'the removal is printed as an absolute path');
+  // The printed removal is compared from the directory, not as a substring of the cwd's spelling: one
+  // directory can have two names, so two strings that describe one path need not be equal.
+  const removal = result.stdout
+    .split('\n')
+    .find((line) => line.startsWith('remove  '))
+    .slice('remove  '.length);
+  assert.ok(isAbsolute(removal), 'the removal is printed as an absolute path');
+  assert.equal(relative(dir, removal), 'package-lock.json');
 
   assert.deepEqual(readdirSync(dir).sort(), ['package.json', 'pnpm-lock.yaml']);
   const lockfile = await readFile(join(dir, 'pnpm-lock.yaml'), 'utf8');
@@ -282,8 +289,8 @@ test('apply refuses a dirty lockfile path, and --allow-dirty proceeds', async (t
   assert.equal(allowed.collector.calls.some((args) => args[0] === 'status'), false);
 });
 
-// The dirty check asks git about pathspecs relative to `cwd`, which is not the root when the command
-// runs from a subdirectory; the refusal names whatever paths git reports.
+// The dirty check runs from the worktree root and names repository-relative pathspecs, so the cwd the
+// command was given cannot change which files it asks about; the refusal names whatever git reports.
 test('apply refuses a dirty lockfile when run from a subdirectory', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
@@ -310,13 +317,7 @@ test('apply refuses a dirty lockfile when run from a subdirectory', async (t) =>
     'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
   );
   const status = collector.calls.find((args) => args[0] === 'status');
-  assert.deepEqual(status, [
-    'status',
-    '--porcelain',
-    '-z',
-    '--',
-    join('..', '..', 'package-lock.json'),
-  ]);
+  assert.deepEqual(status, ['status', '--porcelain', '-z', '--', 'package-lock.json']);
   assert.ok(readdirSync(dir).includes('package-lock.json'));
 });
 

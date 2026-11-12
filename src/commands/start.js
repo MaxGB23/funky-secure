@@ -17,7 +17,7 @@
  * repository past the start is told so in one line instead of being handed a stale checklist.
  */
 
-import { commitWritesStep, derivePlan, writtenPaths, START_STEP } from '../lib/plan.js';
+import { commitWritesStep, dirtyPaths, derivePlan, writtenPaths, START_STEP } from '../lib/plan.js';
 import {
   FOREIGN_PIN_FLAG,
   declaredForeignManager,
@@ -304,14 +304,14 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
 async function hasUncommitted({ plan, ctx, collector }) {
   const root = ctx?.repo?.root;
   if (typeof root !== 'string' || root === '') return false;
-  const cwd = typeof ctx?.cwd === 'string' && ctx.cwd !== '' ? ctx.cwd : root;
-  // The same spelling `applyPlan` uses: the plan carries absolute paths, and `git status` is asked for
-  // repository-relative ones, one entry per file (`writtenPaths`, shared with `init`'s next steps).
-  const paths = writtenPaths(plan, cwd);
+  // The same paths and the same spelling `applyPlan` uses: `git status` answers from the worktree root,
+  // so the comparison is built from that root and not from the cwd, which on a Windows volume can be a
+  // second spelling of it (issue 210). The probe runs there for the same reason.
+  const paths = writtenPaths(plan, root);
   if (paths.length === 0) return false;
-  const dirty = await statusPorcelain(collector, paths);
+  const dirty = await statusPorcelain(collector, paths, root);
   if (dirty === null) return false;
-  return dirty.some((entry) => paths.includes(entry.slice(3)));
+  return dirtyPaths(dirty, paths).length > 0;
 }
 
 /**
@@ -416,8 +416,9 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     (item) => item.state === 'would-write',
   );
   const writes = plan.length;
-  // A real run has no injected collector: `start` now asks git one question, so it needs the probe.
-  const probe = collector ?? createCollector();
+  // A real run has no injected collector: `start` now asks git one question, so it needs the probe,
+  // run from the cwd the command was given and not from wherever the process happens to stand.
+  const probe = collector ?? createCollector({ cwd });
   const uncommitted = writes > 0 && (await hasUncommitted({ plan, ctx, collector: probe }));
   // The ranges the manifest already carries: `start` is guidance, so it names the verb that clears them
   // instead of counting them again. A finding is enough — the count is what the step says.

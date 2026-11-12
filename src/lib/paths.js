@@ -66,26 +66,26 @@ export function validateWriteTarget({ root, relative, expectedBasename } = {}) {
   }
   if (typeof root !== 'string' || root === '') return { ok: false, reason: 'unresolvable' };
 
-  let realRoot;
-  try {
-    realRoot = realpathSync(root);
-  } catch {
-    return { ok: false, reason: 'unresolvable' };
-  }
+  // Every resolution on this path goes through one call, so the containment test compares two names
+  // that came from the same place. `canonicalDirectory` is that call because it is the one the cwd and
+  // the worktree root already go through: a plain `realpathSync` here answers the 8.3 short form on a
+  // Windows volume where git answers the long one, and the root would be found outside itself (210).
+  const realRoot = canonicalDirectory(root);
+  if (!existsSync(realRoot)) return { ok: false, reason: 'unresolvable' };
 
   const resolved = resolve(realRoot, relative);
   const parent = dirname(resolved);
-  let realParent;
-  try {
-    realParent = realpathSync(parent);
-  } catch {
-    return { ok: false, reason: 'unresolvable' };
-  }
+  if (!existsSync(parent)) return { ok: false, reason: 'unresolvable' };
+  const realParent = canonicalDirectory(parent);
 
   let target = resolve(realParent, basename(resolved));
   if (existsSync(resolved)) {
+    // A target that exists but cannot be resolved is refused, not written: this is the guard that keeps
+    // every write inside the repository, and a resolution failure is exactly the case where a symlink
+    // could leave it. `canonicalDirectory` swallows that failure to keep read paths working, so the
+    // strict answer is asked for here instead.
     try {
-      target = realpathSync(resolved);
+      target = realpathSync.native(resolved);
     } catch {
       return { ok: false, reason: 'unresolvable' };
     }

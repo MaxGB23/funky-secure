@@ -12,7 +12,7 @@ import { dirname, relative } from 'node:path';
 
 import { ConfigError, RefusalError } from './errors.js';
 import { resolveLockfileStep } from './foreign-pin.js';
-import { statusPorcelain } from './git.js';
+import { repoRoot, statusPorcelain } from './git.js';
 import { FOREIGN_LOCKFILES } from './targets.js';
 
 export const PLAN_STATES = ['would-write', 'would-skip', 'conflict'];
@@ -59,6 +59,27 @@ export function derivePlan({ ctx, policy, catalog = [], report }) {
 function serializable(item) {
   const { content, ...rest } = item;
   return rest;
+}
+
+/**
+ * The `git status` entries that name one of these repository-relative paths.
+ *
+ * Both sides are already in the repository's own coordinate system, so this is a set intersection and
+ * no path arithmetic. Windows keeps one file under more than one spelling — `Package.json` and
+ * `package.json` are the same file — so the comparison folds case there, and only there: on a
+ * case-sensitive filesystem the two names are two files (issue 210).
+ *
+ * @param {string[]} entries porcelain entries, `XY <root-relative path>`
+ * @param {string[]} paths repository-relative paths
+ * @returns {string[]} the entries that name one of those paths
+ */
+export function dirtyPaths(entries, paths) {
+  const folded = process.platform === 'win32';
+  const wanted = new Set(paths.map((path) => (folded ? path.toLowerCase() : path)));
+  return entries.filter((entry) => {
+    const path = entry.slice(3);
+    return wanted.has(folded ? path.toLowerCase() : path);
+  });
 }
 
 /**
@@ -239,6 +260,9 @@ function refusal(action, message) {
  * A dirty target is refused unless `--allow-dirty`: a security tool does not mix its edits with a
  * stranger's. Every write is printed before it happens, with its digest, in the same run.
  *
+ * `cwd` is the directory the command was given, and only a fallback for that check: the tree is asked
+ * about from the worktree root, because that is the coordinate system `git status` answers in.
+ *
  * @param {{ plan: Array<object>, allowDirty?: boolean, cwd: string, collector: object, stdout: object }} options
  * @returns {Promise<number>} exit code
  */
@@ -250,15 +274,23 @@ export async function applyPlan({ plan, allowDirty = false, cwd, collector, stdo
   }
 
   if (!allowDirty) {
-    const paths = writes.map((item) => relative(cwd, item.path));
-    const dirty = await statusPorcelain(collector, paths);
+    // `git status` reports every entry from the worktree root, so the paths this compares against are
+    // built from that root too and never from the cwd. On a Windows volume with 8.3 names the cwd can
+    // be a second spelling of the root, and subtracting one spelling from the other produced
+    // `../../../..` paths, an empty intersection and a dirty tree the writer then overwrote (issue
+    // 210). The root is the same one the plan items were built from, which is what makes the two sets
+    // comparable; the probe runs there as well, because a pathspec means nothing outside the root's
+    // coordinate system.
+    const root = (await repoRoot(collector)) ?? cwd;
+    const paths = writtenPaths(writes, root);
+    const dirty = await statusPorcelain(collector, paths, root);
     if (dirty === null) {
       throw refusal(
         'pass --allow-dirty, or fix git so git status answers, then re-run',
         'cannot check the working tree: git status failed',
       );
     }
-    const touched = dirty.filter((entry) => paths.includes(entry.slice(3)));
+    const touched = dirtyPaths(dirty, paths);
     if (touched.length > 0) {
       const named = touched.map((entry) => entry.slice(3)).join(', ');
       throw refusal(

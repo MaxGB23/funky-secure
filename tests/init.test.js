@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 
 import { run } from '../src/cli.js';
 import { BEGIN, END } from '../src/lib/managed-block.js';
@@ -45,7 +45,7 @@ function snapshot(dir) {
     // `Dirent.parentPath` arrived in Node 20.12; `engines` declares 20.11, and the floor leg of CI runs
     // it, so the older name is the fallback rather than a reason to raise the declared floor.
     const path = join(entry.parentPath ?? entry.path, entry.name);
-    files.set(path.slice(dir.length + 1).replaceAll('\\', '/'), readFileSync(path, 'utf8'));
+    files.set(relative(dir, path).replaceAll('\\', '/'), readFileSync(path, 'utf8'));
   }
   return files;
 }
@@ -576,7 +576,13 @@ test('the JSON plan document carries target, operation, absolute path, digest, r
     ],
   );
   for (const item of document.plan) {
-    assert.ok(item.path.startsWith(dir), `${item.path} is not absolute inside the repository`);
+    // Compared from the directory the plan was asked for, not by subtracting two strings: on a volume
+    // that gives one directory two spellings the lengths differ and the difference is not a path.
+    const inside = relative(dir, item.path);
+    assert.ok(
+      isAbsolute(item.path) && inside !== '' && !inside.startsWith('..') && !isAbsolute(inside),
+      `${item.path} is not absolute inside the repository`,
+    );
     assert.match(item.digest, /^[0-9a-f]{64}$/);
     assert.equal(item.content, undefined, 'the plan document never prints the content');
     assert.ok(item.operation.length > 0);
@@ -780,7 +786,7 @@ test('the next steps commit exactly the paths the plan wrote, from the constant 
   assert.equal(await preview.run(['init', '--format', 'json']), 0);
   const written = JSON.parse(preview.stdout.text)
     .plan.filter((item) => item.state === 'would-write')
-    .map((item) => item.path.slice(dir.length + 1).replaceAll('\\', '/'));
+    .map((item) => relative(dir, item.path).replaceAll('\\', '/'));
 
   const { APPLY_MESSAGE, commitWritesStep } = await import('../src/lib/plan.js');
   assert.equal(
