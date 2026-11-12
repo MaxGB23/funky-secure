@@ -386,15 +386,24 @@ function defaultSuite() {
   return { ok: result.status === 0, stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 
+/** A local git call that takes longer than this is not slow: it is stuck on a lock. */
+const LOCAL_GIT_TIMEOUT_MS = 30_000;
+
 /** @returns {string} the branch this checkout is on, or the empty string on a detached HEAD */
 function defaultResolveHead() {
-  const result = spawnSync('git', ['branch', '--show-current'], { encoding: 'utf8' });
+  const result = spawnSync('git', ['branch', '--show-current'], {
+    encoding: 'utf8',
+    timeout: LOCAL_GIT_TIMEOUT_MS,
+  });
   return result.status === 0 ? result.stdout.trim() : '';
 }
 
 /** @returns {string} the commit this branch points at, the one the run must belong to */
 function defaultResolveSha() {
-  const result = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+    timeout: LOCAL_GIT_TIMEOUT_MS,
+  });
   return result.status === 0 ? result.stdout.trim() : '';
 }
 

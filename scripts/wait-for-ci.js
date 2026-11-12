@@ -30,6 +30,18 @@ const DEFAULT_INTERVAL_SECONDS = 15;
  * @param {{ run?: { databaseId?: number, status?: string, conclusion?: string } | null, jobs?: Array<{ name?: string, conclusion?: string }> }} answer
  * @returns {{ code: number, state: 'passed'|'failed'|'unknown', reason: string, lines: string[] }}
  */
+/**
+ * The options every child process gets. The timeout is not a nicety: `gh` on a network stall, or
+ * `git` on a lock another process holds, does not fail — it hangs, and a wait that never returns is a
+ * hang wearing the costume of a wait. Bounded by the wait's own budget, so `--timeout 30` cannot spend
+ * longer than 30 seconds inside one child.
+ *
+ * @param {number} timeoutMs
+ */
+export function childOptions(timeoutMs) {
+  return { encoding: 'utf8', timeout: timeoutMs };
+}
+
 export function decideGate({ run = null, jobs = [] } = {}) {
   const list = Array.isArray(jobs) ? jobs : [];
 
@@ -50,20 +62,30 @@ export function decideGate({ run = null, jobs = [] } = {}) {
     return { code: UNKNOWN, state: 'unknown', reason: 'the run reports no job', lines };
   }
 
-  // The run's own conclusion is not the gate: the matrix is. A run that says success while a job
-  // failed is exactly the reading that made a red check look green.
+  // The matrix is the gate, so a failed job is a failure whatever the run summary says. The reverse
+  // does not follow: a summary that disagrees with a green matrix is the stale field this command
+  // exists to survive, and a stale field is a run nobody can decide yet — never a red check.
   const rejected = list.filter((job) => !ACCEPTED.has(job.conclusion));
-  const runAccepted = ACCEPTED.has(run.conclusion);
 
-  if (runAccepted && rejected.length === 0) {
-    return { code: PASS, state: 'passed', reason: `run ${run.databaseId ?? ''}`.trim(), lines };
+  if (rejected.length > 0) {
+    return {
+      code: FAIL,
+      state: 'failed',
+      reason: `${rejected.length} job(s) outside success, skipped and neutral`,
+      lines,
+    };
   }
 
-  const reason =
-    rejected.length > 0
-      ? `${rejected.length} job(s) outside success, skipped and neutral`
-      : `the run concluded ${run.conclusion ?? 'in an unreadable state'}`;
-  return { code: FAIL, state: 'failed', reason, lines };
+  if (!ACCEPTED.has(run.conclusion)) {
+    return {
+      code: UNKNOWN,
+      state: 'unknown',
+      reason: `the run concluded ${run.conclusion ?? 'in an unreadable state'} while every job is accepted`,
+      lines,
+    };
+  }
+
+  return { code: PASS, state: 'passed', reason: `run ${run.databaseId ?? ''}`.trim(), lines };
 }
 
 /**
@@ -165,19 +187,6 @@ export async function wait({
 export async function run(deps = {}) {
   const argv = deps.argv ?? process.argv.slice(2);
   const out = deps.out ?? process.stdout;
-  const exec =
-    deps.exec ??
-    ((args) => {
-      const result = spawnSync('gh', args, { encoding: 'utf8' });
-      return { ok: result.status === 0, stdout: result.stdout ?? '' };
-    });
-  const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const resolveSha =
-    deps.resolveSha ??
-    ((argument) => {
-      const result = spawnSync('git', ['rev-parse', '--verify', `${argument}^{commit}`], { encoding: 'utf8' });
-      return result.status === 0 ? result.stdout.trim() : argument;
-    });
 
   const option = (name, fallback) => {
     const index = argv.indexOf(`--${name}`);
@@ -185,6 +194,28 @@ export async function run(deps = {}) {
     const value = Number(argv[index + 1]);
     return Number.isFinite(value) && value > 0 ? value : fallback;
   };
+
+  // One budget for the wait and for each child it starts, so a stalled `gh` cannot outlive the wait
+  // that is supposed to end it.
+  const childTimeoutMs = option('timeout', DEFAULT_TIMEOUT_SECONDS) * 1000;
+
+  const exec =
+    deps.exec ??
+    ((args) => {
+      const result = spawnSync('gh', args, childOptions(childTimeoutMs));
+      return { ok: result.status === 0, stdout: result.stdout ?? '' };
+    });
+  const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const resolveSha =
+    deps.resolveSha ??
+    ((argument) => {
+      const result = spawnSync(
+        'git',
+        ['rev-parse', '--verify', `${argument}^{commit}`],
+        childOptions(childTimeoutMs),
+      );
+      return result.status === 0 ? result.stdout.trim() : argument;
+    });
 
   const positional = argv.filter((argument, index) => {
     if (argument.startsWith('--')) return false;

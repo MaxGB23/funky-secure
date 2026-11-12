@@ -323,12 +323,14 @@ test('a run that concluded failure exits 1 and still names the pull request', as
   assert.match(out.text, /pull\/42 {2}· {2}failed/);
 });
 
-test('a cancelled run is not an acceptable conclusion, so the gate calls it a failure', async (t) => {
+test('a cancelled run with a green matrix is unknown, never a failure', async (t) => {
   const out = capture();
   const err = capture();
   const { exec } = gh({
     snapshot: [],
     runs: [{ databaseId: 22, headSha: SHA, conclusion: 'cancelled' }],
+    // The matrix is green and the summary is not: that disagreement is the whole point of the case.
+    jobs: [{ name: 'test (ubuntu-24.04, 22)', conclusion: 'success' }],
     watch: { ok: false },
     conclusion: 'cancelled',
   });
@@ -343,10 +345,9 @@ test('a cancelled run is not an acceptable conclusion, so the gate calls it a fa
     err,
   });
 
-  // The gate is one rule, shared with `wait-for-ci`: only success, skipped and neutral are acceptable.
-  // A cancelled run is none of them, so it settles as a failure a maintainer has to look at rather than
-  // as an unknown that reads like "wait a bit more".
-  assert.equal(code, RED);
+  // The matrix is the gate and its jobs are green; the summary disagreeing with it is the stale field
+  // this tool exists to survive. Answering 1 here would say "it broke" about something that did not.
+  assert.equal(code, UNKNOWN);
 });
 
 test('an incomplete command line says what is missing instead of creating anything', async () => {
