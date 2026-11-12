@@ -122,4 +122,12 @@ test('the policy reads the labels the pull request has now, not the ones the eve
     /PR_LABELS:\s*\$\{\{\s*steps\.[\w-]+\.outputs\./,
     'PR_LABELS is not fed from the step that resolves it',
   );
+
+  // The same rule this repository applies to every `gh` child in `open-pr.js`: a child with no ceiling
+  // does not fail, it hangs, and the job would sit there until the runner gives up hours later.
+  assert.match(
+    CI,
+    /timeout \d+ gh pr view/,
+    'the live label read has no ceiling, so a hung gh holds the job open',
+  );
 });
