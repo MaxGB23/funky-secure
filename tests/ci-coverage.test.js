@@ -99,3 +99,27 @@ test('every action is pinned by full commit sha and says which release it is', (
     }
   }
 });
+
+test('the policy reads the labels the pull request has now, not the ones the event carried', () => {
+  // The payload is a snapshot taken before the label is queryable: on #233 the `opened` run read
+  // PR_LABELS empty and failed with "no type:* label" while the `labeled` run of the same commit read it
+  // filled. A draft used to hide that, because this job skips a draft; a pull request that is ready from
+  // birth has no such guard, so the job has to resolve the labels itself.
+  assert.doesNotMatch(
+    CI,
+    /PR_LABELS:\s*\$\{\{\s*join\(github\.event\.pull_request\.labels/,
+    'PR_LABELS still comes from the event payload, which can be empty on a labelled pull request',
+  );
+
+  assert.match(
+    CI,
+    /gh pr view [^\n]*--json labels/,
+    'nothing in ci.yml reads the labels the pull request has now',
+  );
+
+  assert.match(
+    CI,
+    /PR_LABELS:\s*\$\{\{\s*steps\.[\w-]+\.outputs\./,
+    'PR_LABELS is not fed from the step that resolves it',
+  );
+});

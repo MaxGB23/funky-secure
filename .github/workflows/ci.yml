@@ -50,10 +50,8 @@ jobs:
         run: node bin/funky-secure.js scan --scope repo --fail-on warn
 
   pr-policy:
-    # A draft is not a candidate yet, and the policy reads a label that `gh pr create --label` attaches
-    # after the pull request exists — so the `opened` run of a draft reads it empty and reports a
-    # failure nobody caused. Guarding the job on a non-draft pull request removes that false red, and
-    # `ready_for_review` above is what fires the run that decides.
+    # A draft is not a candidate yet: the policy judges a pull request that may merge, so the job skips a
+    # draft and `ready_for_review` is what fires the run that decides.
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
@@ -62,9 +60,24 @@ jobs:
         with:
           node-version: 24
           check-latest: true
+      # The event payload carries the labels as they were when the event fired, which is before the label
+      # is queryable. Measured on #233: the `opened` run read them empty and reported a failure nobody
+      # caused, while the `labeled` run of the same commit read them filled. A guard on a draft used to
+      # hide that, and a pull request that is ready from birth has no such guard, so this job resolves
+      # them itself. A read that fails fails the job: a policy that cannot see the labels must never
+      # answer as if the pull request had none.
+      - name: the labels the pull request has now
+        id: labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          names=$(gh pr view "$PR_NUMBER" --json labels --jq '[.labels[].name] | join(",")')
+          echo "names=$names" >> "$GITHUB_OUTPUT"
       - name: pull request policy
         run: node scripts/check-pr-policy.js
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR_LABELS: ${{ steps.labels.outputs.names }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
