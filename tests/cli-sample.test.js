@@ -133,9 +133,25 @@ test('the start sample in docs/cli.md is the plan the binary prints, not a trans
   // Both sides empty would be a green test that compared nothing, which is the failure mode this
   // test exists to prevent in other people's work.
   assert.ok(inThePage.length >= 6 && fromTheBinary.length >= 6, 'both sides have to carry a plan');
+  // This test fails on a machine nobody can see, so the message carries the three facts that
+  // separate the environments: where the process ran, where git says the repository is, and what
+  // the binary printed. A Windows runner once printed `../../../..` paths from a fixture whose own
+  // directory was the repository, and no amount of reading the diff could say why.
+  const environment = () => {
+    const toplevel = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: dir,
+      encoding: 'utf8',
+    }).trim();
+    return [
+      `fixture cwd  = ${dir}`,
+      `git toplevel = ${toplevel}`,
+      `platform     = ${process.platform} ${process.version}`,
+      `the binary printed:\n${printed}`,
+    ].join('\n');
+  };
   assert.deepEqual(
     inThePage,
     fromTheBinary,
-    'the page and the binary have to say the same thing in the same order',
+    `the page and the binary have to say the same thing in the same order\n${environment()}`,
   );
 });
