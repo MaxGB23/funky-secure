@@ -52,6 +52,9 @@ a path that is not on disk.
   [`CONTRIBUTING.md`](CONTRIBUTING.md) and in `scripts/check-pr-policy.js`; the script is the same one
   CI runs, so run it first, not after the failure notice. `main` requires no status checks, so nothing
   stops a red pull request from merging: the check is only as real as the run before it.
+  The whole ritual is one command — `node scripts/open-pr.js --base main --title "<title>" --body-file
+  <path> --label type:docs` — which refuses a red suite and a policy violation, then creates a labelled
+  draft, marks it ready and reports the run of this commit.
 - **A pull request merges only when its checks have finished, and "finished" is a state list, not a
   feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
   `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
