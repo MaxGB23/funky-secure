@@ -10,6 +10,34 @@ import { existsSync, realpathSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative as relativePath, resolve, sep } from 'node:path';
 
 /**
+ * Whether two spellings name one directory.
+ *
+ * A Windows volume with 8.3 names answers both `runneradmin` and `RUNNER~1` for one directory, and
+ * `realpathSync` hands back whichever it was given. The native call goes through the operating system
+ * and expands both to the same value, so it answers this question even where it cannot be used to
+ * *report* a path: canonicalizing what the tool prints changed every string the tests compared, which
+ * is why that attempt was reverted (issue 210). Here the answer is a boolean and the value is dropped.
+ *
+ * @param {string} one
+ * @param {string} other
+ * @returns {boolean}
+ */
+export function sameDirectory(one, other) {
+  if (typeof one !== 'string' || typeof other !== 'string' || one === '' || other === '') return false;
+  const fold = (directory) => {
+    let expanded;
+    try {
+      expanded = realpathSync.native(directory);
+    } catch {
+      expanded = directory;
+    }
+    const withSeparators = expanded.split('/').join(sep);
+    return process.platform === 'win32' ? withSeparators.toLowerCase() : withSeparators;
+  };
+  return fold(one) === fold(other);
+}
+
+/**
  * @param {string} root
  * @param {string} target
  * @returns {boolean}
