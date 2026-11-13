@@ -29,8 +29,8 @@ Declared deviations from that table, all visible in the rule headings of section
 
 `starter` is **additive**: it is a subset of `baseline`, and `baseline` and `strict` do not change at
 all — not one severity, not one declared deviation, not one byte of their output. It runs the six
-day-zero questions and turns the other six rules `off`: tracked environment files and the five CI and
-workflow rules. Those read artefacts a new project does not have yet, and `off` is stated rather than
+day-zero questions and turns the other seven rules `off`: tracked environment files and the six CI
+and workflow rules. Those read artefacts a new project does not have yet, and `off` is stated rather than
 silent, so a green report under `starter` names the coverage it does not have (10.3). The foreign
 lockfile belongs to the set because a repository a framework generator produced starts with another
 manager's lockfile, and it is the one rule that says a second package manager still shapes the
@@ -39,7 +39,10 @@ gentle, and coexistence with `pnpm-lock.yaml` is the one state in the preset tha
 repository on day zero with two lockfiles is the case nobody should leave overnight. `starter` is
 selectable through `--preset starter` and through `preset` in the config file, and an added catalog
 rule stays `off` under it until the preset says otherwise, because a preset that claims to check less
-must fail in the safe direction.
+must fail in the safe direction. `workflow-run-artifact` (R13) is a rule the catalog gained after this
+preset was decided, so it stays `off` here for that reason: a project on day zero has no
+`workflow_run` trigger to read, and the rule is `error` in `baseline`, which is where the change is
+felt (0035).
 
 `starter` keeps the manager's quarantine floor: `quarantineFloor('starter')` is the documented
 default for the pinned major, the same value `baseline` uses, and never the `4320` minutes of

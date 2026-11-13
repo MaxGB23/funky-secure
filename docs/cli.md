@@ -83,8 +83,9 @@ funky-secure start  ·  guidance, nothing is written
 
   the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git
 
-not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
-         auto-merge, CI install flags, pull_request_target, Workflow permissions
+not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
 ```
 
 A repository a generator left behind turns the order on, in both of its shapes. With a foreign lockfile
@@ -116,8 +117,9 @@ why this order
   the workspace block governs the dependencies added next, and pin is what clears the ranges already in the manifest
   migrate comes after the install, because the install is what writes the lockfile it keeps
 
-not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
-         auto-merge, CI install flags, pull_request_target, Workflow permissions
+not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -269,11 +271,12 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
   The same line for the `starter` preset:
 
 ```text
-not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
-         auto-merge, CI install flags, pull_request_target, Workflow permissions
+not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
 ```
 
-- **A clean target is two lines.** The heading, then `all 5 rules pass` at the same five columns a
+- **A clean target is two lines.** The heading, then `all 6 rules pass` at the same five columns a
   finding hangs from, never one line per rule: the passes are counted in `summary`. A repository at
   policy, from a different run:
 
@@ -290,7 +293,7 @@ REPO-ROOT
      → funky-secure scan --verbose, each names what was not verified and how to verify it
 
 CI
-     all 5 rules pass
+     all 6 rules pass
 
 next     nothing to do: everything at or above the policy passes
 ```

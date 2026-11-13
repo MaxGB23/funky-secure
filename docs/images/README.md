@@ -18,6 +18,12 @@ method that worked: give the model the sibling product's diagram as a rendering 
 replace its words with this product's in one explicit old-to-new pass, and treat every later correction
 as a removal — a repeated line, a leftover label, a duplicated stamp.
 
-Two facts must survive any redraw: every string in the drawing is true of the tool (the twelve rules and
+Two facts must survive any redraw: every string in the drawing is true of the tool (the thirteen rules and
 their four families, the exit codes, the commands the plan prints), and the machine appears read-only,
 because the tool never installs anything and never reaches the network.
+
+**2026-11-13: the drawing still says TWELVE and the catalogue says thirteen.** RFC 0035 shipped
+`workflow-run-artifact` as R13, so every text surface that states the count moved in that release and
+this raster did not. The owner redraws it on their own account, outside that release; until then the
+picture is of a count that has moved, and this paragraph is the record of the divergence rather than a
+second drawing.

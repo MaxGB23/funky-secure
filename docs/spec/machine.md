@@ -64,7 +64,7 @@ only verification loop a read-only tool can honestly offer.
 
 `where`/`which pnpm` feeds `machine.installations` — the count and the resolved binary paths — and
 `pnpm --version` versus `userAgent` feeds `machine.versionAmbiguous` (12.2). Both are **facts of the
-report**, not findings: no rule in the twelve of section 8.2 covers duplicated installations (the old
+report**, not findings: no rule in the thirteen of section 8.2 covers duplicated installations (the old
 design had one, and it is not among them). They are printed in the machine section, they never change
 the verdict, and `--fail-on` cannot fail because of them. G2 is satisfied by the facts, not by a rule.
 

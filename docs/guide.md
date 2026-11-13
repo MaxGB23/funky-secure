@@ -87,11 +87,12 @@ pnpm's own configuration, which is not in the repository and does not travel wit
 evidence, and it counts what you actually got:
 
 ```text
-not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot
-         auto-merge, CI install flags, pull_request_target, Workflow permissions
+not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
 ```
 
-Six of twelve rules ran and the six named ones did not, so a `PASS` here means "passed the six that
+Six of thirteen rules ran and the seven named ones did not, so a `PASS` here means "passed the six that
 ran", not "this repository is fully checked". A rule that is off prints nothing and is not counted in
 `summary`, so without the line a run would look clean while it measured almost nothing. `--only` and
 `--ignore` never print it: picking rules for one run does not change the policy, and the line is a

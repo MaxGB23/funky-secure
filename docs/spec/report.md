@@ -34,8 +34,8 @@ separate document (11.2).
 apart without parsing a message. Rule ids are the public contract (6.2); codes are too.
 
 **What is serialized.** `findings[]` carries the `fail`, `skip` and `error` findings only. `pass`
-findings are counted in `summary.pass` and never listed: a repository with twelve passing rules does
-not print twelve lines of reassurance. A rule set to `off` (9.2) contributes nothing at all — no
+findings are counted in `summary.pass` and never listed: a repository with thirteen passing rules does
+not print thirteen lines of reassurance. A rule set to `off` (9.2) contributes nothing at all — no
 finding and no count.
 
 ### 10.2 JSON output
@@ -130,8 +130,9 @@ When the effective policy sets at least one rule `off`, the header gains exactly
 between `verdict` and the separator, in the same nine-character gutter:
 
 ```
-not run  6 of 12 rules; off by policy: Environment files, Pinned actions, Bot auto-merge,
-         CI install flags, pull_request_target, Workflow permissions
+not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
 ```
 
 The two numbers are how many catalog rules still run and how many the catalog has. A rule at `off`
@@ -168,7 +169,7 @@ tool, so it stays in the JSON document (10.2), in `--help`, in `explain` and in 
 source and no second list of names exists to drift.
 
 A target with nothing to report is two lines: the heading, and the count under it at the same five
-columns a finding hangs from — `CI` then `     all 5 rules pass` — so a clean block reads like every
+columns a finding hangs from — `CI` then `     all 6 rules pass` — so a clean block reads like every
 other block instead of like a sentence with a colon. Passing rules are counted in `summary` and never
 printed one line each (10.1); `--verbose` restores their ids in a single `passing` line.
 

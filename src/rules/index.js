@@ -16,6 +16,7 @@ import pullRequestTarget from './pull-request-target.js';
 import quarantine from './quarantine.js';
 import sensitiveIgnored from './sensitive-ignored.js';
 import workflowPermissions from './workflow-permissions.js';
+import workflowRunArtifact from './workflow-run-artifact.js';
 
 /** @type {Array<object>} */
 export const catalog = [
@@ -31,6 +32,7 @@ export const catalog = [
   ciNoSafetyOverrides,
   pullRequestTarget,
   workflowPermissions,
+  workflowRunArtifact,
 ];
 
 /** @param {string} id */
