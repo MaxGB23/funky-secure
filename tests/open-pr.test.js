@@ -34,8 +34,27 @@ function capture() {
  * A `gh` whose answers are written here and nowhere else. Call order decides which `run list` answer is
  * served: the first one is the floor read before the creation, every later one is a poll of that same
  * question after the deciding event.
+ *
+ * `created` is the whole answer of `pr create` — the URL it printed, or a refusal with what it said —
+ * and `list` is the answer of `pr list`, which is read only once that creation failed: `{ rows }` for
+ * the pull request of this head, or `{ ok: false, stderr }` for a read that could not answer.
+ *
+ * Both spellings of the creation option are read, `created` and the older `create`. A helper that dropped
+ * one of them left the tests written against it silently exercising the default success, which is a test
+ * that asserts nothing about the failure it writes.
  */
-function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snapshot = [], runs = [], conclusion = 'success', jobs = null, watch = {} } = {}) {
+function gh({
+  created,
+  create,
+  list = { rows: [] },
+  snapshot = [],
+  runs = [],
+  conclusion = 'success',
+  jobs = null,
+  watch = {},
+} = {}) {
+  const creation = created ??
+    create ?? { ok: true, stdout: 'https://github.com/MaxGB23/funky-secure/pull/42\n', stderr: '' };
   const calls = [];
   const budgets = [];
   let lists = 0;
@@ -45,7 +64,14 @@ function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snap
     budgets.push({ call: args.join(' '), timeoutMs: options?.timeoutMs ?? null });
     const [group, action] = args;
 
-    if (group === 'pr' && action === 'create') return { ok: true, stdout: create, stderr: '' };
+    if (group === 'pr' && action === 'create') return { ...creation };
+    if (group === 'pr' && action === 'list') {
+      if (list.ok === false) return { ok: false, stdout: '', stderr: list.stderr ?? '' };
+      // A raw answer lets a test hand back what `gh` would never print on purpose: the lookup is the
+      // one place where a garbled answer and an empty one decide between red and unknown.
+      if (typeof list.stdout === 'string') return { ok: true, stdout: list.stdout, stderr: '' };
+      return { ok: true, stdout: JSON.stringify(list.rows ?? []), stderr: '' };
+    }
     if (group === 'run' && action === 'list') {
       lists += 1;
       return { ok: true, stdout: JSON.stringify(lists === 1 ? snapshot : runs), stderr: '' };
@@ -977,4 +1003,301 @@ test('npm is found on PATH when npm did not start the process', async () => {
   );
 
   assert.deepEqual(npmOnPath({ env: {}, exists: () => false }), [], 'no PATH and no npm is no candidate');
+});
+
+test('a creation refused because a pull request for this head exists adopts it and reports its runs', async (t) => {
+  // The second run of one delivery: the pull request exists and run 21 is the run it already fired. A
+  // floor taken now is above that run, so a floor that survived the adoption would report no run at
+  // all — which is the bug the adoption exists to answer.
+  const only = runOf(21);
+  const { exec, calls } = gh({
+    created: {
+      ok: false,
+      stdout: '',
+      stderr: 'a pull request for branch "feat/open-pr" already exists: https://github.com/MaxGB23/funky-secure/pull/41',
+    },
+    // The row is at this commit: the head commit is the evidence that this pull request is this
+    // delivery's, so a row without it is a row nobody could adopt.
+    list: { rows: [{ number: 41, url: 'https://github.com/MaxGB23/funky-secure/pull/41', headRefOid: SHA }] },
+    snapshot: [only],
+    runs: [only],
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, GREEN, err);
+  assert.equal(err, '', 'nothing failed, so nothing is written to stderr');
+  assert.match(
+    out,
+    /open-pr: adopted https:\/\/github\.com\/MaxGB23\/funky-secure\/pull\/41 — a pull request for feat\/open-pr already existed, so none was created/,
+    'a green nobody can audit is worse than no green: the adoption says so on screen',
+  );
+  assert.match(out, /open-pr: run 21 {2}· {2}passed/, 'the runs of the adopted pull request decide it');
+  assert.match(out, /pull\/41 {2}· {2}passed/, 'and the verdict names the pull request it adopted');
+  assert.ok(
+    calls.some((call) => call === 'pr list --head feat/open-pr --json number,url,headRefOid'),
+    'the pull request of this head and its head commit are looked up by head, never by a number someone typed',
+  );
+});
+
+test('a creation that fails with no pull request for this head is red and prints what gh said', async (t) => {
+  const { exec, calls } = gh({
+    created: { ok: false, stdout: '', stderr: 'HTTP 403: Resource not accessible by integration (createPullRequest)' },
+    // The lookup answered: this head has no pull request. "There is none" is a measurement, so the
+    // creation failing is the whole answer, and it is red.
+    list: { rows: [] },
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, RED);
+  assert.match(err, /open-pr: gh pr create failed/);
+  assert.match(err, /HTTP 403: Resource not accessible by integration \(createPullRequest\)/, "the child's words travel");
+  assert.ok(
+    calls.some((call) => call === 'pr list --head feat/open-pr --json number,url,headRefOid'),
+    'the head is looked up before the failure is called red',
+  );
+  assert.doesNotMatch(out, /adopted/, 'nothing was adopted, because the lookup found nothing');
+  assert.doesNotMatch(out, /waiting for the runs/, 'no pull request exists, so no run can decide anything');
+});
+
+test('a lookup that answers with something that is not a list is a question, not an absence', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: 'a pull request for this head already exists' },
+    // The lookup succeeded as a process and answered nothing usable. Reading that as "there is no pull
+    // request" would call a red on evidence nobody has: the pull request may well be there.
+    list: { stdout: 'not json at all' },
+  });
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'a garbled answer is not evidence that there is no pull request');
+  assert.match(err.text, /gh pr list printed something that is not JSON/);
+  assert.doesNotMatch(err.text, /gh pr create failed/, 'and it is never called a red');
+});
+
+test('a creation that fails while the pull request of this head cannot be read is unknown, never red', async (t) => {
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: 'failed to create pull request' },
+    // The API answered nothing, so whether a pull request for this head exists is nobody's measurement.
+    list: { ok: false, stderr: 'HTTP 401: Bad credentials' },
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'an unreadable lookup is not evidence that there is no pull request');
+  assert.match(err, /open-pr: unknown — the creation failed and gh pr list failed: HTTP 401: Bad credentials/);
+  assert.match(err, /whether a pull request exists is unknown/, 'the message says which of the two is unknown');
+  assert.match(err, /check gh pr list --head feat\/open-pr/, 'and gives the command that answers it');
+  assert.doesNotMatch(err, /gh pr create failed/, 'red would report a failure nobody measured');
+  assert.doesNotMatch(out, /waiting for the runs/);
+});
+
+test('an adopted pull request with no run is unknown and names the pull request it adopted', async (t) => {
+  const { exec, calls } = gh({
+    created: {
+      ok: false,
+      stdout: '',
+      stderr: 'a pull request for branch "feat/open-pr" already exists: https://github.com/MaxGB23/funky-secure/pull/41',
+    },
+    list: { rows: [{ number: 41, url: 'https://github.com/MaxGB23/funky-secure/pull/41', headRefOid: SHA }] },
+    snapshot: [],
+    runs: [],
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'no run of an adopted pull request is a question, not a failure');
+  assert.equal(err, '', 'an adoption that finds nothing is not a failure and says so on stdout');
+  assert.match(
+    out,
+    /open-pr: adopted https:\/\/github\.com\/MaxGB23\/funky-secure\/pull\/41/,
+    'the pull request it adopted is named before the wait',
+  );
+  assert.match(
+    out,
+    /no run of a1b2c3d4e5f60718293a4b5c6d7e8f9012345678 appeared within 30s; this is not a failure/,
+  );
+  assert.equal(
+    calls.filter((call) => call.startsWith('pr list')).length,
+    1,
+    'one lookup, made because the creation failed',
+  );
+});
+
+test('a creation killed at its ceiling is unknown, never an adoption', async (t) => {
+  // A create that lost its answer may have created the pull request and may not have. A lookup cannot
+  // tell the two apart -- a pull request this invocation created is at this commit exactly like one that
+  // was already there -- so the answer is a question, and the diagnostic is the lookup itself.
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: '', timedOut: true },
+    list: { rows: [{ number: 41, url: 'https://github.com/MaxGB23/funky-secure/pull/41', headRefOid: SHA }] },
+    runs: [runOf(21)],
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'a creation nobody answered is not a red and not an adoption');
+  assert.match(err, /gh pr create was killed at its ceiling/, 'the ceiling is named as the reason');
+  assert.match(err, /whether a pull request exists cannot be told/, 'the question says what nobody can tell');
+  assert.match(err, /check gh pr list --head feat\/open-pr/, 'and gives the command that answers it');
+  assert.doesNotMatch(out, /adopted/, 'a lookup finding a pull request is not evidence that it is not ours');
+  assert.doesNotMatch(out, /waiting for the runs/, 'its runs decide nothing here');
+  assert.doesNotMatch(err, /gh pr create failed/, 'red would report a failure nobody measured');
+});
+
+test('a creation that succeeded with an unreadable URL keeps the baseline answer and is never adopted', async (t) => {
+  // The creation worked and printed something this script cannot read. A pull request exists because this
+  // invocation made it, so a lookup would find it at this commit and adopt the very creation that
+  // succeeded -- the output would then say none was created while one was.
+  const { exec, calls } = gh({
+    created: { ok: true, stdout: 'warning: no URL in this answer\n', stderr: '' },
+    list: { rows: [{ number: 41, url: 'https://github.com/MaxGB23/funky-secure/pull/41', headRefOid: SHA }] },
+    runs: [runOf(21)],
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, RED, 'the baseline for a success nobody can read is red, and it stays red');
+  assert.match(err, /gh pr create failed/, "the answer that could not be read is reported in gh's own words");
+  assert.match(err, /warning: no URL in this answer/);
+  assert.doesNotMatch(out, /adopted/, 'a successful creation is never an adoption');
+  assert.doesNotMatch(out, /none was created/, 'the output never denies a creation that succeeded');
+  assert.equal(calls.filter((call) => call.startsWith('pr list')).length, 0, 'a successful creation is not looked up');
+});
+
+test('a pull request is adopted only when its head commit is the commit under test', async (t) => {
+  const other = 'b'.repeat(40);
+  const pullRequest = (number) => ({
+    number,
+    url: `https://github.com/MaxGB23/funky-secure/pull/${number}`,
+  });
+  const refused = { ok: false, stdout: '', stderr: 'a pull request for branch "feat/open-pr" already exists' };
+
+  // The head has a pull request, and it is at another commit: another delivery on the same branch name.
+  // Adopting it would report the runs of work this invocation did not create, so the answer is a
+  // question that names what the lookup said.
+  const elsewhere = gh({
+    created: refused,
+    list: { rows: [{ ...pullRequest(41), headRefOid: other }] },
+    runs: [runOf(21)],
+  });
+  const first = await runWith(t, elsewhere.exec);
+
+  assert.equal(first.code, UNKNOWN, 'a pull request at another commit is not this one and not an absence');
+  assert.match(first.err, /gh pr list answered #41 at bbbbbbbb/, 'the answer is named, commit and all');
+  assert.match(first.err, new RegExp(`none of them at ${SHA}`), 'and the commit nobody answered for is named');
+  assert.doesNotMatch(first.out, /adopted/, 'another commit`s pull request is never adopted');
+  assert.doesNotMatch(first.err, /gh pr create failed/, 'and it is never red');
+  assert.equal(
+    elsewhere.calls.filter((call) => call.startsWith('pr list')).length,
+    1,
+    'the lookup is made, because only a failed creation is adopted',
+  );
+
+  // The same head with two pull requests, one of them at this commit: that one is adopted, and the one
+  // at another commit is not read at all.
+  const here = gh({
+    created: refused,
+    list: { rows: [{ ...pullRequest(41), headRefOid: other }, { ...pullRequest(42), headRefOid: SHA }] },
+    snapshot: [runOf(21)],
+    runs: [runOf(21)],
+  });
+  const second = await runWith(t, here.exec);
+
+  assert.equal(second.code, GREEN, second.err);
+  assert.match(second.out, /adopted https:\/\/github\.com\/MaxGB23\/funky-secure\/pull\/42/, 'the row at this commit');
+  assert.doesNotMatch(second.out, /pull\/41/, 'the row at another commit is never the pull request');
+});
+
+test('a lookup that answers rows no pull request can be read from is a question, not an absence', async (t) => {
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: 'failed to create pull request' },
+    // A list with a row, and a row without a number or a URL is not a pull request anybody can read.
+    // Reading that as "there is none" calls a red on a lookup that never answered the question.
+    list: { rows: [{ title: 'a row that names no pull request' }] },
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'an unusable row is not evidence that there is no pull request');
+  assert.match(err, /gh pr list answered 1 row and none of them is a pull request with a number and a URL/);
+  assert.match(err, /whether a pull request exists is unknown/);
+  assert.doesNotMatch(err, /gh pr create failed/, 'red would report a failure nobody measured');
+  assert.doesNotMatch(out, /waiting for the runs/);
+});
+
+test('the suggested lookup carries the repository when one was named', async (t) => {
+  const repo = 'MaxGB23/funky-secure';
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh({
+    created: { ok: false, stdout: '', stderr: 'failed to create pull request' },
+    list: { ok: false, stderr: 'HTTP 401: Bad credentials' },
+  });
+
+  const code = await run({
+    argv: [...argvFor(bodyFile(t, BODY)), '--repo', repo],
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN);
+  assert.match(
+    err.text,
+    new RegExp(`check gh pr list --head feat/open-pr --repo ${repo}(\\s|$)`),
+    'a command without --repo asks about the default repository, not this one',
+  );
+  assert.ok(
+    calls.some((call) => call === `pr list --head feat/open-pr --json number,url,headRefOid --repo ${repo}`),
+    'the lookup itself reads the head commit, from the repository that was named',
+  );
+});
+
+test('the gh helper answers both spellings of the creation option', async (t) => {
+  // A test that still passes `create` must exercise the failure it writes, not the default success. The
+  // old spelling was silently dropped, so such a test passed while asserting nothing about a failure.
+  const refused = { ok: false, stdout: '', stderr: 'a pull request for branch "feat/open-pr" already exists' };
+
+  const spelled = gh({ create: refused });
+  assert.equal(spelled.exec(['pr', 'create']).ok, false, '`create` is the creation, not the default success');
+
+  const { exec } = gh({ create: refused, list: { rows: [] } });
+  const { code, err } = await runWith(t, exec);
+
+  assert.equal(code, RED, 'the ritual that reads it takes the failure path');
+  assert.match(err, /gh pr create failed/, 'and reports the failure the test wrote');
+});
+
+test('the suggested lookup names no repository when none was named', async (t) => {
+  // The sibling of the `--repo` case: the option is additive, and a run without it must not grow a
+  // repository nobody asked for -- a wrong repository in a diagnostic is worse than a bare command.
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: 'failed to create pull request' },
+    list: { ok: false, stderr: 'HTTP 401: Bad credentials' },
+  });
+
+  const { code, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN);
+  assert.match(err, /check gh pr list --head feat\/open-pr\n/, 'the bare command, and nothing after it');
+  assert.doesNotMatch(err, /--repo/, 'no repository was named, so none is named for the reader');
 });

@@ -59,9 +59,14 @@ a path that is not on disk.
   content. It refuses one more thing first: a branch on the remote that is not the commit in front of
   you. The pull request is built from the branch, so an unpushed commit makes the wait ask about a
   commit the pull request does not contain — measured on #241, ten minutes and then `2` with a reason
-  that was true and useless. `--timeout` is the budget of that whole delivery and not a ceiling per
-  child: every `gh` in the phase reads what is left of it, so the number you pass is the number it can
-  spend.
+  that was true and useless. A creation that **fails** adopts a pull request only when a lookup shows one
+  whose head commit is this commit, and its floor becomes `0`, because an adopted pull request is older
+  than any floor a re-run can take: a floor kept would hide exactly the runs the adoption exists to
+  report. `gh`'s refusal wording is not that evidence — a fork's pull request can carry the same head
+  branch name — and a creation killed at its ceiling is never adopted, because a pull request it made
+  itself is at this commit exactly like one that already existed. `--timeout` is the budget of that whole
+  delivery and not a ceiling per child: every `gh` in the phase reads what is left of it, so the number
+  you pass is the number it can spend.
 - **A pull request merges only when its checks have finished, and "finished" is a state list, not a
   feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
   `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
