@@ -56,7 +56,9 @@ a path that is not on disk.
   <path> --label type:docs` — which refuses a red suite, a red packed set and a policy violation, then
   creates a **labelled pull request that is ready from birth** and reports the set of runs of this
   commit. The set is not fussiness: `opened` and `labeled` both fire, so two runs evaluate the same
-  content. It refuses one more thing first: a branch on the remote that is not the commit in front of
+  content. The price of that choice is named rather than hidden: an interrupted ritual leaves a **real
+  pull request** instead of a harmless draft, so the recovery is a re-run that adopts it and never a
+  draft to throw away. It refuses one more thing first: a branch on the remote that is not the commit in front of
   you. The pull request is built from the branch, so an unpushed commit makes the wait ask about a
   commit the pull request does not contain — measured on #241, ten minutes and then `2` with a reason
   that was true and useless. A creation that **fails** adopts a pull request only when a lookup shows one
