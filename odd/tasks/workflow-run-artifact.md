@@ -107,3 +107,33 @@ Close #153 by naming the third privileged trigger, so the README stops carrying 
   and goldens, and one docs commit for the four surfaces. `gentle_review assess` over the committed
   range answered `risk: medium`, `reviewDue: false` (`under_budget`), so no native review was started;
   the independent verifier runs instead, and a `Risk: item 3` line was needed to admit it.
+- **The independent verifier's findings on `5737216`, three of them fixed here.** D1: a producer name two
+  files carry resolved to the first in path order, so a consumer named `build` whose `workflow_run` names
+  `build`, with `a-build.yml` (`on: push`) and `z-build.yml` (`on: pull_request`) carrying the same name,
+  answered `pass / trusted-producer` and said every producer declares no `pull_request`, which is false of
+  that repository; with `z-build.yml` first the same repository answered `fail / workflow-run-artifact`.
+  A name more than one workflow carries now resolves to no producer: the answer is the existing
+  `skip / producer-unresolved-name`, the message names the files that carry it in path order, and the
+  answer no longer depends on which file sorts first. A name exactly one workflow carries keeps today's
+  answer byte for byte, checked against `fd4e32d` over issue #153's pair: the two scans agree on stdout,
+  stderr and exit code. The RED was observed before the fix: the new two-file case answered
+  `pass / trusted-producer` where it requires `skip`, and a hand run over the three-file repository
+  answered `pass / trusted-producer` with the push file first and `fail / workflow-run-artifact` with the
+  `pull_request` file first. D2: the rule's `evidence` string dropped the value clause R13 states, so it
+  now reads "with the value that was read", the shape `evidence.download` already carried and
+  `pull-request-target` and `actions-pinned-sha` write. D3: `docs/validation.md` had one row per rule and
+  none for R13 while `README.md:181` claimed thirteen rules verified against real code; R13's row states
+  the one measurement that exists (issue #153's two files, scanned in a scratch directory with
+  `GIT_CEILING_DIRECTORIES` set to this repository, before the rule and after it, and no real-world
+  repository instance was searched for), and the README bullet claims real code for twelve while naming
+  the thirteenth's evidence. The spec, the page and the rule's own `detection`, `evidence` and `limits`
+  strings say the same: a shared name is a skip, never a resolution to the first in path order. Three
+  tests pin what the verifier checked by hand, and two of them were already there: a shared workflow name
+  is never `trusted-producer` (new), a consumer whose `on:` is a flow collection skips and never fails
+  (already present, named here), and a `schedule:` trigger with one `- cron:` item still parses as `map`
+  with the `schedule` event (`tests/workflows.test.js`, already present). Measured: `node --test
+  tests/rules/workflow-run-artifact.test.js` is 13 of 13, `node --test` is 709 tests with 708 passing, 1
+  skipped and 0 failing, `node scripts/gen-golden.js` writes the same five files and leaves no diff, the
+  self-scan is exit 0 with `0 errors, 0 warnings, 0 info, 11 passing, 2 skipped`, and a scratch scan over
+  the three-file repository answers `skip / producer-unresolved-name` naming the three files in path
+  order. No golden moved. The verifier's fourth finding is not this task's and is left to the parent.

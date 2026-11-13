@@ -396,16 +396,18 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Question:** does a privileged workflow read bytes an unprivileged workflow produced?
 - **Detection:** every workflow of the repository through the structural reader, because the producer
   is named by workflow `name:` in `on.workflow_run.workflows` and lives in a sibling file. Every name
-  the trigger lists is matched against the `name:` of every workflow in the repository. A workflow is
-  a consumer when its `on:` block declares `workflow_run` and a step downloads an artifact: a step
+  the trigger lists is matched against the `name:` of every workflow in the repository, and a name
+  exactly one workflow carries is that producer. A workflow is a consumer when its `on:` block
+  declares `workflow_run` and a step downloads an artifact: a step
   whose `uses` is `actions/download-artifact` with any ref, or a step whose `with.run-id` reads
   `github.event.workflow_run.id`. The download is one `workflow-run-artifact` fail at the step line
   when the declaration that governs that job's token - the job's `permissions:`, else the workflow's
   - grants `contents: write`, `pull-requests: write`, `issues: write` or `write-all`, and when the
   producer resolves to a workflow that declares `pull_request`. A producer that cannot be resolved is
   a skip with its own code and never a pass: `producer-unresolved-name` for a name no workflow
-  carries, `producer-unresolved-trigger` for an `on:` block the reader does not model, and
-  `producer-unresolved-config` for a key the rule reads that is absent or `null`. The passes name the
+  carries and for a name more than one workflow carries, `producer-unresolved-trigger` for an `on:`
+  block the reader does not model, and `producer-unresolved-config` for a key the rule reads that is
+  absent or `null`. The passes name the
   furthest leg reached: no workflow declares `workflow_run` (`no-workflow-run`), a `workflow_run`
   workflow downloads nothing (`workflow-run-without-artifact`), a downloading `workflow_run` job
   holds no write scope (`no-write-permission`), and every resolved producer declares no
@@ -428,10 +430,10 @@ the pin alone is the declaration, and nothing about it is skipped.
   downloaded bytes are or what the job does with them, does not follow the artifact by name (only the
   download is read, never the upload that produced it), does not decide whether a fork can start the
   producer branch it targets, and does not resolve a producer in another repository or one reached
-  through a reusable workflow. A producer name two workflows share resolves to the first in path
-  order. A `with:` map written as a flow collection is invisible to the reader today, so the `uses`
-  signal is the one that always answers, and the listed workflows are read only from a block map: any
-  other spelling of `on:` is a skip, never a guessed list.
+  through a reusable workflow. A producer name more than one workflow carries names no producer, so
+  the pair is a skip and never a resolution. A `with:` map written as a flow collection is invisible
+  to the reader today, so the `uses` signal is the one that always answers, and the listed workflows
+  are read only from a block map: any other spelling of `on:` is a skip, never a guessed list.
 
 ### 8.3 Deferred catalog (six rules, none of them in 0.2)
 

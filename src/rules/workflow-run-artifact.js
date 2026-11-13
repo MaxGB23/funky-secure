@@ -125,11 +125,13 @@ export default {
     'github.event.workflow_run.id. The download is reported only when the declaration that governs ' +
     'its job, which is the job permissions: else the workflow permissions:, grants contents: write, ' +
     'pull-requests: write, issues: write or write-all, and when the producer resolves: every name ' +
-    'the trigger lists is matched against the name: of every workflow in the repository, and a match ' +
-    'that declares pull_request makes the pair one fail (workflow-run-artifact) at the line of the ' +
-    'step that downloads, one per downloading step. A producer that cannot be resolved is a skip ' +
-    'with its own code (producer-unresolved-name, producer-unresolved-trigger, ' +
-    'producer-unresolved-config) and never a pass. The passes: no workflow declares workflow_run ' +
+    'the trigger lists is matched against the name: of every workflow in the repository, a name ' +
+    'exactly one workflow carries is that producer, and one that declares pull_request makes the ' +
+    'pair one fail (workflow-run-artifact) at the line of the step that downloads, one per ' +
+    'downloading step. A producer that cannot be resolved is a skip with its own code ' +
+    '(producer-unresolved-name for a name no workflow carries and for a name more than one workflow ' +
+    'carries, producer-unresolved-trigger, producer-unresolved-config) and never a pass. The ' +
+    'passes: no workflow declares workflow_run ' +
     '(no-workflow-run), a workflow_run workflow downloads nothing ' +
     '(workflow-run-without-artifact), a downloading workflow_run job holds no write scope ' +
     '(no-write-permission), and every resolved producer declares no pull_request ' +
@@ -138,7 +140,8 @@ export default {
   evidence:
     'The consumer job and the downloading step, at the step line; the producer path, the name it was ' +
     'matched by and the pull_request trigger that makes it unprivileged; the download mechanism ' +
-    '(uses, or the run-id expression) and the scopes the write rests on.',
+    '(uses, or the run-id expression) with the value that was read; and the scopes the write rests ' +
+    'on.',
   remediation:
     'Manual, printed as the choice to make: split the workflow so the job that holds the write token ' +
     'never consumes the artifact, or keep the artifact out of the write path and re-derive what the ' +
@@ -150,11 +153,11 @@ export default {
     'downloaded bytes are or what the job does with them, does not follow the artifact by name (only ' +
     'the download is read, never the upload that named it), does not decide whether a fork can ' +
     'trigger the producer branch it targets, and does not resolve a producer that lives in another ' +
-    'repository or is reached through a reusable workflow. A producer name two workflows share ' +
-    'resolves to the first in path order. A with: map written as a flow collection is invisible to ' +
-    'the reader today, so a download that only a flow-style with carries is not seen, and the ' +
-    'workflows the trigger lists are read only from a block map: any other spelling of on: is a ' +
-    'skip, never a guessed list.',
+    'repository or is reached through a reusable workflow. A producer name more than one workflow ' +
+    'carries names no producer, so it is a skip and never a resolution. A with: map written as a ' +
+    'flow collection is invisible to the reader today, so a download that only a flow-style with ' +
+    'carries is not seen, and the workflows the trigger lists are read only from a block map: any ' +
+    'other spelling of on: is a skip, never a guessed list.',
   docs: DOC,
 
   /**
@@ -192,12 +195,16 @@ export default {
     }
 
     // The producer is named by `name:`, so the catalog of names is the whole repository, matched
-    // exactly as GitHub matches it. The first file in path order wins a shared name.
+    // exactly as GitHub matches it. A name more than one file carries names no producer at all:
+    // choosing between them would make the answer depend on which file sorts first.
+    /** @type {Map<string, Array<{ path: string, text: string, parsed: object }>>} */
     const byName = new Map();
     for (const file of files) {
       const name = file.parsed.name;
       if (typeof name !== 'string' || name === '') continue;
-      if (!byName.has(name)) byName.set(name, file);
+      const matches = byName.get(name);
+      if (matches === undefined) byName.set(name, [file]);
+      else matches.push(file);
     }
 
     let declares = false;
@@ -263,7 +270,39 @@ export default {
         continue;
       }
 
-      const producers = names.map((name) => byName.get(name)).filter((match) => match !== undefined);
+      // A name resolves only when exactly one workflow carries it, so a shared name is the absence
+      // of a producer and not a choice between two of them.
+      /** @type {Array<{ path: string, text: string, parsed: object }>} */
+      const producers = [];
+      /** @type {Array<{ name: string, paths: string[] }>} */
+      const shared = [];
+      for (const name of names) {
+        const matches = [...(byName.get(name) ?? [])].sort((a, b) => (a.path < b.path ? -1 : 1));
+        if (matches.length === 1) producers.push(matches[0]);
+        else if (matches.length > 1) shared.push({ name, paths: matches.map((match) => match.path) });
+      }
+
+      if (shared.length > 0) {
+        unresolved = true;
+        findings.push({
+          status: 'skip',
+          code: 'producer-unresolved-name',
+          path: file.path,
+          message:
+            'skipped: the workflow_run trigger names ' +
+            shared
+              .map(
+                (entry) =>
+                  `"${entry.name}", which more than one workflow carries (${entry.paths.join(', ')})`,
+              )
+              .join('; ') +
+            ', so the producer cannot be resolved',
+          evidence: { workflows: names },
+          probeUnavailable: true,
+        });
+        continue;
+      }
+
       if (producers.length === 0) {
         unresolved = true;
         findings.push({
@@ -327,7 +366,8 @@ export default {
  * pass names what it verified rather than a generic "fine".
  * @param {{ declares: boolean, consumes: boolean, privileged: boolean }} seen
  * @param {Array<{ path: string, text: string, parsed: object }>} files
- * @param {Map<string, { path: string, text: string, parsed: object }>} byName
+ * @param {Map<string, Array<{ path: string, text: string, parsed: object }>>} byName the files each
+ *   workflow name is carried by, so the pass never resolves a name two workflows share
  * @returns {object}
  */
 function pass(seen, files, byName) {
@@ -367,8 +407,8 @@ function pass(seen, files, byName) {
     .filter((event) => event.name === TRIGGER)
     .flatMap((event) => (Array.isArray(event.config?.workflows) ? event.config.workflows : []))
     .map((name) => byName.get(name))
-    .filter((match) => match !== undefined)
-    .map((match) => match.parsed.name);
+    .filter((matches) => matches !== undefined && matches.length === 1)
+    .map(([match]) => match.parsed.name);
 
   const names = [...new Set(trusted)];
   return {

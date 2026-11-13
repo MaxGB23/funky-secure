@@ -53,6 +53,7 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `ci-no-safety-overrides` | Detects `--no-frozen-lockfile` in `ts-safeql/safeql` `.github/workflows/ci.yml:49` (`ci-frozen-lockfile-disabled`, with the command in `evidence`); passes on `shadcn-ui/ui` and `t3` (`--frozen-lockfile` and nothing worse) |
 `pull-request-target` | Detects a genuine pwn request in `cloud-bulldozer/benchmark-operator` `.github/workflows/e2e.yml:33` — the step checks out `github.event.pull_request.head.sha` and later steps consume real secrets (`pull-request-target-checkout`); passes on `t3` and `shadcn-ui/ui`, where the two `pull_request_target` workflows never check out the head |
 `workflow-permissions` | 32 findings in `berry` — the rule that produced no signal at all before the indentless-sequence fix — and 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
+`workflow-run-artifact` | Issue #153's own two files, scanned in a scratch directory with `GIT_CEILING_DIRECTORIES` set to this repository, before and after the rule: exit 0 with `all 5 rules pass` before it existed, and the finding at `.github/workflows/label.yml:11` with exit 1 after it. No real-world repository instance was searched for |
 
 ## Behaviour that was measured rather than assumed
 

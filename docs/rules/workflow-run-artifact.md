@@ -47,7 +47,8 @@ hold:
 A producer that cannot be resolved is a `skip` with its own code, because "I did not resolve the
 producer" and "the producer is trusted" must not print the same:
 
-- `producer-unresolved-name` - no workflow in the repository carries the `name:` the trigger names.
+- `producer-unresolved-name` - no workflow in the repository carries the `name:` the trigger names,
+  or more than one does: a shared name names no producer, so it is never resolved to one of them.
 - `producer-unresolved-trigger` - the `on:` block is a form the reader does not model (a flow
   collection), so the names cannot be read out of it.
 - `producer-unresolved-config` - a key the rule reads is absent or `null`: a `workflows:` list the
@@ -104,7 +105,8 @@ a workflow carrying the producer name declares `pull_request`:
   only runs on `push` after a merge is still read as unprivileged here, and a repository that requires
   approval for fork workflows is not in the fact set.
 - **It does not follow a producer into another repository**, nor one reached through a reusable
-  workflow. A producer name two workflows share resolves to the first in path order.
+  workflow. A producer name more than one workflow carries names no producer: the pair is a skip,
+  never a resolution to the first in path order.
 - **A `with:` map written as a flow collection is invisible to the reader today**, so a download that
   only a flow-style `with` carries is not seen; the `uses` signal is the one that always answers.
 - **The listed workflows are read only from a block map.** Any other spelling of `on:` is a skip,

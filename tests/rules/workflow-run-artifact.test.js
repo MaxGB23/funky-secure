@@ -223,6 +223,60 @@ test('skips when no workflow carries the name the trigger names', () => {
   assert.equal(findings[0].path, '.github/workflows/label.yml');
 });
 
+/// GitHub matches `on.workflow_run.workflows` by `name:` across the whole repository, so a name two
+/// files carry names no producer at all. Resolving one of them would make the answer depend on which
+/// file sorts first, and resolving the trusted one turns a real escalation green.
+
+/** A producer file under the given trigger, named `build` like the consumer below. */
+function producerFile(trigger, name) {
+  const lines = ['name: build', `on: ${trigger}`];
+  lines.push('jobs:', '  build:', '    runs-on: ubuntu-24.04', '    steps:', '      - run: npm test', '');
+  return workflow(lines.join('\n'), name);
+}
+
+const DUPLICATE_CONSUMER = `name: build
+on:
+  workflow_run:
+    workflows: ["build"]
+    types: [completed]
+permissions: { contents: write }
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@${'d'.repeat(40)}
+        with:
+          run-id: ${RUN_ID}
+`;
+
+test('a workflow name more than one file carries is unresolved, never the first in path order', () => {
+  const consumer = workflow(DUPLICATE_CONSUMER, 'label.yml');
+  const push = producerFile('push', 'a-build.yml');
+  const pull = producerFile('pull_request', 'z-build.yml');
+
+  // Two files carry the name, so the rule cannot say which one produced the artifact.
+  const pair = rule.detect(context({ workflows: [consumer, pull] }));
+  assert.equal(pair.length, 1);
+  assert.equal(pair[0].status, 'skip');
+  assert.equal(pair[0].code, 'producer-unresolved-name');
+  assert.match(pair[0].message, /more than one workflow/);
+
+  // Three files, two of them producers, answer the same whichever order the collector hands them in,
+  // and the message names them in path order.
+  const forwards = rule.detect(context({ workflows: [consumer, push, pull] }));
+  const backwards = rule.detect(context({ workflows: [consumer, pull, push] }));
+  for (const findings of [forwards, backwards]) {
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].status, 'skip');
+    assert.equal(findings[0].code, 'producer-unresolved-name');
+  }
+  assert.equal(forwards[0].message, backwards[0].message);
+  const first = forwards[0].message.indexOf('a-build.yml');
+  const second = forwards[0].message.indexOf('z-build.yml');
+  assert.notEqual(first, -1, 'the message names the files that share the name');
+  assert.ok(second > first, 'the message names them in path order');
+});
+
 test('skips a trigger block the reader does not model instead of guessing at its names', () => {
   const flow = `name: label
 on: {workflow_run: {}}

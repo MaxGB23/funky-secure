@@ -178,11 +178,14 @@ from an unsupported platform rather than as a regression.
 A tool that sells evidence owes its reader the same treatment, so [`docs/validation.md`](docs/validation.md)
 keeps the ledger: every claim below, and every one that is missing, with what would close it.
 
-- **The thirteen rules are verified against real code** — five cloned open-source repositories, two more
-  read for one rule each, and eleven real workflows — with the findings counted rather than asserted:
+- **Twelve of the thirteen rules are verified against real code**: five cloned open-source
+  repositories, two more read for one rule each, and eleven real workflows, with the findings counted
+  rather than asserted:
   53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 32 jobs inheriting default permissions in
   `berry`, a genuine pwn request in `cloud-bulldozer`, and 206 floating ranges in `shadcn-ui/ui` with
-  zero desyncs over 245 specifiers.
+  zero desyncs over 245 specifiers. The thirteenth, `workflow-run-artifact`, stands on issue #153's
+  own two files and a scratch scan rather than on a real repository, and
+  [`docs/validation.md`](docs/validation.md) says so in its own row.
 - **The written path was verified by strangers.** Three field rounds totalling eleven blind sessions
   were given nothing but the tool's own output, and they never read its source. Every defect they found
   was in the path — a tree left dirty, a step that named no dependency, a pin before the lockfile
