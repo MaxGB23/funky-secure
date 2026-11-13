@@ -36,6 +36,7 @@ Nothing here restates the RFC. Each line names the decision and the section or f
 | D-14 | Help is always current, and complete architecture documentation is a deliverable. | 13, 14 |
 | D-15 | The RFC session ends with the document; implementation happens in another session. | whole document |
 | D-16 | R4 measures the gate, not the number: a preset-dependent floor, `warn` in `baseline`, `error` in `strict`. | 8.2 R4, 9.1, 9.4, 11.2 |
+| D-17 | The catalogue is thirteen: a `workflow_run` consumer that consumes an artifact from a `pull_request` run while holding a write token is a finding. The budget of 8.4 is answered in the rule's own terms, not waived (0035). | 8.2 R13, 8.4 |
 
 ## Implementation decisions (F0–F4, and after)
 

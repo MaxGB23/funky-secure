@@ -97,3 +97,13 @@ Close #153 by naming the third privileged trigger, so the README stops carrying 
   policy runs and names the ones it does not") and `tests/start.test.js` ("both closing blocks always
   print"). Each still states the catalogue as twelve; they are named here for the parent instead of
   edited from this task. The commit these two tasks land in is the parent's to name.
+- **Suite closed.** The parent applied the three count assertions (seven off in `starter`, the label
+  list, the closing sentence): `node --test` is 708 tests, 707 passing, 1 skipped, 0 failing.
+- **The count leaked in four text surfaces, found by grep after the rule landed.** `docs/concept.md`,
+  the README's description of the drawing, `CONTRIBUTING.md`'s feature checklist and `docs/decisions.md`
+  still said twelve, and the log had no row for the product decision. The description drops the number
+  rather than raising it, because the drawing it describes still says TWELVE; the log gained `D-17`.
+- **Commits.** `cdf2126` the reader, `1c0a326` the RFC, `5737216` the rule with its spec, page, tests
+  and goldens, and one docs commit for the four surfaces. `gentle_review assess` over the committed
+  range answered `risk: medium`, `reviewDue: false` (`under_budget`), so no native review was started;
+  the independent verifier runs instead, and a `Risk: item 3` line was needed to admit it.

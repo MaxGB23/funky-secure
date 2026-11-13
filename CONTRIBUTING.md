@@ -56,7 +56,7 @@ request have different checklists because they need different evidence.
 ### Feature request checklist
 
 - [ ] The problem, not the solution: what question about a repository this tool cannot answer today.
-- [ ] Which of the twelve rules it touches, or the argument for a thirteenth (spec 8.3 is the intake).
+- [ ] Which of the thirteen rules it touches, or the argument for a fourteenth (spec 8.3 is the intake).
 - [ ] The facts it needs and where they come from (`ctx.repo`, `ctx.machine`, a collector probe).
 - [ ] What it does when that fact is missing: the `skip` code and its message.
 - [ ] Severity in `baseline` and `strict`, friction, and the single command that fixes it — or why it
