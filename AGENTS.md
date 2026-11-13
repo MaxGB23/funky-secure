@@ -53,9 +53,13 @@ a path that is not on disk.
   CI runs, so run it first, not after the failure notice. `main` requires no status checks, so nothing
   stops a red pull request from merging: the check is only as real as the run before it.
   The whole ritual is one command — `node scripts/open-pr.js --base main --title "<title>" --body-file
-  <path> --label type:docs` — which refuses a red suite and a policy violation, then creates a
-  **labelled pull request that is ready from birth** and reports the set of runs of this commit. The
-  set is not fussiness: `opened` and `labeled` both fire, so two runs evaluate the same content.
+  <path> --label type:docs` — which refuses a red suite, a red packed set and a policy violation, then
+  creates a **labelled pull request that is ready from birth** and reports the set of runs of this
+  commit. The set is not fussiness: `opened` and `labeled` both fire, so two runs evaluate the same
+  content. It refuses one more thing first: a branch on the remote that is not the commit in front of
+  you. The pull request is built from the branch, so an unpushed commit makes the wait ask about a
+  commit the pull request does not contain — measured on #241, ten minutes and then `2` with a reason
+  that was true and useless.
 - **A pull request merges only when its checks have finished, and "finished" is a state list, not a
   feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
   `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,

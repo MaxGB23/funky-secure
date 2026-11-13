@@ -270,7 +270,7 @@ function sameIds(left, right) {
 /**
  * The command line, and the ritual it refuses to skip.
  *
- * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, pack?: () => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
+ * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, pack?: () => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
  * @returns {Promise<number>}
  */
 export async function run(deps = {}) {
@@ -282,6 +282,7 @@ export async function run(deps = {}) {
   const pack = deps.pack ?? defaultPack;
   const resolveHead = deps.resolveHead ?? defaultResolveHead;
   const resolveSha = deps.resolveSha ?? defaultResolveSha;
+  const resolveRemote = deps.resolveRemote ?? defaultResolveRemote;
   const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   const { options, problems, help } = parseArgs(argv);
@@ -367,6 +368,32 @@ export async function run(deps = {}) {
   // an unknown floor is how a run of an earlier event gets to decide this pull request. So a read that
   // cannot answer refuses here, before anything exists, and names itself with what `gh` printed.
   const sha = resolveSha();
+
+  // 4a. The remote branch, read before anything exists. The creation builds the pull request from it,
+  // so a commit that was never pushed makes step 6 ask about a commit the pull request does not
+  // contain: the runs would answer for other content, and the wait would sit out its whole budget on a
+  // question that has no answer. Measured on #241, whose head was the previous commit while this tree
+  // was one ahead: ten minutes, then `unknown`, both true and both useless.
+  const remote = resolveRemote({ head, timeoutMs: LOCAL_GIT_TIMEOUT_MS });
+  if (remote?.ok !== true) {
+    err.write(
+      `open-pr: refusing: ${remote?.problem ?? 'the remote branch could not be read'}; the remote branch is unknown, so nothing was created\n`,
+    );
+    out.write('open-pr: unknown — nothing was created so its verdict is unknown; this is not a failure\n');
+    return UNKNOWN;
+  }
+  if (remote.sha === null) {
+    err.write(`open-pr: refusing: the remote has no branch ${head}, so there is nothing to create from\n`);
+    out.write('open-pr: unknown — nothing was created so its verdict is unknown; this is not a failure\n');
+    return UNKNOWN;
+  }
+  if (remote.sha !== sha) {
+    err.write(
+      `open-pr: refusing: the remote branch ${head} is at ${remote.sha}, your HEAD is ${sha}: push it and run this again\n`,
+    );
+    out.write('open-pr: unknown — nothing was created so its verdict is unknown; this is not a failure\n');
+    return UNKNOWN;
+  }
   const floorAnswer = readRuns(exec, {
     head,
     repo: options.repo,
@@ -692,6 +719,30 @@ function defaultResolveSha() {
     timeout: LOCAL_GIT_TIMEOUT_MS,
   });
   return result.status === 0 ? result.stdout.trim() : '';
+}
+
+/**
+ * The commit the branch on the remote actually has. `gh pr create` builds the pull request from that
+ * branch, so that commit is the only one whose runs say anything about the pull request. `resolveSha`
+ * answers about the tree in front of us instead, and the two agree only after a push.
+ *
+ * @param {{ head?: string, timeoutMs?: number }} [options]
+ * @returns {{ ok: boolean, sha?: string|null, problem?: string }} `sha` is null when the remote has no
+ * such branch. A read that cannot answer is a failure and not an empty answer: an unreadable remote is
+ * not evidence that the two commits are the same one.
+ */
+function defaultResolveRemote({ head = '', timeoutMs = LOCAL_GIT_TIMEOUT_MS } = {}) {
+  const result = spawnSync('git', ['ls-remote', 'origin', `refs/heads/${head}`], {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+  });
+  if (result.status !== 0) {
+    const said = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+    return { ok: false, problem: said === '' ? 'git ls-remote did not answer' : said };
+  }
+  const line = String(result.stdout ?? '').trim();
+  if (line === '') return { ok: true, sha: null };
+  return { ok: true, sha: line.split(/\s+/)[0] };
 }
 
 /**
