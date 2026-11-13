@@ -1,120 +1,57 @@
 # AGENTS.md
 
-Where things live in this repository. Two axes, and each document belongs to exactly one.
-
-| Axis | Answers | Where | Mutability |
-|---|---|---|---|
-| **Record** | what we decided and why | `rfcs/NNNN-<slug>/rfc.md`, `odd/tasks/<feature>.md` | frozen once `implemented` or `closed` |
-| **Present** | what is true now | `docs/spec/`, `docs/decisions.md`, the rest of `docs/` | edited freely, in its own pull request |
+Where things live in this repository, and the rules that keep it honest. Two axes: a **record** of what
+was decided (`rfcs/`, `odd/tasks/`) and the **present** state (`docs/`, code). A record is frozen once
+settled; the present is edited freely, in its own pull request.
 
 ## Paths
 
 | Path | What it is |
 |---|---|
-| `docs/spec/` | **The normative contract.** Extracted verbatim from RFC 0001 sections 6-14 and 17. Where the spec and the record disagree, the spec wins. |
-| `docs/README.md` | The map from a change to the page that must move with it. Start here when you touched code. |
-| `docs/architecture.md` | The four layers, the per-command flows, the invariants and the module map. |
-| `docs/cli.md` | Every command, flag, exit code and JSON field. The operating manual, not a second specification. |
-| `docs/concept.md` | What the product is and what it refuses to be. |
-| `docs/guide.md` | How to read the output, and what to do about each rule a reader meets. |
-| `docs/images/` | The diagram that ships with the package, and its `README.md` note. |
-| `docs/spec/README.md` | The map from every section number (`10.3`, `11.2.1`) to the file that carries it. |
-| `docs/delivery.md` | Contract for CI, pinning, release and provenance (record §17). |
-| `docs/rules/<id>.md` | The page a user reads about one rule; names the spec as normative. |
-| `docs/decisions.md` | Decision log, `D-n` product decisions and `I-n` implementation decisions. |
-| `docs/field-loop.md` | The method that finds what the tests cannot: delegate a fresh session per scenario, triage every claim against the code, pine the finding as a fixture. |
-| `rfcs/README.md` | RFC registry: number, title, status, `supersedes` / `superseded-by`. |
-| `rfcs/0001-funky-secure-v1/rfc.md` | Frozen record, revision 7. **Not edited.** Corrections are a dated `## Errata` append or the next record. |
-| `odd/tasks/<feature>.md` | Feature record: specs, tasks, and an append-only Log. |
-| `src/`, `tests/`, `scripts/` | Code, suite and the golden generator. |
-
-The path map is a fact the suite checks: `tests/docs-contract.test.js` fails when an entry here names
-a path that is not on disk.
+| `docs/spec/` | **The normative contract.** Where it and the record disagree, the spec wins. |
+| `docs/README.md` | The map from a change to the page that must move with it. Start here. |
+| `docs/decisions.md` | The decision log, `D-n` product and `I-n` implementation, with the measurements. |
+| `rfcs/` | The record: `rfcs/README.md` is the registry, and a settled RFC is never rewritten. |
+| `odd/tasks/` | Feature records: specs, tasks and an append-only Log. |
+| `src/` | The code, with the suite in `tests/` and the golden generator in `scripts/`. |
+| `CONTRIBUTING.md` | The hard rules, the issue and pull request ritual, and the local checks. |
 
 ## Working rules
 
-- **A recommendation is not authorization.** "What do you recommend", a review, a comparison or a
-  problem statement is read-only: answer, then wait. Implement only when the change itself was asked
-  for.
-- A behaviour change starts in `docs/spec/`, in its own pull request. Behaviour the record never
+- **A behaviour change starts in `docs/spec/`**, in its own pull request. Behaviour the record never
   decided starts with the next numbered RFC under `rfcs/`, opened as `draft`.
-- The append-only Log of an `odd/tasks/` document is evidence: append, never rewrite.
-- Zero runtime and zero dev dependencies, no network, no machine writes as a side effect; every write
-  inside the repository goes through `validateWriteTarget`, and the one write outside it is
-  `skill --install` (11.5 point 7). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full hard rules.
-- CLI output carries symbols (`✖ ⚠ ℹ ✓ –`), never emoji: double-width glyphs break alignment and
+- **The record is append-only.** A settled RFC is corrected by a dated `## Errata` or the next record;
+  the Log of an `odd/tasks/` document is evidence and is only ever appended to.
+- **Zero runtime and zero dev dependencies, no network, no machine writes as a side effect.** Every
+  write inside the repository goes through `validateWriteTarget`; the one outside it is
+  `skill --install` (11.5 point 7).
+- **CLI output carries symbols (`✖ ⚠ ℹ ✓ –`), never emoji** — double-width glyphs break alignment and
   determinism. Color only on a TTY.
 - **The JSON report is the machine contract; the human text is presentation and may change.**
-- **A pull request passes `pr-policy` or it does not count, and every part of it is knowable before
-  the push**: the body links an issue (`Closes #N`, `Fixes #N` or `Refs #N`), exactly one `type:*`
-  label is applied, and the branch is `type/description`, where `type` is one of `feat fix chore docs
-  style refactor perf test build ci revert`. The rule lives in
-  [`CONTRIBUTING.md`](CONTRIBUTING.md) and in `scripts/check-pr-policy.js`; the script is the same one
-  CI runs, so run it first, not after the failure notice. `main` requires no status checks, so nothing
-  stops a red pull request from merging: the check is only as real as the run before it.
-  The whole ritual is one command — `node scripts/open-pr.js --base main --title "<title>" --body-file
-  <path> --label type:docs` — which refuses a red suite, a red packed set and a policy violation, then
-  creates a **labelled pull request that is ready from birth** and reports the set of runs of this
-  commit. The set is not fussiness: `opened` and `labeled` both fire, so two runs evaluate the same
-  content. The price of that choice is named rather than hidden: an interrupted ritual leaves a **real
-  pull request** instead of a harmless draft, so the recovery is a re-run that adopts it and never a
-  draft to throw away. It refuses one more thing first: a branch on the remote that is not the commit in front of
-  you. The pull request is built from the branch, so an unpushed commit makes the wait ask about a
-  commit the pull request does not contain — measured on #241, ten minutes and then `2` with a reason
-  that was true and useless. A creation that **fails** adopts a pull request only when a lookup shows one
-  whose head commit is this commit, and its floor becomes `0`, because an adopted pull request is older
-  than any floor a re-run can take: a floor kept would hide exactly the runs the adoption exists to
-  report. `gh`'s refusal wording is not that evidence — a fork's pull request can carry the same head
-  branch name — and a creation killed at its ceiling is never adopted, because a pull request it made
-  itself is at this commit exactly like one that already existed. `--timeout` is the budget of that whole
-  delivery and not a ceiling per child: every `gh` in the phase reads what is left of it, so the number
-  you pass is the number it can spend.
-- **A pull request merges only when its checks have finished, and "finished" is a state list, not a
-  feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
-  `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
-  and that exit code does not mean failure — and `mergeStateStatus: CLEAN` is not that gate either,
-  because it reports mergeability, not the matrix. A state string can also be **stale**: `pr-policy`
-  has been seen reporting `IN_PROGRESS` while `gh run view <run> --json jobs` showed it concluded
-  `success` on a run that had already completed. When the state is stuck and the conclusion says
-  otherwise, the conclusion is the authority; a watcher keyed on the state list never converges and has
-  to be stopped by hand. After the merge, the push run on `main` must be
-  green too: the merge commit is the one that ships.
-- **A `pr-policy` failure with the matrix green is read before it is re-run.** The race is one
-  diagnosis and not the only one: the label is attached after the pull request exists, so the `opened`
-  run reads `PR_LABELS` empty. `gh pr create --label type:<t> --draft` puts the label in the creation
-  itself. **That is not reliable, and it is measured**: on #233 the `opened` run read `PR_LABELS` empty and failed with `pr-policy: no type:* label`, while the `labeled` run for the same commit read it filled and passed — with the same command that passed both runs on #231 minutes earlier. The payload is a snapshot taken before the label is queryable, so nothing may depend on it. The draft guard in `.github/workflows/ci.yml` still earns its
-  place for a pull request made by hand; `open-pr.js` no longer creates one, because a draft is a second
-  event for the same commit and the API has nothing that tells the two runs apart afterwards.
-  **A rerun does not cure it**: `gh run rerun --failed` replays the event payload, so an empty
-  `PR_LABELS` stays empty and the job fails identically — measured on 2026-11-12, attempt 2 against
-  attempt 1. A fresh event does, and turning the pull request back into a draft and ready again is the
-  cheapest one. A body that does not link an issue and a branch that is not `type/description` fail the
-  same job, and no retry changes those either. Read the failed log first and let it name the cause: it
-  says which of the three it is.
-- **Waiting for CI is `node scripts/wait-for-ci.js <commit>`.** It exits `0` passed, `1` failed and `2`
-  unknown, and `2` never means failure: no run yet, still running, or the timeout ran out. A loop written
-  by hand is how a green run gets reported as a problem — twice in one day, once on a stale status field
-  and once on a separator that did not match what the loop printed. A watcher keyed on the branch
-  instead of the commit can read an earlier commit's run. The gate it reads is the matrix: a
-  run whose summary says success and whose jobs do not is a failure. On a push to `main` `pr-policy`
-  reads `skipped`, because that job is guarded to pull request events.
-  That ritual has a price. `open-pr.js` creates the pull request **ready**, so `opened` and `labeled`
-  both fire and a pull request shows **two** runs of `ci` on the same commit, both of them running
-  `pr-policy` rather than skipping it. They evaluate the same commit and the same content, so taking one
-  of them is a coin toss: the tool reads the **set**, answers red if any run is red, green only when all
-  of them are, and unknown when they disagree. A hand-made draft that is later marked ready still shows
-  three, and there the `ready_for_review` run is the one that decides.
+- **A pull request is `node scripts/open-pr.js`, never a sequence written by hand**: it refuses a red
+  suite, a red packed set and a policy violation, then creates a labelled pull request that is ready
+  from birth. The three facts it checks, and what a red `pr-policy` means, are in
+  [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **A pull request merges only on `gh pr checks <n> --json state`, with no state outside `SUCCESS`,
+  `SKIPPED` and `NEUTRAL`.** `gh pr checks --watch` is not that gate. When the state says `IN_PROGRESS`
+  and `gh run view <run> --json jobs` says `success`, the conclusion is the authority.
+- **Waiting for CI is `node scripts/wait-for-ci.js <commit>`.** Exit `0` passed, `1` failed, and **`2`
+  never means failure** — no run yet, still running, or the timeout ran out. It reads the matrix, not
+  the run summary; on a push to `main` `pr-policy` reads `skipped`, and that is not a failure.
+- **A `pr-policy` failure is read before it is re-run.** `gh run rerun --failed` replays the event
+  payload, so a label missing from that snapshot stays missing, and the cure is a fresh event. A body
+  that links no issue, or a branch outside `type/description`, is cured by no retry.
+- **Publishing is a human decision with a mechanical precondition.** CI stages and a maintainer approves
+  with 2FA; the order and its preconditions are in
+  [`.agents/skills/release/SKILL.md`](.agents/skills/release/SKILL.md).
 
 ## Commands
 
 ```sh
-node --test                    # the suite: rules, commands, drift gate, goldens, self-scan
-                               # fewer tests than the last run has not run faster
+node --test                    # the suite; fewer tests than the last run has not run faster
 node scripts/gen-golden.js     # regenerate goldens after an intended report change
-node scripts/pack-guard.js     # the packed set against the `files` contract, or `npm run pack:check`
-                               # a packed path outside the contract is a leak; an entry that packs
-                               # nothing is a typo. `open-pr.js` runs it before the policy
+node scripts/pack-guard.js     # the packed set against the `files` contract (`npm run pack:check`)
 node bin/funky-secure.js scan --scope repo --fail-on warn   # self-scan, what CI runs
-PR_BODY="$(cat body.md)" PR_LABELS=type:docs PR_HEAD_REF="$(git branch --show-current)" \\
+PR_BODY="$(cat body.md)" PR_LABELS=type:docs PR_HEAD_REF="$(git branch --show-current)" \
   node scripts/check-pr-policy.js   # the pull request policy, before the push
 ```
