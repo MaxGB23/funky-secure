@@ -12,7 +12,7 @@ for I-25 to I-28 and
 [`../rfcs/0005-skill-install/rfc.md`](../rfcs/0005-skill-install/rfc.md) for I-35 and I-36,
 [`../rfcs/0006-human-defaults/rfc.md`](../rfcs/0006-human-defaults/rfc.md) for I-37, and the records
 of the 0.4–0.8 line — [`0007`](../rfcs/0007-remediation-routes/rfc.md) through
-[`0024`](../rfcs/0024-the-contract-says-what-it-does/rfc.md) — for I-38 to I-55. The log runs to I-70.
+[`0024`](../rfcs/0024-the-contract-says-what-it-does/rfc.md) — for I-38 to I-55.
 
 Nothing here restates the RFC. Each line names the decision and the section or file it binds.
 
