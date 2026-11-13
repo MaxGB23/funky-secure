@@ -313,7 +313,7 @@ function sameIds(left, right) {
 /**
  * The command line, and the ritual it refuses to skip.
  *
- * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, pack?: () => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, now?: () => number, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
+ * @param {{ argv?: string[], exec?: Function, suite?: (ceilings?: { timeoutMs?: number }) => { ok: boolean, stdout: string }, pack?: (ceilings?: { timeoutMs?: number }) => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, now?: () => number, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
  * @returns {Promise<number>}
  */
 export async function run(deps = {}) {
@@ -350,8 +350,24 @@ export async function run(deps = {}) {
     return UNKNOWN;
   }
 
+  // One budget, taken before the first child of all — the suite included, because a step outside the
+  // budget makes `--timeout` a promise about one phase instead of about the turn. Before this the number
+  // `--timeout` names was spent by every child in turn — 600 for the floor, 600 for the creation, 600
+  // for the wait and 600 for each `run view` — so a declared ten minutes could hold the ritual open for
+  // forty, and the suite and the packed set added their own 900 and 120 on top of that. Every child now
+  // reads what is left, and the floor of one second keeps the last attempt possible instead of making
+  // it zero.
+  let deadline = null;
+  const budget = () => (deadline ??= now() + options.timeout * 1000);
+  const remainingMs = () => Math.max(1_000, budget() - now());
+  const remainingSeconds = () => Math.max(1, Math.round(remainingMs() / 1000));
+  // A step keeps its own ceiling while there is room for it and is cut to what is left when there is
+  // not: the ceiling says what the step may take, the budget says what the turn may.
+  const ceiling = (own) => Math.min(own, remainingMs());
+
   // 1. The suite. A branch that does not parse is cheaper to fix here than in a run nobody watches.
-  const tested = suite();
+  const suiteCeilingMs = ceiling(SUITE_TIMEOUT_MS);
+  const tested = suite({ timeoutMs: suiteCeilingMs });
   if (!tested.ok) {
     const count = failingCount(tested.stdout);
     const named = count === null ? '' : ` (${count} failing test${count === 1 ? '' : 's'})`;
@@ -365,12 +381,15 @@ export async function run(deps = {}) {
   // publish. A branch can be green and still publish a tarball that leaks a scratch note or ships less
   // than the `files` contract promised, and that mistake is found after publication if it is found at
   // all. Every step below this one comes after it, so a refusal here means nothing was created.
-  const packed = pack();
+  const packCeilingMs = ceiling(PACK_TIMEOUT_MS);
+  const packed = pack({ timeoutMs: packCeilingMs });
   // A gate killed at its ceiling did not fail: it never answered, and nothing about the packed set is
-  // known. Saying red would report a check as broken when it was never made.
+  // known. Saying red would report a check as broken when it was never made. The ceiling it is named
+  // with is the one it was handed, never the constant, so a gate cut short by a nearly spent budget
+  // does not send the reader looking for the wrong number.
   if (packed?.timedOut === true) {
     out.write(
-      `open-pr: unknown — the packed-set gate did not answer within its ceiling of ${PACK_TIMEOUT_MS / 1000}s, ` +
+      `open-pr: unknown — the packed-set gate did not answer within its ceiling of ${Math.round(packCeilingMs / 1000)}s, ` +
         'so nothing was created and its verdict is unknown; this is not a failure\n',
     );
     return UNKNOWN;
@@ -438,14 +457,6 @@ export async function run(deps = {}) {
     out.write('open-pr: unknown — nothing was created so its verdict is unknown; this is not a failure\n');
     return UNKNOWN;
   }
-  // 4b. One budget, taken once. Before this the number `--timeout` names was spent by every child in
-  // turn — 600 for the floor, 600 for the creation, 600 for the wait and 600 for each `run view` — so a
-  // declared ten minutes could hold the ritual open for forty. Every child now reads what is left, and
-  // the floor of one second keeps the last attempt possible instead of making it zero.
-  const deadline = now() + options.timeout * 1000;
-  const remainingMs = () => Math.max(1_000, deadline - now());
-  const remainingSeconds = () => Math.max(1, Math.round(remainingMs() / 1000));
-
   const floorAnswer = readRuns(exec, {
     head,
     repo: options.repo,
@@ -675,14 +686,16 @@ const SUITE_TIMEOUT_MS = 900_000;
  * server and never closes it does not fail, it hangs, and this script exists so no turn is lost to a
  * wait that cannot end — including the wait for its own suite.
  *
+ * @param {number} [timeoutMs] the ceiling this child is handed, so a caller bounded by the delivery
+ * budget can narrow it; the constant is the default, which keeps every existing caller unchanged.
  * @returns {{ cwd: string, encoding: 'utf8', maxBuffer: number, timeout: number }}
  */
-export function suiteOptions() {
-  return { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: SUITE_TIMEOUT_MS };
+export function suiteOptions(timeoutMs = SUITE_TIMEOUT_MS) {
+  return { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs };
 }
 
-function defaultSuite() {
-  const result = spawnSync(process.execPath, ['--test'], suiteOptions());
+function defaultSuite({ timeoutMs = SUITE_TIMEOUT_MS } = {}) {
+  const result = spawnSync(process.execPath, ['--test'], suiteOptions(timeoutMs));
   return { ok: result.status === 0, stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 
@@ -694,11 +707,14 @@ const PACK_TIMEOUT_MS = 120_000;
  * reason: `npm pack` on a cold cache or behind a held lock can wait, and a step that can wait forever is
  * the step that gets skipped. `extra` is merged over the defaults so a caller can narrow or add to it.
  *
- * @param {object} [extra]
+ * `timeoutMs` is the ceiling this child is handed, so a caller bounded by the delivery budget can
+ * narrow it; the constant is the default, which keeps every existing caller unchanged.
+ *
+ * @param {{ timeoutMs?: number } & object} [options]
  * @returns {{ cwd: string, encoding: 'utf8', maxBuffer: number, timeout: number }}
  */
-export function packOptions(extra = {}) {
-  return { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: PACK_TIMEOUT_MS, ...extra };
+export function packOptions({ timeoutMs = PACK_TIMEOUT_MS, ...extra } = {}) {
+  return { cwd: ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: timeoutMs, ...extra };
 }
 
 /**
@@ -762,7 +778,7 @@ function npmCli() {
  *
  * @returns {{ ok: boolean, stdout: string, timedOut: boolean, problem?: string }}
  */
-function defaultPack() {
+function defaultPack({ timeoutMs = PACK_TIMEOUT_MS } = {}) {
   const cli = npmCli();
   if (cli === null) {
     return {
@@ -773,7 +789,7 @@ function defaultPack() {
     };
   }
 
-  const result = spawnSync(process.execPath, [cli, 'run', 'pack:check'], packOptions());
+  const result = spawnSync(process.execPath, [cli, 'run', 'pack:check'], packOptions({ timeoutMs }));
   return {
     ok: result.status === 0,
     stdout: `${result.stdout ?? ''}${result.stderr ?? ''}`,

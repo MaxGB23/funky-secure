@@ -288,8 +288,9 @@ test('a packed-set gate that reaches its ceiling is unknown, never a red', async
   assert.match(
     out.text,
     // The ceiling a human reads to decide whether to raise it has to be the ceiling the child was
-    // handed, and that number comes from one constant: `packOptions().timeout`.
-    new RegExp(`the packed-set gate did not answer within its ceiling of ${packOptions().timeout / 1000}s`),
+    // handed, and that is now the smaller of the gate's own ceiling, `packOptions().timeout`, and the
+    // budget the command declares — 30s here, not the constant.
+    new RegExp(`the packed-set gate did not answer within its ceiling of ${Math.min(packOptions().timeout, 30_000) / 1000}s`),
   );
   assert.match(out.text, /nothing was created and its verdict is unknown/);
   assert.match(out.text, /this is not a failure/);
@@ -570,6 +571,37 @@ test('a watch that runs out of time is unknown, never a failure', async (t) => {
     'the run is read once the wait gives up: the wait says nothing about the conclusion',
   );
   assert.match(out, /unknown — the run did not conclude within 30s; this is not a failure/);
+});
+
+test('the suite is bounded by the delivery budget, not only by its own ceiling', async (t) => {
+  // `--timeout` names the budget of the delivery, and a step that runs before it cannot spend more than
+  // the whole of it. The suite's own ceiling is 900s and these tests declare 30s, so the smaller number
+  // has to reach the child; and the delivery inherits what the suite left, not what it declared.
+  let clock = 0;
+  const suiteCeilings = [];
+  const ceilings = [];
+  const inner = ghFloor({
+    polls: [[runOf(22, { status: 'in_progress', conclusion: null })]],
+    watch: { timedOut: true },
+    views: { 22: { status: 'in_progress', conclusion: null, jobs: [] } },
+  });
+  const exec = (args, options) => {
+    ceilings.push(options?.timeoutMs ?? null);
+    return inner.exec(args, options);
+  };
+
+  const { code } = await runWith(t, exec, BODY, 30, {
+    now: () => clock,
+    suite: (options = {}) => {
+      suiteCeilings.push(options.timeoutMs);
+      clock += 10_000;
+      return { ok: true, stdout: 'ℹ fail 0\n' };
+    },
+  });
+
+  assert.equal(code, UNKNOWN, 'a watch that ran out is not a failure');
+  assert.equal(suiteCeilings[0], 30_000, 'the suite is bounded by the budget when the budget is smaller');
+  assert.equal(ceilings[0], 20_000, 'the delivery inherits what the suite left');
 });
 
 test('the wait reports the seconds it received, not the ones the command declared', async (t) => {
