@@ -219,6 +219,7 @@ test('a red packed-set gate refuses before anything is created and writes the ga
     }),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
@@ -249,6 +250,7 @@ test('a packed-set gate that reaches its ceiling is unknown, never a red', async
     pack: packGuard({ ok: false, timedOut: true, stdout: 'pack-guard: still packing\n' }),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
@@ -259,6 +261,84 @@ test('a packed-set gate that reaches its ceiling is unknown, never a red', async
   assert.match(out.text, /nothing was created and its verdict is unknown/);
   assert.match(out.text, /this is not a failure/);
   assert.doesNotMatch(err.text, /is red/, 'a ceiling is never a red');
+  assert.equal(calls.length, 0, 'nothing is created on an answer nobody gave');
+});
+
+test('a commit the remote does not have refuses before anything is created', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+  const unpushed = 'b'.repeat(40);
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    // The branch on the remote is not the commit this tree is at. A pull request created from it would
+    // be built from a commit nobody looked at, so its runs would say nothing about this one.
+    resolveRemote: () => ({ ok: true, sha: unpushed }),
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'a commit the pull request will not contain is unknown, never a red');
+  assert.match(err.text, new RegExp(`the remote branch \\S+ is at ${unpushed}`), 'the remote is named');
+  assert.match(err.text, new RegExp(`your HEAD is ${SHA}`), 'and so is the commit that was not pushed');
+  assert.match(err.text, /push it and run this again/, 'the fix is one command and the message says it');
+  assert.match(out.text, /nothing was created so its verdict is unknown/);
+  assert.equal(calls.length, 0, 'nothing is created from a commit the remote does not have');
+  assert.doesNotMatch(out.text, /waiting for the runs/, 'the wait never starts');
+});
+
+test('a branch the remote does not have refuses before anything is created', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    resolveRemote: () => ({ ok: true, sha: null }),
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'a branch that is nowhere upstream is unknown, never a red');
+  assert.match(err.text, /the remote has no branch \S+/);
+  assert.equal(calls.length, 0, 'a pull request needs a branch, so nothing is created');
+});
+
+test('a remote read that fails refuses instead of assuming the branch is where this tree is', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    // A read that cannot answer is not evidence that both commits are the same one.
+    resolveRemote: () => ({ ok: false, problem: 'git ls-remote: fatal: could not read from remote repository' }),
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'an unreadable remote is unknown, never a green');
+  assert.match(err.text, /git ls-remote: fatal: could not read from remote repository/, 'the child speaks');
+  assert.match(err.text, /the remote branch is unknown/);
   assert.equal(calls.length, 0, 'nothing is created on an answer nobody gave');
 });
 
@@ -301,6 +381,7 @@ test('creates a labelled pull request, and the run of this commit decides it', a
     pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
@@ -351,6 +432,7 @@ test('a run that existed before the pull request was created cannot decide it', 
     pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
@@ -395,6 +477,7 @@ test('a run that concluded failure exits 1 and still names the pull request', as
     pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
@@ -424,6 +507,7 @@ test('a cancelled run with a green matrix is unknown, never a failure', async (t
     pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
@@ -567,6 +651,7 @@ async function runWith(t, exec, body = BODY, timeout = 30) {
     pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
     sleep: async () => {},
     out,
     err,
