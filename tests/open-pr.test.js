@@ -37,10 +37,12 @@ function capture() {
  */
 function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snapshot = [], runs = [], conclusion = 'success', jobs = null, watch = {} } = {}) {
   const calls = [];
+  const budgets = [];
   let lists = 0;
 
-  const exec = (args) => {
+  const exec = (args, options) => {
     calls.push(args.join(' '));
+    budgets.push({ call: args.join(' '), timeoutMs: options?.timeoutMs ?? null });
     const [group, action] = args;
 
     if (group === 'pr' && action === 'create') return { ok: true, stdout: create, stderr: '' };
@@ -68,7 +70,7 @@ function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snap
     return { ok: false, stdout: '', stderr: `unexpected gh ${args.join(' ')}` };
   };
 
-  return { exec, calls };
+  return { exec, calls, budgets };
 }
 
 /**
@@ -262,6 +264,84 @@ test('a packed-set gate that reaches its ceiling is unknown, never a red', async
   assert.match(out.text, /this is not a failure/);
   assert.doesNotMatch(err.text, /is red/, 'a ceiling is never a red');
   assert.equal(calls.length, 0, 'nothing is created on an answer nobody gave');
+});
+
+test('the wait gets what is left of the budget, not the whole of it again', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+  let clock = 0;
+  const now = () => clock;
+  // Two children before the wait, each costing a third of the 60s these tests declare. The wait may
+  // spend 20 of them; printing 60 would print a number nobody has, and polling as if it had 60 would
+  // spend one. `run list` polls once per 15s of budget, so 20s buys two polls and 60 buys four.
+  const spending = (args, options) => {
+    const answer = exec(args, options);
+    clock += 20_000;
+    return answer;
+  };
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY), 60),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec: spending,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    now,
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  // The first `run list` is the floor, read before anything exists; the rest are the wait's.`ceil(20/15)`
+  // attempts, plus the read that closes the set: three for 20s of budget, five for 60.
+  const polls = calls.filter((call) => call.startsWith('run list')).length - 1;
+  assert.match(out.text, /waiting for the runs of \S+ \(up to 20s\)/, 'the wait prints what it has');
+  assert.doesNotMatch(out.text, /up to 60s/, 'never the number it was told at the start');
+  assert.equal(polls, 3, 'and it polls what 20s buys, not what 60 would');
+  assert.equal(code, UNKNOWN, 'nothing appeared, so the answer is unknown and not a red');
+});
+
+test('every run view spends from the same budget, so the second is not a fresh ceiling', async (t) => {
+  const out = capture();
+  const err = capture();
+  const settled = { status: 'completed', conclusion: 'success' };
+  const { exec, budgets } = gh({
+    runs: [
+      { databaseId: 101, headSha: SHA, ...settled },
+      { databaseId: 102, headSha: SHA, ...settled },
+    ],
+  });
+  let clock = 0;
+  const now = () => clock;
+  const spending = (args, options) => {
+    const answer = exec(args, options);
+    clock += 5_000;
+    return answer;
+  };
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec: spending,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    now,
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  const views = budgets.filter((entry) => entry.call.includes('run view'));
+  assert.equal(views.length, 2, 'two candidates, two reads');
+  assert.ok(views[1].timeoutMs < views[0].timeoutMs, 'the second read inherits what the first left');
+  assert.ok(
+    views.every((entry) => entry.timeoutMs < 30_000),
+    'neither read gets the whole budget again',
+  );
+  assert.equal(code, GREEN);
 });
 
 test('a commit the remote does not have refuses before anything is created', async (t) => {

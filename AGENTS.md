@@ -59,7 +59,9 @@ a path that is not on disk.
   content. It refuses one more thing first: a branch on the remote that is not the commit in front of
   you. The pull request is built from the branch, so an unpushed commit makes the wait ask about a
   commit the pull request does not contain — measured on #241, ten minutes and then `2` with a reason
-  that was true and useless.
+  that was true and useless. `--timeout` is the budget of that whole delivery and not a ceiling per
+  child: every `gh` in the phase reads what is left of it, so the number you pass is the number it can
+  spend.
 - **A pull request merges only when its checks have finished, and "finished" is a state list, not a
   feeling.** `gh pr checks <n> --json state` must show no state outside `SUCCESS`, `SKIPPED` and
   `NEUTRAL`. `gh pr checks --watch` is not that gate — it exits `1` while checks are still pending,
