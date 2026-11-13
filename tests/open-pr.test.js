@@ -285,7 +285,12 @@ test('a packed-set gate that reaches its ceiling is unknown, never a red', async
   });
 
   assert.equal(code, UNKNOWN, 'a ceiling is not a red check');
-  assert.match(out.text, /the packed-set gate did not answer within its ceiling of \d+s/);
+  assert.match(
+    out.text,
+    // The ceiling a human reads to decide whether to raise it has to be the ceiling the child was
+    // handed, and that number comes from one constant: `packOptions().timeout`.
+    new RegExp(`the packed-set gate did not answer within its ceiling of ${packOptions().timeout / 1000}s`),
+  );
   assert.match(out.text, /nothing was created and its verdict is unknown/);
   assert.match(out.text, /this is not a failure/);
   assert.doesNotMatch(err.text, /is red/, 'a ceiling is never a red');
@@ -567,6 +572,34 @@ test('a watch that runs out of time is unknown, never a failure', async (t) => {
   assert.match(out, /unknown — the run did not conclude within 30s; this is not a failure/);
 });
 
+test('the wait reports the seconds it received, not the ones the command declared', async (t) => {
+  // Budget spent before the wait makes the two numbers different, which is the only way to tell them
+  // apart: with nothing spent yet, "the seconds left" and "the declared timeout" are the same value and
+  // a message that prints the wrong one passes every assertion.
+  let clock = 0;
+  const inner = ghFloor({
+    polls: [[runOf(22, { status: 'in_progress', conclusion: null })]],
+    watches: { 22: { ok: false, timedOut: true } },
+    views: { 22: { status: 'in_progress', conclusion: null, jobs: [] } },
+  });
+  // Two children before the wait — the floor read and the creation — at five seconds each.
+  const exec = (args, options) => {
+    const answer = inner.exec(args, options);
+    clock += 5_000;
+    return answer;
+  };
+
+  const { code, out } = await runWith(t, exec, BODY, 30, { now: () => clock });
+
+  assert.equal(code, UNKNOWN);
+  assert.match(
+    out,
+    /unknown — the run did not conclude within 20s; this is not a failure/,
+    '20 of the declared 30 were left when the wait started',
+  );
+  assert.doesNotMatch(out, /did not conclude within 30s/, 'never the number the command was told');
+});
+
 test('a run that concluded failure exits 1 and still names the pull request', async (t) => {
   const out = capture();
   const err = capture();
@@ -748,7 +781,7 @@ function ghFloor({ floor = [], polls = [[]], views = {}, watch = {}, watches = {
 }
 
 /** One `run()` with the suite and the packed set green, and no waiting, whatever `gh` answers. */
-async function runWith(t, exec, body = BODY, timeout = 30) {
+async function runWith(t, exec, body = BODY, timeout = 30, extra = {}) {
   const out = capture();
   const err = capture();
   const code = await run({
@@ -761,6 +794,7 @@ async function runWith(t, exec, body = BODY, timeout = 30) {
     sleep: async () => {},
     out,
     err,
+    ...extra,
   });
   return { code, out: out.text, err: err.text };
 }
