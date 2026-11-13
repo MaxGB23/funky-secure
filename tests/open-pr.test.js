@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
@@ -16,6 +17,8 @@ import {
   pullRequestFrom,
   run,
   runsPastFloor,
+  spawnOutcome,
+  suiteOptions,
 } from '../scripts/open-pr.js';
 
 const SHA = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -231,6 +234,61 @@ test('a red suite refuses before anything is created and names the failing count
   assert.match(err.text, /the suite is red \(2 failing tests\), so nothing was created/);
   assert.equal(calls.length, 0, 'no gh call, so no pull request');
   assert.equal(out.text, '');
+});
+
+test('a suite killed at its ceiling is unknown, never a red', async () => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+
+  const code = await run({
+    argv: argvFor('body.md'),
+    // `node --test` on a test that opens a server and never closes it does not fail: it hangs, and
+    // `spawnSync` killed at its timeout leaves no status. The reporter's summary it did print says two
+    // tests failed, and that is not evidence: the summary of a killed run is a run that never ended.
+    suite: () => ({ ok: false, timedOut: true, stdout: 'ℹ tests 8\nℹ pass 6\nℹ fail 2\n' }),
+    exec,
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'a ceiling is not a red suite');
+  assert.match(
+    out.text,
+    // The ceiling a human reads to decide whether to raise it has to be the one the suite was handed,
+    // and that is the smaller of the suite's own ceiling, `suiteOptions().timeout`, and the budget the
+    // command declares — 30s here, not the constant.
+    new RegExp(
+      `the suite did not answer within its ceiling of ${Math.min(suiteOptions().timeout, 30_000) / 1000}s`,
+    ),
+    'the suite is named, with the ceiling it actually received',
+  );
+  assert.match(out.text, /nothing was created and its verdict is unknown/);
+  assert.match(out.text, /this is not a failure/);
+  assert.doesNotMatch(out.text, /failing test/, 'no test failed, so no count of failing tests is reported');
+  assert.doesNotMatch(err.text, /is red/, 'a ceiling is never a red');
+  assert.doesNotMatch(err.text, /failing test/, 'and the red branch never prints its count for it');
+  assert.equal(calls.length, 0, 'nothing is created on an answer nobody gave');
+});
+
+test('a child killed at its ceiling is timedOut, and a child that answered is not', () => {
+  // The whole of I-78 rests on this: `spawnSync` killed at its `timeout` leaves no status, and that
+  // absence is the only evidence that the bound was reached rather than the command answering. A stub
+  // here would pin the stub, so this spawns the real thing — this interpreter, hanging inline, against a
+  // ceiling it cannot meet — and reads the two answers `defaultSuite` and `defaultPack` both read.
+  const killed = spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], { timeout: 250 });
+  assert.equal(killed.status, null, 'a kill leaves no status to read');
+  assert.deepEqual(spawnOutcome(killed), { ok: false, timedOut: true }, 'a ceiling is not a red');
+
+  const passed = spawnSync(process.execPath, ['-e', 'process.exit(0)']);
+  assert.deepEqual(spawnOutcome(passed), { ok: true, timedOut: false }, 'an answer is not a ceiling');
+
+  const failed = spawnSync(process.execPath, ['-e', 'process.exit(1)']);
+  assert.deepEqual(
+    spawnOutcome(failed),
+    { ok: false, timedOut: false },
+    'a child that failed has a status, so its red is a red',
+  );
 });
 
 test('a red packed-set gate refuses before anything is created and writes the gate\'s output', async (t) => {
@@ -830,6 +888,42 @@ async function runWith(t, exec, body = BODY, timeout = 30, extra = {}) {
   });
   return { code, out: out.text, err: err.text };
 }
+
+test('the remote read is handed min(its own ceiling, what is left), like every other child', async (t) => {
+  // Two budgets, because the rule has two halves and a call that keeps only one of them passes the
+  // other. At a comfortable budget the read keeps the 30s local-git ceiling a stuck `git ls-remote` is
+  // bounded by — handing it the bare remainder lets a stuck read hold the ritual for the whole declared
+  // ten minutes, which is what that ceiling exists to prevent. At a nearly spent budget it is cut to
+  // what is left, which is the other half: a step outside the deadline is how `--timeout` becomes a
+  // promise about one phase instead of about the turn.
+  const handed = [];
+  const remote = (options = {}) => {
+    handed.push(options.timeoutMs);
+    return { ok: true, sha: SHA };
+  };
+
+  let clock = 0;
+  const comfortable = await runWith(t, ghFloor({ polls: [[runOf(22)]] }).exec, BODY, 600, {
+    now: () => clock,
+    resolveRemote: remote,
+  });
+  assert.equal(comfortable.code, GREEN, 'the delivery still runs to its verdict');
+
+  const { exec } = ghFloor({ polls: [[runOf(22)]] });
+  const spent = await runWith(t, exec, BODY, 60, {
+    now: () => clock,
+    suite: () => {
+      clock += 59_500;
+      return { ok: true, stdout: 'ℹ fail 0\n' };
+    },
+    resolveRemote: remote,
+  });
+  assert.equal(spent.code, GREEN, 'and again with almost none of it left');
+
+  assert.equal(handed.length, 2, 'the remote branch is read exactly once per run');
+  assert.equal(handed[0], 30_000, 'its own ceiling, at a budget with room for it');
+  assert.equal(handed[1], 1_000, 'and what is left, floored at a second, when the budget is nearly spent');
+});
 
 test('a run at or below the floor can never decide the pull request', async (t) => {
   const stale = runOf(9);

@@ -313,7 +313,7 @@ function sameIds(left, right) {
 /**
  * The command line, and the ritual it refuses to skip.
  *
- * @param {{ argv?: string[], exec?: Function, suite?: (ceilings?: { timeoutMs?: number }) => { ok: boolean, stdout: string }, pack?: (ceilings?: { timeoutMs?: number }) => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, now?: () => number, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
+ * @param {{ argv?: string[], exec?: Function, suite?: (ceilings?: { timeoutMs?: number }) => { ok: boolean, timedOut?: boolean, stdout: string }, pack?: (ceilings?: { timeoutMs?: number }) => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, now?: () => number, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
  * @returns {Promise<number>}
  */
 export async function run(deps = {}) {
@@ -368,6 +368,19 @@ export async function run(deps = {}) {
   // 1. The suite. A branch that does not parse is cheaper to fix here than in a run nobody watches.
   const suiteCeilingMs = ceiling(SUITE_TIMEOUT_MS);
   const tested = suite({ timeoutMs: suiteCeilingMs });
+  // A suite killed at its ceiling did not fail: it never answered, and nothing about the branch is
+  // known. Saying red would report a test as failing when no test ever failed — the case that produces
+  // this is a test that opens a server and never closes it, which hangs rather than fails, and a hang
+  // reported as a failure sends the reader looking for a defect in the test that is not there. The
+  // ceiling it is named with is the one it was handed, never the constant, so a suite cut short by a
+  // nearly spent budget does not send the reader looking for the wrong number.
+  if (tested?.timedOut === true) {
+    out.write(
+      `open-pr: unknown — the suite did not answer within its ceiling of ${Math.round(suiteCeilingMs / 1000)}s, ` +
+        'so nothing was created and its verdict is unknown; this is not a failure\n',
+    );
+    return UNKNOWN;
+  }
   if (!tested.ok) {
     const count = failingCount(tested.stdout);
     const named = count === null ? '' : ` (${count} failing test${count === 1 ? '' : 's'})`;
@@ -436,8 +449,10 @@ export async function run(deps = {}) {
   // so a commit that was never pushed makes step 6 ask about a commit the pull request does not
   // contain: the runs would answer for other content, and the wait would sit out its whole budget on a
   // question that has no answer. Measured on #241, whose head was the previous commit while this tree
-  // was one ahead: ten minutes, then `unknown`, both true and both useless.
-  const remote = resolveRemote({ head, timeoutMs: LOCAL_GIT_TIMEOUT_MS });
+  // was one ahead: ten minutes, then `unknown`, both true and both useless. Its ceiling is `ceiling`'s
+  // and not what is left alone, because a stuck `git ls-remote` would then hold the ritual for the whole
+  // declared budget: `min(own, what is left)` is the rule for every bounded child, including this one.
+  const remote = resolveRemote({ head, timeoutMs: ceiling(LOCAL_GIT_TIMEOUT_MS) });
   if (remote?.ok !== true) {
     err.write(
       `open-pr: refusing: ${remote?.problem ?? 'the remote branch could not be read'}; the remote branch is unknown, so nothing was created\n`,
@@ -676,7 +691,7 @@ function defaultExec(args, { timeoutMs } = {}) {
  * The suite, in the repository root, with both streams kept because the failing count is read from the
  * reporter's summary.
  *
- * @returns {{ ok: boolean, stdout: string }}
+ * @returns {{ ok: boolean, stdout: string, timedOut: boolean }}
  */
 /** A suite that runs longer than this is not slow: a test is holding the event loop open. */
 const SUITE_TIMEOUT_MS = 900_000;
@@ -694,9 +709,24 @@ export function suiteOptions(timeoutMs = SUITE_TIMEOUT_MS) {
   return { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: timeoutMs };
 }
 
+/**
+ * What a `spawnSync` of a bounded child answered, in the two answers the ritual reads out of it.
+ *
+ * `timedOut` is not convenience: a kill leaves `status: null`, and that absence is the only evidence
+ * that the bound was reached rather than the child finishing with something to say. It is derived here
+ * once, because the suite and the packed set read the same two answers and a second copy of the rule is
+ * the copy that drifts — a hang reported as a failure, which is the answer a reader cannot act on.
+ *
+ * @param {{ status?: number | null }} result
+ * @returns {{ ok: boolean, timedOut: boolean }}
+ */
+export function spawnOutcome(result) {
+  return { ok: result.status === 0, timedOut: result.status === null };
+}
+
 function defaultSuite({ timeoutMs = SUITE_TIMEOUT_MS } = {}) {
   const result = spawnSync(process.execPath, ['--test'], suiteOptions(timeoutMs));
-  return { ok: result.status === 0, stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
+  return { ...spawnOutcome(result), stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 
 /** A packed-set gate that runs longer than this is not slow: `npm pack` is stuck on a cache or a lock. */
@@ -790,13 +820,7 @@ function defaultPack({ timeoutMs = PACK_TIMEOUT_MS } = {}) {
   }
 
   const result = spawnSync(process.execPath, [cli, 'run', 'pack:check'], packOptions({ timeoutMs }));
-  return {
-    ok: result.status === 0,
-    stdout: `${result.stdout ?? ''}${result.stderr ?? ''}`,
-    // A kill leaves no status, which is the only evidence that the bound was reached rather than npm
-    // answering with a refusal.
-    timedOut: result.status === null,
-  };
+  return { ...spawnOutcome(result), stdout: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 }
 
 /**
