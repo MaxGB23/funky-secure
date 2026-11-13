@@ -334,3 +334,104 @@ test('refuses a permissions declaration it cannot attribute and names the line',
     assert.match(result.detail, detail);
   }
 });
+
+test('reads the workflow name and the trigger block with its lists', () => {
+  const result = parseWorkflow('name: label\non:\n  workflow_run:\n    workflows: ["pr build"]\n    types: [completed]\n');
+  assert.equal(result.ok, true);
+  assert.equal(result.name, 'label');
+  assert.equal(result.triggers.form, 'map');
+  assert.deepEqual(result.triggers.events, [
+    { name: 'workflow_run', line: 3, config: { workflows: ['pr build'], types: ['completed'] } },
+  ]);
+});
+
+test('reads the scalar and sequence forms of on:', () => {
+  assert.deepEqual(parseWorkflow('on: push\n').triggers.events, [{ name: 'push', line: 1, config: {} }]);
+  assert.deepEqual(parseWorkflow('on: [push, pull_request]\n').triggers.events, [
+    { name: 'push', line: 1, config: {} },
+    { name: 'pull_request', line: 1, config: {} },
+  ]);
+});
+
+test('reads the block list form of a trigger list', () => {
+  const result = parseWorkflow('on:\n  workflow_run:\n    workflows:\n      - pr build\n      - other build\n');
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.triggers.events, [
+    { name: 'workflow_run', line: 2, config: { workflows: ['pr build', 'other build'] } },
+  ]);
+});
+
+test('reads env at the job and at the step level', () => {
+  const result = parseWorkflow(
+    'name: x\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    env:\n      NODE_ENV: production\n    steps:\n      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n        env:\n          GH_TOKEN: ${{ github.token }}\n',
+  );
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.jobs[0].env, { NODE_ENV: 'production' });
+  assert.deepEqual(result.jobs[0].steps[0].env, { GH_TOKEN: '${{ github.token }}' });
+});
+
+test('a flow-map on: is reported as a form the reader does not model', () => {
+  const result = parseWorkflow('on: {push: {}}\n');
+  assert.equal(result.ok, true);
+  assert.equal(result.triggers.form, 'flow-map');
+  assert.deepEqual(result.triggers.events, []);
+});
+
+/// A trigger configuration the reader cannot read as a list of scalars is reported, never refused: a
+/// `schedule` block list of maps keeps the workflow readable and only that key is unread, so `null`
+/// (a key the file declares) is never confused with `[]` (a list it declares empty).
+
+test('keeps a workflow readable when a trigger configuration is a list of maps', () => {
+  const result = parseWorkflow(
+    [
+      'name: nightly',
+      'on:',
+      '  schedule:',
+      "    - cron: '0 3 * * *'",
+      'jobs:',
+      '  build:',
+      '    steps:',
+      '      - run: npm test',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(result.ok, true, result.detail);
+  assert.equal(result.triggers.form, 'map');
+  assert.deepEqual(result.triggers.events.map((event) => [event.name, event.line]), [['schedule', 3]]);
+  assert.equal(result.triggers.events[0].config.cron, null);
+});
+
+test('reports one unreadable trigger configuration without degrading its sibling', () => {
+  const result = parseWorkflow(
+    [
+      'on:',
+      '  workflow_run:',
+      '    workflows: ["pr build"]',
+      '  schedule:',
+      "    - cron: '0 3 * * *'",
+      '',
+    ].join('\n'),
+  );
+  assert.equal(result.ok, true, result.detail);
+  assert.equal(result.triggers.form, 'map');
+  assert.deepEqual(result.triggers.events, [
+    { name: 'workflow_run', line: 2, config: { workflows: ['pr build'] } },
+    { name: 'schedule', line: 4, config: { cron: null } },
+  ]);
+});
+
+test('reads an empty flow map on: as the none form', () => {
+  const result = parseWorkflow('on: {}\n');
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.triggers, { line: 1, form: 'none', events: [] });
+});
+
+test('reads a trigger key with an empty block list as an empty list, never as null', () => {
+  const result = parseWorkflow(
+    ['on:', '  workflow_run:', '    workflows: ["pr build"]', '    types:', ''].join('\n'),
+  );
+  assert.equal(result.ok, true, result.detail);
+  assert.deepEqual(result.triggers.events, [
+    { name: 'workflow_run', line: 2, config: { workflows: ['pr build'], types: [] } },
+  ]);
+});
