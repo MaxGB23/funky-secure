@@ -34,8 +34,20 @@ function capture() {
  * A `gh` whose answers are written here and nowhere else. Call order decides which `run list` answer is
  * served: the first one is the floor read before the creation, every later one is a poll of that same
  * question after the deciding event.
+ *
+ * `created` is the whole answer of `pr create` — the URL it printed, or a refusal with what it said —
+ * and `list` is the answer of `pr list`, which is read only once that creation failed: `{ rows }` for
+ * the pull request of this head, or `{ ok: false, stderr }` for a read that could not answer.
  */
-function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snapshot = [], runs = [], conclusion = 'success', jobs = null, watch = {} } = {}) {
+function gh({
+  created = { ok: true, stdout: 'https://github.com/MaxGB23/funky-secure/pull/42\n', stderr: '' },
+  list = { rows: [] },
+  snapshot = [],
+  runs = [],
+  conclusion = 'success',
+  jobs = null,
+  watch = {},
+} = {}) {
   const calls = [];
   const budgets = [];
   let lists = 0;
@@ -45,7 +57,14 @@ function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snap
     budgets.push({ call: args.join(' '), timeoutMs: options?.timeoutMs ?? null });
     const [group, action] = args;
 
-    if (group === 'pr' && action === 'create') return { ok: true, stdout: create, stderr: '' };
+    if (group === 'pr' && action === 'create') return { ...created };
+    if (group === 'pr' && action === 'list') {
+      if (list.ok === false) return { ok: false, stdout: '', stderr: list.stderr ?? '' };
+      // A raw answer lets a test hand back what `gh` would never print on purpose: the lookup is the
+      // one place where a garbled answer and an empty one decide between red and unknown.
+      if (typeof list.stdout === 'string') return { ok: true, stdout: list.stdout, stderr: '' };
+      return { ok: true, stdout: JSON.stringify(list.rows ?? []), stderr: '' };
+    }
     if (group === 'run' && action === 'list') {
       lists += 1;
       return { ok: true, stdout: JSON.stringify(lists === 1 ? snapshot : runs), stderr: '' };
@@ -977,4 +996,134 @@ test('npm is found on PATH when npm did not start the process', async () => {
   );
 
   assert.deepEqual(npmOnPath({ env: {}, exists: () => false }), [], 'no PATH and no npm is no candidate');
+});
+
+test('a creation refused because a pull request for this head exists adopts it and reports its runs', async (t) => {
+  // The second run of one delivery: the pull request exists and run 21 is the run it already fired. A
+  // floor taken now is above that run, so a floor that survived the adoption would report no run at
+  // all — which is the bug the adoption exists to answer.
+  const only = runOf(21);
+  const { exec, calls } = gh({
+    created: {
+      ok: false,
+      stdout: '',
+      stderr: 'a pull request for branch "feat/open-pr" already exists: https://github.com/MaxGB23/funky-secure/pull/41',
+    },
+    list: { rows: [{ number: 41, url: 'https://github.com/MaxGB23/funky-secure/pull/41' }] },
+    snapshot: [only],
+    runs: [only],
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, GREEN, err);
+  assert.equal(err, '', 'nothing failed, so nothing is written to stderr');
+  assert.match(
+    out,
+    /open-pr: adopted https:\/\/github\.com\/MaxGB23\/funky-secure\/pull\/41 — a pull request for feat\/open-pr already existed, so none was created/,
+    'a green nobody can audit is worse than no green: the adoption says so on screen',
+  );
+  assert.match(out, /open-pr: run 21 {2}· {2}passed/, 'the runs of the adopted pull request decide it');
+  assert.match(out, /pull\/41 {2}· {2}passed/, 'and the verdict names the pull request it adopted');
+  assert.ok(
+    calls.some((call) => call === 'pr list --head feat/open-pr --json number,url'),
+    'the pull request of this head is looked up by head, never by a number someone typed',
+  );
+});
+
+test('a creation that fails with no pull request for this head is red and prints what gh said', async (t) => {
+  const { exec, calls } = gh({
+    created: { ok: false, stdout: '', stderr: 'HTTP 403: Resource not accessible by integration (createPullRequest)' },
+    // The lookup answered: this head has no pull request. "There is none" is a measurement, so the
+    // creation failing is the whole answer, and it is red.
+    list: { rows: [] },
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, RED);
+  assert.match(err, /open-pr: gh pr create failed/);
+  assert.match(err, /HTTP 403: Resource not accessible by integration \(createPullRequest\)/, "the child's words travel");
+  assert.ok(
+    calls.some((call) => call === 'pr list --head feat/open-pr --json number,url'),
+    'the head is looked up before the failure is called red',
+  );
+  assert.doesNotMatch(out, /adopted/, 'nothing was adopted, because the lookup found nothing');
+  assert.doesNotMatch(out, /waiting for the runs/, 'no pull request exists, so no run can decide anything');
+});
+
+test('a lookup that answers with something that is not a list is a question, not an absence', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: 'a pull request for this head already exists' },
+    // The lookup succeeded as a process and answered nothing usable. Reading that as "there is no pull
+    // request" would call a red on evidence nobody has: the pull request may well be there.
+    list: { stdout: 'not json at all' },
+  });
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
+    exec,
+    resolveSha: () => SHA,
+    resolveRemote: () => ({ ok: true, sha: SHA }),
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'a garbled answer is not evidence that there is no pull request');
+  assert.match(err.text, /gh pr list printed something that is not JSON/);
+  assert.doesNotMatch(err.text, /gh pr create failed/, 'and it is never called a red');
+});
+
+test('a creation that fails while the pull request of this head cannot be read is unknown, never red', async (t) => {
+  const { exec } = gh({
+    created: { ok: false, stdout: '', stderr: 'failed to create pull request' },
+    // The API answered nothing, so whether a pull request for this head exists is nobody's measurement.
+    list: { ok: false, stderr: 'HTTP 401: Bad credentials' },
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'an unreadable lookup is not evidence that there is no pull request');
+  assert.match(err, /open-pr: unknown — the creation failed and gh pr list failed: HTTP 401: Bad credentials/);
+  assert.match(err, /whether a pull request exists is unknown/, 'the message says which of the two is unknown');
+  assert.match(err, /check gh pr list --head feat\/open-pr/, 'and gives the command that answers it');
+  assert.doesNotMatch(err, /gh pr create failed/, 'red would report a failure nobody measured');
+  assert.doesNotMatch(out, /waiting for the runs/);
+});
+
+test('an adopted pull request with no run is unknown and names the pull request it adopted', async (t) => {
+  const { exec, calls } = gh({
+    created: {
+      ok: false,
+      stdout: '',
+      stderr: 'a pull request for branch "feat/open-pr" already exists: https://github.com/MaxGB23/funky-secure/pull/41',
+    },
+    list: { rows: [{ number: 41, url: 'https://github.com/MaxGB23/funky-secure/pull/41' }] },
+    snapshot: [],
+    runs: [],
+  });
+
+  const { code, out, err } = await runWith(t, exec);
+
+  assert.equal(code, UNKNOWN, 'no run of an adopted pull request is a question, not a failure');
+  assert.equal(err, '', 'an adoption that finds nothing is not a failure and says so on stdout');
+  assert.match(
+    out,
+    /open-pr: adopted https:\/\/github\.com\/MaxGB23\/funky-secure\/pull\/41/,
+    'the pull request it adopted is named before the wait',
+  );
+  assert.match(
+    out,
+    /no run of a1b2c3d4e5f60718293a4b5c6d7e8f9012345678 appeared within 30s; this is not a failure/,
+  );
+  assert.equal(
+    calls.filter((call) => call.startsWith('pr list')).length,
+    1,
+    'one lookup, made because the creation failed',
+  );
 });

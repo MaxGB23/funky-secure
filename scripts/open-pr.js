@@ -16,6 +16,12 @@
  * candidates, they are polled until two consecutive reads agree, and any red candidate makes the answer
  * red because a real failure is never averaged away by a green sibling.
  *
+ * A creation that fails is not yet a failure. A pull request for this head already existing is the second
+ * run of one delivery, so that pull request is adopted and its runs decide, and the floor is dropped for
+ * it: an adopted pull request is older than any floor a re-run can take, and a floor kept would hide
+ * exactly the runs the adoption exists to report. The line says `adopted`, because a green that came
+ * from a run this invocation did not create is only auditable when the output says so.
+ *
  * The decisions are pure functions and every `gh` invocation goes through one injected `exec`, so the
  * tests read a verdict without a network, a repository or a pull request.
  */
@@ -179,6 +185,24 @@ export function runsPastFloor(runs, sha, floor = 0) {
 export function pullRequestFrom(stdout) {
   const match = /https?:\/\/\S+\/pull\/(\d+)/.exec(typeof stdout === 'string' ? stdout : '');
   return match === null ? null : { url: match[0], number: Number(match[1]) };
+}
+
+/**
+ * The pull request of one head, from `gh pr list --head <head> --json number,url`. The answer is a list
+ * whether the head has one pull request or none, and a row without a number or a URL is not one the
+ * ritual can act on.
+ *
+ * @param {string} stdout
+ * @returns {{ url: string, number: number } | null}
+ */
+export function pullRequestFromList(stdout) {
+  const rows = parseJson(stdout);
+  if (!Array.isArray(rows)) return null;
+
+  const row = rows.find(
+    (entry) => Number.isFinite(Number(entry?.number)) && typeof entry?.url === 'string',
+  );
+  return row === undefined ? null : { url: row.url, number: Number(row.number) };
 }
 
 /**
@@ -435,15 +459,37 @@ export async function run(deps = {}) {
     { timeoutMs: remainingMs() },
   );
 
-  const pullRequest = pullRequestFrom(created?.stdout);
+  // 5a. A creation that fails is not yet a failure. A pull request for this head already existing is the
+  // second run of one delivery — the first got as far as the creation — and adopting it is the difference
+  // between reporting its runs and making the reader look up `gh pr list` by hand. "There is none" and
+  // "nobody could tell" are different answers, and only the first is a red.
+  let pullRequest = pullRequestFrom(created?.stdout);
+  let adopted = false;
   if (created?.ok !== true || pullRequest === null) {
-    err.write('open-pr: gh pr create failed\n');
-    for (const chunk of [created?.stdout, created?.stderr]) {
-      if (typeof chunk === 'string' && chunk.trim() !== '') err.write(`${chunk.trim()}\n`);
+    const open = readOpenPullRequest(exec, { head, repo: options.repo, timeoutMs: remainingMs() });
+    if (open.pullRequest !== null) {
+      pullRequest = open.pullRequest;
+      adopted = true;
+    } else if (open.problem !== null) {
+      err.write(
+        `open-pr: unknown — the creation failed and ${open.problem}, so whether a pull request exists is unknown; check gh pr list --head ${head}\n`,
+      );
+      return UNKNOWN;
+    } else {
+      err.write('open-pr: gh pr create failed\n');
+      for (const chunk of [created?.stdout, created?.stderr]) {
+        if (typeof chunk === 'string' && chunk.trim() !== '') err.write(`${chunk.trim()}\n`);
+      }
+      return RED;
     }
-    return RED;
   }
-  out.write(`open-pr: ${pullRequest.url}\n`);
+  // The adoption is said out loud: a green that came from a run this invocation did not create is only
+  // auditable when the output says which pull request it was and that nothing was created.
+  out.write(
+    adopted
+      ? `open-pr: adopted ${pullRequest.url} — a pull request for ${head} already existed, so none was created\n`
+      : `open-pr: ${pullRequest.url}\n`,
+  );
 
   // 6. The runs of this commit past the floor, polled until the set stops moving. A wait that prints
   // nothing is indistinguishable from a hang, so the line is written before the first poll.
@@ -455,7 +501,10 @@ export async function run(deps = {}) {
     head,
     repo: options.repo,
     sha,
-    floor,
+    // An adopted pull request is identified by its head and never by the floor: its runs were fired
+    // before any floor this invocation could take, so the floor would hide exactly the runs the
+    // adoption exists to report.
+    floor: adopted ? 0 : floor,
     sleep,
     timeoutSeconds: waitSeconds,
     intervalSeconds: DEFAULT_INTERVAL_SECONDS,
@@ -781,6 +830,27 @@ function readRuns(exec, { head, repo = null, timeoutMs }) {
   if (!Array.isArray(runs)) return { runs: null, problem: 'gh run list printed something that is not JSON' };
 
   return { runs, problem: null };
+}
+
+/**
+ * @param {(args: string[], options?: object) => { ok: boolean, stdout?: string, stderr?: string }} exec
+ * @param {{ head: string, repo?: string|null, timeoutMs?: number }} target
+ * @returns {{ pullRequest: { url: string, number: number } | null, problem: string | null }} the pull
+ * request of that head, or why the API could not answer. "There is none" and "nobody could tell" are
+ * different answers, and collapsing them is how an unreadable API becomes the claim that no pull request
+ * exists. An answer that is not a list of rows is a failure and not an empty list, for the reason
+ * `readRuns` gives.
+ */
+function readOpenPullRequest(exec, { head, repo = null, timeoutMs }) {
+  const answer = exec(withRepo(repo, ['pr', 'list', '--head', head, '--json', 'number,url']), {
+    timeoutMs,
+  });
+  if (answer?.ok !== true) return { pullRequest: null, problem: describe('gh pr list', answer) };
+  if (!Array.isArray(parseJson(answer.stdout))) {
+    return { pullRequest: null, problem: 'gh pr list printed something that is not JSON' };
+  }
+
+  return { pullRequest: pullRequestFromList(answer.stdout), problem: null };
 }
 
 /**
