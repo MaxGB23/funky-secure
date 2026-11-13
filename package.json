@@ -30,8 +30,9 @@
     "test": "node --test",
     "golden": "node scripts/gen-golden.js",
     "self": "node bin/funky-secure.js scan --scope repo --fail-on warn",
-    "prepublishOnly": "node --test && node bin/funky-secure.js scan --scope repo --fail-on warn && node scripts/release-guard.js && node scripts/pack-smoke.js",
-    "pack:smoke": "node scripts/pack-smoke.js"
+    "prepublishOnly": "node --test && node bin/funky-secure.js scan --scope repo --fail-on warn && node scripts/release-guard.js && node scripts/pack-guard.js && node scripts/pack-smoke.js",
+    "pack:smoke": "node scripts/pack-smoke.js",
+    "pack:check": "node scripts/pack-guard.js"
   },
   "keywords": [
     "supply-chain",

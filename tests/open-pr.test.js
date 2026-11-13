@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 import {
   GREEN,
@@ -11,6 +11,7 @@ import {
   decideVerdict,
   failingCount,
   floorOf,
+  packOptions,
   parseArgs,
   pullRequestFrom,
   run,
@@ -69,6 +70,21 @@ function gh({ create = 'https://github.com/MaxGB23/funky-secure/pull/42\n', snap
 
   return { exec, calls };
 }
+
+/**
+ * The packed-set gate's child, answered here and nowhere else, in the style of `gh()`: the real step is
+ * `npm run pack:check`, and a test that spawned it would run npm and `npm pack` for every case.
+ */
+function packGuard(answer) {
+  return () => answer;
+}
+
+const PACK_GREEN = {
+  ok: true,
+  stdout:
+    'pack-guard: 65 packed files against 10 entries of the files contract\n' +
+    'pack-guard: the packed set is the files contract\n',
+};
 
 /** A body file in a fresh temporary directory, removed when the test ends. */
 function bodyFile(t, text) {
@@ -189,6 +205,63 @@ test('a red suite refuses before anything is created and names the failing count
   assert.equal(out.text, '');
 });
 
+test('a red packed-set gate refuses before anything is created and writes the gate\'s output', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard({
+      ok: false,
+      stdout: 'pack-guard: tests/fixtures/leak.json must not ship: it is not in the files contract\n',
+    }),
+    exec,
+    resolveSha: () => SHA,
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, RED);
+  assert.match(
+    err.text,
+    /open-pr: refusing: the packed-set gate is red, so nothing was created/,
+    'the refusal names the gate it came from',
+  );
+  assert.match(err.text, /tests\/fixtures\/leak\.json must not ship/, "the child's output travels");
+  assert.doesNotMatch(err.text, /the suite is red/, "the gate's message is its own, never the suite's");
+  assert.equal(calls.length, 0, 'no gh call, so no pull request');
+  assert.match(out.text, /open-pr: suite green/, 'the suite ran first and said so');
+  assert.doesNotMatch(out.text, /packed set green/, 'a red gate is not a green one');
+});
+
+test('a packed-set gate that reaches its ceiling is unknown, never a red', async (t) => {
+  const out = capture();
+  const err = capture();
+  const { exec, calls } = gh();
+
+  const code = await run({
+    argv: argvFor(bodyFile(t, BODY)),
+    suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    // A gate killed at its ceiling did not fail: it never answered.
+    pack: packGuard({ ok: false, timedOut: true, stdout: 'pack-guard: still packing\n' }),
+    exec,
+    resolveSha: () => SHA,
+    sleep: async () => {},
+    out,
+    err,
+  });
+
+  assert.equal(code, UNKNOWN, 'a ceiling is not a red check');
+  assert.match(out.text, /the packed-set gate did not answer within its ceiling of \d+s/);
+  assert.match(out.text, /nothing was created and its verdict is unknown/);
+  assert.match(out.text, /this is not a failure/);
+  assert.doesNotMatch(err.text, /is red/, 'a ceiling is never a red');
+  assert.equal(calls.length, 0, 'nothing is created on an answer nobody gave');
+});
+
 test('a policy refusal refuses before anything is created and prints the policy message', async (t) => {
   const out = capture();
   const err = capture();
@@ -198,6 +271,7 @@ test('a policy refusal refuses before anything is created and prints the policy 
   const code = await run({
     argv: argvFor(path),
     suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
     exec,
     out,
     err,
@@ -224,6 +298,7 @@ test('creates a labelled pull request, and the run of this commit decides it', a
   const code = await run({
     argv: argvFor(bodyFile(t, BODY)),
     suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
     sleep: async () => {},
@@ -233,6 +308,11 @@ test('creates a labelled pull request, and the run of this commit decides it', a
 
   assert.equal(code, GREEN, err.text);
   assert.equal(err.text, '');
+  assert.match(
+    out.text,
+    /open-pr: packed set green — 65 packed files against 10 entries of the files contract/,
+    'a green gate says what it found',
+  );
 
   const created = calls.find((call) => call.startsWith('pr create'));
   assert.ok(created, 'the pull request is created');
@@ -268,6 +348,7 @@ test('a run that existed before the pull request was created cannot decide it', 
   const code = await run({
     argv: argvFor(bodyFile(t, BODY)),
     suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
     sleep: async () => {},
@@ -311,6 +392,7 @@ test('a run that concluded failure exits 1 and still names the pull request', as
   const code = await run({
     argv: argvFor(bodyFile(t, BODY)),
     suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
     sleep: async () => {},
@@ -339,6 +421,7 @@ test('a cancelled run with a green matrix is unknown, never a failure', async (t
   const code = await run({
     argv: argvFor(bodyFile(t, BODY)),
     suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
     sleep: async () => {},
@@ -374,6 +457,24 @@ test('the suite is bounded, so a hung test cannot hold the ritual open', async (
   assert.equal(typeof options.timeout, 'number');
   assert.ok(options.timeout > 0, 'an unbounded suite is the eight-minute turn again');
   assert.equal(options.encoding, 'utf8');
+});
+
+test('the packed-set gate is bounded by a ceiling of its own, like the suite', async () => {
+  const { suiteOptions } = await import('../scripts/open-pr.js');
+  const options = packOptions();
+
+  // `npm run` on a cold cache, or behind a held lock, is the other child that can wait forever. A
+  // ceiling shared with the suite would be wrong for it, and no ceiling at all is the same hang one
+  // step later in the ritual.
+  assert.equal(typeof options.timeout, 'number');
+  assert.ok(options.timeout > 0, 'an unbounded npm run is the same hang one step later');
+  assert.ok(options.timeout < suiteOptions().timeout, 'its own ceiling, not the suite\'s');
+  assert.equal(options.encoding, 'utf8');
+  assert.equal(options.cwd, suiteOptions().cwd, 'in the repository root, where the gate reads `files`');
+  assert.ok(options.maxBuffer > 0, 'a generous buffer, because npm prints its own banner too');
+
+  assert.equal(packOptions({ timeout: 5 }).timeout, 5, 'the caller can narrow or add to it');
+  assert.ok(packOptions().timeout > 0, 'and the default is not mutated by that');
 });
 
 test('--help says how to use it and touches nothing', async () => {
@@ -456,13 +557,14 @@ function ghFloor({ floor = [], polls = [[]], views = {}, watch = {}, watches = {
   return { exec, calls, reads };
 }
 
-/** One `run()` with the suite green and no waiting, whatever `gh` answers. */
+/** One `run()` with the suite and the packed set green, and no waiting, whatever `gh` answers. */
 async function runWith(t, exec, body = BODY, timeout = 30) {
   const out = capture();
   const err = capture();
   const code = await run({
     argv: argvFor(bodyFile(t, body), timeout),
     suite: () => ({ ok: true, stdout: 'ℹ fail 0\n' }),
+    pack: packGuard(PACK_GREEN),
     exec,
     resolveSha: () => SHA,
     sleep: async () => {},
@@ -683,4 +785,31 @@ test('every gh call carries a ceiling, so a hung child cannot hold the ritual op
 
   assert.equal(code, GREEN);
   assert.deepEqual(ceilingless, [], 'these gh calls had no ceiling');
+});
+
+test('npm is found on PATH when npm did not start the process', async () => {
+  const { npmOnPath } = await import('../scripts/open-pr.js');
+  const bin = join('/usr', 'local', 'bin');
+  const link = join(bin, 'npm');
+  const cli = join(bin, 'npm-cli.js');
+
+  // The Unix install: `npm` on PATH is a symlink to `npm-cli.js`. `npm_execpath` is unset when this
+  // script is run directly, and the bundled CLI only exists where npm ships with the interpreter, which
+  // is not how most Unix systems install it.
+  const found = npmOnPath({
+    env: { PATH: [bin, join('/usr', 'bin')].join(delimiter) },
+    exists: (path) => path === link || path === cli,
+    real: (path) => (path === link ? cli : path),
+  });
+  assert.deepEqual(found, [cli], 'the symlink Unix installs must resolve to a script this interpreter can run');
+
+  // A shell shim is not a candidate: it is not a file this interpreter can execute, and resolving it
+  // gives its own path back rather than a script.
+  assert.deepEqual(
+    npmOnPath({ env: { PATH: bin }, exists: () => true, real: () => { throw new Error('dangling link'); } }),
+    [],
+    'a link that resolves to nothing is not a candidate',
+  );
+
+  assert.deepEqual(npmOnPath({ env: {}, exists: () => false }), [], 'no PATH and no npm is no candidate');
 });
