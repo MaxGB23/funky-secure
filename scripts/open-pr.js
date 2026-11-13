@@ -270,7 +270,7 @@ function sameIds(left, right) {
 /**
  * The command line, and the ritual it refuses to skip.
  *
- * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, pack?: () => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
+ * @param {{ argv?: string[], exec?: Function, suite?: () => { ok: boolean, stdout: string }, pack?: () => { ok: boolean, timedOut?: boolean, stdout?: string, problem?: string } | null, resolveHead?: () => string, resolveSha?: () => string, resolveRemote?: (options: object) => { ok: boolean, sha?: string|null, problem?: string }, now?: () => number, sleep?: (ms: number) => Promise<void>, out?: { write: Function }, err?: { write: Function } }} [deps]
  * @returns {Promise<number>}
  */
 export async function run(deps = {}) {
@@ -283,6 +283,7 @@ export async function run(deps = {}) {
   const resolveHead = deps.resolveHead ?? defaultResolveHead;
   const resolveSha = deps.resolveSha ?? defaultResolveSha;
   const resolveRemote = deps.resolveRemote ?? defaultResolveRemote;
+  const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   const { options, problems, help } = parseArgs(argv);
@@ -394,10 +395,18 @@ export async function run(deps = {}) {
     out.write('open-pr: unknown — nothing was created so its verdict is unknown; this is not a failure\n');
     return UNKNOWN;
   }
+  // 4b. One budget, taken once. Before this the number `--timeout` names was spent by every child in
+  // turn — 600 for the floor, 600 for the creation, 600 for the wait and 600 for each `run view` — so a
+  // declared ten minutes could hold the ritual open for forty. Every child now reads what is left, and
+  // the floor of one second keeps the last attempt possible instead of making it zero.
+  const deadline = now() + options.timeout * 1000;
+  const remainingMs = () => Math.max(1_000, deadline - now());
+  const remainingSeconds = () => Math.max(1, Math.round(remainingMs() / 1000));
+
   const floorAnswer = readRuns(exec, {
     head,
     repo: options.repo,
-    timeoutMs: options.timeout * 1000,
+    timeoutMs: remainingMs(),
   });
   if (floorAnswer.runs === null) {
     err.write(`open-pr: refusing: ${floorAnswer.problem}; the floor is unknown, so nothing was created\n`);
@@ -423,7 +432,7 @@ export async function run(deps = {}) {
       '--body-file',
       options.bodyFile,
     ]),
-    { timeoutMs: options.timeout * 1000 },
+    { timeoutMs: remainingMs() },
   );
 
   const pullRequest = pullRequestFrom(created?.stdout);
@@ -438,7 +447,8 @@ export async function run(deps = {}) {
 
   // 6. The runs of this commit past the floor, polled until the set stops moving. A wait that prints
   // nothing is indistinguishable from a hang, so the line is written before the first poll.
-  out.write(`open-pr: waiting for the runs of ${sha} (up to ${options.timeout}s)\n`);
+  const waitSeconds = remainingSeconds();
+  out.write(`open-pr: waiting for the runs of ${sha} (up to ${waitSeconds}s)\n`);
 
   const found = await waitForCandidates({
     exec,
@@ -447,7 +457,7 @@ export async function run(deps = {}) {
     sha,
     floor,
     sleep,
-    timeoutSeconds: options.timeout,
+    timeoutSeconds: waitSeconds,
     intervalSeconds: DEFAULT_INTERVAL_SECONDS,
   });
 
@@ -458,7 +468,7 @@ export async function run(deps = {}) {
       );
     } else {
       out.write(
-        `open-pr: unknown — no run of ${sha} appeared within ${options.timeout}s; this is not a failure\n`,
+        `open-pr: unknown — no run of ${sha} appeared within ${waitSeconds}s; this is not a failure\n`,
       );
     }
     return UNKNOWN;
@@ -475,7 +485,7 @@ export async function run(deps = {}) {
     let ceiling = false;
 
     if (candidate.status !== 'completed') {
-      const remaining = Math.max(1, Math.round(options.timeout - found.spentSeconds));
+      const watchBudget = remainingMs();
       const watched = exec(
         withRepo(options.repo, [
           'run',
@@ -485,7 +495,7 @@ export async function run(deps = {}) {
           '--interval',
           String(DEFAULT_INTERVAL_SECONDS),
         ]),
-        { timeoutMs: remaining * 1000 },
+        { timeoutMs: watchBudget },
       );
       ceiling = watched?.timedOut === true;
     }
@@ -495,7 +505,7 @@ export async function run(deps = {}) {
     // not a gate.
     const viewed = exec(
       withRepo(options.repo, ['run', 'view', id, '--json', 'status,conclusion,jobs']),
-      { timeoutMs: options.timeout * 1000 },
+      { timeoutMs: remainingMs() },
     );
     const answer = parseJson(viewed?.stdout);
     if (answer === null) {
@@ -513,7 +523,7 @@ export async function run(deps = {}) {
     out.write(`open-pr: run ${id}  ·  ${verdict.state}${reason}\n`);
     if (verdict.code === UNKNOWN && ceiling) {
       out.write(
-        `open-pr: unknown — the run did not conclude within ${options.timeout}s; this is not a failure\n`,
+        `open-pr: unknown — the run did not conclude within ${waitSeconds}s; this is not a failure\n`,
       );
     }
     for (const line of verdict.lines ?? []) out.write(`${line}\n`);
