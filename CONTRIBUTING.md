@@ -107,6 +107,25 @@ issue reference, exactly one checked type, the evidence of what you ran, and the
 - [ ] New fixtures, goldens and tests are deterministic: no clock, no network, no machine state, no
       absolute paths.
 
+### The ritual, never a sequence written by hand
+
+`node scripts/open-pr.js --base main --title "<title>" --body-file <path> --label type:<t>` runs the
+suite, the packed set and this policy, then creates a labelled pull request that is ready from birth
+and waits for its runs. It refuses a red suite, a red packed set and a policy violation, and it adopts
+the pull request of the head instead of failing on a creation that finds one already there.
+
+`--timeout` is the budget of the whole delivery and not of one step: 600 seconds by default, with the
+suite, the packed set and every `gh` child bounded by what is left of it. A step that does not answer
+is `2` and never a red check — an unanswered gate is not a failed one.
+
+`node scripts/wait-for-ci.js <commit>` answers `0` passed, `1` failed and `2` unknown, and `2` never
+means failure: no run yet, still running, or the budget ran out. It reads the matrix and not the run
+summary, and it waits on the commit and never on the branch. On a push to `main`, `pr-policy` reads
+`skipped`, because that job is guarded to pull request events.
+
+Both print the number they were actually given rather than the number the command declared, so a line
+that says `up to 584s` is a measurement and not a restatement.
+
 ### Size
 
 Keep a pull request reviewable: about **400 authored lines** per work unit, with tests and docs
