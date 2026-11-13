@@ -20,7 +20,12 @@
  * run of one delivery, so that pull request is adopted and its runs decide, and the floor is dropped for
  * it: an adopted pull request is older than any floor a re-run can take, and a floor kept would hide
  * exactly the runs the adoption exists to report. The line says `adopted`, because a green that came
- * from a run this invocation did not create is only auditable when the output says so.
+ * from a run this invocation did not create is only auditable when the output says so. Adoption has two
+ * conditions and no others: the creation must have **failed** — a creation that succeeded and printed
+ * something unreadable is the red it always was, because a lookup would find the pull request it just
+ * made and adopt it — and the lookup must answer a row whose head commit is the commit under test.
+ * `gh`'s refusal wording does not count as evidence: a fork pull request carrying the same head branch
+ * name is a different delivery, and the commit it points at is the only thing that tells them apart.
  *
  * The decisions are pure functions and every `gh` invocation goes through one injected `exec`, so the
  * tests read a verdict without a network, a repository or a pull request.
@@ -45,6 +50,7 @@ export const USAGE =
 const DEFAULT_TIMEOUT_SECONDS = 600;
 const DEFAULT_INTERVAL_SECONDS = 15;
 const RUN_FIELDS = 'databaseId,headSha,status,conclusion';
+const PR_LIST_FIELDS = 'number,url,headRefOid';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /**
@@ -188,20 +194,33 @@ export function pullRequestFrom(stdout) {
 }
 
 /**
- * The pull request of one head, from `gh pr list --head <head> --json number,url`. The answer is a list
- * whether the head has one pull request or none, and a row without a number or a URL is not one the
- * ritual can act on.
+ * Whether a row of `gh pr list` names a pull request the ritual can act on. A row without a number and a
+ * URL is not one: there is nothing to adopt and nothing to watch.
+ *
+ * @param {any} entry
+ * @returns {boolean}
+ */
+function isPullRequestRow(entry) {
+  return Number.isFinite(Number(entry?.number)) && typeof entry?.url === 'string';
+}
+
+/**
+ * The pull request of one head at one commit, from
+ * `gh pr list --head <head> --json number,url,headRefOid`. The answer is a list whether the head has one
+ * pull request or none. A row at another head commit is another delivery on the same branch name — a
+ * fork's pull request, or an earlier one — and adopting it would report the runs of work this invocation
+ * did not create as if they were this one's, so only a row whose `headRefOid` is the commit under test
+ * counts.
  *
  * @param {string} stdout
+ * @param {string} sha the commit under test
  * @returns {{ url: string, number: number } | null}
  */
-export function pullRequestFromList(stdout) {
+export function pullRequestFromList(stdout, sha) {
   const rows = parseJson(stdout);
   if (!Array.isArray(rows)) return null;
 
-  const row = rows.find(
-    (entry) => Number.isFinite(Number(entry?.number)) && typeof entry?.url === 'string',
-  );
+  const row = rows.find((entry) => isPullRequestRow(entry) && entry.headRefOid === sha);
   return row === undefined ? null : { url: row.url, number: Number(row.number) };
 }
 
@@ -463,25 +482,47 @@ export async function run(deps = {}) {
   // second run of one delivery — the first got as far as the creation — and adopting it is the difference
   // between reporting its runs and making the reader look up `gh pr list` by hand. "There is none" and
   // "nobody could tell" are different answers, and only the first is a red.
+  //
+  // Adoption demands two pieces of evidence and no others. The creation must have failed: one that
+  // succeeded and printed an unreadable answer is the red it always was, because its pull request exists
+  // and a lookup would find it at this commit and adopt the very creation that worked. And the row the
+  // lookup answers must be at the commit under test, which is what `gh`'s refusal wording cannot tell us —
+  // a fork pull request carrying the same head branch name would be adopted on that wording alone.
   let pullRequest = pullRequestFrom(created?.stdout);
   let adopted = false;
-  if (created?.ok !== true || pullRequest === null) {
-    const open = readOpenPullRequest(exec, { head, repo: options.repo, timeoutMs: remainingMs() });
-    if (open.pullRequest !== null) {
-      pullRequest = open.pullRequest;
-      adopted = true;
-    } else if (open.problem !== null) {
+  if (created?.ok !== true) {
+    // A creation killed at its ceiling answered nothing, and nothing can tell its own pull request from
+    // one that was already there: both are at this commit. So it is never adopted, whatever the lookup
+    // then finds, and the reader is given the command that answers it.
+    if (created?.timedOut === true) {
       err.write(
-        `open-pr: unknown — the creation failed and ${open.problem}, so whether a pull request exists is unknown; check gh pr list --head ${head}\n`,
+        `open-pr: unknown — gh pr create was killed at its ceiling, so whether a pull request exists cannot be told; ` +
+          `check ${lookupCommand({ head, repo: options.repo })}\n`,
       );
       return UNKNOWN;
-    } else {
-      err.write('open-pr: gh pr create failed\n');
-      for (const chunk of [created?.stdout, created?.stderr]) {
-        if (typeof chunk === 'string' && chunk.trim() !== '') err.write(`${chunk.trim()}\n`);
-      }
+    }
+
+    const open = readOpenPullRequest(exec, {
+      head,
+      repo: options.repo,
+      sha,
+      timeoutMs: remainingMs(),
+    });
+    if (open.problem !== null) {
+      err.write(
+        `open-pr: unknown — the creation failed and ${open.problem}, so whether a pull request exists is unknown; check ${lookupCommand({ head, repo: options.repo })}\n`,
+      );
+      return UNKNOWN;
+    }
+    if (open.pullRequest === null) {
+      writeCreationFailure(err, created);
       return RED;
     }
+    pullRequest = open.pullRequest;
+    adopted = true;
+  } else if (pullRequest === null) {
+    writeCreationFailure(err, created);
+    return RED;
   }
   // The adoption is said out loud: a green that came from a run this invocation did not create is only
   // auditable when the output says which pull request it was and that nothing was created.
@@ -814,6 +855,18 @@ function withRepo(repo, args) {
 }
 
 /**
+ * The command a reader runs when this script could not answer, addressed to the repository this run was
+ * told about. A suggested lookup without `--repo` asks about the default repository of whoever reads it,
+ * which is the one repository the question is not about.
+ *
+ * @param {{ head: string, repo?: string|null }} target
+ * @returns {string}
+ */
+function lookupCommand({ head, repo = null }) {
+  return ['gh', 'pr', 'list', '--head', head, ...(repo === null ? [] : ['--repo', repo])].join(' ');
+}
+
+/**
  * @param {(args: string[], options?: object) => { ok: boolean, stdout?: string, stderr?: string }} exec
  * @param {{ head: string, repo?: string|null }} target
  * @returns {{ runs: Array<object> | null, problem: string | null }} the runs of that branch, or why the
@@ -834,23 +887,65 @@ function readRuns(exec, { head, repo = null, timeoutMs }) {
 
 /**
  * @param {(args: string[], options?: object) => { ok: boolean, stdout?: string, stderr?: string }} exec
- * @param {{ head: string, repo?: string|null, timeoutMs?: number }} target
+ * @param {{ head: string, repo?: string|null, sha: string, timeoutMs?: number }} target
  * @returns {{ pullRequest: { url: string, number: number } | null, problem: string | null }} the pull
- * request of that head, or why the API could not answer. "There is none" and "nobody could tell" are
- * different answers, and collapsing them is how an unreadable API becomes the claim that no pull request
- * exists. An answer that is not a list of rows is a failure and not an empty list, for the reason
- * `readRuns` gives.
+ * request of that head **at that commit**, or why the API could not answer. "There is none" and "nobody
+ * could tell" are different answers, and collapsing them is how an unreadable API becomes the claim that
+ * no pull request exists. Only an empty list is the first: an answer that is not a list, a list of rows
+ * no pull request can be read from, and a list whose rows are all at another commit are the second, each
+ * naming what the lookup said. A problem is never an absence, for the same reason `readRuns` gives.
  */
-function readOpenPullRequest(exec, { head, repo = null, timeoutMs }) {
-  const answer = exec(withRepo(repo, ['pr', 'list', '--head', head, '--json', 'number,url']), {
+function readOpenPullRequest(exec, { head, repo = null, sha, timeoutMs }) {
+  const answer = exec(withRepo(repo, ['pr', 'list', '--head', head, '--json', PR_LIST_FIELDS]), {
     timeoutMs,
   });
   if (answer?.ok !== true) return { pullRequest: null, problem: describe('gh pr list', answer) };
-  if (!Array.isArray(parseJson(answer.stdout))) {
+
+  const rows = parseJson(answer.stdout);
+  if (!Array.isArray(rows)) {
     return { pullRequest: null, problem: 'gh pr list printed something that is not JSON' };
   }
+  // The one measured absence: the head has no pull request at all.
+  if (rows.length === 0) return { pullRequest: null, problem: null };
 
-  return { pullRequest: pullRequestFromList(answer.stdout), problem: null };
+  const usable = rows.filter(isPullRequestRow);
+  if (usable.length === 0) {
+    return {
+      pullRequest: null,
+      problem:
+        `gh pr list answered ${rows.length} row${rows.length === 1 ? '' : 's'} and none of them is a ` +
+        'pull request with a number and a URL',
+    };
+  }
+
+  const pullRequest = pullRequestFromList(answer.stdout, sha);
+  if (pullRequest === null) {
+    const answered = usable
+      .map((row) => {
+        const at =
+          typeof row.headRefOid === 'string' && row.headRefOid !== '' ? row.headRefOid : 'no commit';
+        return `#${Number(row.number)} at ${at}`;
+      })
+      .join(', ');
+    return { pullRequest: null, problem: `gh pr list answered ${answered}, none of them at ${sha}` };
+  }
+
+  return { pullRequest, problem: null };
+}
+
+/**
+ * What `gh pr create` printed, when the failure itself is the whole answer. Split out because two states
+ * end here — a creation that failed with no pull request to adopt, and one that succeeded with an answer
+ * nobody could read — and the reader must not have to tell them apart to see what `gh` said.
+ *
+ * @param {{ write: Function }} err
+ * @param {{ stdout?: string, stderr?: string } | undefined} created
+ */
+function writeCreationFailure(err, created) {
+  err.write('open-pr: gh pr create failed\n');
+  for (const chunk of [created?.stdout, created?.stderr]) {
+    if (typeof chunk === 'string' && chunk.trim() !== '') err.write(`${chunk.trim()}\n`);
+  }
 }
 
 /**
