@@ -438,9 +438,11 @@ jobs:
   assert.equal(findings[0].code, 'no-write-permission');
 });
 
-/// The four repositories the first real measurement read, copied byte for byte into
-/// `tests/fixtures/workflows/real/`. Each pair is the two files the rule needs and nothing else, so a
-/// fixture that drifts from the repository it came from shows up here instead of in a release note.
+/// The four repositories the first real measurement read, in `tests/fixtures/workflows/real/`. Every
+/// consumer file is the repository's own bytes, because the consumer is what the finding is about; the
+/// two producers too large to vendor (pnpm's 1222-line benchmark workflow, next's 827-line deploy
+/// workflow) are elided to the name and the trigger R13 resolves them by, and each says so at the top
+/// with its blob sha. A fixture that drifts from its repository shows up here, not in a release note.
 
 test('fails on the pair pnpm, node and next each carry, as the repository writes it', () => {
   const pairs = [

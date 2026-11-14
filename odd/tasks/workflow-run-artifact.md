@@ -163,9 +163,10 @@ Close #153 by naming the third privileged trigger, so the README stops carrying 
   leaves no diff. The four real answers after it: `pnpm/pnpm` `fail` (`checks: write, issues: write,
   pull-requests: write`), `nodejs/node` `fail` (`pull-requests: write, statuses: write`),
   `vercel/next.js` `fail` (`id-token: write`), `vitejs/vite` `pass / no-workflow-run`. Zero false
-  positives in the four. Two of the real pairs, `pnpm/pnpm`'s and `nodejs/node`'s, and next's pair,
-  are committed byte for byte under `tests/fixtures/workflows/real/` so the evidence is the file the
-  repository writes. Out of scope and reported, not fixed: `nodejs/node`'s `contributor-guidance.yml`
+  positives in the four. The three consumer files are committed byte for byte under
+  `tests/fixtures/workflows/real/`, because the consumer is what the finding is about; the two
+  producers too large to vendor (1222 and 827 lines) are elided to the name and the trigger R13
+  resolves them by, with their blob sha at the top of each. Out of scope and reported, not fixed: `nodejs/node`'s `contributor-guidance.yml`
   is refused by the reader at `WELCOME_MESSAGE: >2-`, a valid YAML indentation indicator, so the file
   is a `skip` for every rule that reads workflows. A second boundary the measurement showed:
   `pnpm/pnpm`'s `ci-performance-bencher-upload.yml` reads fork-produced artifacts with `gh run
