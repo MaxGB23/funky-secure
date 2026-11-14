@@ -145,11 +145,12 @@ Close #153 by naming the third privileged trigger, so the README stops carrying 
   `pacquet-integrated-benchmark-comment.yml:112`, `nodejs/node` `fail` on
   `nix-changes-comment.yml:21` plus `skip / unparseable-workflow` for `contributor-guidance.yml`,
   `vitejs/vite` `pass / no-workflow-run`, and `vercel/next.js`
-  `pass / no-write-permission`. The first three are the measurement working; the fourth is the
-  defect. `upload_preview_tarballs.yml` runs on `workflow_run`, downloads the tarballs
-  `build_and_deploy.yml` built on `pull_request`, and holds `contents: read` with `id-token: write`,
-  because the bytes go to Vercel Blob under an OIDC-minted token. The rule answered `pass` and its
-  message said no bytes reach a write token, which was false of that file. So the write test was
+  `pass / no-write-permission`. The first three are the rule answering as it was built to; whether
+  either `fail` is exploitable in its own repository is that maintainer's call, not this record's. The
+  fourth is the defect. `upload_preview_tarballs.yml` runs on `workflow_run`, downloads the tarballs
+  `build_and_deploy.yml` built on `pull_request`, and holds `contents: read` with `id-token: write`.
+  The rule answered `pass` and its message said no bytes reach a write token, which was false of that
+  file: an `id-token` is a write token. So the write test was
   three scopes that this repository's own workflows write, not a model of a token: `checks: write` on
   pnpm's consumer was missed the same way, and `statuses: write` on node's would have been. The test
   is now any scope whose value is `write`, or `write-all`, at the level that governs the job as

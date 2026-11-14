@@ -185,9 +185,10 @@ keeps the ledger: every claim below, and every one that is missing, with what wo
   `berry`, a genuine pwn request in `cloud-bulldozer`, and 206 floating ranges in `shadcn-ui/ui` with
   zero desyncs over 245 specifiers. The thirteenth, `workflow-run-artifact`, was measured on four
   repositories of its own - `pnpm/pnpm`, `nodejs/node`, `vercel/next.js` and `vitejs/vite`, 121
-  workflow files - and that measurement found two genuine findings (`pnpm/pnpm`, `nodejs/node`), zero
-  false positives, and one false pass (`vercel/next.js`, a consumer holding `id-token: write`) that
-  the same measurement fixed; `vitejs/vite` declares no `workflow_run` at all.
+  workflow files - and two of their workflows answered `fail`, one in each of two repositories, with
+  zero false positives. One false pass in `vercel/next.js` (`id-token: write`) was found and fixed by
+  the same measurement. Whether a project's own workflow is exploitable is its maintainers' to say,
+  so the ledger names the repositories and the counts, not the files.
   [`docs/validation.md`](docs/validation.md) keeps every number, repository and file count.
 - **The written path was verified by strangers.** Three field rounds totalling eleven blind sessions
   were given nothing but the tool's own output, and they never read its source. Every defect they found
