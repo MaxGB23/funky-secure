@@ -149,7 +149,7 @@ test('starter resolves from --preset and from the config file', () => {
   );
 });
 
-test('starter runs exactly six rules and turns the other six off', () => {
+test('starter runs exactly six rules and turns the other seven off', () => {
   const policy = resolve({ presetFromFlag: 'starter' });
 
   assert.deepEqual(policy.active, STARTER_ACTIVE, 'the six the record names, in catalog order');
@@ -160,6 +160,7 @@ test('starter runs exactly six rules and turns the other six off', () => {
     'ci-no-safety-overrides',
     'pull-request-target',
     'workflow-permissions',
+    'workflow-run-artifact',
   ]);
   assert.equal(policy.active.length + disabled(policy).length, CATALOG_IDS.length);
 });

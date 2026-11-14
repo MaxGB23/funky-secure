@@ -1,0 +1,10 @@
+# Excerpt of vercel/next.js .github/workflows/build_and_deploy.yml
+# (blob a74409366879d0bc353dcf2c78cd4512f009b0c2, read 2026-11-13; the file is
+# 827 lines there). Only the name and the trigger are kept: R13 resolves a
+# producer by exactly those two facts. The consumer fixture beside it
+# (upload_preview_tarballs.yml) is the complete file.
+name: build-and-deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize]

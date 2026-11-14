@@ -4,7 +4,7 @@
 > [`../../rfcs/0001-funky-secure-v1/rfc.md`](../../rfcs/0001-funky-secure-v1/rfc.md); this file is
 > what the code owes. Change this file, not the record.
 
-## 8. Rule catalog (the twelve)
+## 8. Rule catalog (the thirteen)
 
 > §8.2 and §8.3 are amended by [record 0024](../../rfcs/0024-the-contract-says-what-it-does/rfc.md): the
 > three rules the record deferred ship, and they are R10, R11 and R12 beside R1–R9 rather than a
@@ -35,7 +35,7 @@ input) returns `error` for itself and never a false `pass`.
 Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline` / `strict`,
 **fix** is `auto` (an apply path exists), `manual` (exact command), or `none` (report only).
 
-### 8.2 The twelve rules
+### 8.2 The thirteen rules
 
 #### R1 — `package-manager-pin` · friction 0 · sev `error`/`error` · fix `auto`
 
@@ -391,6 +391,56 @@ the pin alone is the declaration, and nothing about it is skipped.
   for what that job runs — a workflow that declares `contents: write` everywhere, needed or not, is
   reported as a pass.
 
+#### R13 — `workflow-run-artifact` · friction 1 · sev `error`/`error` · fix `manual`
+
+- **Question:** does a privileged workflow read bytes an unprivileged workflow produced?
+- **Detection:** every workflow of the repository through the structural reader, because the producer
+  is named by workflow `name:` in `on.workflow_run.workflows` and lives in a sibling file. Every name
+  the trigger lists is matched against the `name:` of every workflow in the repository, and a name
+  exactly one workflow carries is that producer. A workflow is a consumer when its `on:` block
+  declares `workflow_run` and a step downloads an artifact: a step
+  whose `uses` is `actions/download-artifact` with any ref, or a step whose `with.run-id` reads
+  `github.event.workflow_run.id`. The download is one `workflow-run-artifact` fail at the step line
+  when the declaration that governs that job's token - the job's `permissions:`, else the workflow's
+  - grants a write, which is any scope whose value is `write`, `write-all` included: `contents`,
+  `pull-requests`, `checks`, `id-token` and every other scope carry one token, and the test is the
+  value rather than a list of names. The message and `evidence.scopes` name every write scope that
+  declaration holds, in catalog order, and never a scope the rule did not read. The measured
+  consequence is that a consumer holding `contents: read` and `id-token: write` is not a pass: it
+  mints an OIDC identity a storage service accepts, and `vercel/next.js` carries exactly that shape
+  over an artifact a `pull_request` run built. The fail also requires that the
+  producer resolves to a workflow that declares `pull_request`. A producer that cannot be resolved is
+  a skip with its own code and never a pass: `producer-unresolved-name` for a name no workflow
+  carries and for a name more than one workflow carries, `producer-unresolved-trigger` for an `on:`
+  block the reader does not model, and `producer-unresolved-config` for a key the rule reads that is
+  absent or `null`. The passes name the
+  furthest leg reached: no workflow declares `workflow_run` (`no-workflow-run`), a `workflow_run`
+  workflow downloads nothing (`workflow-run-without-artifact`), a downloading `workflow_run` job
+  holds no write scope (`no-write-permission`), and every resolved producer declares no
+  `pull_request` (`trusted-producer`). No workflow at all skips (`no-ci`), an unparseable workflow
+  skips (`unparseable-workflow`) without a pass on top, and no repository facts skip (`no-repo`).
+- **Evidence:** the consumer job and the downloading step at the step line; the producer path, the
+  name it was matched by and the `pull_request` trigger that makes it unprivileged; the download
+  mechanism (`uses`, or the `run-id` expression) with the value that was read; and every write scope
+  the governing declaration holds, in catalog order, or `write-all`.
+- **Severity:** `error` in `baseline` and in `strict`, a declared deviation from 9.1 for the reason
+  R11 records: the finding fires on the conjunction of four declarations, removing any one of the
+  four clears it, and no repository that never writes `workflow_run` is touched, so the friction
+  class of the finding is not the friction of the fix.
+- **Remediation:** manual, printed as the choice to make: split the workflow so the job that holds
+  the write token never consumes the artifact, or keep the artifact out of the write path and
+  re-derive what the job needs from the run through the API. Printing, hashing or copying the bytes
+  is a read like any other. The tool never edits a workflow.
+- **Limits:** proves that a declared trigger, a declared step and a declared permission name the pair,
+  and that a workflow carrying the producer name declares `pull_request`. It does not read what the
+  downloaded bytes are or what the job does with them, does not follow the artifact by name (only the
+  download is read, never the upload that produced it), does not decide whether a fork can start the
+  producer branch it targets, and does not resolve a producer in another repository or one reached
+  through a reusable workflow. A producer name more than one workflow carries names no producer, so
+  the pair is a skip and never a resolution. A `with:` map written as a flow collection is invisible
+  to the reader today, so the `uses` signal is the one that always answers, and the listed workflows
+  are read only from a block map: any other spelling of `on:` is a skip, never a guessed list.
+
 ### 8.3 Deferred catalog (six rules, none of them in 0.2)
 
 The three workflow rules this section used to defer against the 0.2 line **have shipped**: the frozen
@@ -421,7 +471,7 @@ not before.
 A rule that leaves this table moves into §8.2 with the next free number; numbering in the catalog is
 append-only, so a citation like `8.2 R5` never changes what it names (0024).
 
-### 8.4 Why nine, and then twelve
+### 8.4 Why nine, then twelve, and then thirteen
 
 The count is a product constraint, not an accident. Nine rules fit one screen of output on a real
 repository, one page of documentation, one test file each, and one release note. Every additional
@@ -444,8 +494,35 @@ ambiguously:
 that matters is per release, not per catalog: twelve rules must still fit one screen of output on a
 real repository, one page of documentation, one test file each and one release note. The three that
 shipped first were chosen by that test — each reuses a reader that already exists, so none of them adds
-a new way for the tool to be wrong in public. The catalogue is twelve today, and
+a new way for the tool to be wrong in public. The catalogue is thirteen today, and
 `tests/docs-contract.test.js` counts this file's `#### R` sections against the catalog the code
-exports, so a thirteenth rule cannot arrive without a section here (0024).
+exports, so a rule could not arrive without a section here (0024). R13 is the one that did, and it
+answers that budget in its own section below.
+
+**And the count rose to thirteen.** The rule is `workflow-run-artifact` (R13), it exists because
+the CI family could not model a trigger that starts a workflow when another one finishes, and it
+answers the budget of this section point by point (0035):
+
+- **One screen.** The rule is one more row in the CI family, and the family prints as one block with
+  a count: `all 5 rules pass` becomes `all 6 rules pass` on a repository that is clean, and one
+  finding is one paragraph, the size of every other CI finding. Nothing moves off the screen to make
+  room.
+- **One page.** `docs/rules/workflow-run-artifact.md`, in the shape every rule page has: the
+  question, what the rule reads, what it cannot read, and the two edits that clear the finding.
+- **One test file.** `tests/rules/workflow-run-artifact.test.js`, with issue #153's own two files as
+  the pair that must fail and the case that removes one leg at a time as the rest.
+- **One release note.** One breaking-change line and one upgrade sentence, because the rule is
+  `error` in `baseline` and `--fail-on` defaults to `error`, so a repository that carried the pair
+  and was green turns red on that release with no change to the repository (17.5).
+- **No new way to be wrong in public.** The rule adds a question, not a parser. Every field it reads
+  is a field another rule already had to get right: the trigger block with its lists (R11),
+  `permissions:` at the workflow level and in each job (R12), and a workflow's `name:`. A parser two
+  rules share is a parser whose defects are found twice.
+
+**What the alternative costs.** This section counts rules; it does not count false passes. Leaving
+the pair unreported is a `PASS` over a request the product documented as an open hole on its own
+front page, printed by the output a reader is told to trust. `all 5 rules pass` over issue #153's
+pair is worth less than `all 6 rules pass` with one finding in it, and a budget that protects a
+known-untrue green is measuring the wrong thing.
 
 ---

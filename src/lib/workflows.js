@@ -13,12 +13,24 @@
  * which is valid YAML and the shape GitHub's own templates write.
  *
  * Shapes it refuses, each naming the line: anchors/aliases/merge keys, tabs, multi-document streams,
- * sequences or flow maps where a job map is expected, and a `uses:` value written as a block scalar
- * (the reference cannot be attributed from a joined scalar without guessing).
+ * sequences or flow maps where a job map is expected, a `uses:` value written as a block scalar
+ * (the reference cannot be attributed from a joined scalar without guessing), and a trigger list item
+ * that is itself a map (a scalar list cannot carry it).
  *
- * The reader models jobs and steps, never the trigger: `declaresTrigger` reads the one place YAML
- * defines it — a top-level `on:` key — so no rule scans the file for a trigger token (RFC 8.3, 16
- * F5 G3). R9 and `pull-request-target` share it, instead of growing a second trigger parser.
+ * The reader also models the workflow `name:` and the trigger block, as data a rule can consume: `on:`
+ * in every spelling YAML gives it, one event per trigger with the line it was declared on and its own
+ * keys read as scalar lists. The flow-map spelling is reported as a form the reader does not model
+ * rather than guessed at, and `on: {}` is the `none` form, which declares no event. A trigger
+ * configuration the reader cannot read as a list of scalars - a list of maps such as a `schedule:`
+ * cron job, a flow map, a block scalar, an anchor - is reported as `null` under its own key and never
+ * refused: a trigger must not turn the whole workflow unreadable, because that would skip every
+ * rule's verdict on the file. A key the file declares is therefore present and only an undeclared one
+ * is absent, so `null` is never confused with `[]`. `env:` is read as a map at the job and at the step
+ * level, beside `with:`.
+ *
+ * `declaresTrigger` still reads the one place YAML defines a trigger, a top-level `on:` key, so no
+ * rule scans the file for a trigger token (RFC 8.3, 16 F5 G3). R9 and `pull-request-target` share it,
+ * instead of growing a second trigger parser.
  *
  * It also models `permissions:`, at the workflow level and in each job, so `workflow-permissions`
  * reads a declaration the reader attributed instead of scanning the file for the key (RFC 8.3, 16
@@ -226,6 +238,10 @@ function parseFlowMap(text, line) {
 /** @typedef {{ no: number, raw: string }} RawLine */
 /** @typedef {{ key: string, value: string, line: number, indent: number, start: number, bodyStart: number, bodyEnd: number }} WorkflowEntry */
 /** @typedef {{ form: 'map' | 'write-all' | 'read-all' | 'none', line: number, entries?: Record<string, string> }} Permissions */
+/** @typedef {'none' | 'map' | 'sequence' | 'scalar' | 'flow-map'} TriggerForm */
+/** @typedef {Record<string, string[] | null>} TriggerConfig */
+/** @typedef {{ name: string, line: number, config: TriggerConfig }} TriggerEvent */
+/** @typedef {{ line: number, form: TriggerForm, events: TriggerEvent[] }} Triggers */
 
 class Reader {
   /** @param {string} text */
@@ -373,8 +389,46 @@ class Reader {
     return entries;
   }
 
-  /** @returns {{ jobs: Array<object>, permissions: Permissions | null }} */
+  /**
+   * The items of a block sequence written under a key that carries no value: `- item` lines at one
+   * indentation, which may be the key's own column (an indentless sequence, S1.1). Each item is one
+   * scalar, because a deeper line or a map item cannot be attributed to a single value.
+   * @param {number} start
+   * @param {number} end
+   * @param {string} context
+   * @returns {Array<{ value: string, line: number }>}
+   */
+  blockSequence(start, end, context) {
+    /** @type {Array<{ value: string, line: number }>} */
+    const items = [];
+    let dashIndent = null;
+    for (let i = this.next(start); i < end; i = this.next(i + 1)) {
+      const line = this.lines[i].no;
+      const indent = this.indent(i);
+      const text = stripComment(this.content(i));
+      if (dashIndent === null) {
+        if (!isSequenceItem(text)) fail(`expected a sequence item at line ${line} in ${context}`);
+        dashIndent = indent;
+      }
+      if (indent !== dashIndent || !isSequenceItem(text)) {
+        fail(`unexpected indentation at line ${line} in ${context}`);
+      }
+      const value = text.slice(1).trim();
+      if (value === '') fail(`sequence item at line ${line} in ${context} has no value`);
+      if (splitKeyValue(value) !== null) {
+        fail(`sequence item at line ${line} in ${context} is a map, which the reader does not attribute`);
+      }
+      items.push({ value: unquote(value), line });
+    }
+    return items;
+  }
+
+  /** @returns {{ name: string | null, triggers: Triggers | null, jobs: Array<object>, permissions: Permissions | null }} */
   parse() {
+    /** @type {string | null} */
+    let name = null;
+    /** @type {Triggers | null} */
+    let triggers = null;
     /** @type {Array<object>} */
     const jobs = [];
     /** @type {Permissions | null} */
@@ -414,7 +468,11 @@ class Reader {
         bodyStart: i + 1,
         bodyEnd: end,
       };
-      if (kv.key === 'jobs') {
+      if (kv.key === 'name') {
+        name = this.scalarValue(entry, 'name');
+      } else if (kv.key === 'on') {
+        triggers = this.parseTriggers(entry);
+      } else if (kv.key === 'jobs') {
         if (kv.value !== '') fail(`"jobs" at line ${line} is not a block map`);
         for (const job of this.parseJobs(i + 1, end)) jobs.push(job);
       } else if (kv.key === 'permissions') {
@@ -422,7 +480,7 @@ class Reader {
       }
       i = end;
     }
-    return { jobs, permissions };
+    return { name, triggers, jobs, permissions };
   }
 
   /**
@@ -436,7 +494,15 @@ class Reader {
 
   /** @param {WorkflowEntry} entry */
   parseJob(entry) {
-    const job = { id: entry.key, line: entry.line, name: null, condition: null, permissions: null, steps: [] };
+    const job = {
+      id: entry.key,
+      line: entry.line,
+      name: null,
+      condition: null,
+      permissions: null,
+      env: null,
+      steps: [],
+    };
     if (entry.value === '{}') return job;
     if (entry.value !== '') {
       if (entry.value.startsWith('{')) {
@@ -448,6 +514,7 @@ class Reader {
       if (key.key === 'name') job.name = this.scalarValue(key, 'name');
       else if (key.key === 'if') job.condition = this.scalarValue(key, 'if');
       else if (key.key === 'permissions') job.permissions = this.parsePermissions(key);
+      else if (key.key === 'env') job.env = this.mapValue(key, 'env');
       else if (key.key === 'steps') job.steps = this.parseSteps(key, entry.key);
     }
     return job;
@@ -500,6 +567,165 @@ class Reader {
       fail(`"permissions" at line ${line} declares neither a value nor a key`);
     }
     return { form: 'map', line, entries };
+  }
+
+  /**
+   * The top-level `on:` key as the data a rule needs, in every spelling YAML gives it: a block map of
+   * events, a block or flow sequence of names, a single name, a flow map (`flow-map`), or the empty
+   * flow map (`none`), which declares no event at all. The non-empty flow map carries no events,
+   * because the reader does not model that spelling and will not guess at it. `none` also names the
+   * absent trigger set from the caller's side (`triggers` is `null` then), so a rule can ask a trigger
+   * set for its events without special-casing it.
+   * @param {WorkflowEntry} entry
+   * @returns {Triggers}
+   */
+  parseTriggers(entry) {
+    const line = entry.line;
+    if (entry.value === '') {
+      const first = this.next(entry.bodyStart);
+      if (first >= entry.bodyEnd) return { line, form: 'map', events: [] };
+      if (isSequenceItem(this.content(first))) {
+        const items = this.blockSequence(entry.bodyStart, entry.bodyEnd, '"on"');
+        return {
+          line,
+          form: 'sequence',
+          events: items.map((item) => ({ name: item.value, line: item.line, config: {} })),
+        };
+      }
+      const events = this.mapEntries(entry.bodyStart, entry.bodyEnd, '"on"').map((child) => ({
+        name: child.key,
+        line: child.line,
+        config: this.triggerConfig(child),
+      }));
+      return { line, form: 'map', events };
+    }
+    if (entry.value === '{}') return { line, form: 'none', events: [] };
+    if (entry.value.startsWith('{')) return { line, form: 'flow-map', events: [] };
+    if (entry.value.startsWith('[')) {
+      if (!entry.value.endsWith(']')) {
+        fail(`"on" at line ${line} is a flow sequence that spans more than one line`);
+      }
+      const events = splitFlow(entry.value.slice(1, -1), line).flatMap((part) => {
+        const name = unquote(stripComment(part));
+        return name === '' ? [] : [{ name, line, config: {} }];
+      });
+      return { line, form: 'sequence', events };
+    }
+    if (BLOCK_SCALAR.test(entry.value)) {
+      fail(`"on" at line ${line} is a block scalar, which the reader does not attribute`);
+    }
+    const name = unquote(entry.value);
+    if (name === '') fail(`"on" at line ${line} names no trigger`);
+    return { line, form: 'scalar', events: [{ name, line, config: {} }] };
+  }
+
+  /**
+   * One event's own block keys, each read as a list of scalars. An event with an empty body (`push:`)
+   * or an empty flow map (`push: {}`) has no configuration, which is a fact and not a gap.
+   *
+   * A key whose value is not a list of scalars is reported as `null` instead of refusing the file, so
+   * the event and its siblings survive: a `schedule:` block list of maps still yields the `cron` key it
+   * declares, and that key is `null` because a list item cannot be read as the event's scalar list.
+   * @param {WorkflowEntry} entry
+   * @returns {TriggerConfig}
+   */
+  triggerConfig(entry) {
+    /** @type {TriggerConfig} */
+    const config = {};
+    if (entry.value === '{}') return config;
+    if (entry.value !== '') {
+      const spelling = entry.value.startsWith('{') ? 'a flow map' : 'a scalar';
+      fail(`trigger "${entry.key}" at line ${entry.line} is ${spelling}, which the reader does not attribute`);
+    }
+    const context = `trigger "${entry.key}" at line ${entry.line}`;
+    const first = this.next(entry.bodyStart);
+    if (first >= entry.bodyEnd) return config;
+    const level = this.indent(first);
+    let i = first;
+    while (i < entry.bodyEnd) {
+      if (this.skippable(i)) {
+        i += 1;
+        continue;
+      }
+      const line = this.lines[i].no;
+      const indent = this.indent(i);
+      const text = stripComment(this.content(i));
+      const item = isSequenceItem(text);
+      const kv = splitKeyValue(item ? text.slice(1).trim() : text);
+      if (indent !== level || kv === null) {
+        i += 1;
+        continue;
+      }
+      const bodyEnd = Math.min(this.entryEnd(i, indent, entry.bodyEnd), entry.bodyEnd);
+      config[kv.key] = item
+        ? null
+        : this.triggerValue(
+            {
+              key: kv.key,
+              value: kv.value,
+              rawValue: kv.value,
+              line,
+              indent,
+              start: i,
+              bodyStart: i + 1,
+              bodyEnd,
+            },
+            context,
+          );
+      i = bodyEnd;
+    }
+    return config;
+  }
+
+  /**
+   * One event key read as a list of scalars, or `null` when the file declares it in a spelling that is
+   * not one. The refusal `scalarList` raises is caught here, because a trigger configuration the reader
+   * cannot read is reported under its own key and must never make the whole workflow unreadable.
+   * @param {WorkflowEntry} entry
+   * @param {string} context
+   * @returns {string[] | null}
+   */
+  triggerValue(entry, context) {
+    try {
+      return this.scalarList(entry, context);
+    } catch (error) {
+      if (error instanceof UnparseableWorkflow) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * One value as a list of scalars, whichever of the three spellings it is written in: a flow
+   * sequence (`workflows: ["pr build"]`), a block sequence (`workflows:` then `- pr build` items), or
+   * a single scalar (`types: completed`). A key declared with no value and no item is an empty list.
+   * Nothing is flattened: an item that is a map, and a value written as a block scalar, a flow map or
+   * an anchor/alias, is refused naming the line, and `triggerValue` reports that refusal as `null`.
+   * @param {WorkflowEntry} entry
+   * @param {string} context
+   * @returns {string[]}
+   */
+  scalarList(entry, context) {
+    if (entry.value === '[]') return [];
+    if (entry.value.startsWith('[')) {
+      if (!entry.value.endsWith(']')) {
+        fail(`"${entry.key}" at line ${entry.line} is a flow sequence that spans more than one line`);
+      }
+      return splitFlow(entry.value.slice(1, -1), entry.line)
+        .map((part) => unquote(stripComment(part)))
+        .filter((value) => value !== '');
+    }
+    if (BLOCK_SCALAR.test(entry.value)) {
+      fail(`"${entry.key}" at line ${entry.line} is a block scalar, which the reader does not attribute`);
+    }
+    if (entry.value.startsWith('{')) {
+      fail(`"${entry.key}" at line ${entry.line} is a flow map, which is not a list of scalars`);
+    }
+    if (entry.value.startsWith('&') || entry.value.startsWith('*')) {
+      fail(`"${entry.key}" at line ${entry.line} is an anchor or an alias, which the reader does not attribute`);
+    }
+    if (entry.value !== '') return [unquote(entry.value)];
+    if (this.next(entry.bodyStart) >= entry.bodyEnd) return [];
+    return this.blockSequence(entry.bodyStart, entry.bodyEnd, context).map((item) => item.value);
   }
 
   /**
@@ -586,8 +812,8 @@ class Reader {
     const rawRest = text.slice(1).trim();
     const rest = stripComment(rawRest).trim();
     const stop = this.stepEnd(start, dashIndent, end);
-    /** @type {{ index: number, line: number, name: string | null, uses: string | null, raw: string | null, with: Record<string, string>, run: string | null }} */
-    const step = { index, line, name: null, uses: null, raw: null, with: {}, run: null };
+    /** @type {{ index: number, line: number, name: string | null, uses: string | null, raw: string | null, with: Record<string, string>, run: string | null, env: Record<string, string> | null }} */
+    const step = { index, line, name: null, uses: null, raw: null, with: {}, run: null, env: null };
 
     if (rest.startsWith('{')) {
       const pairs = parseFlowMap(rest, line);
@@ -673,17 +899,24 @@ class Reader {
       return;
     }
     if (entry.key === 'with') step.with = this.mapValue(entry, 'with');
+    if (entry.key === 'env') step.env = this.mapValue(entry, 'env');
   }
 }
 
 /**
  * @param {string} text
- * @returns {{ ok: true, jobs: Array<object>, permissions: Permissions | null } | { ok: false, reason: 'unparseable-workflow', detail: string }}
+ * @returns {{ ok: true, name: string | null, triggers: Triggers | null, jobs: Array<object>, permissions: Permissions | null } | { ok: false, reason: 'unparseable-workflow', detail: string }}
  */
 export function parseWorkflow(text) {
   try {
     const parsed = new Reader(text).parse();
-    return { ok: true, jobs: parsed.jobs, permissions: parsed.permissions };
+    return {
+      ok: true,
+      name: parsed.name,
+      triggers: parsed.triggers,
+      jobs: parsed.jobs,
+      permissions: parsed.permissions,
+    };
   } catch (error) {
     if (error instanceof UnparseableWorkflow) {
       return { ok: false, reason: 'unparseable-workflow', detail: error.message };

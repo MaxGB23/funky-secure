@@ -36,7 +36,7 @@
     "warn": 1,
     "info": 0,
     "pass": 6,
-    "skip": 3,
+    "skip": 4,
     "verdict": "fail"
   },
   "findings": [
@@ -144,6 +144,19 @@
         "kind": "none"
       },
       "doc": "funky-secure explain workflow-permissions",
+      "code": "no-ci"
+    },
+    {
+      "rule": "workflow-run-artifact",
+      "status": "skip",
+      "severity": "error",
+      "scope": "repo",
+      "target": "ci",
+      "message": "skipped: there is no .github/workflows directory, so no workflow can declare a trigger",
+      "remediation": {
+        "kind": "none"
+      },
+      "doc": "funky-secure explain workflow-run-artifact",
       "code": "no-ci"
     }
   ]

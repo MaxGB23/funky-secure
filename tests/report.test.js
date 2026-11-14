@@ -696,6 +696,7 @@ const DISABLED_LABELS = [
   'CI install flags',
   'pull_request_target',
   'Workflow permissions',
+  'Workflow run artifact',
 ];
 
 /** The honesty block of one rendering, or `[]` when it prints none. */
@@ -731,7 +732,7 @@ test('states how many rules a reduced policy runs and names the ones it does not
   const sentence = block.map((line) => line.slice(NOT_RUN.length)).join(' ');
   assert.equal(
     sentence,
-    `6 of 12 rules; off by policy: ${DISABLED_LABELS.join(', ')}`,
+    `6 of 13 rules; off by policy: ${DISABLED_LABELS.join(', ')}`,
     'the count is the active rules against the catalog, and the names are the labels in catalog order',
   );
 

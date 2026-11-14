@@ -495,8 +495,8 @@ test('both closing blocks always print: why this order, and what the starter doe
   }
   assert.equal(
     sentence.map((line) => line.slice(9)).join(' '),
-    '6 of 12 rules; off by policy: Environment files, Pinned actions, Bot auto-merge, ' +
-      'CI install flags, pull_request_target, Workflow permissions',
+    '6 of 13 rules; off by policy: Environment files, Pinned actions, Bot auto-merge, ' +
+      'CI install flags, pull_request_target, Workflow permissions, Workflow run artifact',
     'the same honesty content the report renders',
   );
 });

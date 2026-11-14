@@ -6,7 +6,7 @@
 [![provenance](https://img.shields.io/badge/provenance-SLSA%20v1-8a2be2?logo=sigstore&logoColor=white&style=flat-square&labelColor=1f2937)](https://www.npmjs.com/package/funky-secure)
 
 `funky-secure` audits a pnpm repository and answers one question: **is this project — and the machine
-that builds it — configured the way we decided?** Twelve stateless rules, the evidence each one read,
+that builds it — configured the way we decided?** Thirteen stateless rules, the evidence each one read,
 one verdict, and a write plan you read before anything is applied. For a new repository it starts
 earlier: `start` prints the ordered steps that make the answer `yes`, and writes nothing itself. It
 never installs, never resolves a version, never touches the network and never keeps state.
@@ -21,11 +21,11 @@ pnpm dlx funky-secure@0.11.1 start      # the same command, in a repository alre
 npx funky-secure scan --preset starter  # past the start: the same rules as findings, each with a → command
 ```
 
-![Four numbered glass panels on a dark grid: what funky-secure reads, twelve stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
+![Four numbered glass panels on a dark grid: what funky-secure reads, the stateless rules in four families, the verdict carrying PASS and FAIL, and the findings turned into a plan you apply, with the exit codes and the commands the plan prints](docs/images/diagram.jpg)
 
 ## 📦 What you get
 
-- **A verdict with evidence.** Twelve rules over what decides what your machine installs and what your
+- **A verdict with evidence.** Thirteen rules over what decides what your machine installs and what your
   CI is allowed to do: the package manager pin, the lockfile, the release-age quarantine, floating
   ranges, tracked `.env` files, the CI pins, the merge path, the workflow triggers.
 - **A plan instead of magic.** `init` prints every write with its absolute path and its reason, and
@@ -57,13 +57,13 @@ deterministically, with evidence you can review.
 ## 🎯 Who this is for
 
 Both readers get the same product, and neither gets a different rule set. A beginner is pointed at the
-`starter` preset, which is these twelve rules with six of them `off` by policy for day zero, and the
+`starter` preset, which is these thirteen rules with seven of them `off` by policy for day zero, and the
 report says so on its own line instead of claiming coverage it does not have.
 
 **You are starting out.** In a new project run `funky-secure start` and follow the ordered steps; in
 an existing one, `funky-secure scan` and do what the `→` lines say. You do not need to know why a
 72-hour quarantine matters to benefit from it, though every rule page explains the attack it prevents.
-[`docs/guide.md`](docs/guide.md) has a "if you see this, do this" table for the twelve rules and
+[`docs/guide.md`](docs/guide.md) has a "if you see this, do this" table for the thirteen rules and
 explains what each symbol and verdict means.
 
 **You already do this for a living.** `--scope` separates repository facts from machine facts,
@@ -107,7 +107,7 @@ the one in [`docs/guide.md`](docs/guide.md).
 `npx` is the first-run convenience and nothing more. For anything repeatable — CI, a gate, a script —
 pin it, exactly as the tool asks of the repositories it audits.
 
-None of this changes what the audit covers. The twelve rules read the repository and its workflows —
+None of this changes what the audit covers. The thirteen rules read the repository and its workflows —
 the lockfile, the ranges, the committed ignore rules, the pinned actions, the merge path, the
 permissions — so a project that already uses pnpm gets **fewer findings because there is nothing to
 migrate, not a shorter check**. `start` drops only the steps that do not apply.
@@ -126,7 +126,7 @@ of what it wrote.
 [`docs/guide.md`](docs/guide.md) explains how to read the report. When a command refuses, the first
 line says what to do and the second says why it refused.
 
-## 🧭 The twelve rules
+## 🧭 The thirteen rules
 
 | Rule | `baseline / strict` | Question |
 |---|---|---|
@@ -142,6 +142,7 @@ line says what to do and the second says why it refused.
 | `ci-no-safety-overrides` | warn / error | does CI disable the frozen lockfile or re-enable lifecycle scripts? |
 | `pull-request-target` | error / error | does a workflow combine `pull_request_target` with a checkout of the pull request head? |
 | `workflow-permissions` | warn / error | does each workflow declare least-privilege `permissions:`? |
+| `workflow-run-artifact` | error / error | does a privileged workflow read an artifact an unprivileged run produced? |
 
 Every rule has one page under [`docs/rules/`](docs/rules/), and this table, `--help` and `explain` are
 renderings of the same catalog in `src/rules/index.js`. A drift test fails when they disagree.
@@ -177,11 +178,20 @@ from an unsupported platform rather than as a regression.
 A tool that sells evidence owes its reader the same treatment, so [`docs/validation.md`](docs/validation.md)
 keeps the ledger: every claim below, and every one that is missing, with what would close it.
 
-- **The twelve rules are verified against real code** — five cloned open-source repositories, two more
-  read for one rule each, and eleven real workflows — with the findings counted rather than asserted:
+- **All thirteen rules are verified against real code**: five cloned open-source
+  repositories, two more read for one rule each, and eleven real workflows, with the findings counted
+  rather than asserted:
   53 unpinned actions in `berry`, 64 in `shadcn-ui/ui`, 32 jobs inheriting default permissions in
   `berry`, a genuine pwn request in `cloud-bulldozer`, and 206 floating ranges in `shadcn-ui/ui` with
-  zero desyncs over 245 specifiers.
+  zero desyncs over 245 specifiers. The thirteenth, `workflow-run-artifact`, was measured on four
+  repositories of its own - `pnpm/pnpm`, `nodejs/node`, `vercel/next.js` and `vitejs/vite`, 121
+  workflow files - and three of their workflows answered `fail`, one in each of three repositories.
+  Two did so under the rule's first threshold; the third is the file where the same measurement found
+  the rule answering `pass` with a message false of it - a consumer whose only write scope is
+  `id-token: write` - and widened the threshold to any write scope. No workflow answered `fail`
+  without fork-authored bytes reaching a write scope. Whether a project's own workflow is exploitable
+  is its maintainers' to say, so the ledger names the repositories and the counts, not the files.
+  [`docs/validation.md`](docs/validation.md) keeps every number, repository and file count.
 - **The written path was verified by strangers.** Three field rounds totalling eleven blind sessions
   were given nothing but the tool's own output, and they never read its source. Every defect they found
   was in the path — a tree left dirty, a step that named no dependency, a pin before the lockfile
@@ -190,10 +200,6 @@ keeps the ledger: every claim below, and every one that is missing, with what wo
   runner, and that `permissions: contents: read` really produces a `403`, is unverified: those rules
   are checked statically against the eleven real workflows recorded in
   [`docs/validation.md`](docs/validation.md). It would take a runner and a repository.
-- **One hole in the rule set is known and open.** A `workflow_run` workflow that consumes an artifact
-  and carries a write token can pass the CI rules today —
-  [#153](https://github.com/MaxGB23/funky-secure/issues/153) — and it is a hole in what the rules
-  model, not in whether they were tested.
 - **macOS is a decided non-goal, not a gap.** It is never executed anywhere, and the section above
   says so instead of hedging.
 

@@ -30,7 +30,7 @@ interactions in the browser ([Vercel's incident
 response](https://vercel.com/blog/critical-npm-supply-chain-attack-response-september-8-2025),
 [GHSA-8mgj-vmr8-frr6](https://github.com/advisories/GHSA-8mgj-vmr8-frr6)). Nothing about those
 releases looked wrong: the right publisher, a normal version bump. What turns that window into a delay
-the ecosystem can use is a release-age floor, which is one of the twelve rules — `quarantine`.
+the ecosystem can use is a release-age floor, which is one of the thirteen rules — `quarantine`.
 
 ## What it refuses to be
 

@@ -1,0 +1,10 @@
+# Excerpt of pnpm/pnpm .github/workflows/pacquet-integrated-benchmark.yml
+# (blob 96393559d9db0efabb455b2b37ceff915bebbc11, read 2026-11-13; the file is
+# 1222 lines there). Only the name and the trigger are kept: R13 resolves a
+# producer by exactly those two facts. The consumer fixture beside it
+# (pacquet-integrated-benchmark-comment.yml) is the complete file.
+name: Pacquet Integrated-Benchmark
+
+on:
+  pull_request:
+    types: [opened, synchronize]
