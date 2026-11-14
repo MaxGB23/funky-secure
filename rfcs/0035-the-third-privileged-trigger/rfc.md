@@ -213,3 +213,42 @@ to decide which of the two documents is lying.
 - **The preset rule that keeps `starter` at six.** [`docs/spec/policy.md`](../../docs/spec/policy.md)
   §9.1.
 - **The breakage contract.** [`docs/delivery.md`](../../docs/delivery.md) §17.5.
+
+## Amendment, 2026-11-13: the write test is any write scope
+
+The first real-repository measurement changed one declaration of this record. *The rule* above reads
+"whose permissions grant a write (`contents: write`, `pull-requests: write`, `issues: write`, or
+`write-all`, at workflow or job level)". That parenthetical was the whole test, and it is replaced by:
+
+> whose permissions, at the level that governs the job - the job's own `permissions:` else the
+> workflow's - grant a write, which is any scope whose value is `write`, or `write-all`.
+
+**Why.** Three scopes were a list of the ones this repository's own workflows write, not a model of a
+token. `permissions:` grants one token per job, and any scope set to `write` widens it: `checks` opens
+check runs, `statuses` writes commit statuses, and `id-token` mints an OIDC identity that a storage
+service accepts in place of a secret. `vercel/next.js` carries the case that made it plain: its
+`build_and_deploy.yml` builds a fork's tarballs on `pull_request`, and `upload_preview_tarballs.yml`
+runs on `workflow_run` with `contents: read` and `id-token: write`, downloads those tarballs and
+uploads them to Vercel Blob under the minted token. The rule as written answered
+`pass / no-write-permission` with a message saying no bytes reach a write token, over the exact pair it
+exists to find: a false pass, and a false sentence.
+
+**What the widening costs, and does not.** A false pass is the failure this rule was argued into the
+catalogue to remove, so the wider test is the one it owes: the message and `evidence.scopes` now name
+every `write` scope the governing declaration holds, in catalog order, and never a scope the rule did
+not read. The finding count grows only where a consumer holds a write outside the three the list
+carried: `checks: write` on `pnpm/pnpm`'s benchmark comment consumer, and `id-token: write` on
+`vercel/next.js`. Everything the record fixed stays fixed - the level that governs the job, the
+producer resolution, the three unresolved codes, the four passes, and a repository with no
+`workflow_run` at all is still `pass / no-workflow-run`.
+
+**What the measurement said about the record's other claims.** Four repositories read, 121 workflow
+files: `pnpm/pnpm` and `nodejs/node` are the two genuine findings, `vercel/next.js` is the false pass
+this amendment closes, and `vitejs/vite` declares no `workflow_run`. No false positive was found on
+any of the four - three real consumers, three answers, none of them a pass over a pair - which is the
+first outside evidence that the four-declaration conjunction is as narrow as the record's severity
+argument claims. The same run restated a boundary the record already carries: a real repository also
+reads artifacts outside `uses` (`pnpm/pnpm` uses `gh run download` and the artifacts API in a `run:`
+block) and through reusable workflows, and both are still invisible here. The record's status stays
+`draft`; the parenthetical above is superseded by this section and not edited, because the amendment
+is the record of the change.

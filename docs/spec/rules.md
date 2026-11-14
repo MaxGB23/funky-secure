@@ -402,7 +402,13 @@ the pin alone is the declaration, and nothing about it is skipped.
   whose `uses` is `actions/download-artifact` with any ref, or a step whose `with.run-id` reads
   `github.event.workflow_run.id`. The download is one `workflow-run-artifact` fail at the step line
   when the declaration that governs that job's token - the job's `permissions:`, else the workflow's
-  - grants `contents: write`, `pull-requests: write`, `issues: write` or `write-all`, and when the
+  - grants a write, which is any scope whose value is `write`, `write-all` included: `contents`,
+  `pull-requests`, `checks`, `id-token` and every other scope carry one token, and the test is the
+  value rather than a list of names. The message and `evidence.scopes` name every write scope that
+  declaration holds, in catalog order, and never a scope the rule did not read. The measured
+  consequence is that a consumer holding `contents: read` and `id-token: write` is not a pass: it
+  mints an OIDC identity a storage service accepts, and `vercel/next.js` carries exactly that shape
+  over an artifact a `pull_request` run built. The fail also requires that the
   producer resolves to a workflow that declares `pull_request`. A producer that cannot be resolved is
   a skip with its own code and never a pass: `producer-unresolved-name` for a name no workflow
   carries and for a name more than one workflow carries, `producer-unresolved-trigger` for an `on:`
@@ -415,8 +421,8 @@ the pin alone is the declaration, and nothing about it is skipped.
   skips (`unparseable-workflow`) without a pass on top, and no repository facts skip (`no-repo`).
 - **Evidence:** the consumer job and the downloading step at the step line; the producer path, the
   name it was matched by and the `pull_request` trigger that makes it unprivileged; the download
-  mechanism (`uses`, or the `run-id` expression) with the value that was read; and the scopes the
-  write rests on.
+  mechanism (`uses`, or the `run-id` expression) with the value that was read; and every write scope
+  the governing declaration holds, in catalog order, or `write-all`.
 - **Severity:** `error` in `baseline` and in `strict`, a declared deviation from 9.1 for the reason
   R11 records: the finding fires on the conjunction of four declarations, removing any one of the
   four clears it, and no repository that never writes `workflow_run` is touched, so the friction

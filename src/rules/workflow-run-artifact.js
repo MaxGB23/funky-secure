@@ -36,8 +36,27 @@ const DOWNLOAD_ACTION = 'actions/download-artifact';
 /** The expression that names the producing run, read from a step's `with.run-id`. */
 const RUN_ID = 'github.event.workflow_run.id';
 
-/** The scopes a write can rest on (RFC 0035), beside the `write-all` form. */
-const WRITE_SCOPES = ['contents', 'pull-requests', 'issues'];
+/**
+ * GitHub's permission scopes in catalog order, which is the order this rule names them in. A scope the
+ * catalog does not list is still a write when the declaration writes it, so it is kept and named after
+ * the listed ones instead of being dropped: an unnamed write would be a pass over a token that exists.
+ */
+const SCOPE_CATALOG = [
+  'actions',
+  'attestations',
+  'checks',
+  'contents',
+  'deployments',
+  'discussions',
+  'id-token',
+  'issues',
+  'models',
+  'packages',
+  'pages',
+  'pull-requests',
+  'security-events',
+  'statuses',
+];
 
 /** The remediation, printed as the choice to make: both routes are structural. */
 const FIX =
@@ -79,8 +98,11 @@ function download(step) {
 }
 
 /**
- * The write scopes one `permissions:` declaration grants, or an empty list when it grants none.
- * `write-all` is reported under its own name, because it is the whole token rather than three scopes.
+ * The write scopes one `permissions:` declaration grants, or an empty list when it grants none. Any
+ * scope whose value is `write` is one: a token that mints an OIDC identity (`id-token`), opens a check
+ * (`checks`) or writes a status (`statuses`) reaches the same place as `contents`, which is why the
+ * three-scope list the first draft carried was a false pass over a real repository. `write-all` is
+ * reported under its own name, because it is the whole token rather than a list of scopes.
  * @param {{ form?: string, entries?: Record<string, string> } | null | undefined} permissions
  * @returns {string[]}
  */
@@ -89,7 +111,15 @@ function writeScopes(permissions) {
   if (permissions.form === 'write-all') return ['write-all'];
   if (permissions.form !== 'map') return [];
   const entries = permissions.entries ?? {};
-  return WRITE_SCOPES.filter((scope) => entries[scope] === 'write');
+  const rank = (scope) => {
+    const at = SCOPE_CATALOG.indexOf(scope);
+    return at === -1 ? SCOPE_CATALOG.length : at;
+  };
+  // Object.keys keeps the declaration order, and a stable sort keeps it for a scope the catalog does
+  // not list, so the answer never depends on how the file happened to spell its map.
+  return Object.keys(entries)
+    .filter((scope) => entries[scope] === 'write')
+    .sort((a, b) => rank(a) - rank(b));
 }
 
 /**
@@ -123,8 +153,11 @@ export default {
     'workflow whose on: block declares workflow_run and whose steps carry an artifact download: a ' +
     'step whose uses is actions/download-artifact (with any ref), or a step whose with.run-id reads ' +
     'github.event.workflow_run.id. The download is reported only when the declaration that governs ' +
-    'its job, which is the job permissions: else the workflow permissions:, grants contents: write, ' +
-    'pull-requests: write, issues: write or write-all, and when the producer resolves: every name ' +
+    'its job, which is the job permissions: else the workflow permissions:, grants any scope whose ' +
+    'value is write, or write-all: contents: write, id-token: write, checks: write and every other ' +
+    'scope carry the same token. Every write scope that declaration holds is named in the message and ' +
+    'in evidence.scopes, in catalog order and never one it did not read. The download is reported ' +
+    'when the producer resolves: every name ' +
     'the trigger lists is matched against the name: of every workflow in the repository, a name ' +
     'exactly one workflow carries is that producer, and one that declares pull_request makes the ' +
     'pair one fail (workflow-run-artifact) at the line of the step that downloads, one per ' +
@@ -140,8 +173,8 @@ export default {
   evidence:
     'The consumer job and the downloading step, at the step line; the producer path, the name it was ' +
     'matched by and the pull_request trigger that makes it unprivileged; the download mechanism ' +
-    '(uses, or the run-id expression) with the value that was read; and the scopes the write rests ' +
-    'on.',
+    '(uses, or the run-id expression) with the value that was read; and every write scope the ' +
+    'governing declaration holds, in catalog order, or write-all.',
   remediation:
     'Manual, printed as the choice to make: split the workflow so the job that holds the write token ' +
     'never consumes the artifact, or keep the artifact out of the write path and re-derive what the ' +
@@ -153,7 +186,10 @@ export default {
     'downloaded bytes are or what the job does with them, does not follow the artifact by name (only ' +
     'the download is read, never the upload that named it), does not decide whether a fork can ' +
     'trigger the producer branch it targets, and does not resolve a producer that lives in another ' +
-    'repository or is reached through a reusable workflow. A producer name more than one workflow ' +
+    'repository or is reached through a reusable workflow. A scope whose value is write is a write ' +
+    'whatever the scope is called, and which scopes fork bytes can reach is not decided here, so an ' +
+    'artifact read outside a step (gh run download, the artifacts API) and one a reusable workflow ' +
+    'reads as an input are invisible. A producer name more than one workflow ' +
     'carries names no producer, so it is a skip and never a resolution. A with: map written as a ' +
     'flow collection is invisible to the reader today, so a download that only a flow-style with ' +
     'carries is not seen, and the workflows the trigger lists are read only from a block map: any ' +

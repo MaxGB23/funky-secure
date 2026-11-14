@@ -325,6 +325,177 @@ test('skips instead of passing when the fact it would read is absent', () => {
   assert.equal(unparseable[0].code, 'unparseable-workflow');
 });
 
+/// The write the finding rests on is any permission whose value is `write`, not three of them. The
+/// first real-repository measurement found the narrower test answering `pass / no-write-permission`
+/// over `vercel/next.js`, which builds a fork's tarballs on `pull_request` and uploads them to a
+/// storage service under `id-token: write` minted for that run.
+
+/** A consumer whose governing declaration is the argument, shaped like the pair it must fail on. */
+function consumerWith(permissions, name = 'label.yml') {
+  return workflow(
+    `name: label
+on:
+  workflow_run:
+    workflows: ["pr build"]
+    types: [completed]
+${permissions}
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@${'e'.repeat(40)}
+        with:
+          run-id: ${RUN_ID}
+`,
+    name,
+  );
+}
+
+test('names every write scope the governing declaration holds, in catalog order', () => {
+  const findings = rule.detect(
+    context({
+      workflows: [
+        PRODUCER,
+        consumerWith(
+          'permissions: { contents: read, actions: read, checks: write, issues: write, pull-requests: write }',
+        ),
+      ],
+    }),
+  );
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'fail');
+  assert.deepEqual(findings[0].evidence.scopes, ['checks', 'issues', 'pull-requests']);
+  assert.match(findings[0].message, /checks: write, issues: write, pull-requests: write/);
+  assert.doesNotMatch(findings[0].message, /contents/);
+});
+
+test('fails on an id-token: write consumer, and the message names that scope', () => {
+  const findings = rule.detect(
+    context({
+      workflows: [PRODUCER, consumerWith('permissions: { actions: read, contents: read, id-token: write }')],
+    }),
+  );
+
+  assert.equal(findings.length, 1);
+  const [finding] = findings;
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'workflow-run-artifact');
+  assert.notEqual(finding.code, 'no-write-permission');
+  assert.deepEqual(finding.evidence.scopes, ['id-token']);
+  assert.match(finding.message, /id-token: write/);
+  assert.doesNotMatch(finding.message, /no write scope/);
+});
+
+test('fails on a consumer that holds checks: write alone, and names it', () => {
+  const findings = rule.detect(
+    context({ workflows: [PRODUCER, consumerWith('permissions: { checks: write }')] }),
+  );
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'fail');
+  assert.deepEqual(findings[0].evidence.scopes, ['checks']);
+  assert.match(findings[0].message, /checks: write/);
+});
+
+test('a read-only declaration is still no-write-permission, and the message claims no scope', () => {
+  const findings = rule.detect(
+    context({
+      workflows: [
+        PRODUCER,
+        consumerWith('permissions: { actions: read, checks: read, contents: read, id-token: read }'),
+      ],
+    }),
+  );
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].code, 'no-write-permission');
+  assert.match(findings[0].message, /grants no write scope/);
+  assert.doesNotMatch(findings[0].message, /id-token|checks:/);
+});
+
+test('a job-level contents: read over a workflow-level write-all still holds no write', () => {
+  const consumer = `name: label
+on:
+  workflow_run:
+    workflows: ["pr build"]
+    types: [completed]
+permissions: write-all
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }
+    steps:
+      - uses: actions/download-artifact@${'f'.repeat(40)}
+        with:
+          run-id: ${RUN_ID}
+`;
+  const findings = rule.detect(context({ workflows: [PRODUCER, workflow(consumer)] }));
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].code, 'no-write-permission');
+});
+
+/// The four repositories the first real measurement read, copied byte for byte into
+/// `tests/fixtures/workflows/real/`. Each pair is the two files the rule needs and nothing else, so a
+/// fixture that drifts from the repository it came from shows up here instead of in a release note.
+
+test('fails on the pair pnpm, node and next each carry, as the repository writes it', () => {
+  const pairs = [
+    {
+      repository: 'pnpm/pnpm',
+      files: ['pacquet-integrated-benchmark.yml', 'pacquet-integrated-benchmark-comment.yml'],
+      consumer: 'pacquet-integrated-benchmark-comment.yml',
+      producer: 'pacquet-integrated-benchmark.yml',
+      download: 'actions/download-artifact@',
+      scopes: ['checks', 'issues', 'pull-requests'],
+    },
+    {
+      repository: 'nodejs/node',
+      files: ['nix-changes.yml', 'nix-changes-comment.yml'],
+      consumer: 'nix-changes-comment.yml',
+      producer: 'nix-changes.yml',
+      download: 'actions/download-artifact@',
+      scopes: ['pull-requests', 'statuses'],
+    },
+    {
+      repository: 'vercel/next.js',
+      files: ['build_and_deploy.yml', 'upload_preview_tarballs.yml'],
+      consumer: 'upload_preview_tarballs.yml',
+      producer: 'build_and_deploy.yml',
+      download: 'actions/download-artifact@',
+      scopes: ['id-token'],
+    },
+  ];
+
+  for (const pair of pairs) {
+    const workflows = pair.files.map((name) =>
+      workflow(fixture('workflows', 'real', name), name),
+    );
+    const findings = rule.detect(context({ workflows }));
+
+    assert.equal(findings.length, 1, `${pair.repository} is one finding and not ${findings.length}`);
+    const [finding] = findings;
+    assert.equal(finding.status, 'fail', `${pair.repository} answered ${finding.status} / ${finding.code}`);
+    assert.equal(finding.code, 'workflow-run-artifact');
+    assert.equal(finding.path, `.github/workflows/${pair.consumer}`);
+    const text = fixture('workflows', 'real', pair.consumer).split('\n');
+    const start = finding.line - 1;
+    // The finding is reported at the first line of the step, which a reader edits; its `uses` is the
+    // line directly below it here, and the fixture decides it rather than this test.
+    assert.match(text[start], /^\s*- /, `${pair.repository}: the finding is not at a step's first line`);
+    const step = text.slice(start, start + 9).join('\n');
+    assert.ok(step.includes(pair.download), `${pair.repository}: the step at the line does not download`);
+    assert.equal(finding.evidence.producerPath, `.github/workflows/${pair.producer}`);
+    assert.deepEqual(finding.evidence.scopes, pair.scopes);
+    for (const scope of pair.scopes) {
+      assert.match(finding.message, new RegExp(`${scope}: write`));
+    }
+  }
+});
+
 test('the catalog entry declares its identity, severity and page', () => {
   assert.equal(rule.id, 'workflow-run-artifact');
   assert.equal(rule.label, 'Workflow run artifact');

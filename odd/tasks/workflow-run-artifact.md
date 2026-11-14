@@ -137,3 +137,38 @@ Close #153 by naming the third privileged trigger, so the README stops carrying 
   self-scan is exit 0 with `0 errors, 0 warnings, 0 info, 11 passing, 2 skipped`, and a scratch scan over
   the three-file repository answers `skip / producer-unresolved-name` naming the three files in path
   order. No golden moved. The verifier's fourth finding is not this task's and is left to the parent.
+- **The R13 measurement on four real repositories, and the false pass it found.** The queue item after
+  D3 was the one that row left open: a real repository instance was searched for. Four repositories
+  were fetched into `.tmp/realwf/` and every workflow file read through the rule, with nothing from any
+  of them executed: `pnpm/pnpm` (34 files), `vercel/next.js` (29), `nodejs/node` (45) and `vitejs/vite`
+  (13), 121 workflow files in total. Verdicts before this change: `pnpm/pnpm` `fail` on
+  `pacquet-integrated-benchmark-comment.yml:112`, `nodejs/node` `fail` on
+  `nix-changes-comment.yml:21` plus `skip / unparseable-workflow` for `contributor-guidance.yml`,
+  `vitejs/vite` `pass / no-workflow-run`, and `vercel/next.js`
+  `pass / no-write-permission`. The first three are the measurement working; the fourth is the
+  defect. `upload_preview_tarballs.yml` runs on `workflow_run`, downloads the tarballs
+  `build_and_deploy.yml` built on `pull_request`, and holds `contents: read` with `id-token: write`,
+  because the bytes go to Vercel Blob under an OIDC-minted token. The rule answered `pass` and its
+  message said no bytes reach a write token, which was false of that file. So the write test was
+  three scopes that this repository's own workflows write, not a model of a token: `checks: write` on
+  pnpm's consumer was missed the same way, and `statuses: write` on node's would have been. The test
+  is now any scope whose value is `write`, or `write-all`, at the level that governs the job as
+  before; the message and `evidence.scopes` name every write scope the file holds, in catalog order,
+  and only ones it read. Nothing else moved: the codes are the same seven, the parser is untouched,
+  and the four passes answer what they answered. RED observed before the fix - the four new cases
+  failed on their own assertions (`pass` where `fail` was required, and the real-pair case failing on
+  the first repository's status) while the two preserved cases passed already. After the fix:
+  `node --test tests/rules/workflow-run-artifact.test.js` is 19 of 19, `node --test` is 715 tests,
+  714 passing, 1 skipped, 0 failing, and `node scripts/gen-golden.js` writes the same six files and
+  leaves no diff. The four real answers after it: `pnpm/pnpm` `fail` (`checks: write, issues: write,
+  pull-requests: write`), `nodejs/node` `fail` (`pull-requests: write, statuses: write`),
+  `vercel/next.js` `fail` (`id-token: write`), `vitejs/vite` `pass / no-workflow-run`. Zero false
+  positives in the four. Two of the real pairs, `pnpm/pnpm`'s and `nodejs/node`'s, and next's pair,
+  are committed byte for byte under `tests/fixtures/workflows/real/` so the evidence is the file the
+  repository writes. Out of scope and reported, not fixed: `nodejs/node`'s `contributor-guidance.yml`
+  is refused by the reader at `WELCOME_MESSAGE: >2-`, a valid YAML indentation indicator, so the file
+  is a `skip` for every rule that reads workflows. A second boundary the measurement showed:
+  `pnpm/pnpm`'s `ci-performance-bencher-upload.yml` reads fork-produced artifacts with `gh run
+  download` and the artifacts API inside a `run:` block, which this rule cannot see, and it holds no
+  write scope, so its answer was right for a reason the rule did not read. Both are stated in the
+  page's Limits.

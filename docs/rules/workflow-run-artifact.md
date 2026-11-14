@@ -38,11 +38,19 @@ hold:
 
 1. the workflow declares `workflow_run`;
 2. a step downloads an artifact;
-3. the declaration that governs that job's token grants a write - `contents: write`,
-   `pull-requests: write`, `issues: write`, or `write-all`. The job's own `permissions:` wins over
-   the workflow's, exactly as GitHub applies it, so a job that narrows the workflow grant to
-   `contents: read` holds no write here;
+3. the declaration that governs that job's token grants a write - any scope whose value is `write`,
+   or `write-all`. The namespace does not matter: `contents`, `pull-requests`, `checks`, `id-token`
+   and the rest are one token, and `id-token: write` alone is enough. The job's own `permissions:`
+   wins over the workflow's, exactly as GitHub applies it, so a job that narrows the workflow grant
+   to `contents: read` holds no write here;
 4. the producer resolves, and it declares `pull_request`.
+
+The message and `evidence.scopes` name every write scope the governing declaration holds, in
+catalog order, and never a scope the rule did not read. `id-token: write` is the case that made this
+plain: it mints an OIDC identity that a storage service accepts in place of a secret, so an artifact
+it carries into the upload is a fork's bytes reaching a write token exactly as `contents: write`
+would be. `vercel/next.js` runs that shape over an artifact a `pull_request` run built, and the
+narrower test the rule shipped with answered `pass / no-write-permission` about it.
 
 A producer that cannot be resolved is a `skip` with its own code, because "I did not resolve the
 producer" and "the producer is trusted" must not print the same:
@@ -76,7 +84,8 @@ four declarations, removing any one of them clears it, and no repository that ne
 `evidence.producerPath`, `evidence.producerName` and `evidence.producerTrigger` name the other half of
 the pair: the file, the `name:` it was matched by, and the `pull_request` trigger that makes it
 unprivileged. `evidence.downloadKind` is `uses` or `run-id` and `evidence.download` is the value that
-was read; `evidence.scopes` lists the write scopes the token rests on, or `write-all`.
+was read; `evidence.scopes` lists every write scope the token rests on, in catalog order, or
+`write-all`.
 
 ## Remediation
 
@@ -107,6 +116,15 @@ a workflow carrying the producer name declares `pull_request`:
 - **It does not follow a producer into another repository**, nor one reached through a reusable
   workflow. A producer name more than one workflow carries names no producer: the pair is a skip,
   never a resolution to the first in path order.
+- **It reads only the spelling of the download it models.** An artifact fetched outside a step's
+  `uses` or `with.run-id` is not seen: `pnpm/pnpm` reads fork-produced artifacts with `gh run download`
+  and the artifacts API inside a `run:` block, and that read never reached this rule. The workflow
+  holds no write scope, so the answer there was right for a reason the rule did not read.
+- **It follows no artifact into a reusable workflow.** A job that passes the artifact to a reusable
+  workflow, or reads it inside one, is outside what the reader attributes, so a producer reached that
+  way names no producer here and a read reached that way is invisible.
+- **The scope that carries the bytes to a service is not classified.** Any `write` value counts, and
+  the message names the scopes rather than judging which of them the downloaded bytes can reach.
 - **A `with:` map written as a flow collection is invisible to the reader today**, so a download that
   only a flow-style `with` carries is not seen; the `uses` signal is the one that always answers.
 - **The listed workflows are read only from a block map.** Any other spelling of `on:` is a skip,
