@@ -243,11 +243,15 @@ producer resolution, the three unresolved codes, the four passes, and a reposito
 `workflow_run` at all is still `pass / no-workflow-run`.
 
 **What the measurement said about the record's other claims.** Four repositories read, 121 workflow
-files: `pnpm/pnpm` and `nodejs/node` are the two genuine findings, `vercel/next.js` is the false pass
-this amendment closes, and `vitejs/vite` declares no `workflow_run`. No false positive was found on
-any of the four - three real consumers, three answers, none of them a pass over a pair - which is the
-first outside evidence that the four-declaration conjunction is as narrow as the record's severity
-argument claims. The same run restated a boundary the record already carries: a real repository also
+files. Three of them carry a `workflow_run` consumer that answers `fail` under this amendment -
+`pnpm/pnpm`, `nodejs/node`, and `vercel/next.js`, the last being the false pass the amendment closes -
+and `vitejs/vite` declares no `workflow_run` at all. No `fail` was answered where fork-authored bytes
+do not reach a write scope, which is the first outside evidence that the four-declaration conjunction
+is as narrow as the record's severity argument claims. Read closely, the two mechanisms each carry a
+mitigation this record can name and the rule cannot see - the pull-request number resolved from the
+trusted payload in one, the artifact body recorded as untrusted Markdown in the other - so a `fail`
+here states what the rule read, never that a repository is exploitable. The same run restated a boundary
+the record already carries: a real repository also
 reads artifacts outside `uses` (`pnpm/pnpm` uses `gh run download` and the artifacts API in a `run:`
 block) and through reusable workflows, and both are still invisible here. The record's status stays
 `draft`; the parenthetical above is superseded by this section and not edited, because the amendment
