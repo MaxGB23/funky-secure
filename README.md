@@ -191,7 +191,7 @@ keeps the ledger: every claim below, and every one that is missing, with what wo
   Two did so under the rule's first threshold; the third is the file where the same measurement found
   the rule answering `pass` with a message false of it - a consumer whose only write scope is
   `id-token: write` - and widened the threshold to any write scope. No workflow answered `fail`
-  without fork-authored bytes reaching a write scope. Whether a project's own workflow is exploitable
+  without fork-derived bytes reaching a write scope. Whether a project's own workflow is exploitable
   is its maintainers' to say, so the ledger names the repositories and the counts, not the files.
   [`docs/validation.md`](docs/validation.md) keeps every number, repository and file count.
 - **The written path was verified by strangers.** Three field rounds totalling eleven blind sessions

@@ -245,7 +245,7 @@ producer resolution, the three unresolved codes, the four passes, and a reposito
 **What the measurement said about the record's other claims.** Four repositories read, 121 workflow
 files. Three of them carry a `workflow_run` consumer that answers `fail` under this amendment -
 `pnpm/pnpm`, `nodejs/node`, and `vercel/next.js`, the last being the false pass the amendment closes -
-and `vitejs/vite` declares no `workflow_run` at all. No `fail` was answered where fork-authored bytes
+and `vitejs/vite` declares no `workflow_run` at all. No `fail` was answered where fork-derived bytes
 do not reach a write scope, which is the first outside evidence that the four-declaration conjunction
 is as narrow as the record's severity argument claims. Read closely, the two mechanisms each carry a
 mitigation this record can name and the rule cannot see - the pull-request number resolved from the
