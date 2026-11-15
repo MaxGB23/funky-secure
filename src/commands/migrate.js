@@ -369,6 +369,14 @@ export async function run({
       ? `   pnpm import${flag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
       : `   pnpm install${flag}   # resolves and downloads; writes pnpm-lock.yaml`,
   );
+  // A lockfile that is already there is not evidence the step was performed: `pnpm install` writes one
+  // by resolving from the manifest and discards the versions the foreign file recorded (0021), so the
+  // plan says what it read and what it cannot decide, and claims no status (S9).
+  if (foreign.length > 0 && hasPnpmLock) {
+    lines.push(
+      `   pnpm-lock.yaml is present; whether it was imported from ${foreign[0]} or resolved from the manifest, only the import carries its versions`,
+    );
+  }
   // A command that carries a flag says why it does, so the reader knows the declaration is a decision
   // the tool leaves to them and not a setting it failed to correct.
   if (foreignPin !== null) {

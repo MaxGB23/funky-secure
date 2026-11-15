@@ -433,6 +433,42 @@ test('a yarn repository names pnpm import in step 3 and yarn.lock in step 4', as
   assert.deepEqual(readdirSync(dir).sort(), ['package.json', 'pnpm-lock.yaml']);
 });
 
+test('step 3 reports the lockfile it found instead of claiming the step is done', async (t) => {
+  // A `pnpm-lock.yaml` can be there because `pnpm install` resolved it from the manifest, which discards
+  // the versions the foreign lockfile recorded (0021). The plan says what it read and what it cannot
+  // decide; it never says the step is satisfied, because only the import carries those pins.
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'yarn.lock': '# yarn lockfile v1\n',
+    'pnpm-lock.yaml': 'lockfileVersion: 9\n',
+  });
+
+  const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
+
+  assert.match(result.stdout, /3\. human step[\s\S]*pnpm import/);
+  assert.match(
+    result.stdout,
+    /pnpm-lock\.yaml is present; whether it was imported from yarn\.lock or resolved from the manifest/,
+  );
+  assert.doesNotMatch(
+    result.stdout,
+    /satisfied|nothing to do|step is done/,
+    'the plan reports the state, it never claims the step is fulfilled',
+  );
+});
+
+test('step 3 says nothing extra while the lockfile is still owed', async (t) => {
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'yarn.lock': '# yarn lockfile v1\n',
+  });
+
+  const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
+
+  assert.match(result.stdout, /3\. human step[\s\S]*pnpm import/);
+  assert.doesNotMatch(result.stdout, /pnpm-lock\.yaml is present/);
+});
+
 test('a bun-only repository is refused for the missing pnpm lockfile, not removed', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
