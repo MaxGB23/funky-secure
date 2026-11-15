@@ -42,11 +42,12 @@ repository's own CI instead of a static reading. Issue #267.
 |---|---|---|---|---|
 | T0 | Issue #267; confirm `docs/delivery.md` does not enumerate the CI jobs | S14 | inline | — |
 | T1 | This record, the Engram mirror and the todo projection | S1 | inline | — |
-| T2 | `scripts/probe-permissions.js` + test, the `runtime-claims` job with its guard, `tests/ci-coverage.test.js` extended | S2–S6, S10, S13 | inline | `feat: prove the permissions claim on the runner` |
-| T3 | The `pack-smoke.js` step and its gate assertion | S6, S7 | inline | `feat: exercise the packed artifact in CI` |
-| T4 | `scripts/probe-remediation.js` importing the catalogue's strings, + test + step + gate | S6–S8 | inline | `feat: prove the remediation commands take effect` |
-| T5 | Rows `:87`, `:90`, `:91` moved with narrowed subjects; `:92` cross-reference fixed | S2, S9, S11 | inline | `docs: state the three claims as measured` |
+| T2 | `scripts/probe-permissions.js` + test, the `runtime-claims` job with its guard, `tests/ci-coverage.test.js` extended | S2–S6, S10, S13 | inline | `082127c` (PR #268) |
+| T3 | The `pack-smoke.js` step and its gate assertion | S6, S7 | inline | `7018ddd` (PR #268) |
+| T4 | `scripts/probe-remediation.js` importing the catalogue's strings, + test + step + gate | S6–S8 | inline | `4a66ad2` (PR #269) |
+| T5 | Rows `:87`, `:90`, `:91` moved with narrowed subjects; `:92` cross-reference fixed | S2, S9, S11 | inline | this commit |
 | T6 | Verification, native review per commit, `node scripts/open-pr.js` | S15 | inline | — |
+| T7 | The four findings the reviews left: the guard moved to the step, request deadlines, the literal envelope, the importer pin form | S13 | inline | `b33bade` (PR #270) |
 
 ## Log
 
@@ -66,3 +67,19 @@ repository's own CI instead of a static reading. Issue #267.
   which means the rows cannot be moved by the same pull request that first introduces the job. The feature
   ships as two: pull request A carries T2–T4, the evidence, and pull request B carries T5, the three rows
   moved, once the job is green on `main`.
+- **L6** Delivery strategy at the slice boundary. The three evidence commits total 908 authored lines, past
+  the ~400-line review slice, so they ship as two chained pull requests: A carries T2 and T3 (399 lines,
+  ends at `f777763`), B carries T4 (the one that touches `src/rules/exact-versions.js`), C carries T5 after
+  both merge. The boundary is recorded here because a slice boundary belongs to the record, not to the
+  order the commits happened to be written in.
+- **L7** Delivered. #268 (T2 and T3, 399 lines) and #269 (T4, 515, stacked and retargeted after the merge)
+  landed on `main` on 2026-11-15, both green on the runner, the `runtime-claims` job included; #270 closed
+  the four findings the reviews left; #273 (positioning) and #274 (`fork-derived`) shipped the two docs
+  claims separately, as decided. T5 below is this commit.
+- **L8** What the reviews cost and taught. A native reliability reviewer found a blocker no gate here could
+  see: `- name: the 403 for a contents: read token` put a colon-space inside an unquoted YAML scalar, so
+  `ci.yml` stopped parsing and **every** job would have failed. `tests/ci-coverage.test.js` reads the
+  workflow as text, so it was green. The correction was one quoted line, re-validated, and the review
+  approved. Four non-blocking findings from the same reviews became T7. Separately, the delivery gate
+  refuses a push whose exact range has no consumed review: three per-commit reviews were not enough, and a
+  fourth covered the #268 slice. Recorded because it changes how a future feature is sliced.

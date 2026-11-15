@@ -10,12 +10,12 @@ number becomes wrong at the next release, and the suite itself is the authority 
 
 | Claim | How | Where |
 |---|---|---|
-586 tests, 585 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
+737 tests, 736 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
 The repository passes its own audit | `node bin/funky-secure.js scan --scope repo --fail-on warn`, exit 0 | CI |
 Every documented flag is accepted by the command the document names | `tests/docs-contract.test.js` | documentation contract |
 The spec stays a true slice of the record, and every amendment names a shipped record | `tests/drift.test.js` | the drift gate |
 A rule cannot be added without a page and without a spec section | `tests/docs-contract.test.js` | catalogue |
-The pack we would publish installs and runs | `node scripts/pack-smoke.js` — packs, installs the tarball into an empty directory, asks the installed binary for its version and runs a report | `prepublishOnly` |
+The pack we would publish installs and runs | `node scripts/pack-smoke.js` — packs, installs the tarball into an empty directory, asks the installed binary for its version and runs a report | `prepublishOnly`, and the `runtime-claims` job in CI |
 
 ## Read-only: nothing is written by a scan
 
@@ -66,6 +66,9 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `pnpm --version` answers the declared version **inside** the project | measured on `shadcn-ui/ui` (10.33.4 inside, 12.3.4 on the PATH) |
 `init --apply` is idempotent on a real workspace | `t3`: block appended after `onlyBuiltDependencies`, `packages:` untouched, `yaml@2.9.0` parses it, second run `nothing to apply`, bytes identical |
 `pnpm import` reads a **berry** `yarn.lock` offline and keeps the pin | pnpm 12.3.4, a `__metadata: version: 8` lockfile, `lodash` `4.17.21`: 23 ms, and the new `pnpm-lock.yaml` records `lodash@4.17.21` |
+`permissions: contents: read` really produces a 403 | the `runtime-claims` job on `ubuntu-24.04`: the probe attempts a write that cannot succeed even with `contents: write`, is answered 403 with the integration denial, and reads the path back absent — on a `push` to `main` and on a pull request from a branch of this repository. A pull request from a fork is not measured, because the platform imposes a read-only token there; the job prints why. That a third-party workflow the rules call correct really runs green, and that its bytes stay out of a write scope, are still read statically |
+The packed artifact installs into a directory that holds nothing else, and answers | `npm pack` at the commit under test, on `ubuntu-24.04`, installed into a directory that holds nothing but the tarball, then asked for its version and a report (`scripts/pack-smoke.js`). The runner checks this repository out first, so the empty thing is the install directory and not the machine. A registry install through a mirror, and the staged tarball's own identity, stay outside this claim |
+The remediation commands change a repository the way their text says | three of the shapes the catalogue prints — the resolve step, the root pin, and the importer pin carrying `-C <dir>` — run in throwaway directories on `ubuntu-24.04`, and are judged by the lockfile appearing and by the field the pin sets. Effect only: the resolve step is judged by its file appearing and not by what it resolved, the pin is exercised with a local link rather than a version, the `--pm-on-fail=ignore` form the catalogue prints for a foreign `packageManager` is not exercised, and a consumer's monorepo is not either |
 pnpm **ignores `workspaces` in `package.json`**, and an empty `pnpm-workspace.yaml` changes nothing | four trees: no block, empty block, managed keys only — one importer each; only `packages:` produces three importers and the `workspace:^` link. So creating the file never degrades a workspace pnpm already had, and it never transfers an npm or yarn one either |
 pnpm 10 reads the block | pnpm 10.16.1 and 12.3.4 both answer `1440`, `4320` and `~` from `pnpm-workspace.yaml`, and `undefined` outside it; `ignoreScripts` answers `true` |
 `devEngines.packageManager` is a guard npm enforces and `packageManager` is not | npm 11.13.0 exits 1 `EBADDEVENGINES` before the install and writes no `package-lock.json`; `--force` downgrades it to a warning and writes one; a machine-level `pmOnFail` overrides it on pnpm's side. The guard is a deterrent, not a wall: a forced install lands the repository in R3's coexistence case, which is `error`, so the audit still answers with the bytes on disk rather than with a promise about the installer | `rfcs/0030-the-guard-both-managers-read/evidence/onfail-and-autoswitch.md`, re-measured on npm 11.13.0 |
@@ -84,12 +87,9 @@ An `at-policy` fixture is at policy for the reason its name claims | the fixture
 
 | Not verified | Why, and what it would take |
 |---|---|
-GitHub Actions behaviour: that a correct workflow really runs green, and that `permissions: contents: read` really produces a 403 | Needs a runner and a repository. The rules were verified statically against 11 real workflows, and `workflow-run-artifact` against the 121 workflow files its row above names |
 Linux | the suite, the self-scan and the drift gate run on `ubuntu-24.04` in the CI matrix, at the engines floor and the Active LTS, and `tests/ci-coverage.test.js` fails if the label leaves the matrix. A field loop has never run there: every field round was Windows |
 macOS | **a decided non-goal, not a gap.** It is never executed, locally or in CI, and the owner decided it stays that way: the code branches on `win32` against POSIX, so macOS would run the path Ubuntu exercises, but nothing here claims it. A macOS user is on their own, and the README says so |
-The published tarball on another machine | The tarball was installed and exercised locally only |
-The correctness of every remediation that needs an install (`pnpm install --lockfile-only`, `pnpm pkg set`) | Following one would change a repository; the commands were verified for shape, not for effect |
-The three changes of the paths-and-guards release, as a fresh agent meets them | **closed.** The first round (0 of 4 sessions reached the end) found the defect that blocked it (#110, `start` planned a path from a directory that was not yet a repository); after the fix, the second round reached the last step in all four scenarios with `verdict PASS` and exit 0. See *The field rounds* below; what stays unverified is macOS and the Actions runtime, in the rows that follow |
+The three changes of the paths-and-guards release, as a fresh agent meets them | **closed.** The first round (0 of 4 sessions reached the end) found the defect that blocked it (#110, `start` planned a path from a directory that was not yet a repository); after the fix, the second round reached the last step in all four scenarios with `verdict PASS` and exit 0. See *The field rounds* below; what stays unverified is macOS, above, and a third-party repository's runtime. |
 A field round outside a pnpm workspace | **closed by removing the claim.** The second round's installs never escaped, because `init --apply` writes `pnpm-workspace.yaml` before any step runs pnpm — so the line `rfcs/0031` added could not fire through the canonical path (#113), and three blind sessions in round 3 watched it print and be false. The line and its probe are gone (#144); `start` no longer says anything about a workspace it is about to create. The escape itself is still real for a package of a monorepo where the tool is not the one ordering the installs, and nothing in the tool claims otherwise now |
 
 ## The field rounds
