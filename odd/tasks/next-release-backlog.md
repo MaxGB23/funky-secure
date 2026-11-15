@@ -140,7 +140,7 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   explorer, `path:line` evidence, no repository change. Commit: none.
 - **T1** #133 — the skip sentence becomes a claim about the manifest, in the message, the golden and the page
   that quotes it — S7. Spec: none (the string is absent from `docs/spec/`, confirmed). Judge: the claims after
-  CI. Commit: —
+  CI. Commit: 1baf94d (PR #283)
 - **T2** #119 — the cross-reference at §8.2 R1 `:49` plus the intersection test, no behaviour change — S8.
   Spec: this is the specification pull request. Judge: plan, LIGHT. Commit: —
 - **T3** #135 — the human step says what the tool knows, or names its real condition — S9. Spec: with it.
@@ -238,3 +238,8 @@ the fourth produced one owner decision and no code.
   question — does a test already cover an unversioned pin with a versioned guard — and the answer, read at
   `tests/rules/package-manager-pin.test.js:136-203`, is no. Corrections: S7, S8, S11, S12, S14, S18, S19, S20,
   S21, new S22, T1, T2, T5, T8, T10, and this entry. Neither judge reviews its own correction.
+- **L8** T1 landed: PR #283 merged as `1baf94d`, #133 closed as completed. Three commits, and the third
+  exists because the blind claim judge found that the page still said "a repository deliberately on
+  another manager" at `:128`, and that the test's comment attributed to RFCs 0018/0020 a rule that lives at
+  `docs/spec/commands.md:51`. It confirmed six of seven claims and refused to certify the gates it was
+  forbidden to run, which is the honest answer. `funky-judge-protocol` was written from this round.
