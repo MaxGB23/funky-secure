@@ -1,0 +1,240 @@
+# The next release's backlog: six issues, two documentation debts, one review finding
+
+Close every issue and identified defect the owner scoped to the next release, one candidate at a time,
+each with its plan judged before code and its claims judged after CI. Sources: issues #133, #119, #135,
+#139, #266, #134; native-review finding R2-001; the two `docs/validation.md` debts of the 2026-11-15 audit.
+
+## Specs
+
+- **S1** The owner's instruction: "Quiero ir atacando todos los pendientes uno por uno. Haremos odd con rdd."
+  And on granularity: "iremos issue por issue para llevar mejor control."
+- **S2** Scope, in the owner's words from the session that produced this list: "La idea es que la proxima
+  release, todos los issues y fallos que hayamos identificado queden cubiertos." No open issue and no
+  identified defect is left over.
+- **S3** Instrument, in the owner's words: "Para cada issue delegaremos funky-judge para que nos ayude a ver
+  si nuestro plan es correcto por issue, incluso para refutar nuestro plan, y despues cuando la pr de un
+  issue esté lista, el judge detectará si cosas son falsas o están mal." And the refinement: "judge cuando
+  sea necesario, como validar un plan o tareas del odd antes de implementar. Y para atacar afirmaciones, ya
+  que los jueces el 100% de las veces han detectado afirmaciones falsas."
+- **S4** Two instruments, one gate. `funky-judge` reviews an artifact — a plan, the task list of this
+  document, a set of claims — and returns findings only. The native 4R review reviews a diff, and only a
+  **consumed** review of the exact pushed range gates delivery. A judge's approval never substitutes for it,
+  and no candidate merges with red checks.
+- **S5** Repository policy: a behaviour change starts in `docs/spec/` in its own pull request. This is not a
+  style preference — `AGENTS.md` states it — so a task whose behaviour changes ships a spec pull request
+  before its code pull request, and a task that only restates what the spec already decides ships one.
+- **S6** The four unverified leftovers are not facts. "Verificar antes de asignarles alcance, no asumir que
+  siguen abiertos": each is decided by evidence before it becomes a task.
+- **S7** #133 — the skip is right, the sentence is not: "So the skip is defensible and the sentence is not.
+  'This repository is not on pnpm' is a claim about the repository; 'the manifest still declares npm' is a
+  claim about the manifest, and it is the one the tool can support." And: "The message, not the status."
+  The conditional resolves to **no specification pull request**: the string does not appear anywhere in
+  `docs/spec/` (read, not assumed), and `docs/spec/rules.md:47-49` already scopes `not-pnpm` to a declaration
+  naming another manager. What the string does reach is `src/rules/package-manager-pin.js:228` (the message),
+  `tests/golden/pinned-conflict.json:50` (the exact message, so a golden regeneration) and
+  `docs/rules/package-manager-pin.md:41`, which quotes the sentence in prose and goes stale with it. T1
+  therefore names three artifacts and no spec page. The second question in the issue — whether such a pin
+  deserves more than a `skip` — is a record, and S22 is where it is named.
+- **S8** #119 — the behaviour is the specified one and does not change. The guard-first order **is already
+  normative** at `docs/spec/rules.md:77-90` (a guard that differs is `skip` with `self-managed-pin` "whatever
+  pnpm answers", and a guard declaring no `version` is not equal to a pin that declares one), and
+  `src/rules/package-manager-pin.js:244-249` implements it. What is missing is not a second rule: `:49` states
+  the unversioned pin fails without naming that the guard branch is read first, so a reader of `:49` alone
+  reaches the opposite answer for this shape. The clause is therefore a **cross-reference to `:77`**, never a
+  restatement, and the issue says it in its own words: "needs the clause that the guard branch is read first,
+  or the two sentences stay reconcilable only by reading both." The test claim was re-read and holds: every
+  `self-managed-pin` test declares a **versioned** pin (`tests/rules/package-manager-pin.test.js:136-203`)
+  and the only `pin-unversioned` test carries no guard, so no test pins the intersection.
+- **S9** #135 — the issue names two ways out and does not choose: "Either the line says what the tool knows —
+  the lockfile is already there, so this step is satisfied — or it names its condition the way every other
+  printed step in this tool does." The condition the issue proposes is itself imprecise: the print condition
+  today is any foreign lockfile, not the absence of `pnpm-lock.yaml`. The task decides the wording and the
+  spec row with it.
+- **S10** #139 — the two ways out, and the reason to prefer the first: "Either the printed step names the
+  consequence ('if the manifest already declares it, this commit has nothing to do'), or the step merges with
+  the closing commit for this branch of the path... The second contradicts 0016's rule that a commit names
+  what it covers, so the first is probably the honest one — but it is a spec sentence, not a code change."
+- **S11** #266 — three deliverables: the reader honours the indicator, "A test over `WELCOME_MESSAGE: >2-`
+  asserting the file parses and the value is read as the scalar it is", and one line listing which
+  block-scalar spellings the subset accepts. The audit narrows the premise: `BLOCK_SCALAR` at
+  `src/lib/workflows.js:50` already accepts the indicator, while `readBlockScalar` (`:320-344`) ignores it and
+  takes the first body line's indent. The sentence the issue's audit attributes to the reader header is not
+  there — `src/lib/workflows.js:15-18` lists **refused** shapes, including a `uses:` block scalar — so the line
+  to move is `docs/spec/rules.md:266`, and that misquote is corrected here rather than repeated. Acceptance is
+  the whole of what the issue asks, not the part a fixture can satisfy: a fixture in the `>2-` shape proves the
+  value is read and the CI rules answer on it, because `nodejs/node` is not in this tree and the tool never
+  touches the network, and every existing block-scalar test still passes, **including the ones that pin the
+  refusal of a shape the subset deliberately does not model**.
+- **S12** #134 — the three claims that do not reconcile, and its own scope statement: "Whether the verdict
+  line should carry a coverage caveat, whether `next` should name the six rules or only say 'nothing to do in
+  the enabled set', or whether the per-target breakdown should list every rule, is presentation and belongs to
+  a record if it changes what `PASS` means. The counter labels are the cheapest part and the clearer defect."
+  Acceptance is **all three**, not the caveat alone: `0 skipped` must stop sitting beside rules that never ran
+  (`src/lib/render-human.js:462`), `next` must be scoped to the enabled set (`:517`), and a reduced policy must
+  stop reading as a clean repository (`:393`). Two figures the audit fixes and two it leaves conditional: the
+  line reads `6 of 13` with seven labels (`tests/report.test.js:692-700,735`), and the sixth passing rule is
+  `exact-versions` with `targets: ['importer']` (`src/rules/exact-versions.js:307`) whose pass carries no
+  `path` — which the renderer **drops only when the importer block resolves to paths**
+  (`src/lib/render-human.js:270-282`) and keeps when it does not. T8 measures which happens on a real run
+  before it claims either.
+- **S13** R2-001 — the probe fixture is built from the constant the judgement reads, never from a copied
+  literal: "Editing that constant would make the fixture and the judgement disagree, which fails loudly on
+  the next run rather than passing quietly."
+- **S14** Debt (a) — `docs/validation.md` states `737 tests, 736 pass, 1 skipped` while the audit measured the
+  tree at `739 / 738 / 1`. The second figure is **the task's measurement, not a settled fact**: T12 runs the
+  suite and reads the totals before it decides anything. What is settled is that nothing catches the drift.
+  "The honest fix is not a better number typed by hand: either the row stops carrying a count... or a test
+  derives it from a fact the run can read, and a number nothing checks is the mistake the page's own last
+  section is about."
+- **S15** Debt (b) — the rule table measures one side only on real repositories for five of thirteen rules:
+  `foreign-lockfile`, `quarantine`, `exact-versions`, `actions-pinned-sha`, `workflow-permissions`. Either a
+  clone sweep finds a repository where each passes, or the residual declaration says so.
+- **S16** Delivery gates, per candidate, all of them: `node --test`, `node scripts/gen-golden.js` when the
+  report changes on purpose, `node scripts/pack-guard.js`, the self-scan, `node scripts/check-pr-policy.js`
+  before the push, and a merge only on `gh pr checks <n> --json state` with no state outside `SUCCESS`,
+  `SKIPPED` and `NEUTRAL`.
+- **S17** No issue is closed on a partial reading. Each task closes when the acceptance its issue states is
+  demonstrated, not when the code "looks right"; a task whose acceptance cannot be demonstrated says so and
+  stays open.
+- **S18** Every line reference in this document was re-read at `main` `9d7569f` after the first blind review,
+  and **four of them were wrong at the commit they claimed to describe** — this is not drift, it is an unread
+  citation. So the rule is stronger than "re-confirm before the first edit": a task may rely on no citation it
+  has not read itself, and the four corrected here (`renderSkipped`, `renderBlock`, the `applyPlan` zero-write
+  return, the `unsupported-glob` range) are the evidence that the rest are not inherited truths either.
+- **S19** The renderer emits two consecutive blank lines when one target block carries exactly one failing
+  rule and exactly one skipped rule: `renderSkipped` (`src/lib/render-human.js:184-197`) returns a group that
+  opens with `''` (`:186-187`) and `renderBlock` (`:225`) pushes its own separator between groups (`:243-246`),
+  so the second blank line has no owner. Presentation only — `AGENTS.md` puts the human text outside the
+  machine contract — so no spec page moves; one test pins the spacing, and T7 is the task with no other
+  evidence, so its first read is the renderer itself.
+- **S20** A `packages:` negation such as `!**/test/**` is **not modelled and not reported**. The pattern fails
+  the shape test as `unsupported-glob` (`src/lib/targets.js:157-166`: the test at `:157`, the skip at `:162`;
+  `:147-156` is the `outside-root` branch), is collected at `:307-312` and is then dropped by `exact-versions`
+  (`src/rules/exact-versions.js:488-493`) with the reasoning that "saying its directories are not read would be
+  false" — which is right, and leaves the opposite fact unstated: the directories *are* read, so the read set
+  exceeds what the manifest declares. Scope is the honest report, not a negation model: modelling negation is
+  new workspace semantics and belongs to its own record, out of this campaign. The report change is additive
+  to a list, so it is not a contract removal, but it changes what the tool says it covered, and it ships with
+  its spec sentence.
+- **S21** A plan of `init --apply` whose items are all conflicts refuses everything and exits `0`. The record
+  names the gap in its own words (`docs/decisions.md:103`, I-58): "The exit code stays `0` because
+  `init --apply` writes the other items of the plan… a conflicted plan that refuses everything is a contract
+  change and is left to its own record." That record does not exist. The **code value** is not open: the spec
+  defines `3` as "a refusal — understood, refused, nothing written" (`docs/spec/README.md:73`, restated at
+  `:98`, `docs/spec/report.md:224`), so honouring it is the specified answer and the record states it; whether
+  to ship the change is the owner's, and S22 keeps that distinction. The behaviour lives at
+  `src/commands/init.js:83` (the guard skips the early path when a conflict exists) and at
+  `src/lib/plan.js:291-293` (`return 0` for a zero-write plan). The test surface is wider than the audit said:
+  `tests/init.test.js` pins `init --apply` exit codes at `:441`, `:468`, `:539` and `:593`, and T10 reads each
+  before writing, because one of them may be the zero-write case and then it is the assertion the task
+  changes.
+- **S22** Two questions the release does not answer, named so that S2 stays honest: whether a pin the tool
+  never rewrites deserves more than a `skip` in a repository it just migrated (#133 defers it "to a record"),
+  and whether to prune the 121 merged remote branches and drop `stash@{0}`. Both are the owner's decisions,
+  both are recorded here, and neither is a task. "Nothing left over" means every reported defect closes; a
+  design question an issue explicitly defers is named, never silently dropped.
+
+## Tasks
+
+- **T0** Verify the four leftovers with evidence before scoping them — S6, S18. Route: one read-only
+  explorer, `path:line` evidence, no repository change. Commit: none.
+- **T1** #133 — the skip sentence becomes a claim about the manifest, in the message, the golden and the page
+  that quotes it — S7. Spec: none (the string is absent from `docs/spec/`, confirmed). Judge: the claims after
+  CI. Commit: —
+- **T2** #119 — the cross-reference at §8.2 R1 `:49` plus the intersection test, no behaviour change — S8.
+  Spec: this is the specification pull request. Judge: plan, LIGHT. Commit: —
+- **T3** #135 — the human step says what the tool knows, or names its real condition — S9. Spec: with it.
+  Judge: plan, before writing. Commit: —
+- **T4** #139 — the printed step names its consequence — S10. Spec: with it. Judge: claims after CI.
+  Commit: —
+- **T5** #266 — `readBlockScalar` honours the indicator, with the `>2-` fixture and the accepted spellings —
+  S11. Acceptance includes the issue's first line, proven by the fixture because the real file is not
+  retrievable here, and every existing block-scalar test, including the refusal ones. Spec: with it. Judge:
+  claims after CI. Commit: —
+- **T6** R2-001 — the probe fixture is built from the constant — S13. Spec: none. Judge: none. Commit: —
+- **T7** The renderer stops emitting two blank lines for one fail plus one skip — S19. Spec: none.
+  Judge: none (a spacing test is the proof). Commit: —
+- **T8** #134 — the verdict block stops implying a coverage it did not measure, in all three ways — S12.
+  Spec: the page that defines the report plus the decision row, because it changes what `PASS` reads as.
+  Judge: plan, STANDARD, before writing. Commit: —
+- **T9** The unmodelled `packages:` negation is reported instead of dropped — S20. Spec: with it.
+  Judge: claims after CI. Commit: —
+- **T10** A conflict-only `init --apply` exits `3`, with the record that says so — S21. First read: which of
+  `tests/init.test.js:441,468,539,593` is the zero-write case. Spec: the record first, because it closes a
+  contract the spec already states. Judge: plan, STANDARD (exit codes are consumed by scripts). Commit: —
+- **T11** Debt (b) — the five one-sided rules are measured or declared — S15. Spec: the page itself.
+  Judge: plan, before the sweep. Commit: —
+- **T12** Debt (a) — the count either leaves the row or is derived by a test — S14. Spec: the page itself.
+  Judge: claims after CI. Commit: —
+
+**Why this order.** T1 first because it is one message, one golden and one page line, and it takes the whole
+path from issue to merged pull request on the cheapest candidate. T2 follows: it is the only task that ships a
+specification and no code. T3 and T4 are the two printed-step tasks (`migrate` and `start`) and share the
+question of how a printed step names its own condition. T5 is the only task that needs a shape the tree does
+not contain. T6 is one constant. T7 before T8 because both rewrite `src/lib/render-human.js` and the smaller
+edit goes first, so the invasive one lands on a settled file. T9 and T10 each add a surface a script can read,
+so they follow the presentation work. T11 needs a clone sweep, the one task with external work. T12 is last
+because its count must be measured against the final suite.
+
+## Leftovers verified (T0, closed)
+
+All four were checked with `path:line` evidence on `main` `9d7569f`. Three are real and became tasks above;
+the fourth produced one owner decision and no code.
+
+- **Conflicted `init --apply` exits `0`** — real, and narrower than "no record": I-58 names the gap itself.
+  Became **T10** (S21).
+- **`packages:` negation is silently dropped** — real and worse than described: it neither applies nor
+  rejects, and because the excluded directories are read anyway, the read set exceeds the manifest.
+  Became **T9** (S20).
+- **Double blank line, one fail plus one skip** — real and reachable, not fixed, and no golden could ever
+  show it. Became **T7** (S19).
+- **Branches and stash** — inventory, not a defect, and no code task. `git branch -r --merged main` lists
+  **121** remote branches; three are unmerged (`origin/chore/t1-path-evidence`,
+  `origin/docs/readme-three-commands`, `origin/fix/canonical-working-directory`). `stash@{0}` is the only
+  stash and it is the **pre-0.1 snapshot of the whole tool** (85 files, 7242 insertions, including
+  `src/lib/writers.js` and all nine rules), parked on `review/s1`, a branch that no longer exists. Pruning
+  branches and dropping a stash are destructive and belong to the owner, not to this campaign:
+  **one decision, no task**.
+
+## Log
+
+- **L1** Owner, session that produced this list: "Guarda en memoria todos los pendientes que quedan. La idea
+  es que la proxima release, todos los issues y fallos que hayamos identificado queden cubiertos. Guarda igual
+  la estrategia de apoyarnos en fu[…]" (the captured prompt is truncated at that point).
+- **L2** Owner: "Quiero ir atacando todos los pendientes uno por uno. Haremos odd con rdd. Para cada issue
+  delegaremos funky-judge para que nos ayude a ver si nuestro plan es correcto por issue, incluso para
+  refutar nuestro plan, y despues cuando la pr de un issue esté lista, el judge detectará si cosas son falsas
+  o están mal. No sé qué te parezca este flujo o tiene algo mas que decirme"
+- **L3** Owner: "dale, judge cuando sea necesario, como validar un plan o tareas del odd antes de implementar.
+  Y para atacar afirmaciones, ya que los jueces el 100% de las veces han detectado afirmaciones falsas, tu
+  plan tiene sentido. Iniciemos. SI van surgiendo dudas las iremos atacando, iremos issue por issue para
+  llevar mejor control. Pero antes debemos delegar una exploracion para los restos sin verificar, para que el
+  plan sea correcto, arranquemos"
+- **L4** Evidence opening the campaign: `main` at `9d7569f`, clean tree, no candidate in flight; the six
+  issues open with their audit sections recorded against `49114b5`; the audit of this list taken against
+  `9d7569f`.
+- **L5** T0 evidence, from one read-only explorer and three closing reads, **all re-read after the judge round**:
+  a conflicted `init --apply` exits `0` (`src/commands/init.js:83` skips the early path when `conflicts`,
+  `src/lib/plan.js:291-293` returns `0` for a zero-write plan); I-58 at `docs/decisions.md:103` leaves the
+  all-conflict case to its own record. `!**/test/**` fails the shape test (`src/lib/targets.js:157-166`), is
+  collected at `:307-312` and dropped at `src/rules/exact-versions.js:488-493`. Two blank lines come from
+  `renderSkipped` (`src/lib/render-human.js:184-197`, blank at `:186-187`) plus the separator in `renderBlock`
+  (`:243-246`); `grep` finds no test pinning human spacing. `git branch -r --merged main` = 121; unmerged = 3;
+  `git stash show --stat` = 85 files, 7242 insertions.
+- **L6** Scope growth, recorded rather than assumed: the owner's standing rule is that no identified defect is
+  left over, so the three real leftovers entered the campaign as T7, T9 and T10. The exit-code value was never
+  open — the spec fixes `3` — so T10 writes the missing record and honours a contract that already exists;
+  whether the change ships in this release is the owner's (S22). The branch pruning and the stash became one
+  owner decision and no task.
+- **L7** First judge round, STANDARD, two blind judges on the frozen artifact (`6445a757…`, 178 lines), both
+  hash-verified. They **independently refuted the same four citations** (`renderSkipped`, `renderBlock`, the
+  `applyPlan` zero-write return, the `unsupported-glob` range); both found that #133's string reaches
+  `docs/rules/package-manager-pin.md:41` and the golden with no task touching them; both found that T5 and T8
+  could pass without closing their issue; both found that #133's deferred question had no task and no owner
+  row. They **disagreed on #119**: judge A held that `:49` needs its clause, judge B that `:77-90` already
+  decides the intersection and that a clause at `:49` would be a second normative statement. The adjudication
+  is S8: B is right that no rule is new, A is right that `:49` alone reaches the opposite answer, so the
+  clause is a cross-reference and never a restatement. Judge B closed its own residual gap by asking the right
+  question — does a test already cover an unversioned pin with a versioned guard — and the answer, read at
+  `tests/rules/package-manager-pin.test.js:136-203`, is no. Corrections: S7, S8, S11, S12, S14, S18, S19, S20,
+  S21, new S22, T1, T2, T5, T8, T10, and this entry. Neither judge reviews its own correction.
