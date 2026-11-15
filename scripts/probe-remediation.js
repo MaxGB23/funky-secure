@@ -9,7 +9,7 @@
  * consequence does not follow: the reason a step cannot be followed in *the* repository is that it
  * writes one, and a directory from `mkdtemp` is a repository it may write.
  *
- * So the probe follows the two shapes the catalogue prints today, and asserts the effect rather than the
+ * So the probe follows three of the shapes the catalogue prints today, and asserts the effect rather than the
  * exit: a command that exits `0` and writes nothing would be a green that measures nothing, and the
  * claim being closed is "the step does what its text says", never "pnpm is installed". Two things keep
  * it honest.
