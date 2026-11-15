@@ -466,7 +466,7 @@ test('step 3 says nothing extra while the lockfile is still owed', async (t) => 
   const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
 
   assert.match(result.stdout, /3\. human step[\s\S]*pnpm import/);
-  assert.doesNotMatch(result.stdout, /is present; whether it was imported/);
+  assert.doesNotMatch(result.stdout, /pnpm-lock\.yaml is present/);
 });
 
 test('a bun-only repository is refused for the missing pnpm lockfile, not removed', async (t) => {
