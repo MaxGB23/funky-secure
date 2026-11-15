@@ -148,7 +148,8 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   condition), then the code. Judge: plan, LIGHT, on the committed specification. Commit: 7e33049 (spec,
   PR #285) and 399c4d1 (code, PR #286); #135 stays open by design.
 - **T4** #139 — the printed step names its consequence — S10. Spec: with it. Judge: claims after CI.
-  Commit: —
+  Commit: `a3aacc4` (spec, PR #287) and `04d3ec0` (code, PR #288); #139 closed. The second judged round
+  on the specification produced T14.
 - **T5** #266 — `readBlockScalar` honours the indicator, with the `>2-` fixture and the accepted spellings —
   S11. Acceptance includes the issue's first line, proven by the fixture because the real file is not
   retrievable here, and every existing block-scalar test, including the refusal ones. Spec: with it. Judge:
@@ -284,3 +285,8 @@ the fourth produced one owner decision and no code.
   depends on a choice the plan cannot see, and the row points at it instead of arguing it in a cell. Two
   judged rounds is the cap; this revision is the owner's decision, not a judged one. The second round also
   produced T14, a pre-existing defect the row had been leaning on.
+- **L13** T4 landed in `a3aacc4` (specification, PR #287) and `04d3ec0` (code, PR #288); #139 closed. Two
+  judged rounds refused the specification, and the decision moved out of the table cell into a new §11.7
+  element. The claim judge on the code found two advisories worth taking: `docs/cli.md` had not moved with
+  the command, which `docs/README.md` binds, and the printed sentence said "declares it" with no
+  antecedent in the line — both fixed in `0c3f866`.
