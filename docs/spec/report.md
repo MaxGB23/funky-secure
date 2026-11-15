@@ -43,7 +43,7 @@ finding and no count.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.11.1" },
+  "tool": { "name": "funky-secure", "version": "0.12.0" },
   "scope": "all",
   "policy": {
     "preset": "baseline",
