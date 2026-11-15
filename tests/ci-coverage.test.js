@@ -131,3 +131,62 @@ test('the policy reads the labels the pull request has now, not the ones the eve
     'the live label read has no ceiling, so a hung gh holds the job open',
   );
 });
+
+/**
+ * One job's block: from its header to the next job header, so an assertion about a job cannot be
+ * satisfied by a line that belongs to another one.
+ * @param {string} name
+ * @returns {string}
+ */
+function jobBlock(name) {
+  const lines = CI.split('\n');
+  const start = lines.findIndex((line) => line === `  ${name}:`);
+  assert.notEqual(start, -1, `ci.yml declares no ${name} job`);
+
+  const end = lines.findIndex((line, index) => index > start && /^ {2}[a-z0-9-]+:$/.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
+test('the runtime claims are measured on a runner, by a job that declares the permission it proves', () => {
+  const job = jobBlock('runtime-claims');
+
+  assert.match(job, /^ {4}runs-on: ubuntu-24\.04$/m, 'the runtime claims need the runner they claim');
+  assert.match(
+    job,
+    /^ {4}permissions:\n {6}contents: read$/m,
+    'the job does not declare contents: read itself, so the claim it measures is not the one a reviewer reads',
+  );
+});
+
+test('the runtime claims never measure a fork pull request, where the answer is the platform\u2019s', () => {
+  const job = jobBlock('runtime-claims');
+
+  assert.ok(
+    job.includes("github.event_name == 'push'"),
+    'the job does not run on a push, so the default-branch context is never measured',
+  );
+  assert.ok(
+    job.includes('github.event.pull_request.head.repo.full_name == github.repository'),
+    'the job is not guarded against a fork pull request, whose token is read-only whatever the job declares',
+  );
+});
+
+test('every runtime claim is a step a deleted line fails', () => {
+  const job = jobBlock('runtime-claims');
+
+  assert.match(job, /^ +run: node scripts\/probe-permissions\.js$/m, 'the 403 probe is not a step');
+  assert.match(
+    job,
+    /^ +GH_TOKEN: \$\{\{ github\.token \}\}$/m,
+    'the probe step is handed no token, so it would measure a missing credential instead of the permission',
+  );
+
+  // The row `docs/validation.md` carried as "the tarball was installed and exercised locally only": a
+  // claim with no step is a claim nobody measures, and a step nothing asserts is one line away from
+  // disappearing.
+  assert.match(
+    job,
+    /^ +run: node scripts\/pack-smoke\.js$/m,
+    'the packed artifact is never installed and run in CI, so `files` can fail where no test can see it',
+  );
+});
