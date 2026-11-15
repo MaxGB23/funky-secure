@@ -253,6 +253,29 @@ test('refuses a uses value written as a block scalar instead of guessing a refer
   assert.match(result.detail, /line 4/);
 });
 
+test('reads a block scalar at its indentation indicator, not at its first line (#266)', () => {
+  // `>2-` says the body starts two columns past the key, so a first line written deeper than that is
+  // content carrying a preserved leading space, not the body's indent. Inferring the indent from that
+  // first line ends the scalar early, and the tail is then read as structure.
+  const text = [
+    'jobs:',
+    '  test:',
+    '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+    '      - run: >2-',
+    '           printf first',
+    '          printf second',
+    '',
+  ].join('\n');
+
+  const result = parseWorkflow(text);
+
+  assert.equal(result.ok, true, result.detail ?? 'the body is read at the indicator');
+  assert.deepEqual(result.jobs.map((job) => job.id), ['test']);
+  assert.equal(result.jobs[0].steps.length, 2);
+});
+
 test('reads a trailing comment after a key instead of treating it as the value', () => {
   const text = [
     'jobs:',

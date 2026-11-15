@@ -319,10 +319,16 @@ class Reader {
    */
   readBlockScalar(start, indent) {
     const kv = splitKeyValue(stripComment(this.content(start)));
-    const fold = (kv?.value ?? '').startsWith('>');
+    const value = kv?.value ?? '';
+    const fold = value.startsWith('>');
+    // An explicit indentation indicator (`|2`, `>2-`) decides where the body starts, counted from the
+    // key's own column: without it, a first line written deeper than the indicator is read as the
+    // body's indent and the tail ends the scalar early (S1.1, #266). A scalar that carries none keeps
+    // the indent its first non-empty line declares, which is what every writer that omits it expects.
+    const indicator = /^[|>]([1-9])/.exec(value);
     /** @type {string[]} */
     const body = [];
-    let bodyIndent = null;
+    let bodyIndent = indicator === null ? null : indent + Number(indicator[1]);
     let i = start + 1;
     for (; i < this.lines.length; i += 1) {
       const raw = this.lines[i].raw;
