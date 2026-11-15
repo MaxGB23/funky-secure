@@ -83,3 +83,6 @@ repository's own CI instead of a static reading. Issue #267.
   approved. Four non-blocking findings from the same reviews became T7. Separately, the delivery gate
   refuses a push whose exact range has no consumed review: three per-commit reviews were not enough, and a
   fourth covered the #268 slice. Recorded because it changes how a future feature is sliced.
+- **L9** L5's slice plan was superseded by L6 before any pull request opened: the evidence shipped as #268
+  (T2 and T3) and #269 (T4), then #270 carried the hardening. L5 is kept because the Log is append-only and
+  a plan that changed is evidence; L6 is the one that happened.
