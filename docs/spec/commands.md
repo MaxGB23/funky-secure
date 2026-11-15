@@ -280,7 +280,7 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 11 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
 | 12 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The refusal names the same `git switch -c` command this step prints, because it refuses to remove a lockfile on `main` (10.4) |
 | 13 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add. It carries `--pm-on-fail=ignore` under step 6's condition, because the add meets the same refusal |
-| 14 | `git add package.json && git commit -m "<message>"` | step 13 printed: the add records the dependency in `package.json` and leaves it dirty, so the path prints the commit that records it, because the very next writer refuses that state (0018, 0028). It stages the manifest and nothing else, for the reason 0016 gives, because the lockfile the add also writes is carried by the closing commit, which already names it. It is the one commit on the path whose staging the plan cannot decide when it prints it: the dependency is a placeholder, so whether step 13 rewrote the manifest is the reader's choice, and a commit with nothing staged exits `1`. It carries that consequence as a comment on its own line, and the printed element list does not grow |
+| 14 | `git add package.json && git commit -m "<message>"` | step 13 printed: the add records the dependency in `package.json` and, when it rewrites the manifest, leaves it dirty, so the path prints the commit that records that rewrite, because the very next writer refuses that state (0018, 0028). When it does, it stages the manifest and nothing else, for the reason 0016 gives, because the lockfile the add also writes is carried by the closing commit, which already names it. Whether it rewrote the manifest is a choice the plan cannot see, and the step carries the one line §11.7 defines for that case |
 | 15 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest: the pin's own commit and the add's own commit are what record the manifest's rewrites on this path (0016, 0028) |
 | 16 | `funky-secure scan --preset starter` | always, and last |
 
@@ -333,18 +333,16 @@ leaves it dirty, and the very next writer on the path refuses that state, so the
 clean tree prints the command that produces it (0018). Step 14 is that command, printed only where
 step 13 printed, and it stages the manifest and nothing else, for the reason given above for the pin:
 the lockfile the add also writes is carried by the closing commit, which already names it (0016).
+RFC 0028 decided that the closing commit stages
+no manifest, on the premise that after the pin's own commit nothing else on the path writes one; this
+branch of the path is the case that premise missed, so the premise is corrected here and the record
+stands as written (0028). No other row moves: the pin keeps its own commit where its own state is
+produced, and the closing commit keeps naming the lockfile and the removal it covers.
 
-It is also the one commit on this path whose staging the plan cannot decide: the dependency is a
-placeholder, so whether step 13 rewrote the manifest is the reader's choice, and a commit with nothing
-staged exits `1`. The command carries that consequence as a comment on its own line, where `migrate`'s
-import step already carries one, so the plan promises no tree state it cannot see and the printed
-element list does not grow. 0016's rule keeps its own scope — a closing commit the plan can decide is
-not printed when it would stage nothing — and this row is the case the plan cannot decide. RFC 0028
-decided that the closing commit stages no manifest, on the premise that after the pin's own commit
-nothing else on the path writes one; this branch of the path is the case that premise missed, so the
-premise is corrected here and the record stands as written (0028). No other row moves: the pin keeps its
-own commit where its own state is produced, and the closing commit keeps naming the lockfile and the
-removal it covers.
+Step 14 is also the one step on this path whose outcome the plan cannot see: whether the add rewrote
+the manifest is the reader's choice, and the plan reads nothing about the package the reader picks. It
+therefore carries the line §11.7 defines for exactly that case, and the path makes no promise about the
+tree on the reader's behalf.
 
 The order is the contract: the managed block has to exist before the install that reads it, because
 `savePrefix: ''` and `minimumReleaseAge` only act on an install that happens after `init --apply`
@@ -372,6 +370,13 @@ Last, when a printed step writes, one line says what to read if a writer refuses
 explain <rule>` for the reason, and `--allow-dirty` only for a tree the reader understands. The
 refusal is not this line — it is the writer's, it exits `3`, and it names its own way out — so the two
 cannot contradict each other: this one is what to read before taking that way out.
+
+When a step's outcome depends on a choice the plan cannot see, one line follows that step and names the
+choice and what happens the other way. Today only step 14 has one: the dependency is a placeholder, the
+reader picks which package the add records, and the plan cannot know whether that add rewrote the
+manifest — so the line says the commit has nothing to do when the manifest already declared the package,
+and it claims no tree state either way. The line is prose, carries no command, and changes neither the
+numbered list nor the count `why this order` prints.
 
 The list is followed by `why this order` — the reason above, two lines, plus one line when a foreign
 lockfile moves `migrate` ahead of the block, plus one line when the manifest declares another
