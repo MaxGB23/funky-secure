@@ -180,4 +180,13 @@ test('every runtime claim is a step a deleted line fails', () => {
     /^ +GH_TOKEN: \$\{\{ github\.token \}\}$/m,
     'the probe step is handed no token, so it would measure a missing credential instead of the permission',
   );
+
+  // The row `docs/validation.md` carried as "the tarball was installed and exercised locally only": a
+  // claim with no step is a claim nobody measures, and a step nothing asserts is one line away from
+  // disappearing.
+  assert.match(
+    job,
+    /^ +run: node scripts\/pack-smoke\.js$/m,
+    'the packed artifact is never installed and run in CI, so `files` can fail where no test can see it',
+  );
 });

@@ -105,3 +105,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+      # The row `docs/validation.md` carried as "the tarball was installed and exercised locally only":
+      # `files` decides what survives packing, and every mistake there fails at the one place the suite
+      # cannot see — the package installs and does not start.
+      - name: the packed artifact installs and answers
+        run: node scripts/pack-smoke.js
