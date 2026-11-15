@@ -262,7 +262,7 @@ function ruleSeverity(rule) {
  */
 export function renderHelp({ catalog = defaultCatalog } = {}) {
   const lines = [
-    `${TOOL.name} ${TOOL.version} — supply-chain auditor and initializer for pnpm repositories`,
+    `${TOOL.name} ${TOOL.version} — supply-chain auditor and initializer for Node repositories`,
     '',
     'usage: funky-secure <command> [options]',
     '       funky-secure --help',

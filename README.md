@@ -5,11 +5,13 @@
 [![license](https://img.shields.io/npm/l/funky-secure?label=license&style=flat-square&labelColor=1f2937&color=3f6fd8)](LICENSE)
 [![provenance](https://img.shields.io/badge/provenance-SLSA%20v1-8a2be2?logo=sigstore&logoColor=white&style=flat-square&labelColor=1f2937)](https://www.npmjs.com/package/funky-secure)
 
-`funky-secure` audits a pnpm repository and answers one question: **is this project — and the machine
-that builds it — configured the way we decided?** Thirteen stateless rules, the evidence each one read,
-one verdict, and a write plan you read before anything is applied. For a new repository it starts
-earlier: `start` prints the ordered steps that make the answer `yes`, and writes nothing itself. It
-never installs, never resolves a version, never touches the network and never keeps state.
+`funky-secure` audits a Node repository and answers one question: **is this project — and the machine
+that builds it — configured the way we decided?** We decided pnpm: a pinned manager, a committed
+lockfile, a quarantine on the age of a release. From npm the scan names the gap and `migrate` prints
+the five steps out. Thirteen stateless rules, the evidence each one read, one verdict, and a write plan
+you read before anything is applied. For a new repository it starts earlier: `start` prints the
+ordered steps that make the answer `yes`, and writes nothing itself. It never installs, never resolves
+a version, never touches the network and never keeps state.
 
 The point is a verdict you can defend: every finding names the file it read, and the line where the
 rule can point at one; every action is a command or an edit; and the report says whether the policy

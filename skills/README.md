@@ -5,8 +5,8 @@ Agent-facing instructions shipped with the package. A skill is not documentation
 
 ## `funky-secure`
 
-`skills/funky-secure/SKILL.md` — bootstrap and audit a pnpm repository, with the prohibitions that keep
-a "fix" from making a repository worse.
+`skills/funky-secure/SKILL.md` — bootstrap and audit a Node repository towards pnpm, with the
+prohibitions that keep a "fix" from making a repository worse.
 
 It deliberately contains no flag list, no rule catalogue and no message text. `--help` and `explain`
 own those, so the skill cannot drift from the binary; a drift gate in `tests/drift.test.js` fails if it

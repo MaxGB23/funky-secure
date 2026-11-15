@@ -1,13 +1,14 @@
 ---
 name: funky-secure
 version: 0.11.1
-description: Bootstrap or audit a pnpm repository's supply-chain posture. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
+description: Bootstrap or audit a repository's supply-chain posture, from npm to a pnpm target. Use when starting a project, adding dependencies, reviewing a lockfile, hardening CI, or asked whether a repository is safe to install from.
 ---
 
 # funky-secure
 
-A CLI that reads a pnpm repository and says whether its supply-chain posture matches a policy. It
-never installs, never edits your machine, and never rewrites a dependency tree.
+A CLI that reads a Node repository and says whether its supply-chain posture matches a policy, and
+what stands between it and pnpm. It never installs, never edits your machine, and never rewrites a
+dependency tree.
 
 `start` is read-only guidance. Inside the repository `init --apply` and `pin --apply` are the writers,
 and each writes only when it is asked. Outside it,

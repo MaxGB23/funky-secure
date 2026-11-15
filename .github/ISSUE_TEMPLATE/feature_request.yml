@@ -14,7 +14,7 @@ body:
     id: problem
     attributes:
       label: The problem, not the solution
-      description: What supply-chain question about a pnpm repository cannot be answered today, and what goes wrong because of it.
+      description: What supply-chain question about your repository cannot be answered today, and what goes wrong because of it.
     validations:
       required: true
 
