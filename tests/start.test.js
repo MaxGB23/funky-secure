@@ -378,6 +378,24 @@ test('a repository with a plan to write names init --apply and how many writes',
   assert.equal(stdout.includes(ADD_STEP), false, 'the lockfile is committed');
 });
 
+test('the add commit says what it does when the add wrote nothing (#139)', async (t) => {
+  // The dependency is a placeholder, so the plan cannot know whether `pnpm add` rewrote the manifest.
+  // When it did not, the commit stages nothing and exits 1; the plan says so under the step instead of
+  // promising a tree state it cannot see (11.7).
+  const dir = scratch(t, 'at-policy');
+  unlinkSync(join(dir, 'pnpm-lock.yaml'));
+  const { stdout } = await start(dir);
+  const lines = stdout.split('\n');
+  const at = lines.findIndex((line) => line.includes(ADD_COMMIT_STEP));
+
+  assert.ok(at > 0, 'the add commit printed');
+  assert.equal(
+    lines[at + 1],
+    '     if the manifest already declares the package, this commit has nothing to do and exits 1',
+    'the consequence follows the step, unnumbered',
+  );
+});
+
 test('a repository missing only the lockfile starts at the first dependency', async (t) => {
   // Issue 131, the second half: the add rewrites `package.json`, and the closing commit stages only the
   // lockfile, so the path used to end with ` M package.json` in the tree it called closed. The add has

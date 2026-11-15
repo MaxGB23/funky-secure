@@ -165,6 +165,11 @@ commit -m "chore: add the first dependency"` — and it stages the manifest and 
 the `pnpm-lock.yaml` the add also writes is carried by the closing commit, which already names it. It
 prints only where the add prints, so a repository that already carries its lockfile gains no step.
 
+The dependency is a placeholder, so this is the one step whose outcome the plan cannot see: when the
+manifest already declares the package, the add writes nothing and the commit stages nothing. One
+unnumbered line under the step says so — if the manifest already declares the package, this commit has
+nothing to do and exits 1 — and the path promises no tree state it cannot see.
+
 `why this order` is the reason the sequence is not a list: the managed block has to exist before the
 install that reads it, a lockfile can only exist after the first add, and a migration puts the block
 first because the install it needs has to read one. The `not run` block is the same line the report prints (RFC
