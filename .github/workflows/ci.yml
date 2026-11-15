@@ -81,3 +81,27 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ steps.labels.outputs.names }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+
+  runtime-claims:
+    # The one question `docs/validation.md` said no runner could answer: that a token declaring
+    # `contents: read` is really refused a write. Guarded rather than triggered, because a job inherits
+    # the workflow's events and a pull request from a fork gets a read-only token whatever this job
+    # declares: a green there would measure the platform's rule, not the permission. A skipped check is
+    # the honest signal, and `docs/validation.md` names the skip instead of hiding it.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    # Declared here and not inherited: the claim this job measures is about this declaration, so a
+    # reviewer reads it in the job rather than two screens above it.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          check-latest: true
+      - name: "the 403 for a contents: read token"
+        run: node scripts/probe-permissions.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
