@@ -92,9 +92,9 @@ and the tag of a staged candidate is immutable, so a candidate staged with `late
   or from a branch push, which is why a malicious pull request cannot reach the publish job even
   after it merges (the subject of R9, applied here).
 - The workflow stages; it does not publish. `npm stage publish` queues the tarball and the job ends
-  with the stage id in its step summary, because approval happens after the job. A maintainer reviews
-  it with `npm stage list` and `npm stage download`, and publishes it with `npm stage approve <id>`
-  under 2FA. Until that approval the version is not installable. A report step that fails does not
+  with the stage id in its step summary, because approval happens after the job. The release is reviewed
+  with `npm stage list` and `npm stage download`, and published with `npm stage approve <id>` under 2FA.
+  Until that approval the version is not installable. A report step that fails does not
   undo the stage: the candidate is still queued, `npm stage list` returns its id, and the tag is never
   re-pushed — it does not move, and the version it names is already spent.
 - The ordering is fixed: green gate on the commit, then the tag, then the staged candidate, then the
@@ -112,12 +112,13 @@ and the tag of a staged candidate is immutable, so a candidate staged with `late
   reachable by a test while it was inline. A reporting step that fails after a successful stage spends
   the tag on a candidate nobody can approve. The registry publishes `dist.integrity` (SHA-512 SRI) and
   `dist.shasum` and never a `sha256` of the tarball, so no such hash is claimed.
-- The GitHub Release is created by the maintainer **after** the approval, never by the workflow that
+- The GitHub Release is created **after** the approval, never by the workflow that
   staged, and the repository enables release immutability so the tag of a released version cannot be
   moved or deleted.
 
-The steps a maintainer runs are the runbook at
-[`../.agents/skills/release/SKILL.md`](../.agents/skills/release/SKILL.md).
+The steps are the runbook at
+[`../.agents/skills/release/SKILL.md`](../.agents/skills/release/SKILL.md); 17.6 says which of them need
+the owner's hands.
 
 **A published version is not an indexed one.** Measured 2026-11-11: a package live for four days, with
 a complete description, five keywords, a `repository` and a 7.9 kB README in the registry document,
@@ -158,7 +159,7 @@ parser of the human output looked for a file named `]`.
   `type:breaking-change` label and a migration note in the release body.
 - The release body is the changelog of that version: it names every rule added, changed or removed,
   every severity deviation from 9.1, and every user-visible message that changed.
-- The body lives at release time: the maintainer writes it after the approval and it becomes the
+- The body lives at release time: it is written after the approval and it becomes the
   GitHub Release body. This repository keeps no `CHANGELOG.md`, because npm embeds nothing from the
   tree and an accumulated file would need a commit after the tag, outside the version it describes.
 - `version` and the tag are checked against each other, and the tag is the only source of the
@@ -172,10 +173,15 @@ parser of the human output looked for a file named `]`.
 
 ### 17.6 What automation does not decide
 
-Publication is a human decision with a mechanical precondition. The owner decides that a version
-ships and pushes the tag; the pipeline decides whether that tag may produce a tarball. Provenance
-proves who built what from which commit, never that the code is safe — and this document says so
-explicitly, because a supply-chain auditor that overclaims its own guarantees is making the mistake it
+Publication is a human decision with a mechanical precondition. The owner decides that a version ships
+and performs **two steps and only two**: `npm login`, because the session is the credential, and
+`npm stage approve <id>` under 2FA, because that is the point where a candidate becomes installable.
+Every other step is run for them and reported with its evidence — the gate, the tag, watching the stage,
+reviewing the artifact against the tree at the tag, the release body and the Release itself. A doubt
+about one of those is settled by reading its evidence; it is never a reason to hand the step back, and
+no step waits for a second operator. The pipeline decides whether the tag may produce a tarball.
+Provenance proves who built what from which commit, never that the code is safe — and this document says
+so explicitly, because a supply-chain auditor that overclaims its own guarantees is making the mistake it
 reports.
 
 ### 17.7 The release path is tested

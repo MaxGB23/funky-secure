@@ -11,7 +11,22 @@ Stage it, review it, approve it, then publish the notes. This file is the order 
 ## Activation
 
 Runs when the owner says a version ships. It never decides that a version ships, never approves a
-candidate, never moves a tag and never runs `npm publish`.
+candidate and never runs `npm publish`.
+
+## Who runs what
+
+The owner performs **two steps and only two**: `npm login`, because the session is the credential, and
+`npm stage approve <id>`, because that is where a candidate becomes installable. Every other step in this
+file — the gate, the tag, watching the stage, reviewing the artifact against the tag, the notes and the
+Release — is run for them and reported with its evidence. A doubt about a step is settled by reading that
+evidence, not by handing the step back.
+
+Three consequences, each met in practice. The review in step 4 needs the owner's live session, so
+`npm whoami` answering `E401` means "ask for a login", never "skip the review" — and once they have logged
+in, the session is shared through the same `.npmrc`, so no other login is needed. The 2FA prompt never
+travels through a chat. And `npm stage download <id>` writes `<name>-<version>-<id>.tgz` into the working
+directory — it ignores a destination argument and appends the id, so `funky-secure-<version>.tgz` is a
+name that does not exist.
 
 ## Preconditions
 
@@ -46,12 +61,12 @@ configured on a package and a package exists only after a first publish.
 
 ## The sequence
 
-1. **Green gate on that commit** — the owner. `node --test`,
+1. **Green gate on that commit** — the agent. `node --test`,
    `node bin/funky-secure.js scan --scope repo --fail-on warn`, `node scripts/release-guard.js --tag
    vX.Y.Z`, `node scripts/pack-smoke.js`. All of it runs again inside `prepublishOnly` at stage time.
-2. **Push the tag** — the owner. `git tag vX.Y.Z && git push origin vX.Y.Z`, on the commit from
-   step 1. `release-guard` compares the tag with `package.json`; a mismatch exits `2` and stages
-   nothing.
+2. **Push the tag** — the agent, once the gate is green. `git tag vX.Y.Z && git push origin vX.Y.Z`, on
+   the commit from step 1. `release-guard` compares the tag with `package.json`; a mismatch exits `2` and
+   stages nothing.
 3. **Stages the candidate** — the release workflow, on `push: tags: ['v*']` over OIDC with no
    credential. It prints the stage id in its step summary and ends. It does not publish.
    **A failed report does not undo the stage.** When the step that reads the id dies, the candidate
@@ -59,27 +74,28 @@ configured on a package and a package exists only after a first publish.
    re-push the tag — it does not move, and the version is already queued — and do not reject the
    candidate to "clean up": on a package whose only content is the placeholder, a reject unpublishes
    the package and destroys its trusted publisher.
-4. **Reviews the candidate** — the maintainer, and **with a live `npm login` session**: `npm stage`
-   authenticates, so a review begun without one answers `E401`, and the two-hour session step 5 needs
-   does not exist yet. `npm stage list`, `npm stage view <id>`, `npm stage download <id>` — which writes
-   the tarball into the working directory, because it ignores a destination argument — then
+4. **Reviews the candidate** — the agent, and **with a live `npm login` session the owner opened**:
+   `npm stage` authenticates, so a review begun without one answers `E401`, and the two-hour session
+   step 5 needs does not exist yet. `npm stage list`, `npm stage view <id>`, `npm stage download <id>` —
+   which writes the tarball into the working directory, because it ignores a destination argument — then
    `tar -tzf <tarball>` and read the file set against the packed set of §17.4. **Compare the artifact's
    `sha1` with the `shasum` in `npm stage list`**: that is the difference between having reviewed a
    tarball and having reviewed *the* tarball the registry will serve. A file that should not ship is a
-   reject, not a note.
-5. **Approves or rejects** — the maintainer, under 2FA. `npm stage approve <id>` publishes; nothing is
-   installable before it. A fresh candidate reports `validating` before `staged`: approve only once it
+   reject, not a note. The download lands in the working directory, so review it from a scratch
+directory and delete the file afterwards: it is not gitignored.
+5. **Approves or rejects** — **the owner, and only this step**, under 2FA. `npm stage approve <id>`
+   publishes; nothing is installable before it. A fresh candidate reports `validating` before `staged`: approve only once it
    reads `staged`. And an unapproved candidate is not free — the semver index treats that version as
    taken — so decide: approve it, or reject it deliberately. `npm stage reject <id>` discards the
    candidate and leaves the tag in place.
    On a package whose only content is the bootstrap placeholder, a reject unpublishes the package and
    its trusted publisher with it: reject only once a real version is published.
-6. **Verifies what users get** — the maintainer. `npm view funky-secure@<version>`,
+6. **Verifies what users get** — the agent. `npm view funky-secure@<version>`,
    `npm view funky-secure@<version> dist.integrity`; the second value is what the body records. Check
    `dist.attestations` too: staged approval keeps the provenance, and its `resolvedDependencies` names
    the tag and commit the job built from, which is the only link between that commit and the bytes a
    user installs.
-7. **Publishes the Release** — the maintainer, after the approval in step 5 and never before. Release
+7. **Publishes the Release** — the agent, after the approval in step 5 and never before. Release
    immutability is enabled **first** (Settings → Releases), because GitHub applies it only to releases
    published after the setting is on. Write `RELEASE_NOTES.md`, run
    `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file RELEASE_NOTES.md`, then delete the file.
