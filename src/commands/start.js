@@ -115,6 +115,12 @@ function pinStep(trackedLockfile) {
  */
 export const ADD_MESSAGE = 'chore: add the first dependency';
 const ADD_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
+/**
+ * The one line the plan prints for a step whose outcome depends on a choice it cannot see (11.7). The
+ * dependency is a placeholder, so whether the add rewrote the manifest is the reader's pick, and a
+ * commit with nothing staged exits `1`. It names the other way instead of promising a state.
+ */
+export const ADD_STEP_NOTE = 'if the manifest already declares it, this commit has nothing to do and exits 1';
 
 /** The branch the migration step names. A step that requires a state prints how to reach it (0018). */
 const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
@@ -331,6 +337,9 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
     const printed = boot ? pending : [...pending, SCAN_STEP];
     for (const [index, step] of printed.entries()) {
       lines.push(`  ${index + 1}  ${step}`);
+      // A step whose outcome depends on a choice the plan cannot see carries one unnumbered line under
+      // it, and step 14 is today's only case (11.7).
+      if (step === ADD_STEP) lines.push(`${' '.repeat(String(index + 1).length + 4)}${ADD_STEP_NOTE}`);
     }
 
     // Every pnpm step begins with `pnpm `, so the reference is derived from the list that was just
