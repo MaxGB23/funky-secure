@@ -280,7 +280,7 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 11 | `git switch -c chore/supply-chain-bootstrap` | a foreign lockfile is present: `migrate --apply` refuses to remove one on the default branch, so the step that requires a feature branch prints the command that creates it (0018) |
 | 12 | `funky-secure migrate --apply` | a foreign lockfile is present, after the install: the removal needs the `pnpm-lock.yaml` the install writes, because a foreign lockfile that is the only one is never deleted. The refusal names the same `git switch -c` command this step prints, because it refuses to remove a lockfile on `main` (10.4) |
 | 13 | `pnpm add <your first dependency>` | there is no `pnpm-lock.yaml` and no foreign lockfile, because a lockfile cannot exist before the first add. It carries `--pm-on-fail=ignore` under step 6's condition, because the add meets the same refusal |
-| 14 | `git add package.json && git commit -m "<message>"` | step 13 printed: the add records the dependency in the manifest and leaves it dirty, so the path prints the commit that produces the clean tree the steps after it require (0018, 0028). It stages the manifest and nothing else, for the reason 0016 gives, because the lockfile the add also writes is carried by the closing commit, which already names it |
+| 14 | `git add package.json && git commit -m "<message>"` | step 13 printed: the add records the dependency in `package.json` and leaves it dirty, so the path prints the commit that records it, because the very next writer refuses that state (0018, 0028). It stages the manifest and nothing else, for the reason 0016 gives, because the lockfile the add also writes is carried by the closing commit, which already names it. It is the one commit on the path whose staging the plan cannot decide when it prints it: the dependency is a placeholder, so whether step 13 rewrote the manifest is the reader's choice, and a commit with nothing staged exits `1`. It carries that consequence as a comment on its own line, and the printed element list does not grow |
 | 15 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report already carries a `lockfile-committed` finding for one that is present: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest: the pin's own commit and the add's own commit are what record the manifest's rewrites on this path (0016, 0028) |
 | 16 | `funky-secure scan --preset starter` | always, and last |
 
@@ -331,13 +331,20 @@ stages nothing is never printed (0016, 0028).
 The same rule gives the add a commit of its own: step 13 records the dependency in `package.json` and
 leaves it dirty, and the very next writer on the path refuses that state, so the step that requires a
 clean tree prints the command that produces it (0018). Step 14 is that command, printed only where
-step 13 printed, because a commit that stages nothing is never printed (0016). It stages the manifest
-and nothing else, for the reason given above for the pin: the lockfile the add also writes is carried
-by the closing commit, which already names it (0016). RFC 0028 decided that the closing commit stages
-no manifest, on the premise that after the pin's own commit nothing else on the path writes one; this
-branch of the path is the case that premise missed, so the premise is corrected here and the record
-stands as written (0028). No other row moves: the pin keeps its own commit where its own state is
-produced, and the closing commit keeps naming the lockfile and the removal it covers.
+step 13 printed, and it stages the manifest and nothing else, for the reason given above for the pin:
+the lockfile the add also writes is carried by the closing commit, which already names it (0016).
+
+It is also the one commit on this path whose staging the plan cannot decide: the dependency is a
+placeholder, so whether step 13 rewrote the manifest is the reader's choice, and a commit with nothing
+staged exits `1`. The command carries that consequence as a comment on its own line, where `migrate`'s
+import step already carries one, so the plan promises no tree state it cannot see and the printed
+element list does not grow. 0016's rule keeps its own scope — a closing commit the plan can decide is
+not printed when it would stage nothing — and this row is the case the plan cannot decide. RFC 0028
+decided that the closing commit stages no manifest, on the premise that after the pin's own commit
+nothing else on the path writes one; this branch of the path is the case that premise missed, so the
+premise is corrected here and the record stands as written (0028). No other row moves: the pin keeps its
+own commit where its own state is produced, and the closing commit keeps naming the lockfile and the
+removal it covers.
 
 The order is the contract: the managed block has to exist before the install that reads it, because
 `savePrefix: ''` and `minimumReleaseAge` only act on an install that happens after `init --apply`
