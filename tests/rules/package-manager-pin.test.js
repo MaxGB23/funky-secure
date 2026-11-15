@@ -509,6 +509,22 @@ test('a byte-order mark is said in its own words, not as invalid JSON (S4)', () 
   assert.doesNotMatch(finding.message, /not valid JSON/, 'a byte-order mark is not invalid JSON');
 });
 
+test('an unversioned pin that carries a versioned guard is answered by the guard order (#119)', () => {
+  // §8.2 R1 reads the guard before the pin: a guard that declares a `version` is not equal to a pin
+  // that declares none, and a differing guard is `skip` whatever pnpm answers. The row before this
+  // one still states that an unversioned pin fails, so the intersection of the two is pinned here
+  // instead of being left to whichever sentence a reader meets first.
+  const json = {
+    packageManager: 'pnpm',
+    devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } },
+  };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.status, 'skip', 'the guard branch is read first, so the unversioned row loses');
+  assert.equal(finding.code, 'self-managed-pin');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
 test('a declaration that names pnpm and no version fails, and says what to write (S5)', () => {
   // `"packageManager": "pnpm"` used to be classified as "not pnpm", printing "package.json declares
   // pnpm, so this repository is not on pnpm". The field names the manager and declares no version: that
