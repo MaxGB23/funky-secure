@@ -120,9 +120,10 @@ test('another manager is a skip, not a conflict: the pnpm question does not appl
 
 test('a declaration of another manager says what the manifest declares, never where the repository runs (#133)', () => {
   // A repository `migrate` just moved to pnpm still carries `packageManager: npm@...`, because the
-  // tool never rewrites a declaration a human made (0018, 0020). The skip is right and the sentence
-  // was not: "this repository is not on pnpm" is a claim about the repository, and the only claim the
-  // tool can support is the narrower one — the manifest still declares npm.
+  // tool never rewrites a declaration it did not make: W3 is a conflict, so the pin a plan cannot
+  // establish is never written over one that exists (`docs/spec/commands.md:51`). The skip is right
+  // and the sentence was not: "this repository is not on pnpm" is a claim about the repository, and the
+  // only claim the tool can support is the narrower one — the manifest still declares npm.
   const [finding] = rule.detect(context({ packageManager: 'npm@11.13.0' }));
 
   assert.equal(finding.code, 'not-pnpm');
