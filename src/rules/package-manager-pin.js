@@ -225,7 +225,7 @@ export default {
           status: 'skip',
           code: 'not-pnpm',
           path: PATH,
-          message: `skipped: package.json declares ${declared}, so this repository is not on pnpm and the pin question does not apply`,
+          message: `skipped: package.json declares ${declared}, so the pnpm pin question does not apply to this manifest`,
           evidence,
           remediation: { kind: 'none' },
         },

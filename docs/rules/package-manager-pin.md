@@ -88,8 +88,8 @@ The executable path is evidence, not message text: a report body never carries a
   only path that touches the declaration: a pin that already exists is never rewritten.
 - `pin-differs-from-machine` — `none`: the declaration is honoured inside the project, and the
   difference belongs to the machine. Nothing to fix, nothing to run.
-- `not-pnpm` — `none`: the repository runs on another manager; the rules that need a pnpm repository
-  already report the consequence.
+- `not-pnpm` — `none`: the manifest declares another manager, so the pnpm pin question does not apply
+  to it; the rules that need a pnpm repository already report the consequence.
 - `pin-unversioned` — `manual`: set `"packageManager": "pnpm@<observed version>"` in `package.json`,
   and the message names that value, because "declare a version" is not an instruction without one.
   This one is a hand edit: write W3 fills an absent declaration and never rewrites one it finds.

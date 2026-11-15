@@ -118,6 +118,23 @@ test('another manager is a skip, not a conflict: the pnpm question does not appl
   assert.deepEqual(finding.remediation, { kind: 'none' });
 });
 
+test('a declaration of another manager says what the manifest declares, never where the repository runs (#133)', () => {
+  // A repository `migrate` just moved to pnpm still carries `packageManager: npm@...`, because the
+  // tool never rewrites a declaration a human made (0018, 0020). The skip is right and the sentence
+  // was not: "this repository is not on pnpm" is a claim about the repository, and the only claim the
+  // tool can support is the narrower one — the manifest still declares npm.
+  const [finding] = rule.detect(context({ packageManager: 'npm@11.13.0' }));
+
+  assert.equal(finding.code, 'not-pnpm');
+  assert.match(finding.message, /declares npm@11\.13\.0/, 'it names the declaration it read');
+  assert.match(finding.message, /this manifest/, 'the claim is about the manifest');
+  assert.doesNotMatch(
+    finding.message,
+    /repository is not on pnpm/,
+    'the repository may be on pnpm while its manifest still declares another manager',
+  );
+});
+
 test('a pin the project manages itself is a skip, not a conflict (0020, narrowed by 0030)', () => {
   // pnpm 12 with devEngines.packageManager answers with the version the project declares, not the
   // one on PATH: from its own directory it reported another version while the binary answering was

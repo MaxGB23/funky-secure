@@ -47,7 +47,7 @@
       "scope": "repo",
       "target": "repo-root",
       "path": "package.json",
-      "message": "skipped: package.json declares npm@10.9.0, so this repository is not on pnpm and the pin question does not apply",
+      "message": "skipped: package.json declares npm@10.9.0, so the pnpm pin question does not apply to this manifest",
       "evidence": {
         "declared": "npm@10.9.0",
         "observed": "12.3.4",
