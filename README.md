@@ -201,7 +201,7 @@ keeps the ledger: every claim below, and every one that is missing, with what wo
 - **The Actions runtime is measured, and only on this repository.** A job declaring `permissions:
   contents: read` really is refused a write with a `403`, on `push` to `main` and on a pull request from a
   branch here; the packed artifact installs into a directory that holds nothing else and answers on a
-  clean runner; and the remediation commands change a repository the way their text says. What stays a
+  clean runner; and the remediation commands are run until they leave the files they promise. What stays a
   static reading is the runtime of a *third-party* workflow: those rules are checked against the eleven
   real workflows recorded in [`docs/validation.md`](docs/validation.md), and whether a corrected workflow
   of theirs turns green is their maintainers' to see.
