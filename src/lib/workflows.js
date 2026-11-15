@@ -7,8 +7,10 @@
  * the rules report `skip: unparseable-workflow` instead of guessing.
  *
  * Shape it understands: block and flow-style step maps, quoted values, trailing comments kept as
- * evidence, `with:` maps (including their block scalars), block scalars (`run: |`, `run: >-`) whose
- * bodies are never steps, `docker://image:tag`, `docker://image@sha256:…` and local `./path` actions.
+ * evidence, `with:` maps (including their block scalars), block scalars (`run: |`, `run: >-`, and either
+ * of them with an explicit indentation indicator — `run: |2`, `run: >2-`, `run: |-2` — whose indicator
+ * decides where the body starts) whose bodies are never steps, `docker://image:tag`,
+ * `docker://image@sha256:…` and local `./path` actions.
  * A sequence may be indented under its key or written *indentless* — a dash at the key's own column,
  * which is valid YAML and the shape GitHub's own templates write.
  *
@@ -319,10 +321,18 @@ class Reader {
    */
   readBlockScalar(start, indent) {
     const kv = splitKeyValue(stripComment(this.content(start)));
-    const fold = (kv?.value ?? '').startsWith('>');
+    const value = kv?.value ?? '';
+    const fold = value.startsWith('>');
+    // An explicit indentation indicator (`|2`, `>2-`, `|-2`) decides where the body starts, counted from
+    // the key's own column: without it, a first line written deeper than the indicator is read as the
+    // body's indent and the tail ends the scalar early (S1.1, #266). YAML puts the digit and the
+    // chomping sign in either order and allows one sign, so both spellings reach the same number here.
+    // A scalar that carries no indicator keeps the indent its first non-empty line declares.
+    const header = /^[|>]([+-]?)([1-9])([+-]?)$/.exec(value);
+    const indicator = header !== null && !(header[1] !== '' && header[3] !== '') ? header[2] : null;
     /** @type {string[]} */
     const body = [];
-    let bodyIndent = null;
+    let bodyIndent = indicator === null ? null : indent + Number(indicator);
     let i = start + 1;
     for (; i < this.lines.length; i += 1) {
       const raw = this.lines[i].raw;

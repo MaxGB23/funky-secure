@@ -253,6 +253,99 @@ test('refuses a uses value written as a block scalar instead of guessing a refer
   assert.match(result.detail, /line 4/);
 });
 
+test('reads a block scalar at its indentation indicator, not at its first line (#266)', () => {
+  // `>2-` says the body starts two columns past the key, so a first line written deeper than that is
+  // content carrying a preserved leading space, not the body's indent. The value is asserted, not just
+  // the parse: a body indent taken from the dash instead of the key slices the wrong columns and still
+  // parses, which is the mistake this pins.
+  const text = [
+    'jobs:',
+    '  test:',
+    '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+    '      - run: >2-',
+    '           printf first',
+    '          printf second',
+    '',
+  ].join('\n');
+
+  const result = parseWorkflow(text);
+
+  assert.equal(result.ok, true, result.detail ?? 'the body is read at the indicator');
+  assert.deepEqual(result.jobs.map((job) => job.id), ['test']);
+  assert.equal(result.jobs[0].steps.length, 2);
+  assert.equal(
+    result.jobs[0].steps[1].run,
+    ' printf first printf second',
+    'the body starts at key + 2, so the first line keeps one leading space',
+  );
+});
+
+test('honours an indentation indicator written with the sign first (#266)', () => {
+  // YAML allows the chomping sign on either side of the digit: `|-2` is the same body as `|2-`. A
+  // reader that only matches `>2-` silently falls back to inference for this spelling.
+  const text = [
+    'jobs:',
+    '  test:',
+    '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+    '      - run: |-2',
+    '           printf first',
+    '          printf second',
+    '',
+  ].join('\n');
+
+  const result = parseWorkflow(text);
+
+  assert.equal(result.ok, true, result.detail ?? 'the sign-first spelling is read');
+  assert.equal(result.jobs[0].steps.length, 2);
+  assert.equal(result.jobs[0].steps[1].run, ' printf first\nprintf second', 'a literal scalar keeps its lines');
+});
+
+test('reads an indicator inside a with map, the shape an env block writes (#266)', () => {
+  // The step path and the map path read block scalars through the same helper but with their own key
+  // columns, and the real file that found this writes a map value, not a run body.
+  const text = [
+    'jobs:',
+    '  test:',
+    '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+    '        with:',
+    '          WELCOME_MESSAGE: >2-',
+    '             hello',
+    '            world',
+    '',
+  ].join('\n');
+
+  const result = parseWorkflow(text);
+
+  assert.equal(result.ok, true, result.detail ?? 'the with map parses');
+  assert.equal(result.jobs[0].steps[0].with.WELCOME_MESSAGE, ' hello world');
+});
+
+test('refuses a body indented less than its own indicator instead of misreading it (#266)', () => {
+  // A body that starts shallower than the indicator is not the document the header declares, so the
+  // file is refused and every rule skips it: the answer is a skip, never a guess.
+  const text = [
+    'jobs:',
+    '  test:',
+    '    runs-on: ubuntu-24.04',
+    '    steps:',
+    '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+    '      - run: |2',
+    '         printf shallow',
+    '',
+  ].join('\n');
+
+  const result = parseWorkflow(text);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unparseable-workflow');
+});
+
 test('reads a trailing comment after a key instead of treating it as the value', () => {
   const text = [
     'jobs:',
