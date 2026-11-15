@@ -143,8 +143,9 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   CI. Commit: 1baf94d (PR #283)
 - **T2** #119 — the cross-reference at §8.2 R1 `:49` plus the intersection test, no behaviour change — S8.
   Spec: this is the specification pull request. Judge: plan, LIGHT. Commit: —
-- **T3** #135 — the human step says what the tool knows, or names its real condition — S9. Spec: with it.
-  Judge: plan, before writing. Commit: —
+- **T3** #135 — the human step reports the lockfile it depends on and names the criterion it cannot
+  evaluate, never declaring the step done — S9. Spec: **its own pull request first** (the row and its
+  condition), then the code. Judge: plan, LIGHT, on the committed specification. Commit: —
 - **T4** #139 — the printed step names its consequence — S10. Spec: with it. Judge: claims after CI.
   Commit: —
 - **T5** #266 — `readBlockScalar` honours the indicator, with the `>2-` fixture and the accepted spellings —
@@ -166,6 +167,9 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   Judge: plan, before the sweep. Commit: —
 - **T12** Debt (a) — the count either leaves the row or is derived by a test — S14. Spec: the page itself.
   Judge: claims after CI. Commit: —
+- **T13** The `--apply` refusal tells the reader to run `pnpm install`, while step 3 of the same plan exists
+  because `install` discards the foreign pins (0021): the defect's second instance, in the message the
+  reader meets when the refusal fires. Spec: its own pull request. Judge: claims after CI. Commit: —
 
 **Why this order.** T1 first because it is one message, one golden and one page line, and it takes the whole
 path from issue to merged pull request on the cheapest candidate. T2 follows: it is the only task that ships a
@@ -243,3 +247,19 @@ the fourth produced one owner decision and no code.
   another manager" at `:128`, and that the test's comment attributed to RFCs 0018/0020 a rule that lives at
   `docs/spec/commands.md:51`. It confirmed six of seven claims and refused to certify the gates it was
   forbidden to run, which is the honest answer. `funky-judge-protocol` was written from this round.
+- **L9** T2 landed: PR #284 merged as `745881b`, #119 closed. One judged round refuted the first version
+  of the clause on substance, not style: it restated the ordering the guard order already states, and its
+  "answered by that comparison" was false for a pin that names another manager (which returns before the
+  guard is read) and for a versioned pin whose guard is equal. The row now says only what it does not
+  decide. Two positional claims of mine were also false — "nine lines later" in the bodies of #283 and
+  #284, where the measured distances are 106 and 31 — and both bodies now carry the correction; a pushed
+  commit message cannot be corrected without rewriting history, so the body is the record.
+- **L10** T3's specification took two judged rounds and both found it wrong, in different ways. The first
+  refused "step 3 is satisfied when `pnpm-lock.yaml` exists", because a lockfile resolved from the manifest
+  does not carry the foreign pins — the harm 0021 forbids — so the declaration would drop the only route that
+  keeps them. The second refused the replacement for underspecifying the output (which branches print, the
+  added line, its position relative to the flag line) and for adding a criterion no record sources. The row
+  now prints the command in both branches, adds one line when the lockfile is present, names the criterion,
+  and claims no status: only an import carries those pins, and this command does not compare the two files.
+  The second round also surfaced **T13** — the `--apply` refusal recommends `pnpm install`, the command the
+  same plan's step 3 says discards the pins. Two judged rounds is the cap; a third would be the owner's call.
