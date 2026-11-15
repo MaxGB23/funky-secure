@@ -110,12 +110,15 @@ const FIXTURE_MANIFEST = '{\n  "name": "remediation-probe",\n  "version": "1.0.0
  * @param {string} [packageManager]
  * @returns {string}
  */
-function resolveManifest(packageManager) {
+export function resolveManifest(packageManager) {
   const manifest = {
     name: 'remediation-probe',
     version: '1.0.0',
     private: true,
-    dependencies: { [PROBE_RESOLVE_PIN.dependency]: PROBE_RESOLVE_PIN.version },
+    // The section the judgement reads, built from the same constant: a literal here and a constant there
+    // diverge the first time one of them is edited, and the probe would then judge a section its own
+    // fixture never wrote (native review of #278, R2-001).
+    [PROBE_RESOLVE_PIN.type]: { [PROBE_RESOLVE_PIN.dependency]: PROBE_RESOLVE_PIN.version },
   };
   if (packageManager !== undefined) manifest.packageManager = packageManager;
   return `${JSON.stringify(manifest, null, 2)}\n`;

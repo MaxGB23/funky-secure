@@ -16,6 +16,7 @@ import {
   judgeLockfile,
   lockfileCommand,
   probe,
+  resolveManifest,
 } from '../scripts/probe-remediation.js';
 
 /**
@@ -198,6 +199,19 @@ function resolvedLockfile(version) {
     '',
   ].join('\n');
 }
+
+test('the resolve fixture declares the dependency under the section the judgement reads', () => {
+  // The fixture and the judgement were written from two literals that happened to agree. One constant
+  // now feeds both, and this is what says so: an edit to PROBE_RESOLVE_PIN.type that the fixture did not
+  // follow leaves the section absent here (native review of #278, R2-001).
+  const manifest = JSON.parse(resolveManifest());
+
+  assert.deepEqual(
+    Object.keys(manifest[PROBE_RESOLVE_PIN.type] ?? {}),
+    [PROBE_RESOLVE_PIN.dependency],
+    'the fixture writes the section the judgement reads',
+  );
+});
 
 test('the importer record is the measurement, not the file, and each failure is named apart', () => {
   const command = 'pnpm install --lockfile-only';
