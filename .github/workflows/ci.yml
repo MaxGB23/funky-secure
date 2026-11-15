@@ -83,13 +83,13 @@ jobs:
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
 
   runtime-claims:
-    # The one question `docs/validation.md` said no runner could answer: that a token declaring
-    # `contents: read` is really refused a write. Guarded rather than triggered, because a job inherits
-    # the workflow's events and a pull request from a fork gets a read-only token whatever this job
-    # declares: a green there would measure the platform's rule, not the permission. A skipped check is
-    # the honest signal, and `docs/validation.md` names the skip instead of hiding it.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # Three claims `docs/validation.md` used to leave to a static reading, measured on one runner. The
+    # guard is per step and not per job: only the 403 question depends on the token's context, and the
+    # other two touch no token, so they keep running on a fork pull request, where the permission answer
+    # belongs to the platform.
     runs-on: ubuntu-24.04
+    # A stalled connection would otherwise hold the job open for the runner's default maximum.
+    timeout-minutes: 15
     # Declared here and not inherited: the claim this job measures is about this declaration, so a
     # reviewer reads it in the job rather than two screens above it.
     permissions:
@@ -107,7 +107,22 @@ jobs:
         with:
           version: 12.3.4
           run_install: false
+      - name: which context this job measured
+        run: |
+          set -eu
+          echo "event: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "measured: a push to the default branch"
+          elif [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+            echo "measured: a pull request from a branch of this repository"
+          else
+            echo "not measured: a pull request from a fork, whose token is read-only whatever the job declares"
+          fi
+      # The guard sits on this step, not on the job: a fork pull request gets a read-only token whatever
+      # the job declares, so a green here would measure the platform's rule. The print above says so,
+      # which is what makes the skip legible instead of looking like a disabled job.
       - name: "the 403 for a contents: read token"
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         run: node scripts/probe-permissions.js
         env:
           GH_TOKEN: ${{ github.token }}

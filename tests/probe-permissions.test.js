@@ -11,7 +11,18 @@ import {
   probe,
 } from '../scripts/probe-permissions.js';
 
-const denied = (message = DENIED_MESSAGE) => JSON.stringify({ message, documentation_url: 'https://docs.github.com' });
+/**
+ * The envelope GitHub writes, spelled out. The fixture is deliberately not built from `DENIED_MESSAGE`:
+ * a constant that drifted would then agree with itself and every test would pass, while the live probe
+ * rejected the real 403. One test below pins the constant to this literal.
+ */
+const DENIED_LITERAL = 'Resource not accessible by integration';
+
+const denied = (message = DENIED_LITERAL) => JSON.stringify({ message, documentation_url: 'https://docs.github.com' });
+
+test('the denial the probe recognises is the envelope GitHub writes', () => {
+  assert.equal(DENIED_MESSAGE, DENIED_LITERAL, 'the constant drifted from the envelope a real 403 carries');
+});
 
 test('a 403 carrying the integration denial is the measurement', () => {
   assert.deepEqual(judgeAttempt({ status: 403, body: denied() }), { ok: true, problems: [] });
@@ -67,6 +78,25 @@ test('a transport that throws is not a pass', async () => {
     () => probe({ repo: 'a/b', token: 't', fetchImpl: async () => { throw new Error('getaddrinfo ENOTFOUND api.github.com'); } }),
     /ENOTFOUND/,
   );
+});
+
+test('both requests carry a deadline, so a stalled connection cannot hold the job open', async () => {
+  const signals = [];
+  const answers = [
+    { status: 403, body: denied() },
+    { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+  ];
+  const fetchImpl = async (url, options) => {
+    signals.push(options?.signal);
+    const next = answers.shift();
+    return { status: next.status, text: async () => next.body };
+  };
+
+  assert.deepEqual(await probe({ repo: 'a/b', token: 't', fetchImpl }), { ok: true, problems: [] });
+  assert.equal(signals.length, 2, 'the probe made a different number of requests than the two it judges');
+  for (const signal of signals) {
+    assert.ok(signal instanceof AbortSignal, 'a request without a signal has no deadline');
+  }
 });
 
 test('a refused write and an absent path are the only way probe() answers ok', async () => {

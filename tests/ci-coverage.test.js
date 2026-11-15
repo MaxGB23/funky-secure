@@ -158,16 +158,22 @@ test('the runtime claims are measured on a runner, by a job that declares the pe
   );
 });
 
-test('the runtime claims never measure a fork pull request, where the answer is the platform\u2019s', () => {
+test('only the step that needs the token is guarded, and the job says which context it measured', () => {
   const job = jobBlock('runtime-claims');
 
+  // A job-level guard skipped every claim on a fork, including the two that touch no token: a fork pull
+  // request that broke `files` went unmeasured, and the skip was indistinguishable from a disabled job.
+  assert.doesNotMatch(job, /^ {4}if:/m, 'a job-level guard skips the claims that never needed the token');
+  assert.match(job, /^ {4}timeout-minutes: \d+$/m, 'the job has no ceiling, so a stalled network holds it open');
+
+  const guard = "if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository";
+  const step = job.slice(job.indexOf('the 403 for a contents'), job.indexOf('scripts/probe-permissions.js'));
+  assert.ok(step.includes(guard), 'the 403 step is not guarded, so a fork pull request would measure the platform');
+
+  const print = job.slice(job.indexOf('which context this job measured'), job.indexOf('the 403 for a contents'));
   assert.ok(
-    job.includes("github.event_name == 'push'"),
-    'the job does not run on a push, so the default-branch context is never measured',
-  );
-  assert.ok(
-    job.includes('github.event.pull_request.head.repo.full_name == github.repository'),
-    'the job is not guarded against a fork pull request, whose token is read-only whatever the job declares',
+    print.includes('not measured: a pull request from a fork'),
+    'nothing prints why a fork run measures less, so the skip is silent',
   );
 });
 

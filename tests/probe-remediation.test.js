@@ -9,6 +9,7 @@ import rule, { pinCommand } from '../src/rules/exact-versions.js';
 import {
   LOCKFILE,
   PROBE_PIN,
+  PROBE_SCOPED_PIN,
   judgeField,
   judgeLockfile,
   lockfileCommand,
@@ -179,15 +180,16 @@ test('the manifest carrying the value afterwards is the measurement, and anythin
   assert.match(otherValue.problems.join(' '), /1\.0\.0/, 'the value found is not named');
 });
 
-test('the probe runs the two commands the catalogue prints, in a directory of its own', (t) => {
+test('the probe runs the three command shapes the catalogue prints, each in a directory of its own', (t) => {
   const root = scratch(t);
   const seen = [];
   probe({ root, run: (command) => seen.push(command) });
 
-  // The commands, in order, and nothing the catalogue does not print: the pin value is a local link
-  // because the probe must measure the form and never a registry's uptime (S8 is about effect, not
-  // about a resolution).
-  assert.deepEqual(seen, [lockfileCommand(), pinCommand(PROBE_PIN)]);
+  // The commands, in order, and nothing the catalogue does not print: the resolve, the root pin, and the
+  // importer pin carrying the `-C <dir>` prefix. The pin value is a local link because the probe must
+  // measure the form and never a registry's uptime (S8 is about effect, not about a resolution).
+  assert.deepEqual(seen, [lockfileCommand(), pinCommand(PROBE_PIN), pinCommand(PROBE_SCOPED_PIN)]);
+  assert.ok(seen[2].startsWith(`pnpm -C ${PROBE_SCOPED_PIN.dir} pkg set`), 'the importer form lost its prefix');
   assert.equal(PROBE_PIN.version, 'file:./vendor', 'the pin needs no registry, so the measurement needs no network');
 });
 
@@ -206,18 +208,23 @@ test('a command that ran and left nothing behind is a failure, never a pass', (t
   );
 });
 
-test('a transport that leaves the two effects behind is the only way probe() answers ok', (t) => {
+test('a transport that leaves every effect behind is the only way probe() answers ok', (t) => {
   const root = scratch(t);
   const effect = (command, cwd) => {
     if (command === lockfileCommand()) {
       writeFileSync(join(cwd, LOCKFILE), "lockfileVersion: '9.0'\n");
       return;
     }
-    // The manifest shape `pnpm pkg set 'devDependencies["local-pin"]=…'` writes, produced by hand so
-    // the judgement is exercised without pnpm, an install or a network.
-    const manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
-    manifest[PROBE_PIN.type] = { [PROBE_PIN.dependency]: PROBE_PIN.version };
-    writeFileSync(join(cwd, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+
+    // The manifest shape `pnpm pkg set 'dependencies["name"]=…'` writes, produced by hand so the
+    // judgement is exercised without pnpm, an install or a network. The importer form writes into the
+    // directory its `-C` names, which is the difference between measuring the form and guessing it.
+    const scoped = command.includes(`-C ${PROBE_SCOPED_PIN.dir}`);
+    const pin = scoped ? PROBE_SCOPED_PIN : PROBE_PIN;
+    const target = scoped ? join(cwd, PROBE_SCOPED_PIN.dir) : cwd;
+    const manifest = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
+    manifest[pin.type] = { [pin.dependency]: pin.version };
+    writeFileSync(join(target, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   };
 
   assert.deepEqual(probe({ root, run: effect }), { ok: true, problems: [] });

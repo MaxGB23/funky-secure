@@ -52,6 +52,18 @@ export const LOCKFILE = 'pnpm-lock.yaml';
  */
 export const PROBE_PIN = Object.freeze({ type: 'devDependencies', dependency: 'local-pin', version: 'file:./vendor' });
 
+/**
+ * The importer form: a workspace finding is pinned in *that* manifest, with the `-C <dir>` prefix the
+ * catalogue prints. A probe that only ran the root form would leave this path measured as text and not
+ * as effect, which is the gap a reviewer named on the first version of this file.
+ */
+export const PROBE_SCOPED_PIN = Object.freeze({
+  type: 'dependencies',
+  dependency: '@probe/pin',
+  version: 'file:./vendor',
+  dir: 'packages/api',
+});
+
 /** The one file the pin's `install` segment needs, so the chain completes with no registry. */
 const VENDOR_MANIFEST = '{\n  "name": "local-pin",\n  "version": "1.0.0"\n}\n';
 
@@ -163,6 +175,22 @@ export function probe({ root, run = runCommand }) {
       type: PROBE_PIN.type,
       dependency: PROBE_PIN.dependency,
       expected: PROBE_PIN.version,
+    }).problems,
+  );
+
+  const workspace = join(root, 'workspace');
+  const importerDir = join(workspace, PROBE_SCOPED_PIN.dir);
+  mkdirSync(join(importerDir, 'vendor'), { recursive: true });
+  writeFileSync(join(importerDir, 'vendor', 'package.json'), VENDOR_MANIFEST);
+  writeFileSync(join(importerDir, 'package.json'), FIXTURE_MANIFEST);
+  writeFileSync(join(workspace, 'package.json'), FIXTURE_MANIFEST);
+  run(pinCommand(PROBE_SCOPED_PIN), workspace);
+  problems.push(
+    ...judgeField({
+      manifest: readManifest(importerDir),
+      type: PROBE_SCOPED_PIN.type,
+      dependency: PROBE_SCOPED_PIN.dependency,
+      expected: PROBE_SCOPED_PIN.version,
     }).problems,
   );
 
