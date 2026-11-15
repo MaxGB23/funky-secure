@@ -145,7 +145,8 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   Spec: this is the specification pull request. Judge: plan, LIGHT. Commit: —
 - **T3** #135 — the human step reports the lockfile it depends on and names the criterion it cannot
   evaluate, never declaring the step done — S9. Spec: **its own pull request first** (the row and its
-  condition), then the code. Judge: plan, LIGHT, on the committed specification. Commit: —
+  condition), then the code. Judge: plan, LIGHT, on the committed specification. Commit: 7e33049 (spec,
+  PR #285) and 399c4d1 (code, PR #286); #135 stays open by design.
 - **T4** #139 — the printed step names its consequence — S10. Spec: with it. Judge: claims after CI.
   Commit: —
 - **T5** #266 — `readBlockScalar` honours the indicator, with the `>2-` fixture and the accepted spellings —
@@ -170,6 +171,11 @@ each with its plan judged before code and its claims judged after CI. Sources: i
 - **T13** The `--apply` refusal tells the reader to run `pnpm install`, while step 3 of the same plan exists
   because `install` discards the foreign pins (0021): the defect's second instance, in the message the
   reader meets when the refusal fires. Spec: its own pull request. Judge: claims after CI. Commit: —
+- **T14** Step 14 hands the lockfile the add writes to the closing commit (row 15), whose printed-when covers
+  an install or an existing `lockfile-committed` finding; on the branch where step 13 prints there is no
+  lockfile yet, so no step stages the one the add creates. Row 10 says an absent lockfile "is left to row
+  14, which is where it is first recorded", and row 14 stages the manifest only. Found by the second judged
+  round on T4; pre-existing and untouched by it. Spec: its own pull request. Judge: plan, LIGHT. Commit: —
 
 **Why this order.** T1 first because it is one message, one golden and one page line, and it takes the whole
 path from issue to merged pull request on the cheapest candidate. T2 follows: it is the only task that ships a
@@ -263,3 +269,18 @@ the fourth produced one owner decision and no code.
   and claims no status: only an import carries those pins, and this command does not compare the two files.
   The second round also surfaced **T13** — the `--apply` refusal recommends `pnpm install`, the command the
   same plan's step 3 says discards the pins. Two judged rounds is the cap; a third would be the owner's call.
+- **L11** T3 landed in two pull requests: `7e33049` the specification (PR #285) and `399c4d1` the code
+  (PR #286). **#135 stays open**, and the pull request says `Refs` rather than `Closes`: the issue's title
+  is that the step is printed at all, and withholding it needs a comparison this command does not compute.
+  Both exits the issue offered were unsafe — "satisfied" would drop the only route that keeps the foreign
+  pins, and its own proposed condition (absence) is the same trap — so the comment on the issue records
+  what landed and what remains, as a product decision. A sibling instance became T13.
+- **L12** T4's specification took two judged rounds and both blocked it, and both times the defect was the same
+  in a smaller form: the row promised a state it also said the plan could not know. The first round refused
+  that, the widening of 0016's scoped rule into a path invariant, a claim about what `pnpm add` writes that
+  the specification does not carry, and an output slot named nowhere. The second refused the appended
+  retraction, an element that both existed and did not grow the list, and prose that still promised a clean
+  tree. The change moved to where the element is defined: §11.7 now carries one line for a step whose outcome
+  depends on a choice the plan cannot see, and the row points at it instead of arguing it in a cell. Two
+  judged rounds is the cap; this revision is the owner's decision, not a judged one. The second round also
+  produced T14, a pre-existing defect the row had been leaning on.
