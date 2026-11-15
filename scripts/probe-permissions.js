@@ -28,6 +28,12 @@ export const PROBE_PATH = '.github/runtime-claims-probe';
 export const DENIED_MESSAGE = 'Resource not accessible by integration';
 
 /**
+ * The ceiling on each request. Without one, a stalled connection holds the job open until the runner
+ * gives up, which reads as a hang rather than as a probe that could not answer.
+ */
+export const FETCH_TIMEOUT_MS = 15_000;
+
+/**
  * The contents endpoint for a `owner/repo`.
  * @param {string} repo
  * @returns {string}
@@ -106,9 +112,9 @@ export async function probe({ repo, token, fetchImpl = fetch }) {
     'user-agent': 'funky-secure runtime-claims probe',
   };
 
-  const attempt = await fetchImpl(url, { method: 'PUT', headers, body: attemptBody() });
+  const attempt = await fetchImpl(url, { method: 'PUT', headers, body: attemptBody(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   const text = await attempt.text();
-  const readBack = await fetchImpl(url, { headers });
+  const readBack = await fetchImpl(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 
   const problems = [
     ...judgeAttempt({ status: attempt.status, body: text }).problems,
