@@ -172,12 +172,14 @@ Plan steps, printed in order:
 2. **Report-only, no action:** behavior settings in `.npmrc` that pnpm no longer reads (4.1 and 1.3),
    listed by key name so the user moves them to `pnpm-workspace.yaml` or the pnpm global config
    deliberately.
-3. **Human step, never executed by the tool (4.9):** carry the foreign pins into `pnpm-lock.yaml` with
-   `pnpm import`. Printed whenever a foreign lockfile exists — it reads `yarn.lock` or
-   `package-lock.json` and records the versions they pinned, which `pnpm install` discards by resolving
-   from the manifest. When `pnpm-lock.yaml` is already present the plan says so and names the criterion
-   it cannot evaluate — whether that lockfile was imported from the foreign one or resolved from the
-   manifest — because presence is not evidence that the pins were carried over.
+3. **Human step, never executed by the tool (4.9):** the step that writes `pnpm-lock.yaml`.
+   - A foreign lockfile exists: `pnpm import` reads `yarn.lock` or `package-lock.json` and records the
+     versions they pinned, which `pnpm install` discards by resolving from the manifest (0021). If
+     `pnpm-lock.yaml` is already present, one line follows the command: it names that fact, names the
+     criterion this command does not evaluate — whether the lockfile was imported from the foreign one
+     or resolved from the manifest — and claims no status, because only an import carries those pins and
+     this plan does not compare the two files.
+   - No foreign lockfile exists: `pnpm install` resolves and writes it.
 4. **Removal:** the foreign lockfile(s), only after `pnpm-lock.yaml` exists.
 5. **CI follow-up:** the workflow and composite-action lines that need rewriting, quoted by
    `file:line`, as suggestions.
