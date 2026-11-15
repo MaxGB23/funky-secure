@@ -21,9 +21,11 @@ repository's own CI instead of a static reading. Issue #267.
   transport. Precedent: `docs/decisions.md` I-68.
 - **S7** The remediation probe imports the command strings the catalogue emits (`src/lib/foreign-pin.js:21`,
   `src/rules/exact-versions.js:239,245,461`). A copy would drift, and the claim is about what the tool prints.
-- **S8** The remediation claim is **effect, for the command shapes the catalogue emits today**: a lockfile
-  exists after `pnpm install --lockfile-only`, and a field carries the value after the `pnpm pkg set` form.
-  Not "every remediation", and not the correctness of a resolution.
+- **S8** The remediation claim is **effect, for the command shapes the catalogue emits today**: the resolve
+  step's lockfile records the dependency it resolved — the importer row, not the file's existence — and a
+  field carries the value after the `pnpm pkg set` form. Both shapes the catalogue prints for the resolve
+  step are exercised, the bare one and the one carrying `--pm-on-fail=ignore` for a repository that
+  declares a foreign `packageManager`. Not "every remediation", and not the correctness of a resolution.
 - **S9** No row says "measured" before the job has run green on the pull request that moves it.
 - **S10** Every action is pinned to a SHA; the job declares `permissions: contents: read`. The pin is enforced
   by `tests/ci-coverage.test.js:85-101`; the self-scan is not a backstop (it passes when any declaration
@@ -48,6 +50,7 @@ repository's own CI instead of a static reading. Issue #267.
 | T5 | Rows `:87`, `:90`, `:91` moved with narrowed subjects; `:92` cross-reference fixed | S2, S9, S11 | inline | this commit |
 | T6 | Verification, native review per commit, `node scripts/open-pr.js` | S15 | inline | — |
 | T7 | The four findings the reviews left: the guard moved to the step, request deadlines, the literal envelope, the importer pin form | S13 | inline | `b33bade` (PR #270) |
+| T8 | The two gaps this record left: the resolve step judged by its importer record, and the `--pm-on-fail=ignore` shape exercised | S7, S8 | inline | this commit |
 
 ## Log
 
@@ -86,3 +89,16 @@ repository's own CI instead of a static reading. Issue #267.
 - **L9** L5's slice plan was superseded by L6 before any pull request opened: the evidence shipped as #268
   (T2 and T3) and #269 (T4), then #270 carried the hardening. L5 is kept because the Log is append-only and
   a plan that changed is evidence; L6 is the one that happened.
+- **L10** The two gaps this record's own row left, closed after the owner asked for a release with nothing
+  loose in it: "No debemos dejar cosas flojas, debe quedar pulido funky secure para aprobar la release
+  próxima". Both were named in `docs/validation.md:71` as limits, and a limit written down is honest but
+  not done. Measured on pnpm 12.3.4 before the fix: the fixture declared no dependency and wrote a
+  `pnpm-lock.yaml` whose root importer is `.: {}`, so a judgement that asked whether the file existed
+  passed on a document that resolved nothing; and a fixture declaring `packageManager: npm@11.13.0` fails
+  `pnpm install --lockfile-only` with exit 1 ("This project is configured to use npm") unless the flag the
+  catalogue prints is carried, so that shape had never run at all. T8 closes both: the fixture declares one
+  `file:./vendor` link, the judge reads `importers["."].dependencies` through `src/lib/lockfile.js`, and a
+  fourth case runs the flag form through `resolveLockfileStep`, the builder the catalogue prints from. Two
+  mutations, each caught by exactly the tests that name it: a missing record that stopped failing, and
+  `lockfileCommand` ignoring the context it is asked about. S8 is the spec this changes; the rest of the
+  record stands.

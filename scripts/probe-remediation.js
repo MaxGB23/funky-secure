@@ -9,7 +9,7 @@
  * consequence does not follow: the reason a step cannot be followed in *the* repository is that it
  * writes one, and a directory from `mkdtemp` is a repository it may write.
  *
- * So the probe follows three of the shapes the catalogue prints today, and asserts the effect rather than the
+ * So the probe follows four of the shapes the catalogue prints today, and asserts the effect rather than the
  * exit: a command that exits `0` and writes nothing would be a green that measures nothing, and the
  * claim being closed is "the step does what its text says", never "pnpm is installed". Two things keep
  * it honest.
@@ -28,6 +28,14 @@
  * report on npm's uptime. The form — the bracketed property path, the `-C <dir>` prefix, the trailing
  * install — is the rule's own, unchanged.
  *
+ * The resolve step is judged by the row it writes, not by the file it names. A fixture that declared no
+ * dependency produced a `pnpm-lock.yaml` whose root importer recorded nothing (`.: {}`), and a judgement
+ * that asked whether the file existed called that a pass; the fixture now declares one link and the
+ * judgement reads `importers["."].dependencies` through the reader the rules already parse a lockfile
+ * with, so the probe and the report cannot disagree about what an importer records. Its second shape is
+ * the one the catalogue prints for a repository declaring a foreign `packageManager`
+ * (`src/lib/foreign-pin.js`), which is the step a user migrating off npm follows.
+ *
  * Every write happens inside the `mkdtemp` directory, which is removed before the process exits.
  */
 import { execFileSync } from 'node:child_process';
@@ -36,11 +44,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { LOCKFILE_ONLY_STEP } from '../src/lib/foreign-pin.js';
+import { FOREIGN_PIN_FLAG, resolveLockfileStep } from '../src/lib/foreign-pin.js';
+import { parseLockfile, recordedVersion } from '../src/lib/lockfile.js';
 import { pinCommand } from '../src/rules/exact-versions.js';
 
 /** The file the resolve step is supposed to write. */
 export const LOCKFILE = 'pnpm-lock.yaml';
+
+/** The importer key `pnpm-lock.yaml` gives the repository root. */
+const ROOT_IMPORTER = '.';
 
 /**
  * The pin the probe follows, in the shape the rule's builder takes.
@@ -51,6 +63,28 @@ export const LOCKFILE = 'pnpm-lock.yaml';
  * network — never because a version is untestable.
  */
 export const PROBE_PIN = Object.freeze({ type: 'devDependencies', dependency: 'local-pin', version: 'file:./vendor' });
+
+/**
+ * The dependency the resolve fixtures declare.
+ *
+ * The claim is "the resolve step records what it resolved", and a manifest with nothing declared gives
+ * the lockfile nothing to record: the document holds `lockfileVersion` and no importer, so the only
+ * question left is whether a file exists. `file:./vendor` is exact and offline, for the same reason the
+ * pin's value is a link.
+ */
+export const PROBE_RESOLVE_PIN = Object.freeze({
+  type: 'dependencies',
+  dependency: 'local-pin',
+  version: 'file:./vendor',
+});
+
+/**
+ * The foreign declaration the second resolve fixture carries.
+ *
+ * `npm@11.13.0` is the version `docs/validation.md` measured the flag against, so the fixture exercises
+ * the declaration the evidence names rather than a range pnpm might answer differently.
+ */
+export const FOREIGN_PACKAGE_MANAGER = 'npm@11.13.0';
 
 /**
  * The importer form: a workspace finding is pinned in *that* manifest, with the `-C <dir>` prefix the
@@ -67,27 +101,86 @@ export const PROBE_SCOPED_PIN = Object.freeze({
 /** The one file the pin's `install` segment needs, so the chain completes with no registry. */
 const VENDOR_MANIFEST = '{\n  "name": "local-pin",\n  "version": "1.0.0"\n}\n';
 
-/** The fixture's own manifest: nothing declared, so every effect after the run is the run's. */
+/** The fixture's own manifest for the pin cases: nothing declared, so every effect after the run is the run's. */
 const FIXTURE_MANIFEST = '{\n  "name": "remediation-probe",\n  "version": "1.0.0",\n  "private": true\n}\n';
 
 /**
- * The resolve step the catalogue prints, imported and never copied (S7): the constant
- * `src/lib/foreign-pin.js` owns, which is the same one `start`, `migrate` and the pin path print.
+ * The resolve fixtures' manifest: one declared link, so the lockfile has a row to record, and the
+ * declaration the shape under test is asked about, when there is one.
+ * @param {string} [packageManager]
  * @returns {string}
  */
-export function lockfileCommand() {
-  return LOCKFILE_ONLY_STEP;
+function resolveManifest(packageManager) {
+  const manifest = {
+    name: 'remediation-probe',
+    version: '1.0.0',
+    private: true,
+    dependencies: { [PROBE_RESOLVE_PIN.dependency]: PROBE_RESOLVE_PIN.version },
+  };
+  if (packageManager !== undefined) manifest.packageManager = packageManager;
+  return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 /**
- * Judge the resolve step by the file it exists to write. A missing lockfile is a problem that names the
- * step, because "no pnpm-lock.yaml" without the command is a fact with no instruction in it.
- * @param {{ present: boolean }} observed
+ * The reader's context for a manifest this probe wrote, carrying only the field `declaredPackageManager`
+ * reads. The step is therefore asked for from the declaration the fixture exercises, never from a second
+ * copy of the condition.
+ * @param {string} text
+ * @returns {object}
+ */
+function manifestContext(text) {
+  return { files: { packageJson: { json: JSON.parse(text) } } };
+}
+
+/**
+ * The resolve step the catalogue prints, imported and never copied (S7): `resolveLockfileStep` is the
+ * builder `start`, `migrate`, the pin path and the writers print from, so the flag that appears for a
+ * repository declaring a foreign `packageManager` reaches this probe instead of being remembered here.
+ * @param {object | null} [repo] the reader's context for the manifest the step will act on
+ * @returns {string}
+ */
+export function lockfileCommand(repo = null) {
+  return resolveLockfileStep(repo);
+}
+
+/**
+ * Judge the resolve step by the row it exists to write: `importers["."]` naming the dependency with a
+ * version beside it.
+ *
+ * The file appearing is not the claim. pnpm writes a lockfile for a manifest with nothing declared, so
+ * "a lockfile exists" passes on a document that resolved nothing — measured, not feared: the fixture that
+ * declared no dependency produced a `pnpm-lock.yaml` whose root importer is `.: {}`, and the first
+ * version of this probe called that a pass. The three ways the row can be missing are named apart — no
+ * file, a file this reader refuses, a file with no record — because they send the reader to three
+ * different places.
+ *
+ * @param {{ text: string | null, command: string, dependency: string }} input
  * @returns {{ ok: boolean, problems: Array<string> }}
  */
-export function judgeLockfile({ present }) {
-  if (present) return { ok: true, problems: [] };
-  return { ok: false, problems: [`no ${LOCKFILE} exists after ${lockfileCommand()}`] };
+export function judgeLockfile({ text, command, dependency }) {
+  if (typeof text !== 'string') {
+    return { ok: false, problems: [`no ${LOCKFILE} exists after ${command}`] };
+  }
+
+  const lock = parseLockfile(text);
+  if (!lock.supported) {
+    return {
+      ok: false,
+      problems: [`${LOCKFILE} is not a shape this reader can judge after ${command}: ${lock.detail}`],
+    };
+  }
+
+  const recorded = recordedVersion(lock.importers?.[ROOT_IMPORTER], dependency, PROBE_RESOLVE_PIN.type);
+  if (recorded === null) {
+    return {
+      ok: false,
+      problems: [
+        `${LOCKFILE} records no ${PROBE_RESOLVE_PIN.type}["${dependency}"] with a version after ${command}`,
+      ],
+    };
+  }
+
+  return { ok: true, problems: [] };
 }
 
 /**
@@ -147,6 +240,22 @@ function readManifest(dir) {
 }
 
 /**
+ * The lockfile's text, or `null` when the step wrote nothing: the two are different failures, and the
+ * judge names them apart.
+ * @param {string} path
+ * @returns {string | null}
+ */
+function readIfPresent(path) {
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
+
+/** The directory holding the fixture the pin's `install` segment reads, so the chain needs no registry. */
+function writeVendor(dir) {
+  mkdirSync(join(dir, 'vendor'), { recursive: true });
+  writeFileSync(join(dir, 'vendor', 'package.json'), VENDOR_MANIFEST);
+}
+
+/**
  * Follow both commands and judge what they left behind.
  *
  * The runner is a parameter, for the same reason `probe-permissions.js` takes its `fetchImpl`: the suite
@@ -158,15 +267,31 @@ function readManifest(dir) {
 export function probe({ root, run = runCommand }) {
   const problems = [];
 
-  const lockfileDir = join(root, 'lockfile');
-  mkdirSync(lockfileDir, { recursive: true });
-  writeFileSync(join(lockfileDir, 'package.json'), FIXTURE_MANIFEST);
-  run(lockfileCommand(), lockfileDir);
-  problems.push(...judgeLockfile({ present: existsSync(join(lockfileDir, LOCKFILE)) }).problems);
+  // Two resolve shapes, because the catalogue prints two: the bare step for a repository that declares no
+  // foreign manager, and the one carrying the flag for a repository that does. The second is the path a
+  // user migrating off npm follows (0018), so it is measured here rather than assumed from the constant.
+  const resolveCases = [
+    { dir: 'lockfile', manifest: resolveManifest() },
+    { dir: 'foreign-lockfile', manifest: resolveManifest(FOREIGN_PACKAGE_MANAGER) },
+  ];
+
+  for (const { dir, manifest } of resolveCases) {
+    const target = join(root, dir);
+    writeVendor(target);
+    writeFileSync(join(target, 'package.json'), manifest);
+    const command = lockfileCommand(manifestContext(manifest));
+    run(command, target);
+    problems.push(
+      ...judgeLockfile({
+        text: readIfPresent(join(target, LOCKFILE)),
+        command,
+        dependency: PROBE_RESOLVE_PIN.dependency,
+      }).problems,
+    );
+  }
 
   const pinDir = join(root, 'pin');
-  mkdirSync(join(pinDir, 'vendor'), { recursive: true });
-  writeFileSync(join(pinDir, 'vendor', 'package.json'), VENDOR_MANIFEST);
+  writeVendor(pinDir);
   writeFileSync(join(pinDir, 'package.json'), FIXTURE_MANIFEST);
   run(pinCommand(PROBE_PIN), pinDir);
   problems.push(
@@ -180,8 +305,7 @@ export function probe({ root, run = runCommand }) {
 
   const workspace = join(root, 'workspace');
   const importerDir = join(workspace, PROBE_SCOPED_PIN.dir);
-  mkdirSync(join(importerDir, 'vendor'), { recursive: true });
-  writeFileSync(join(importerDir, 'vendor', 'package.json'), VENDOR_MANIFEST);
+  writeVendor(importerDir);
   writeFileSync(join(importerDir, 'package.json'), FIXTURE_MANIFEST);
   writeFileSync(join(workspace, 'package.json'), FIXTURE_MANIFEST);
   run(pinCommand(PROBE_SCOPED_PIN), workspace);
@@ -228,7 +352,7 @@ function main() {
 
   if (result.ok) {
     console.log(
-      `probe-remediation: ${lockfileCommand()} wrote ${LOCKFILE}, and ${pinCommand(PROBE_PIN)} left ${PROBE_PIN.type}["${PROBE_PIN.dependency}"]=${PROBE_PIN.version}`,
+      `probe-remediation: ${lockfileCommand()} and its ${FOREIGN_PIN_FLAG} form each recorded ${PROBE_RESOLVE_PIN.dependency}, ${pinCommand(PROBE_PIN)} left ${PROBE_PIN.type}["${PROBE_PIN.dependency}"]=${PROBE_PIN.version}, and ${pinCommand(PROBE_SCOPED_PIN)} left the same in ${PROBE_SCOPED_PIN.dir}`,
     );
     return;
   }
