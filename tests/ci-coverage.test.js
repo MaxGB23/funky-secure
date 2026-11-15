@@ -181,12 +181,24 @@ test('every runtime claim is a step a deleted line fails', () => {
     'the probe step is handed no token, so it would measure a missing credential instead of the permission',
   );
 
-  // The row `docs/validation.md` carried as "the tarball was installed and exercised locally only": a
-  // claim with no step is a claim nobody measures, and a step nothing asserts is one line away from
-  // disappearing.
+  // The other two rows `docs/validation.md` carried as not verified, pinned the same way: a claim with
+  // no step is a claim nobody measures, and a step nothing asserts is one line away from disappearing.
   assert.match(
     job,
     /^ +run: node scripts\/pack-smoke\.js$/m,
     'the packed artifact is never installed and run in CI, so `files` can fail where no test can see it',
+  );
+  assert.match(
+    job,
+    /^ +run: node scripts\/probe-remediation\.js$/m,
+    'the remediation commands are never run in CI, so their effect is still only their shape',
+  );
+
+  // The remediation probe runs pnpm itself, and the job declares no other reason to have it: an
+  // answering pnpm is what the claim is measured with, never the one the runner image happens to carry.
+  assert.match(
+    job,
+    /uses: pnpm\/action-setup@[0-9a-f]{40} # v\d/,
+    'the remediation probe would measure whatever pnpm the image carries, or none at all',
   );
 });

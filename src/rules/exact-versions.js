@@ -18,6 +18,7 @@
  *   specifier the package already has.
  */
 
+import { LOCKFILE_ONLY_STEP } from '../lib/foreign-pin.js';
 import { parseLockfile, recordedVersion, overrideTouches } from '../lib/lockfile.js';
 import { isFloating } from '../lib/specifiers.js';
 import { manifestProblem } from '../lib/targets.js';
@@ -215,19 +216,36 @@ function pnpmAt(dir) {
 }
 
 /**
- * The remediation of a floating range (S4, field round 4). `pnpm add --save-exact <name>@<range>` is a
- * measured no-op on pnpm 12.3.4 — pnpm keeps the range the package already declares — so the command
- * that works is `pnpm pkg set` with the resolved version the lockfile records, followed by
- * `pnpm install`, both pointed at the importer that owns the manifest.
+ * The pin the catalogue prints for a floating range (S4, field round 4). `pnpm add --save-exact
+ * <name>@<range>` is a measured no-op on pnpm 12.3.4 — pnpm keeps the range the package already
+ * declares — so the command that works is `pnpm pkg set` with the resolved version the lockfile
+ * records, followed by `pnpm install`, both pointed at the importer that owns the manifest.
  *
  * The property path is bracketed, not dotted: `pnpm pkg set 'devDependencies.@types/node=1'` fails on
  * pnpm 12.3.4 with ERR_PNPM_PKG_INVALID_PROPERTY_PATH, because `@` is not a token a dot path can carry,
  * and scoped names are most of a modern dependency set. The bracket form works unchanged for an
  * unscoped name, so there is one form and one thing to remember.
  *
+ * Exported because the text is a claim somebody follows: `scripts/probe-remediation.js` runs this exact
+ * command in a scratch directory and asserts the manifest carries the value afterwards (S7). A copy
+ * beside it would drift from the finding, and the measurement would then be about a command nobody
+ * prints.
+ *
+ * @param {{ type: string, dependency: string, version: string, dir?: string }} options
+ * @returns {string}
+ */
+export function pinCommand({ type, dependency, version, dir }) {
+  const at = pnpmAt(dir);
+  return `pnpm ${at}pkg set '${type}["${dependency}"]=${version}' && pnpm ${at}install`;
+}
+
+/**
+ * The remediation of a floating range (S4, field round 4).
+ *
  * With no recorded version the tool invents nothing (RFC 4.9): the remediation is the resolve step
  * plus the scan, which then prints the exact pin for that repository. That step writes the lockfile
- * rather than a manifest, so it stays workspace-wide.
+ * rather than a manifest, so it stays workspace-wide — and it is `LOCKFILE_ONLY_STEP`, imported, so the
+ * probe that follows it measures the command this finding prints.
  *
  * @param {{ type: string, dependency: string, version: string | null, dir?: string }} options
  * @returns {{ kind: string, command: string }}
@@ -236,14 +254,10 @@ function floatingRemediation({ type, dependency, version, dir }) {
   if (typeof version !== 'string' || version === '') {
     return {
       kind: 'manual',
-      command: 'pnpm install --lockfile-only && funky-secure scan --only exact-versions',
+      command: `${LOCKFILE_ONLY_STEP} && funky-secure scan --only exact-versions`,
     };
   }
-  const at = pnpmAt(dir);
-  return {
-    kind: 'manual',
-    command: `pnpm ${at}pkg set '${type}["${dependency}"]=${version}' && pnpm ${at}install`,
-  };
+  return { kind: 'manual', command: pinCommand({ type, dependency, version, dir }) };
 }
 
 /**
@@ -458,7 +472,9 @@ export default {
               ? `${entry.dependency}@${shown} is not recorded in pnpm-lock.yaml`
               : `${entry.dependency} is ${shown} in package.json but ${shownResolved} in pnpm-lock.yaml`,
           evidence: { specifier: shown, resolved: shownResolved },
-          remediation: { kind: 'manual', command: 'pnpm install --lockfile-only' },
+          // Imported, never spelled here: the probe of the remediation's effect runs the same string
+          // this finding prints (S7), and two copies would drift.
+          remediation: { kind: 'manual', command: LOCKFILE_ONLY_STEP },
         });
       }
     }

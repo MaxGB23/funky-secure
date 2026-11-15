@@ -60,3 +60,9 @@ repository's own CI instead of a static reading. Issue #267.
   `.tmp/plans/runtime-claims-plan-v2.md`, `sha256 7a9052b1…`.
 - **L4** Issue #267 opened with `type:feature` and `status:approved` on the owner's in-session authorization
   of the plan.
+- **L5** Plan adjustment at T2, for two reasons the plan named but did not weigh. The commit slice rule
+  (about 400 authored lines) fires at T2's 385, so the three probes cannot share one pull request with
+  healthy review size. And S9 forbids a row claiming "measured" before the job ran green on a pull request,
+  which means the rows cannot be moved by the same pull request that first introduces the job. The feature
+  ships as two: pull request A carries T2–T4, the evidence, and pull request B carries T5, the three rows
+  moved, once the job is green on `main`.
