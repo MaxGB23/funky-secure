@@ -265,8 +265,10 @@ the pin alone is the declaration, and nothing about it is skipped.
   indented map), **a sequence written at its key's own indentation** (the *indentless* form: `steps:`
   followed by `- uses:` at the same column, which is valid YAML and the shape GitHub's own templates
   write — 0024, S1.1), flow-style maps (`- { name: …, uses: … }`), quoted `uses:` values, trailing
-  `# vX.Y.Z` comments (preserved as evidence, never trusted), `with:` maps, block scalars (`run: |`,
-  `run: >-`) whose bodies are not steps, `docker://image:tag` versus `docker://image@sha256:...`, and
+  `# vX.Y.Z` comments (preserved as evidence, never trusted), `with:` maps, block scalars whose bodies
+  are not steps (`run: |`, `run: >-`, and either of them with an explicit indentation indicator —
+  `run: |2`, `run: >2-` — where the indicator decides the body's indent whenever one is written),
+  `docker://image:tag` versus `docker://image@sha256:...`, and
   local `./path` actions. Accept `owner/repo@<40 hex>`. Flag `@v1`/`@main`/`@<7 hex>`. Treat
   `docker://image:tag` as a finding and `docker://image@sha256:...` as a pass. A file the reader cannot
   parse yields `skip: unparseable-workflow` for that file.
