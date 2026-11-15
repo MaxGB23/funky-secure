@@ -1,9 +1,11 @@
 # Concept
 
-`funky-secure` is a supply-chain auditor and initializer for pnpm repositories. It answers one
+`funky-secure` is a supply-chain auditor and initializer for Node repositories. It answers one
 question: *is this repository, and the machine that builds it, configured the way we decided — and if
-not, what exactly do I run next?* It reports evidence, offers the writes that fix what is fixable as
-a plan you read first, and never pretends a policy it cannot verify.
+not, what exactly do I run next?* We decided pnpm: a pinned manager, a committed lockfile, a
+quarantine on the age of a release. From npm the scan names the gap and `migrate` prints the five
+steps out. It reports evidence, offers the writes that fix what is fixable as a plan you read first,
+and never pretends a policy it cannot verify.
 
 ## The three routes in
 
