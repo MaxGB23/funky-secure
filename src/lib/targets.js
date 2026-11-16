@@ -125,8 +125,9 @@ async function readTextFile(collector, path) {
 }
 
 /**
- * Single-level expansion of a `packages:` entry (RFC 7.1). A nested glob is reported, never silently
- * ignored, and an entry that leaves the repository root is refused before anything is read.
+ * Single-level expansion of a `packages:` entry (RFC 7.1). A `!` negation is classified first and
+ * reported as not applied; a nested glob is neither expanded nor reported; and an entry that leaves
+ * the repository root is refused before anything is read.
  *
  * The containment question is the one `paths.js` already answers for a write target, reused here
  * instead of a second check that could disagree with it: a `packages:` entry of `..` was expanded as a
@@ -136,6 +137,22 @@ async function readTextFile(collector, path) {
  */
 async function expandEntry(root, entry) {
   const cleaned = entry.replace(/\/+$/, '');
+  // A negation is the one entry a reader writes to keep something out, and this expander reads
+  // positive entries only. It is classified before any glob reasoning so every negation is reported
+  // the same way whatever follows the bang (0036): the shape test used to decide its fate, and two of
+  // the three shapes were dropped without a record.
+  if (cleaned.startsWith('!')) {
+    return {
+      dirs: [],
+      skipped: [
+        {
+          entry,
+          code: 'workspace-entry-not-applied',
+          reason: 'a negation is not applied, so its directories are still read',
+        },
+      ],
+    };
+  }
   // `unresolvable` is not a refusal: it means the parent directory does not exist, which is the
   // ordinary empty case below. `not-relative` and `outside-root` are the two answers that say this
   // entry would be read outside the repository, and both are refused under the name a reader sees.
