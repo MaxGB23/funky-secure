@@ -64,6 +64,27 @@ test('orders findings by scope, then target, then rule, then path, then line', (
   );
 });
 
+test('one fail and one skip in the same block leave a single blank line', () => {
+  // `renderBlock` separates groups, and `renderSkipped` opens a single skip with a blank line of its
+  // own, so the two stacked into two consecutive blank lines. One separator is the contract.
+  const report = buildReport({
+    scope: 'repo',
+    policy,
+    catalog,
+    tool,
+    targets: [],
+    findings: [
+      finding({ rule: 'alpha', status: 'fail', severity: 'error' }),
+      finding({ rule: 'alpha', status: 'skip' }),
+    ],
+  });
+  const text = renderHuman(report);
+
+  assert.match(text, /✖/, 'the block carries its failing finding');
+  assert.match(text, /–/, 'the block carries its skipped finding');
+  assert.equal(/\n\n\n/.test(text), false, 'the two groups are separated once, not twice');
+});
+
 test('counts every rule verdict exactly once and never counts a pass under its severity', () => {
   const report = buildReport({
     scope: 'repo',
