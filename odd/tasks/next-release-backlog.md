@@ -324,3 +324,32 @@ the fourth produced one owner decision and no code.
   by an audit nobody had asked for. Two escape hatches were also confirmed by measurement: the `not run`
   line prints the count that **ran** first, and a chained delivery command makes the RDD preflight refuse
   the whole chain rather than the command inside it.
+
+## Tasks opened after the release
+
+- **T17** A **testing policy**: which behaviour requires a test, which does not, and what makes a test
+  admissible. The owner asked on 2026-11-17 whether `AGENTS.md` already carried such a rule and whether the
+  suite's **765 `test(` declarations in 48 files** (the run reports 768) are all worth keeping. Today the
+  rules are scattered — `CONTRIBUTING.md:87-107` asks for a green suite with its counts, test-first for a
+  behaviour change, the drift and docs-contract gates, goldens, and determinism — and **no page states when
+  a test is required or when one is inadmissible**. Proposed, not yet judged: one `docs/testing.md` of
+  process (not spec: no behaviour moves) with five admission tests — the test pins an observable contract
+  (exit code, exact stdout/stderr, a report field, a tree state, a golden); it can fail for the right
+  reason, so deleting the line it pins turns it red; one rule carries all its observable effects, including
+  that a rejected input leaves data and counters untouched; it is deterministic, with no clock, network or
+  machine state; and it is named for the contract, never the implementation. Plus the two absences nobody
+  wrote: **what does not need a test**, and the test that duplicates another's contract. Two mechanical
+  debts ride with it — a list of tests that cannot fail, found by mutation and forbidden to grow, and the
+  `docs/field-loop.md` link that neither `AGENTS.md`'s Paths table nor `CONTRIBUTING.md`'s checklist
+  carries. Adopted from `M:/funky-ai/.agents/skills/vitest/SKILL.md:76`: behaviour-named tests, one unit
+  under test per file, shared helpers in one place, an empty debt map. Rejected, with the reason: the
+  blanket "never hardcode copy" (here the stdout **is** the product and `docs/spec/commands.md` fixes it
+  line by line, so the adapted rule is "assert the bytes the spec fixes, and none it does not"), the
+  500/800-line caps, and a meta-test policing names. Spec: the page itself. Judge: plan, STANDARD, before
+  any edit. Commit: —
+- **L17** The field loop was already the rule the owner remembered, and the gap is a **link, not a
+  document**: `docs/field-loop.md` says the suite custodies what we know while the loop discovers what
+  nobody imagined, and its step 3 (*"Pine it — or pay for it twice"*) already requires a field finding to
+  land as a case, taken from the agent's own files and named after the promise it broke. What no page does
+  is state the admission rule, and neither `AGENTS.md` nor `CONTRIBUTING.md` points at the loop at all. So
+  T17 adds one page and two cross-references; it reopens no measurement and claims none.
