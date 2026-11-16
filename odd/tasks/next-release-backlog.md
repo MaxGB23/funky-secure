@@ -166,27 +166,20 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   five statuses (`src/lib/report.js:115-126`), so the first clause was false and `3 skipped` read as
   coverage. Owner decision (L15): the spec tells the truth and `PASS` is not touched. Spec: 10.2 and the
   `cli.md` capture that shows it. Commit: —
-- **T15b** #134, the invisible pass — the passing rule whose finding carries no path
-  (`exact-versions`, `targets: ['importer']`, dropped when a block filters by path). The spec already
-  says passing rules are counted and never printed one line each (10.3), so this needs the decision row
-  0008 does not write. Spec: the report page plus its decision row. Judge: plan, STANDARD. Commit: —
-- **T9** The unmodelled `packages:` negation is reported instead of dropped — S20. Spec: with it.
-  Judge: claims after CI. Commit: —
-- **T10** A conflict-only `init --apply` exits `3`, with the record that says so — S21. First read: which of
-  `tests/init.test.js:441,468,539,593` is the zero-write case. Spec: the record first, because it closes a
-  contract the spec already states. Judge: plan, STANDARD (exit codes are consumed by scripts). Commit: —
-- **T11** Debt (b) — the five one-sided rules are measured or declared — S15. Spec: the page itself.
-  Judge: plan, before the sweep. Commit: —
-- **T12** Debt (a) — the count either leaves the row or is derived by a test — S14. Spec: the page itself.
-  Judge: claims after CI. Commit: —
+- **T15b** #134, the invisible pass — **landed**: spec `8df1a96` (#317), code `2ed897d` (merge `1d6c9a7`, #318), decision row I-81. A pathless passing finding is counted in a block of its target, headed by the kind alone; blocks sum to `summary.pass`. The failing half is measured, not deferred: `exact-versions` is the only `targets: ['importer']` rule and both its fail sites carry a path.
+- **T9** The unmodelled `packages:` negation is reported instead of dropped — **landed**: RFC 0036 (`74f92a8`), code `8064ca5` (#300), and the follow-up `#301`→`72a8a96` (#302) that replaced "its directories are still read" with "it excludes nothing", true outside the root too.
+- **T10** A conflict-only `init --apply` exits `3`, with the record that says so — **landed**: RFC 0037 (`70586a2`), code `3791a2f` (#305), and `#306`→`d40e5b5` (#308) where the refusal now ends with the `funky-secure:`/`reason:` lines every refusal uses. Exit codes are consumed by scripts, so the record came first.
+- **T11** Debt (b) — the five one-sided rules are measured or declared — S15. **Still open.** Spec: the page itself. Judge: plan, before the sweep. Commit: —
+- **T12** Debt (a) — the count either leaves the row or is derived by a test — **landed**: `21d76ce` (#316), 737 → 765 measured against the finished suite, which is why it was the campaign's last task.
 - **T13** The `--apply` refusal tells the reader to run `pnpm install`, while step 3 of the same plan exists
-  because `install` discards the foreign pins (0021): the defect's second instance, in the message the
-  reader meets when the refusal fires. Spec: its own pull request. Judge: claims after CI. Commit: —
-- **T14** Step 14 hands the lockfile the add writes to the closing commit (row 15), whose printed-when covers
-  an install or an existing `lockfile-committed` finding; on the branch where step 13 prints there is no
-  lockfile yet, so no step stages the one the add creates. Row 10 says an absent lockfile "is left to row
-  14, which is where it is first recorded", and row 14 stages the manifest only. Found by the second judged
-  round on T4; pre-existing and untouched by it. Spec: its own pull request. Judge: plan, LIGHT. Commit: —
+  because `install` discards the foreign pins (0021) — **landed** as `#309`→`b80f02c` (#311). The first
+  fix named `install --lockfile-only`, and the audit showed the safe step for that state is `pnpm import`:
+  it reads the foreign file. `IMPORT_STEP` now lives beside `LOCKFILE_ONLY_STEP`, shared with the plan.
+- **T14** Step 14 hands the lockfile the add writes to the closing commit (row 15) — **closed as invalid
+  (2026-11-16).** A claim audit of #312 refuted the premise: `src/commands/start.js:230` prints the closing
+  commit when the lockfile is missing, and `tests/start.test.js:405-414` already pinned it. Issue #310
+  closed, PR #312 closed unmerged. What survived is the wording that made it plausible — row 15 said "for
+  one that is present" while the code answers `status !== 'pass'` — fixed in #313 (`c0da664`).
 
 **Why this order.** T1 first because it is one message, one golden and one page line, and it takes the whole
 path from issue to merged pull request on the cheapest candidate. T2 follows: it is the only task that ships a
@@ -323,3 +316,11 @@ the fourth produced one owner decision and no code.
   repository with two bad files. RFC 0008 says a verdict **names** the rules it did not verify, and I-53
   says "a count is not a name"; the fix is a distinct-rule count or the names alone. Spec: 10.3 and the
   0008 errata it needs. Judge: plan, STANDARD. Commit: —
+- **L16** The campaign closed with three artifacts it should not have opened. A judge's finding is a claim,
+  not evidence: T14's premise was refuted by a test the repository already had
+  (`tests/start.test.js:405-414`), and issue #310, PR #312 and a spec sentence were built on it before an
+  audit read the condition. Hard rule 9 of `funky-judge-protocol` now says so. The verdict's counter carried
+  the same shape of error in production: `plural(summary.skip)` labelled findings as rules until T16, found
+  by an audit nobody had asked for. Two escape hatches were also confirmed by measurement: the `not run`
+  line prints the count that **ran** first, and a chained delivery command makes the RDD preflight refuse
+  the whole chain rather than the command inside it.
