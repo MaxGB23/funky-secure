@@ -180,13 +180,15 @@ Plan steps, printed in order:
    deliberately.
 3. **Human step, never executed by the tool (4.9):** the step that writes `pnpm-lock.yaml`.
    - A foreign lockfile exists: `pnpm import` reads `yarn.lock` or `package-lock.json` and records the
-     versions they pinned, which `pnpm install` discards by resolving from the manifest (0021). Re-running
-     it is not a no-op: it rewrites `pnpm-lock.yaml` from those pins, so a version the manifest resolved
-     since the last import is replaced by the one the foreign lockfile records. If
+     versions they pinned, which `pnpm install` discards by resolving from the manifest (0021). The path
+     prints the same command, so a reader who has followed it has already run this step; the tool cannot
+     tell from the file whether they did, and this line does not claim the step is still owed. If
      `pnpm-lock.yaml` is already present, one line follows the command: it names that fact, names the
      criterion this command does not evaluate — whether the lockfile was imported from the foreign one
      or resolved from the manifest — and claims no status, because only an import carries those pins and
-     this plan does not compare the two files.
+     this plan does not compare the two files. Re-running it is not a no-op: it rewrites `pnpm-lock.yaml`
+     from those pins, so a version the manifest resolved since the last import is replaced by the one
+     the foreign lockfile records (measured; `docs/validation.md`).
    - No foreign lockfile exists: `pnpm install` resolves and writes it.
 4. **Removal:** the foreign lockfile(s), only after `pnpm-lock.yaml` exists.
 5. **CI follow-up:** the workflow and composite-action lines that need rewriting, quoted by
