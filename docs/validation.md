@@ -78,6 +78,7 @@ condition for saying what has not been measured.
 | Claim | How |
 |---|---|
 `pnpm import` reads a foreign `package-lock` v3 offline, in 39 ms, keeping the recorded version | measured in a scratch directory |
+`pnpm import` over an existing `pnpm-lock.yaml` replaces what it records with the foreign pins | scratch directory, offline: a lockfile recording `lodash@4.17.21` beside a `package-lock.json` pinning `4.17.20` ends at `4.17.20`, exit 0. It neither refuses the existing lockfile nor merges the two. The first import was measured long before this one; the second is what makes a printed step safe to follow twice |
 `minimumReleaseAge` defaults to 0 on pnpm 10.16 and to 1440 from pnpm 11 | measured against both |
 `minimumReleaseAgeStrict` defaults to true only when an age is explicit | pnpm issue #14409, and measured |
 `pnpm --version` rewrites a lockfile when the repository declares `packageManager` | isolated four ways before the probe was moved out of the repository |

@@ -526,7 +526,11 @@ Prints the five steps of RFC 11.3 in order:
 1. **evidence** — foreign lockfiles, `package.json` `packageManager`, `.npmrc` manager lines;
 2. **report-only** — `.npmrc` keys pnpm no longer reads, each with where the setting does work;
 3. **human step** — `pnpm import`, which reads the foreign lockfile and keeps its versions (never
-   executed); under a `packageManager` naming another manager it is `pnpm import --pm-on-fail=ignore`,
+   executed); `start` prints the same command, so a reader who followed the path has already run it and
+   the line does not claim the step is still owed; re-running it rewrites `pnpm-lock.yaml` from those
+   pins, so a version resolved from the manifest since the last import is replaced by the one the foreign
+   lockfile records; under a
+   `packageManager` naming another manager it is `pnpm import --pm-on-fail=ignore`,
    and a line below it names the declaration, because the tool does not rewrite one a human made;
 4. **removal** — the foreign lockfile(s), only after `pnpm-lock.yaml` exists;
 5. **CI follow-up** — workflow lines that mention npm or yarn, quoted as `file:line` suggestions.
