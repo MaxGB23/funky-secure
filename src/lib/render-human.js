@@ -239,10 +239,12 @@ function renderBlock(block, options) {
   const skipped = renderSkipped(block.skipped, options);
   if (skipped.length > 0) groups.push(skipped);
 
-  // One blank line between findings: a paragraph that runs straight into the next one is the
-  // problem this output was rewritten to fix.
+  // One blank line between findings: a paragraph that runs straight into the next one is the problem
+  // this output was rewritten to fix. A group that already opens with its own blank line — a single
+  // skip, which reads better as its own paragraph — supplies the separator, so pushing one here too
+  // produced two consecutive blank lines.
   groups.forEach((group, index) => {
-    if (index > 0) lines.push('');
+    if (index > 0 && group[0] !== '') lines.push('');
     lines.push(...group);
   });
   return lines;
