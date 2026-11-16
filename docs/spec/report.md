@@ -177,7 +177,10 @@ source and no second list of names exists to drift.
 A target with nothing to report is two lines: the heading, and the count under it at the same five
 columns a finding hangs from — `CI` then `     all 6 rules pass` — so a clean block reads like every
 other block instead of like a sentence with a colon. Passing rules are counted in `summary` and never
-printed one line each (10.1); `--verbose` restores their ids in a single `passing` line.
+printed one line each (10.1); `--verbose` restores their ids in a single `passing` line. A passing finding
+whose `path` is absent is counted in the block of its target rather than dropped: when that target's
+blocks are keyed by path, it gets one block of its own headed by the target kind alone, so the count a
+block prints and the count `summary` prints name the same set from two directions (#134, T15b).
 
 Skips collapse by target. Two or more skipped rules in one target print one `–` line naming the
 labels that were not verified and the command that expands them, `funky-secure scan --verbose`,
