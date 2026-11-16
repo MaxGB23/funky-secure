@@ -82,8 +82,11 @@ repository — and `machine` is `included` or `excluded`. It is a function of th
 does not break determinism and changes no count. The human rendering of the same object is the
 `provenance` line of 10.3.
 
-`summary` counts every rule verdict exactly once: `error`, `warn` and `info` count the failing
-findings by their effective severity; `pass` and `skip` count those statuses. A passing finding is
+`summary` counts findings, once each: `error`, `warn` and `info` count the failing findings by
+their effective severity, and `pass` and `skip` count the findings at those statuses, so a rule that
+skips twelve files contributes twelve. The counters are not a measure of coverage: a rule at `off`
+contributes nothing at all (9.2), so no counter moves, and what a run covered is stated by the
+`not run` line and by the verdict's unverified count (10.3, 0008), never here. A passing finding is
 never counted under its rule's severity, and `info` is a severity, never a rendering of a pass
 (Appendix D.1 and D.2 follow this rule). `summary.verdict` is `fail` when at least one finding sits
 at or above `policy.failOn`, and `pass` otherwise; with `--fail-on none` the verdict is always `pass`

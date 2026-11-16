@@ -303,6 +303,11 @@ CI
 next     nothing to do: everything at or above the policy passes
 ```
 
+- **The `summary` counters count findings, and they are not coverage.** `4 passing · 6 skipped`
+  says four passing findings and six that answered `skip`; a rule at `off` moves none of them, and a
+  rule that skips twelve files moves `skipped` twelve times. What the run covered is the `not run`
+  line and the verdict's unverified count, which is why a clean `starter` scan can read `PASS` beside
+  `3 skipped` and `6 of 13 rules` and be telling the truth three times.
 - **Skips collapse by target.** Two or more skipped rules print one `–` line naming the labels that
   were not verified and the command that expands them; the JSON is untouched. Exactly one skipped
   rule keeps its own block — symbol `–`, the reason, and the command that verifies it — because a
