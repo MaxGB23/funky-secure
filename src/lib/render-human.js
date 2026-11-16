@@ -392,9 +392,12 @@ function verdictLine(summary, failOn, color, unverifiedIds = []) {
   const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
   const { head: label, indent } = gutter('verdict');
   const head = `${label}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${failOn}`;
-  if (summary.skip === 0) return `${head})`;
+  if (unverifiedIds.length === 0) return `${head})`;
 
-  const count = `${plural(summary.skip, 'rule', 'rules')} not verified`;
+  // The verdict names rules, so it counts rules: `summary.skip` counts skip findings, and one rule that
+  // emits a skip per unreadable file made this line say "16 rules not verified" over 10 names (0008,
+  // I-53). The names were already deduplicated by the caller; the count follows them.
+  const count = `${plural(unverifiedIds.length, 'rule', 'rules')} not verified`;
   const named = unverifiedIds.length > 0 ? `: ${unverifiedIds.join(', ')}` : '';
   const oneLine = `${head} · ${count}${named})`;
   if (oneLine.length <= WIDTH) return oneLine;
