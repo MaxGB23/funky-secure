@@ -366,8 +366,11 @@ export async function run({
   lines.push(
     '',
     '3. human step (this tool never runs it)',
+    // Re-running the import is not a no-op: it rewrites `pnpm-lock.yaml` from the foreign pins, so a
+    // version the manifest resolved since the last import is replaced by the one the foreign lockfile
+    // records (measured; docs/validation.md). The line carries that cost and the file it reads.
     foreign.length > 0
-      ? `   ${IMPORT_STEP}${flag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
+      ? `   ${IMPORT_STEP}${flag}   # reads ${foreign[0]}; its pins replace what pnpm-lock.yaml records`
       : `   pnpm install${flag}   # resolves and downloads; writes pnpm-lock.yaml`,
   );
   // A lockfile that is already there is not evidence the step was performed: `pnpm install` writes one

@@ -457,6 +457,29 @@ test('step 3 reports the lockfile it found instead of claiming the step is done'
   );
 });
 
+test('step 3 names the foreign lockfile it reads and that its pins replace what the lockfile records', async (t) => {
+  // Re-running the import is not a no-op: it rewrites `pnpm-lock.yaml` from the foreign pins, so a
+  // version the manifest resolved since the last import is replaced by the one the foreign lockfile
+  // records (measured; docs/validation.md). The step line carries that cost, or a `#` comment that
+  // hides it is deleted in silence.
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'package-lock.json': '{"lockfileVersion": 3}',
+  });
+
+  const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(result.code, 0);
+  const line = result.stdout.split('\n').find((entry) => entry.includes('pnpm import'));
+  assert.ok(line, 'step 3 prints the import command');
+  assert.match(line, /package-lock\.json/, 'the step still names the foreign lockfile it reads');
+  assert.match(
+    line,
+    /replace[^;]*pnpm-lock\.yaml/,
+    'the step says its pins replace what pnpm-lock.yaml records',
+  );
+});
+
 test('step 3 says nothing extra while the lockfile is still owed', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
