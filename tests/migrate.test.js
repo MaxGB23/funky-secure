@@ -150,7 +150,7 @@ test('apply refuses without pnpm-lock.yaml and keeps the only lockfile', async (
 
   assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
-  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --pm-on-fail=ignore), then re-run migrate --apply');
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --lockfile-only --pm-on-fail=ignore), then re-run migrate --apply');
   assert.equal(reason, 'refusing to remove package-lock.json: pnpm-lock.yaml is absent (never delete the only lockfile)');
   assert.deepEqual(readdirSync(dir).sort(), ['package-lock.json', 'package.json']);
 });
@@ -170,7 +170,7 @@ test('the refusal under a foreign pin names a pnpm command that runs', async (t)
   const { action, reason } = refusal(result.stderr);
   assert.equal(
     action,
-    'create pnpm-lock.yaml first (run pnpm install --pm-on-fail=ignore), then re-run migrate --apply',
+    'create pnpm-lock.yaml first (run pnpm install --lockfile-only --pm-on-fail=ignore), then re-run migrate --apply',
   );
   assert.equal(
     reason,
@@ -196,7 +196,7 @@ test('a pnpm pin keeps the unflagged refusal', async (t) => {
 
   assert.equal(result.code, 3);
   const { action } = refusal(result.stderr);
-  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install), then re-run migrate --apply');
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --lockfile-only), then re-run migrate --apply');
   assert.equal(result.stdout.includes('--pm-on-fail=ignore'), false);
 });
 
@@ -479,7 +479,7 @@ test('a bun-only repository is refused for the missing pnpm lockfile, not remove
 
   assert.equal(result.code, 3);
   const { action, reason } = refusal(result.stderr);
-  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --pm-on-fail=ignore), then re-run migrate --apply');
+  assert.equal(action, 'create pnpm-lock.yaml first (run pnpm install --lockfile-only --pm-on-fail=ignore), then re-run migrate --apply');
   assert.equal(reason, 'refusing to remove bun.lock: pnpm-lock.yaml is absent (never delete the only lockfile)');
   assert.deepEqual(readdirSync(dir).sort(), ['bun.lock', 'package.json']);
 });

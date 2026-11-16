@@ -15,6 +15,7 @@ import {
   declaredForeignManager,
   declaredPackageManager,
   pnpmFlag,
+  LOCKFILE_ONLY_STEP,
 } from '../lib/foreign-pin.js';
 import { defaultBranch, statusPorcelain } from '../lib/git.js';
 import { validateWriteTarget } from '../lib/paths.js';
@@ -174,7 +175,7 @@ async function applyRemoval({
 
   if (!hasPnpmLock) {
     throw refusal(
-      `create pnpm-lock.yaml first (run pnpm install${pnpmFlag}), then re-run migrate --apply`,
+      `create pnpm-lock.yaml first (run ${LOCKFILE_ONLY_STEP}${pnpmFlag}), then re-run migrate --apply`,
       `refusing to remove ${names}: pnpm-lock.yaml is absent (never delete the only lockfile)`,
     );
   }
