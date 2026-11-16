@@ -15,6 +15,7 @@ import {
   declaredForeignManager,
   declaredPackageManager,
   pnpmFlag,
+  IMPORT_STEP,
 } from '../lib/foreign-pin.js';
 import { defaultBranch, statusPorcelain } from '../lib/git.js';
 import { validateWriteTarget } from '../lib/paths.js';
@@ -174,7 +175,7 @@ async function applyRemoval({
 
   if (!hasPnpmLock) {
     throw refusal(
-      `create pnpm-lock.yaml first (run pnpm install${pnpmFlag}), then re-run migrate --apply`,
+      `create pnpm-lock.yaml first (run ${IMPORT_STEP}${pnpmFlag}), then re-run migrate --apply`,
       `refusing to remove ${names}: pnpm-lock.yaml is absent (never delete the only lockfile)`,
     );
   }
@@ -366,7 +367,7 @@ export async function run({
     '',
     '3. human step (this tool never runs it)',
     foreign.length > 0
-      ? `   pnpm import${flag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
+      ? `   ${IMPORT_STEP}${flag}   # reads ${foreign[0]} and writes pnpm-lock.yaml`
       : `   pnpm install${flag}   # resolves and downloads; writes pnpm-lock.yaml`,
   );
   // A lockfile that is already there is not evidence the step was performed: `pnpm install` writes one
