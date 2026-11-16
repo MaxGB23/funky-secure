@@ -10,7 +10,7 @@ number becomes wrong at the next release, and the suite itself is the authority 
 
 | Claim | How | Where |
 |---|---|---|
-765 tests, 764 pass, 0 fail, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
+The suite passes, exit 0 | `node --test` | the whole tree |
 The repository passes its own audit | `node bin/funky-secure.js scan --scope repo --fail-on warn`, exit 0 | CI |
 Every documented flag is accepted by the command the document names | `tests/docs-contract.test.js` | documentation contract |
 The spec stays a true slice of the record, and every amendment names a shipped record | `tests/drift.test.js` | the drift gate |
@@ -54,6 +54,24 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `pull-request-target` | Detects a genuine pwn request in `cloud-bulldozer/benchmark-operator` `.github/workflows/e2e.yml:33` — the step checks out `github.event.pull_request.head.sha` and later steps consume real secrets (`pull-request-target-checkout`); passes on `t3` and `shadcn-ui/ui`, where the two `pull_request_target` workflows never check out the head |
 `workflow-permissions` | 32 findings in `berry` — the rule that produced no signal at all before the indentless-sequence fix — and 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
 | `workflow-run-artifact` | Four repositories fetched whole and every workflow read: `pnpm/pnpm` (34 files), `nodejs/node` (45), `vercel/next.js` (29) and `vitejs/vite` (13), 121 workflow files. Three workflows answered `fail`, one in each of three repositories: two under the rule's first threshold, and the third the case where the same measurement found the rule answering `pass` with a message false of the file - a consumer whose only write scope is `id-token: write` - after which the threshold is any write scope. No workflow in the four answered `fail` without fork-derived bytes reaching a write scope (the bytes are written by the trusted workflow, from the fork's tree), which is the rule's question; when the two mechanisms were read closely, each carried a mitigation in the part that could be seen - documented upstream for `pnpm/pnpm`, our reading of the files for `nodejs/node` - which is why this row names the repositories and the counts and not the files, and why exploitability stays their maintainers' to say. `vitejs/vite` declares no `workflow_run` at all (`pass / no-workflow-run`); `nodejs/node`'s `contributor-guidance.yml` is refused by the reader (`WELCOME_MESSAGE: >2-`, a valid indentation indicator) and is `skip / unparseable-workflow`, a parser limit this measurement reported and did not fix (#266). Issue #153's own two files remain the fixture the rule's tests start from |
+
+## The side each rule was measured from
+
+Five rows were exercised on one side only. The campaign that found this allowed either a clone sweep that
+locates the other side or a declaration that says so; this is the declaration. It states what this page
+measured and it claims nothing about repositories no sweep read.
+
+| Rule | The side this row reports | The side it does not |
+|---|---|---|
+| `foreign-lockfile` | the warning, on `primevue` and `berry` | a repository with no foreign lockfile beside `pnpm-lock.yaml` |
+| `quarantine` | the declaration that passes, and the block `init --apply` writes | a repository whose declaration fails the rule |
+| `exact-versions` | the findings, and how accurately the comparator located the ranges — `0 mismatches` and `0 desyncs` measure the locating, not the rule's pass, which is "no floating specifier and no desync" (`rules/exact-versions.md`) | a repository whose specifiers are all exact |
+| `actions-pinned-sha` | the unpinned actions, in three repositories | a repository whose every action is pinned to a SHA |
+| `workflow-permissions` | the findings, in `berry` and `shadcn-ui/ui` | a repository whose workflows all declare permissions |
+
+The rule table says what a rule does; this paragraph is where a reader looks for what was actually read. A
+row that later gains the other side moves out of this table. The sweep is open work, and it is not a
+condition for saying what has not been measured.
 
 ## Behaviour that was measured rather than assumed
 
