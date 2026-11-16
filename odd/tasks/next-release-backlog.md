@@ -307,17 +307,19 @@ the fourth produced one owner decision and no code.
 - **L15** The owner answered #134's counter question with **A**: the spec tells the truth and `PASS` is not
   touched. The measurement that framed it, on a clean fixture with `--preset starter`: `summary 0 errors ·
   0 warnings · 0 info · 3 passing · 3 skipped`, `verdict PASS (threshold: error · 3 rules not verified: …)`,
-  `not run 6 of 13 rules; off by policy: …`, and `next nothing to do among the rules that ran` — nine of
+  `not run 6 of 13 rules; off by policy: …`, and `next nothing to do among the rules that ran` — ten of
   thirteen rules measured nothing, and every line was true. §10.2 now says the counters count findings and
   are not coverage; T15 splits into T15a (this spec) and T15b (the invisible passing rule).
 
 ## Tasks opened by a claim audit
 
 - **T16** the verdict counts findings and calls them rules — found while auditing #296's claims, not
-  reported anywhere. `src/lib/render-human.js:394` prints `plural(summary.skip, 'rule', 'rules') not
+  reported anywhere. `src/lib/render-human.js:397` prints `plural(summary.skip, 'rule', 'rules') not
   verified`, and `summary.skip` counts skip **findings** (10.2, `src/lib/report.js:121-123`). A rule that
-  emits a skip per unreadable file — `actions-pinned-sha.js:247-266`,
-  `workflow-run-artifact.js:217-228`, `exact-versions.js:364` — makes the verdict say "2 rules not
-  verified" about one rule. RFC 0008 says a verdict **names** the rules it did not verify, and I-53 says
-  "a count is not a name"; the fix is a distinct-rule count or the names alone. Spec: 10.3 and the 0008
-  errata it needs. Judge: plan, STANDARD. Commit: —
+  emits a skip per unreadable file — `actions-pinned-sha.js:257-263`,
+  `workflow-run-artifact.js:221-227`, `exact-versions.js:383-389` — makes the verdict overstate its own
+  labels. Measured on two crafted unparseable workflows with `--preset baseline`: `verdict PASS
+  (threshold: error · 16 rules not verified:` over **10** names, so the sentence is wrong by six in a
+  repository with two bad files. RFC 0008 says a verdict **names** the rules it did not verify, and I-53
+  says "a count is not a name"; the fix is a distinct-rule count or the names alone. Spec: 10.3 and the
+  0008 errata it needs. Judge: plan, STANDARD. Commit: —
