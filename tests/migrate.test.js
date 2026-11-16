@@ -457,11 +457,12 @@ test('step 3 reports the lockfile it found instead of claiming the step is done'
   );
 });
 
-test('step 3 names the foreign lockfile it reads and that its pins replace what the lockfile records', async (t) => {
-  // Re-running the import is not a no-op: it rewrites `pnpm-lock.yaml` from the foreign pins, so a
-  // version the manifest resolved since the last import is replaced by the one the foreign lockfile
-  // records (measured; docs/validation.md). The step line carries that cost, or a `#` comment that
-  // hides it is deleted in silence.
+test('step 3 names the foreign lockfile it reads, the lockfile it writes, and what a re-run replaces', async (t) => {
+  // Two readers reach this line. One is migrating for the first time and needs to know the command
+  // writes `pnpm-lock.yaml`; the other already has one, and re-running is not a no-op — it rewrites the
+  // file from the foreign pins, so a version the manifest resolved since the last import is replaced by
+  // the one the foreign lockfile records (measured; docs/validation.md). The line is identical in both
+  // states, so it carries both facts, or a `#` comment that hides one is deleted in silence.
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
     'package-lock.json': '{"lockfileVersion": 3}',
@@ -473,10 +474,11 @@ test('step 3 names the foreign lockfile it reads and that its pins replace what 
   const line = result.stdout.split('\n').find((entry) => entry.includes('pnpm import'));
   assert.ok(line, 'step 3 prints the import command');
   assert.match(line, /package-lock\.json/, 'the step still names the foreign lockfile it reads');
+  assert.match(line, /writes pnpm-lock\.yaml/, 'the first-run reader learns what the command writes');
   assert.match(
     line,
-    /replace[^;]*pnpm-lock\.yaml/,
-    'the step says its pins replace what pnpm-lock.yaml records',
+    /re-run replaces what it recorded/,
+    'the re-run reader learns that an existing recording changes',
   );
 });
 
