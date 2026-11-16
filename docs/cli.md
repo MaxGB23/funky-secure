@@ -303,6 +303,12 @@ CI
 next     nothing to do: everything at or above the policy passes
 ```
 
+- **The `summary` counters count findings, and they are not coverage.** `4 passing · 6 skipped`
+  says four passing findings and six that answered `skip`; a rule at `off` moves none of them, and so
+  does a rule dropped by `--only` or `--ignore`. What a run covered is the `not run` line and nothing
+  else, and that line speaks for the policy, never for a flag. A clean
+  `scan --scope repo --preset starter` reads `PASS` beside `3 passing · 3 skipped` and `6 of 13 rules`
+  and is telling the truth: six rules ran, seven never ran, and three of the six verified nothing.
 - **Skips collapse by target.** Two or more skipped rules print one `–` line naming the labels that
   were not verified and the command that expands them; the JSON is untouched. Exactly one skipped
   rule keeps its own block — symbol `–`, the reason, and the command that verifies it — because a

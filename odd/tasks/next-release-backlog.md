@@ -161,13 +161,15 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   slice a record: (a) `next` names the set it speaks for when a rule is off; (b) the `summary` counter
   vocabulary and the pathless passing rule. Spec: the page that defines the report. Judge: plan, STANDARD.
   Commit: —
-- **T15** #134, second half — the `0 skipped` counter (the issue's "cheaper part and the clearer defect")
-  and the passing rule whose finding carries no path (`exact-versions`, `targets: ['importer']`, dropped at
-  `src/lib/render-human.js:280`). Both change what a reader sees about coverage, so they need the decision
-  row 0008 does not write; the first round of judges on T8 refused the version that put a second count on
-  the verdict line, because 0008 owns that sentence and prints its count only when it is not zero
-  (`rfcs/0008-refusal-honesty/rfc.md:43-46`). Spec: the report page plus its decision row. Judge: plan,
-  STANDARD. Commit: —
+- **T15a** #134, the counter — `docs/spec/report.md:85` said `summary` "counts every rule verdict
+  exactly once" and the sentence after it counted failing *findings*; the code counts findings for all
+  five statuses (`src/lib/report.js:115-126`), so the first clause was false and `3 skipped` read as
+  coverage. Owner decision (L15): the spec tells the truth and `PASS` is not touched. Spec: 10.2 and the
+  `cli.md` capture that shows it. Commit: —
+- **T15b** #134, the invisible pass — the passing rule whose finding carries no path
+  (`exact-versions`, `targets: ['importer']`, dropped when a block filters by path). The spec already
+  says passing rules are counted and never printed one line each (10.3), so this needs the decision row
+  0008 does not write. Spec: the report page plus its decision row. Judge: plan, STANDARD. Commit: —
 - **T9** The unmodelled `packages:` negation is reported instead of dropped — S20. Spec: with it.
   Judge: claims after CI. Commit: —
 - **T10** A conflict-only `init --apply` exits `3`, with the record that says so — S21. First read: which of
@@ -302,3 +304,22 @@ the fourth produced one owner decision and no code.
   T0 verification and had no issue of its own, and this repository's pull requests need one. The renderer's
   separator and `renderSkipped`'s own leading blank line are both deliberate, so the fix pushes one
   separator per boundary instead of removing either. T8 (#134) is the same file and the harder question.
+- **L15** The owner answered #134's counter question with **A**: the spec tells the truth and `PASS` is not
+  touched. The measurement that framed it, on a clean fixture with `--preset starter`: `summary 0 errors ·
+  0 warnings · 0 info · 3 passing · 3 skipped`, `verdict PASS (threshold: error · 3 rules not verified: …)`,
+  `not run 6 of 13 rules; off by policy: …`, and `next nothing to do among the rules that ran` — ten of
+  thirteen rules measured nothing, and every line was true. §10.2 now says the counters count findings and
+  are not coverage; T15 splits into T15a (this spec) and T15b (the invisible passing rule).
+
+## Tasks opened by a claim audit
+
+- **T16** the verdict counts findings and calls them rules — found while auditing #296's claims, not
+  reported anywhere. `src/lib/render-human.js:397` prints `plural(summary.skip, 'rule', 'rules') not
+  verified`, and `summary.skip` counts skip **findings** (10.2, `src/lib/report.js:121-123`). A rule that
+  emits a skip per unreadable file — `actions-pinned-sha.js:257-263`,
+  `workflow-run-artifact.js:221-227`, `exact-versions.js:383-389` — makes the verdict overstate its own
+  labels. Measured on two crafted unparseable workflows with `--preset baseline`: `verdict PASS
+  (threshold: error · 16 rules not verified:` over **10** names, so the sentence is wrong by six in a
+  repository with two bad files. RFC 0008 says a verdict **names** the rules it did not verify, and I-53
+  says "a count is not a name"; the fix is a distinct-rule count or the names alone. Spec: 10.3 and the
+  0008 errata it needs. Judge: plan, STANDARD. Commit: —
