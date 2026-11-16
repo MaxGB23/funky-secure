@@ -193,8 +193,12 @@ the pin alone is the declaration, and nothing about it is skipped.
   guessed finding. That skip names `pnpm-lock.yaml` and keeps the line it stopped at, a document that
   ends inside a block it opened is one of those refused shapes rather than the part it managed to
   read, and a `packages:` entry in `pnpm-workspace.yaml` that resolves outside the repository root is
-  refuses and reported as `skip: workspace-entry-outside-root` on that file, so an importer never
-  disappears without a word (0027). One fixture per supported `lockfileVersion` (`6.0` and `9.0`)
+  refused and reported as `skip: workspace-entry-outside-root` on that file, so an importer never
+  disappears without a word (0027). An entry that is a negation is not applied — the expansion is
+  single-level and reads no pattern it cannot match — and it is reported as
+  `skip: workspace-entry-not-applied` on that file, one finding per entry, naming the entry and saying
+  its directories are still read, so a reader who wrote an exclusion and got a full scan learns it from
+  the report (0036). One fixture per supported `lockfileVersion` (`6.0` and `9.0`)
   proves the reader, and
   a future major that moves the shape degrades to `skip`.
   Ignored top-level sections — `packages`, `settings`, `snapshots`, `time` — are checked at their
