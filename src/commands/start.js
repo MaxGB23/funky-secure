@@ -120,7 +120,8 @@ const ADD_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
  * dependency is a placeholder, so whether the add rewrote the manifest is the reader's pick, and a
  * commit with nothing staged exits `1`. It names the other way instead of promising a state.
  */
-const ADD_STEP_NOTE = 'if the manifest already declares the package, this commit has nothing to do and exits 1';
+const ADD_STEP_NOTE =
+  'if the manifest already declares the package, this commit has nothing to do and exits 1; if the add wrote pnpm-lock.yaml, add it to this commit';
 
 /** The branch the migration step names. A step that requires a state prints how to reach it (0018). */
 const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';

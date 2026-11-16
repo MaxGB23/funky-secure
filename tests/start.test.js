@@ -391,7 +391,7 @@ test('the add commit says what it does when the add wrote nothing (#139)', async
   assert.ok(at > 0, 'the add commit printed');
   assert.equal(
     lines[at + 1],
-    '     if the manifest already declares the package, this commit has nothing to do and exits 1',
+    '     if the manifest already declares the package, this commit has nothing to do and exits 1; if the add wrote pnpm-lock.yaml, add it to this commit',
     'the consequence follows the step, unnumbered',
   );
 });
