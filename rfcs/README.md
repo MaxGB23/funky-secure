@@ -42,6 +42,7 @@ document that changes without a new record.
 | [0033](0033-start-points-at-pnpm/rfc.md) | The path says where pnpm comes from | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0034](0034-the-resolve-comes-before-the-pin/rfc.md) | The resolve comes before the pin | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0035](0035-the-third-privileged-trigger/rfc.md) | The third privileged trigger | `draft` | — | — | `pending`: becomes [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R13 and §8.4 when the rule merges |
+| [0036](0036-the-negation-is-named/rfc.md) | The negation is named | `draft` | — | — | `pending`: becomes [`docs/spec/rules.md`](../docs/spec/rules.md) §8.1 R1 when the change merges |
 
 ## Layout
 
