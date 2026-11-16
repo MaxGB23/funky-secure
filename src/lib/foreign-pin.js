@@ -19,6 +19,8 @@ export const FOREIGN_PIN_FLAG = '--pm-on-fail=ignore';
 
 /** The resolve that re-syncs the lockfile `pin` desynced on purpose (0011, 11.9). */
 export const LOCKFILE_ONLY_STEP = 'pnpm install --lockfile-only';
+/** The step that reads a foreign lockfile and writes `pnpm-lock.yaml` without resolving over the pins (0021). */
+export const IMPORT_STEP = 'pnpm import';
 
 /**
  * The `packageManager` string the repository's root manifest declares, or `null`.
