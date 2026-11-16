@@ -9,10 +9,18 @@
 
 ## What is true today
 
-`pnpm-workspace.yaml` may carry negations — `!**/test/**` — and funky-secure reads none of them.
-`src/lib/targets.js:157-166` files any entry with more than one `*`, or a `*` followed by `/`, under
-`unsupported-glob`; `!**/test/**` matches both. `src/rules/exact-versions.js:493` is the only consumer,
-and it keeps one code:
+`pnpm-workspace.yaml` may carry negations — `!**/test/**`, `!packages/*`, `!test` — and funky-secure
+reads none of them. Worse, it does not fail to read them in one place. `expandEntry` never inspects
+`!`: it classifies on how many `*` an entry carries and where they sit, so a negation's fate depends
+on the shape of the pattern that follows the bang.
+
+| entry | path through `src/lib/targets.js` | what the report says |
+|---|---|---|
+| `!**/test/**` | more than one `*` → `skipped` with `code: 'unsupported-glob'` (`:156-166`) | nothing: the only consumer keeps one code |
+| `!packages/*` | one `*`, no `/` after it → the expansion branch → `readdir('!packages')` throws → `catch` returns `{ dirs: [], skipped: [] }` (`:169-176`) | nothing, and no skip was even recorded |
+| `!test` | no `*` → returned as `dirs: ['!test']` (`:155`) | nothing: it is read as a literal directory, so the scan invents an importer named `!test` |
+
+`src/rules/exact-versions.js:493` is the only consumer of the skip list, and it keeps one code:
 
 ```js
 if (skipped.code !== 'outside-root') continue;
@@ -22,6 +30,11 @@ The choice is argued in the comment above it, and the argument is sound as far a
 directories *are* read, so a message saying they were not would be false. `docs/rules/exact-versions.md`
 records the same thing twice, at `:122-123` and `:209`: "a nested glob or a `!` negation is neither
 expanded nor reported".
+
+A fix that lived only in the consumer would reach the first row and neither of the other two:
+`!packages/*` records no skip to filter, and `!test` never becomes a pattern at all. The classification
+of a negation therefore belongs in `expandEntry`, before the no-`*` return, where every entry passes —
+not in the rule that reads what the expander left behind.
 
 ## Why that is a defect
 
@@ -36,21 +49,26 @@ record decides, and it is not needed to stop the report from lying by omission.
 
 ## Decision
 
-A `packages:` entry that is a negation is reported as one `skip` finding on `pnpm-workspace.yaml`, with
-code `workspace-entry-not-applied`, naming the entry and saying the negation is not applied and its
-directories are still read. One finding per entry: four negations are four findings, because a reader
-who deletes one needs to see the remaining three.
+`expandEntry` classifies a negation **first**, on its leading `!`, before any glob reasoning, and records
+it as `skipped` with `code: 'workspace-entry-not-applied'` and its entry. Every negation therefore
+reaches the same place whatever follows the bang, and the reader sees one line per entry instead of
+depending on a pattern's shape.
+
+`exact-versions` reports that code as one `skip` finding on `pnpm-workspace.yaml`, naming the entry and
+saying the negation is not applied and its directories are still read. One finding per entry: four
+negations are four findings, because a reader who deletes one needs to see the remaining three.
 
 The message names what is true — not applied, still read — and never claims a refusal. A nested glob
-that is **not** a negation keeps its current silence, because there the limitation is the single-level
-expansion and the entry's directories are matched by nothing it would have covered; a negation is a
-statement about directories that *are* covered, and that is the difference this record turns into output.
+that is **not** a negation keeps its current silence, because no positive pattern covered the
+directories it would have matched; a negation is a statement about directories that a positive entry
+does cover, and that is the difference this record turns into output.
 
 ## Conformance
 
-One test per shape: a negation produces the finding with its entry in the message, a plain nested glob
-produces none, and a repository with four negations produces four findings. The verdict counts the rule
-once (0008), so the count does not become four.
+One test per shape: a nested-glob negation, a one-glob negation and a bare negation each produce the
+finding with its entry in the message; a plain nested glob produces none; and a repository with four
+negations produces four findings. The verdict counts the rule once (0008), so the count does not become
+four.
 
 ## What this does not do
 

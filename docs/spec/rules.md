@@ -194,11 +194,12 @@ the pin alone is the declaration, and nothing about it is skipped.
   ends inside a block it opened is one of those refused shapes rather than the part it managed to
   read, and a `packages:` entry in `pnpm-workspace.yaml` that resolves outside the repository root is
   refused and reported as `skip: workspace-entry-outside-root` on that file, so an importer never
-  disappears without a word (0027). An entry that is a negation is not applied — the expansion is
-  single-level and reads no pattern it cannot match — and it is reported as
+  disappears without a word (0027). An entry that begins with `!` is a negation: it is not applied,
+  because the expansion reads positive entries only, and it is reported as
   `skip: workspace-entry-not-applied` on that file, one finding per entry, naming the entry and saying
   its directories are still read, so a reader who wrote an exclusion and got a full scan learns it from
-  the report (0036). One fixture per supported `lockfileVersion` (`6.0` and `9.0`)
+  the report. The negation is classified before any glob reasoning, so a bare `!test` is reported like
+  `!**/test/**` (0036). One fixture per supported `lockfileVersion` (`6.0` and `9.0`)
   proves the reader, and
   a future major that moves the shape degrades to `skip`.
   Ignored top-level sections — `packages`, `settings`, `snapshots`, `time` — are checked at their
