@@ -253,6 +253,13 @@ function renderBlock(block, options) {
 /**
  * Splits one target kind into the blocks that are printed under it. `importer` is the only kind that
  * can be about several files at once, so it is the only one that is split by path.
+ *
+ * A passing finding with no path — `exact-versions` reports one per target it read without a lockfile
+ * file to name — matches no path of a path-keyed target, so filtering by path dropped it: `summary`
+ * counted it and the body printed a smaller number. It gets one block of its own, headed by the kind
+ * alone, so the count a block prints and the count `summary` prints name the same set (10.3, T15b).
+ * That block is built only when a pathless pass exists, so a target whose passes all carry a path keeps
+ * the bytes it always had.
  * @returns {Array<object>}
  */
 function blocksFor(kind, targets, findings, passing) {
@@ -274,14 +281,20 @@ function blocksFor(kind, targets, findings, passing) {
         ? []
         : [{ kind, path: null, facts, findings: kindFindings, passing: kindPassing, skipped: [] }];
     }
-    return paths.map((path) => ({
-      kind,
-      path,
-      facts: [],
-      findings: kindFindings.filter((finding) => finding.path === path),
-      passing: kindPassing.filter((finding) => finding.path === path),
-      skipped: [],
-    }));
+    const pathless = kindPassing.filter((finding) => !finding.path);
+    return [
+      ...paths.map((path) => ({
+        kind,
+        path,
+        facts: [],
+        findings: kindFindings.filter((finding) => finding.path === path),
+        passing: kindPassing.filter((finding) => finding.path === path),
+        skipped: [],
+      })),
+      ...(pathless.length === 0
+        ? []
+        : [{ kind, path: null, facts: [], findings: [], passing: pathless, skipped: [] }]),
+    ];
   }
 
   return [

@@ -638,6 +638,96 @@ test('a clean target is one line, and never lists its rules', () => {
   assert.equal(lines[heading + 1], '     all 1 rule pass', 'the count hangs from the finding indent');
 });
 
+/// T15b, #134: a passing finding with no `path` is counted in the block of its target instead of
+/// being dropped by a block filter that only ever matched a path (10.3).
+
+const IMPORTER_PATH = 'packages/api/package.json';
+
+/** An importer target at one path, carrying exactly the findings a test hands it. */
+function importerWith(findings) {
+  return buildReport({
+    scope: 'repo',
+    policy,
+    catalog,
+    tool,
+    targets: [{ kind: 'importer', path: IMPORTER_PATH }],
+    findings,
+  });
+}
+
+/** Every `IMPORTER` block, as the heading it prints and the count line under it. */
+function importerBlocks(report) {
+  const lines = renderedLines(report);
+  return lines
+    .map((line, index) => ({ heading: line, count: lines[index + 1] }))
+    .filter((block) => block.heading === 'IMPORTER' || block.heading.startsWith('IMPORTER  '));
+}
+
+function countedBy(blocks) {
+  return blocks.reduce((total, block) => {
+    const match = /^ {5}all (\d+) rules? pass$/.exec(block.count ?? '');
+    assert.ok(match, `a clean block prints its count, got: ${JSON.stringify(block)}`);
+    return total + Number(match[1]);
+  }, 0);
+}
+
+test('a passing finding with no path is counted in its target block, never dropped (T15b, #134)', () => {
+  // `exact-versions` passes with a target and no path. `blocksFor` built importer blocks from the paths
+  // it collected, so a pathless pass matched no path filter: `summary` counted it, the body dropped it,
+  // and the two counts named different sets.
+  const report = importerWith([
+    finding({ rule: 'alpha', status: 'pass', target: 'importer', path: IMPORTER_PATH }),
+    finding({ rule: 'beta', status: 'pass', target: 'importer', path: undefined }),
+  ]);
+
+  assert.equal(report.summary.pass, 2, 'the header counts both passes');
+  assert.deepEqual(importerBlocks(report), [
+    { heading: `IMPORTER  ${IMPORTER_PATH}`, count: '     all 1 rule pass' },
+    { heading: 'IMPORTER', count: '     all 1 rule pass' },
+  ]);
+  assert.equal(
+    countedBy(importerBlocks(report)),
+    report.summary.pass,
+    'the blocks and `summary` count the same set from two directions',
+  );
+});
+
+test('a target whose passing findings all have paths renders the bytes it always did (T15b, #134)', () => {
+  // The pathless block is added only when there is something in it. A target whose every pass carries a
+  // path prints exactly what it printed before the block existed, in both renderings.
+  const report = importerWith([
+    finding({ rule: 'alpha', status: 'pass', target: 'importer', path: IMPORTER_PATH }),
+    finding({ rule: 'beta', status: 'pass', target: 'importer', path: IMPORTER_PATH }),
+  ]);
+  const header = [
+    'funky-secure scan  ·  preset baseline  ·  scope repo',
+    'summary  0 errors · 0 warnings · 0 info · 2 passing · 0 skipped',
+    'verdict  PASS (threshold: error)',
+    '─'.repeat(90),
+    '',
+  ];
+  const next = 'next     nothing to do: everything at or above the policy passes';
+
+  assert.equal(
+    renderHuman(report),
+    [
+      ...header,
+      `IMPORTER  ${IMPORTER_PATH}`,
+      '     all 2 rules pass',
+      '',
+      next,
+      '',
+    ].join('\n'),
+  );
+  assert.equal(
+    renderHuman(report, { verbose: true }),
+    [...header, `IMPORTER  ${IMPORTER_PATH}`, '     all 2 rules pass', '', 'passing  2 rules (alpha, beta)', '', next, ''].join(
+      '\n',
+    ),
+    '--verbose still restores every id in one passing line',
+  );
+});
+
 test('the verdict names what it did not verify, so PASS is never read as checked', () => {
   // Field report: `scan --scope repo` printed `verdict  PASS` with two rules unverified. The skip lines
   // said so below, and a reader who stops at the verdict — or a CI log that greps it — read "pass" as
