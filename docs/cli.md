@@ -370,14 +370,16 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
          funky-secure explain lockfile-committed   what this rule wants, and why
 ```
 
-**The `next` block** names exactly one command, and it has one of three shapes, decided by the report
-alone:
+**The `next` block** names exactly one command, and it has one of four shapes, decided by the report
+and by the effective policy, and read in this order:
 
 - at least one failing finding carries an `auto` remediation: `funky-secure init`, the number of
   fixes it can plan, and the fact that nothing is written yet, followed by one
   `funky-secure explain <rule>` line. `<rule>` is the highest-severity failing finding, ties broken by
   catalog order, so the same state names the same rule on every run.
-- the verdict is `pass`: `nothing to do: everything at or above the policy passes`.
+- the verdict is `pass` and the effective policy sets a rule `off`: `nothing to do among the rules that
+  ran`. The unscoped sentence would be a claim about rules the policy did not run.
+- the verdict is `pass` and no rule is off: `nothing to do: everything at or above the policy passes`.
 - the verdict is `fail` and no finding is automatic: `manual: each finding names the file, its line,
   and the action`.
 

@@ -137,7 +137,9 @@ not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
 
 The two numbers are how many catalog rules still run and how many the catalog has. A rule at `off`
 does not run, is not counted and prints nothing (9.2), so the line states the coverage the verdict
-actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The labels
+actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The verdict
+line adds nothing to it — its count and when it prints belong to 0008 — so this line is the one place
+the coverage is stated. The labels
 are in catalog order (8.2, 13.1) and are the same labels a finding heading carries, so the line names
 the rules exactly as the rest of the report would. The text wraps at 86 columns with every
 continuation indented to the gutter — ten columns narrower than the rest of the report, because this
@@ -199,11 +201,15 @@ live behind `funky-secure scan --verbose`, which the collapsed line names; the o
 not dropped.
 
 A human `scan` ends by naming the next command, not only the verdict. After `summary` and `verdict`, one
-`next` block uses the same label gutter and says exactly one of three things: when at least one failing
-finding carries an `auto` remediation, `funky-secure init` together with the number of fixes it can make
-and the fact that nothing is written yet; when the verdict is `pass`, that nothing is left to do; when
-the verdict is `fail` and no finding is automatic, that the work is manual and each finding already names
-its file, line and action. When the block names `init`, a second line names one rule through
+`next` block uses the same label gutter and says one of these, in this order, so a report that fits two
+of them is never ambiguous: when at least one failing finding carries an `auto` remediation,
+`funky-secure init` together with the number of fixes it can make and the fact that nothing is written
+yet; when the verdict is `pass` and the effective policy sets a rule `off`, exactly
+`nothing to do among the rules that ran`, because the unscoped sentence would be a claim about rules
+nobody measured and this one names the set it speaks for; when the verdict is `pass` and no rule is off,
+`nothing to do: everything at or above the policy passes`, in the bytes it has always had; when the
+verdict is `fail` and no finding is automatic, that the work is manual and each finding already names its
+file, line and action. When the block names `init`, a second line names one rule through
 `funky-secure explain <rule>`, chosen as the highest-severity failing finding with ties broken by catalog
 order, so the two runs over the same state produce the same bytes. The block is human output only: the
 JSON document of 10.2 does not gain a field for it, because a reader that wants the plan asks for the
