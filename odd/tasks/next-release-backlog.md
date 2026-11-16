@@ -156,10 +156,18 @@ each with its plan judged before code and its claims judged after CI. Sources: i
   claims after CI. Commit: —
 - **T6** R2-001 — the probe fixture is built from the constant — S13. Spec: none. Judge: none. Commit: —
 - **T7** The renderer stops emitting two blank lines for one fail plus one skip — S19. Spec: none.
-  Judge: none (a spacing test is the proof). Commit: —
-- **T8** #134 — the verdict block stops implying a coverage it did not measure, in all three ways — S12.
-  Spec: the page that defines the report plus the decision row, because it changes what `PASS` reads as.
-  Judge: plan, STANDARD, before writing. Commit: —
+  Judge: none (a spacing test is the proof). Commit: `fda4a0d` (PR #293); issue #292 opened and closed with it.
+- **T8** #134 — the verdict block stops implying a coverage it did not measure, in the order that keeps each
+  slice a record: (a) `next` names the set it speaks for when a rule is off; (b) the `summary` counter
+  vocabulary and the pathless passing rule. Spec: the page that defines the report. Judge: plan, STANDARD.
+  Commit: —
+- **T15** #134, second half — the `0 skipped` counter (the issue's "cheaper part and the clearer defect")
+  and the passing rule whose finding carries no path (`exact-versions`, `targets: ['importer']`, dropped at
+  `src/lib/render-human.js:280`). Both change what a reader sees about coverage, so they need the decision
+  row 0008 does not write; the first round of judges on T8 refused the version that put a second count on
+  the verdict line, because 0008 owns that sentence and prints its count only when it is not zero
+  (`rfcs/0008-refusal-honesty/rfc.md:43-46`). Spec: the report page plus its decision row. Judge: plan,
+  STANDARD. Commit: —
 - **T9** The unmodelled `packages:` negation is reported instead of dropped — S20. Spec: with it.
   Judge: claims after CI. Commit: —
 - **T10** A conflict-only `init --apply` exits `3`, with the record that says so — S21. First read: which of
@@ -290,3 +298,7 @@ the fourth produced one owner decision and no code.
   element. The claim judge on the code found two advisories worth taking: `docs/cli.md` had not moved with
   the command, which `docs/README.md` binds, and the printed sentence said "declares it" with no
   antecedent in the line — both fixed in `0c3f866`.
+- **L14** T7 landed in `fda4a0d` (PR #293), and it began by opening issue #292: the defect was found in the
+  T0 verification and had no issue of its own, and this repository's pull requests need one. The renderer's
+  separator and `renderSkipped`'s own leading blank line are both deliberate, so the fix pushes one
+  separator per boundary instead of removing either. T8 (#134) is the same file and the harder question.
