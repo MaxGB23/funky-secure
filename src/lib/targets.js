@@ -148,7 +148,7 @@ async function expandEntry(root, entry) {
         {
           entry,
           code: 'workspace-entry-not-applied',
-          reason: 'a negation is not applied, so its directories are still read',
+          reason: 'a negation is not applied, so it excludes nothing',
         },
       ],
     };

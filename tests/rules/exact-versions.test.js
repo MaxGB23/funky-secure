@@ -482,7 +482,7 @@ test('a nested glob is not reported as a refused importer (S8 names the refusal)
  * The skip `src/lib/targets.js` records for an entry that begins with `!` (0036). Spelled here so the
  * two tests below cannot disagree about what the expander hands the rule.
  */
-const NEGATION_REASON = 'a negation is not applied, so its directories are still read';
+const NEGATION_REASON = 'a negation is not applied, so it excludes nothing';
 
 function negation(entry) {
   return { entry, code: 'workspace-entry-not-applied', reason: NEGATION_REASON };
@@ -509,7 +509,7 @@ test('a packages negation is one skip finding naming the entry, never a refusal 
   assert.equal(finding.path, 'pnpm-workspace.yaml', 'the file that holds the entry');
   assert.match(finding.message, /packages entry "!\*\*\/test\/\*\*"/, 'the entry is named');
   assert.match(finding.message, /not applied/);
-  assert.match(finding.message, /still read/);
+  assert.match(finding.message, /excludes nothing/);
   assert.doesNotMatch(finding.message, /refused/, 'a negation is ignored, not refused');
   assert.deepEqual(finding.evidence, { entry: '!**/test/**', reason: 'workspace-entry-not-applied' });
   assert.deepEqual(finding.remediation, { kind: 'none' });

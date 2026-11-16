@@ -122,7 +122,7 @@ disappear without a word, which is the quieter form of a defect this repository 
 (0022, 0027). A nested glob is not reported: no positive pattern covered the directories it would have
 matched, so it produced no importer rather than a refused one. A `!` negation is reported, as
 `skip: workspace-entry-not-applied`, because that is the one entry a reader writes to keep something
-out and it does nothing: the line names the entry and says its directories are still read (0036).
+out and it does nothing: the line names the entry and says the exclusion had no effect (0036).
 
 A specifier can carry a secret: a private tarball URL such as `https://user:token@host/pkg.tgz`
 is echoed as `https://***@host/pkg.tgz`, so a scan never prints a credential.
@@ -210,7 +210,7 @@ desync is created, so the fix and the resolution must happen in one `pnpm` comma
 - The workspace expander reads one level. An entry that resolves outside the repository root is refused
   and reported; a nested glob is neither expanded nor reported, because no positive pattern covered the
   directories it would have matched, so they are simply not importers of this run; a `!` negation is
-  reported as not applied, because its directories **are** still read and a reader who excluded them
+  reported as not applied, because the exclusion had no effect and a reader who wrote it
   deserves to know (0036).
 - The rule does not judge whether an exact version is *good* — only whether it is exact and whether
   the lockfile agrees with it.

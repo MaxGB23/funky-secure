@@ -55,10 +55,10 @@ reaches the same place whatever follows the bang, and the reader sees one line p
 depending on a pattern's shape.
 
 `exact-versions` reports that code as one `skip` finding on `pnpm-workspace.yaml`, naming the entry and
-saying the negation is not applied and its directories are still read. One finding per entry: four
+saying the negation is not applied and that it excludes nothing. One finding per entry: four
 negations are four findings, because a reader who deletes one needs to see the remaining three.
 
-The message names what is true — not applied, still read — and never claims a refusal. A nested glob
+The message names what is true — not applied, excludes nothing — and never claims a refusal. A nested glob
 that is **not** a negation keeps its current silence, because no positive pattern covered the
 directories it would have matched; a negation is a statement about directories that a positive entry
 does cover, and that is the difference this record turns into output.

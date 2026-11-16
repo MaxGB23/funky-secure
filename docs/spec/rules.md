@@ -197,7 +197,7 @@ the pin alone is the declaration, and nothing about it is skipped.
   disappears without a word (0027). An entry that begins with `!` is a negation: it is not applied,
   because the expansion reads positive entries only, and it is reported as
   `skip: workspace-entry-not-applied` on that file, one finding per entry, naming the entry and saying
-  its directories are still read, so a reader who wrote an exclusion and got a full scan learns it from
+  it excludes nothing, so a reader who wrote an exclusion and got a full scan learns it from
   the report. The negation is classified before any glob reasoning, so a bare `!test` is reported like
   `!**/test/**` (0036). One fixture per supported `lockfileVersion` (`6.0` and `9.0`)
   proves the reader, and
