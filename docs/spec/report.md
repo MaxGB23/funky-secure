@@ -84,9 +84,10 @@ does not break determinism and changes no count. The human rendering of the same
 
 `summary` counts findings, once each: `error`, `warn` and `info` count the failing findings by
 their effective severity, and `pass` and `skip` count the findings at those statuses, so a rule that
-skips twelve files contributes twelve. The counters are not a measure of coverage: a rule at `off`
-contributes nothing at all (9.2), so no counter moves, and what a run covered is stated by the
-`not run` line and by the verdict's unverified count (10.3, 0008), never here. A passing finding is
+emits a skip for each file it could not read contributes one per file. The counters are not a measure
+of coverage: a rule at `off` contributes nothing at all (9.2), so no counter moves, and what a run
+covered is named outside them — by the `not run` line, which lists the rules the policy never ran,
+and by the verdict, which names each rule it could not verify (10.3, 0008). A passing finding is
 never counted under its rule's severity, and `info` is a severity, never a rendering of a pass
 (Appendix D.1 and D.2 follow this rule). `summary.verdict` is `fail` when at least one finding sits
 at or above `policy.failOn`, and `pass` otherwise; with `--fail-on none` the verdict is always `pass`
