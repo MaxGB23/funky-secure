@@ -1,8 +1,9 @@
 # 0.13.0 — what must land before the release
 
-The release closes the backlog work of the last campaign. Three artifacts are still owed: the validation
-page carries a count nothing checks and hides a one-sided measurement, and the `migrate` plan's import step
-does not say what re-running it costs. The release itself is last, and only with the owner's approval.
+The release closes the backlog work of the last campaign. The three artifacts it was written for have landed:
+the validation page no longer carries a count nothing checks and declares which side of five rules was
+measured; the `migrate` plan's import step names what re-running it costs and says the step may already be
+satisfied. What remains is the release itself — last, and only with the owner's approval.
 
 ## Specs
 
@@ -65,27 +66,24 @@ does not say what re-running it costs. The release itself is last, and only with
 ## Tasks
 
 - **T0** Open the issue the campaign never opened for T11: the validation page's uncheckable count and its
-  one-sided measurement — S2, S3. No commit.
+  one-sided measurement — S2, S3. Issue #320.
 - **T1** `docs/validation.md`: the row loses its number and keeps its claim in exit-code form; a paragraph
   after the rule table declares, per rule, which side each row reports — S2, S3. Branch
-  `docs/validation-residual`; body `Closes #<T0>`; gates S6. Commit: —.
+  `docs/validation-residual`; body `Closes #<T0>`; gates S6. Commit: `ba5491e` (#321).
 - **T2** `#135` spec: `docs/spec/commands.md`'s migrate step 3 (`:181-188`) gains the clause naming what
   re-running `pnpm import` costs, and `docs/cli.md:528-532` **adds** the criterion sentence — the page has no
   such sentence today, and it carries no `migrate` plan block to move, so the prose is where the reader meets
   it. The mapping is the command row (`docs/README.md:10`); `:11` was considered and does not apply, because
   §10.3 governs the report's layout and not a plan step's wording. Branch `docs/135-import-cost`; body
-  `Refs #135`. Spec first, alone, before T3. Commit: —.
+  `Refs #135`. Spec first, alone, before T3. Commit: `2d98627` (#322).
 - **T3** `#135` code: the `#` comment on `src/commands/migrate.js:370` carries the same clause, and one test
-  asserts the printed step line carries it — nothing pins that comment today, so the test is the only thing
-  that keeps the clause from being deleted in silence. Falls back to the constant in
-  `src/lib/foreign-pin.js` only if the clause must be shared with the refusal path. Branch
-  `fix/135-import-cost`; body `Refs #135`. Commit: —.
+  asserts the printed step line carries it — nothing pinned that comment, so the test is the only thing that
+  keeps the clause from being deleted in silence. Branch `fix/135-import-cost`; body `Refs #135`.
+  Commit: `ee3bff1` (#323).
 - **T4** `chore/release-0.13.0`: the manifest, the pages S5 names, and the six goldens — S5. Branch
-  `chore/release-0.13.0`; body `Refs #135` unless T0's issue is still open, in which case it is that one.
-  Commit: —.
+  `chore/release-0.13.0`; body `Refs #135`. Commit: this pull request.
 - **T5** The release ritual: gate, tag, staged candidate, the owner's approval, the Release — S5. Commit: not
   applicable.
-
 ## Log
 
 - **L1** "el plan me gusta, la release siemore queda para el final y con aprobación, ya que pueden surgir
@@ -123,3 +121,11 @@ does not say what re-running it costs. The release itself is last, and only with
   byte-identical (`git status --porcelain` clean for `tests/golden/`, no bump had happened) and the document
   was rewritten from this file's own content. The rule this is the third instance of: a document whose text
   contains commands is never edited by a shell substitution — it is written whole.
+- **L9** The suite totals this document records are the ones each measurement saw, and they move as tests
+  land: L4 saw 767/766 before T3 added one, and at T4 the suite reports 768/767. The plan carries the number
+  as history, which is why it stays inside the log and never enters the validation page — that page's row now
+  claims the exit code and nothing else.
+- **L10** The claim audit of #324 found this document contradicting the head it landed on: T1–T4 still read
+  `Commit: —` while their commits were ancestors of the pull request. The tasks now name them, and T0 names
+  its issue. A record that lands stale is worse than one that lands late, because the next reader treats it
+  as current.
