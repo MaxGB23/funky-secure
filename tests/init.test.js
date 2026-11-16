@@ -749,6 +749,124 @@ test('a savePrefix declared outside the managed block is a conflict, never a sec
   assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), "savePrefix: '^'\n");
 });
 
+test('a plan whose every item is a conflict exits 3 and writes nothing (0037, #303)', async (t) => {
+  // Every item the plan carries is refused, so the plan performs zero writes: exit `3` says
+  // "understood and refused, nothing written" (10.4). `0` would report a success that did not happen,
+  // and a script running `init --apply && funky-secure scan` would proceed as if the repository had been
+  // initialised when it had not (0037).
+  const dir = scratch(t);
+  // The `.gitignore` of the fixture the suite already proves is at policy: W2 then plans nothing, so the
+  // only items left are the two the repository genuinely refuses.
+  writeFileSync(join(dir, '.gitignore'), readFileSync(join(FIXTURES, 'at-policy', '.gitignore'), 'utf8'));
+  writeFileSync(
+    join(dir, 'pnpm-workspace.yaml'),
+    'packages:\n  - packages/*\n\n' +
+      `${BEGIN}\nminimumReleaseAgeStrict: true\nminimumReleaseAge: 1440\n${END}\n\n` +
+      "savePrefix: '^'\n",
+  );
+  writeFileSync(
+    join(dir, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'conflict-only',
+        private: true,
+        packageManager: 'pnpm@12.3.4',
+        devEngines: { packageManager: { name: 'pnpm', version: '11.0.0' } },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
+  const before = snapshot(dir);
+
+  // The fixture really reaches zero writes: without this the exit code below would prove nothing.
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const document = JSON.parse(preview.stdout.text);
+  assert.deepEqual(
+    document.plan.filter((item) => item.state === 'would-write'),
+    [],
+    'the plan must reach zero writes, or this fixture tests the other side of the line',
+  );
+  assert.deepEqual(
+    document.plan
+      .filter((item) => item.state === 'conflict')
+      .map((item) => item.target)
+      .sort(),
+    ['package.json', 'pnpm-workspace.yaml'],
+  );
+
+  // Without `--apply` a plan is an offer: `0` in every case, conflicts included.
+  const offer = runner(dir, { tracked });
+  assert.equal(await offer.run(['init']), 0);
+  assert.deepEqual(snapshot(dir), before);
+
+  const applied = runner(dir, { tracked });
+  assert.equal(
+    await applied.run(['init', '--apply']),
+    3,
+    'a plan that refused every item is a refusal, not a success (0037)',
+  );
+
+  // The plan is printed first, so the reader sees which items were refused and why.
+  assert.match(applied.stdout.text, /^conflicts$/m);
+  assert.match(applied.stdout.text, /already declares savePrefix outside the managed block/);
+  assert.match(applied.stdout.text, /already declares devEngines\.packageManager/);
+  assert.equal(writeCount(applied.stdout.text), 0, 'a refused plan writes nothing');
+  assert.deepEqual(snapshot(dir), before, 'every file stays byte-identical');
+});
+
+test('a conflict inside a plan that writes something keeps exit 0 (I-58, 0037)', async (t) => {
+  // The side of the line that must never widen: exit `3` promises nothing was written, and something
+  // was. One write, one conflict, applied.
+  const dir = scratch(t, 'at-policy');
+  const workspaceBefore = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
+  writeFileSync(
+    join(dir, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'one-write-one-conflict',
+        private: true,
+        devEngines: { packageManager: { name: 'pnpm', version: '11.0.0' } },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+  const document = JSON.parse(preview.stdout.text);
+  assert.deepEqual(
+    document.plan.map((item) => [item.operation, item.state]),
+    [
+      ['set packageManager', 'would-write'],
+      ['set devEngines.packageManager', 'conflict'],
+    ],
+    'the fixture carries exactly one write and one conflict',
+  );
+
+  const applied = runner(dir, { tracked });
+  assert.equal(
+    await applied.run(['init', '--apply']),
+    0,
+    'a plan that wrote what it was asked to write keeps 0, conflicts included (I-58)',
+  );
+  assert.equal(writeCount(applied.stdout.text), 1);
+
+  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.equal(json.packageManager, 'pnpm@12.3.4', 'the write the plan could perform happened');
+  assert.deepEqual(
+    json.devEngines.packageManager,
+    { name: 'pnpm', version: '11.0.0' },
+    'the conflicted item is left exactly as it was declared',
+  );
+  assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), workspaceBefore);
+});
+
 test('next steps name the commit and funky-secure start, never an install it cannot derive (11.2.2, 0132)', async (t) => {
   // Issue 132: `init` printed `pnpm install` while the path it was reached from printed `pnpm import`
   // or `pnpm add`, and three field sessions could not tell which was authoritative. The resolve a

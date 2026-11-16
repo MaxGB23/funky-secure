@@ -99,5 +99,13 @@ export async function run({
   stdout.write(text);
 
   if (!apply) return 0;
-  return applyPlan({ plan, allowDirty, cwd, collector: probes, stdout: ledger });
+
+  const code = await applyPlan({ plan, allowDirty, cwd, collector: probes, stdout: ledger });
+
+  // A plan that performs zero writes and carries a conflict refused every item it was asked to write
+  // (0037): exit `3` is "understood and refused, nothing written", and `0` would report a success that
+  // did not happen. Anything written keeps `0`, conflicts included (I-58), and the plan above already
+  // names which items were refused and why.
+  if (code === 0 && writes.length === 0 && conflicts) return 3;
+  return code;
 }
