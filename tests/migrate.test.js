@@ -457,6 +457,31 @@ test('step 3 reports the lockfile it found instead of claiming the step is done'
   );
 });
 
+test('step 3 names the foreign lockfile it reads, the lockfile it writes, and what a re-run replaces', async (t) => {
+  // Two readers reach this line. One is migrating for the first time and needs to know the command
+  // writes `pnpm-lock.yaml`; the other already has one, and re-running is not a no-op — it rewrites the
+  // file from the foreign pins, so a version the manifest resolved since the last import is replaced by
+  // the one the foreign lockfile records (measured; docs/validation.md). The line is identical in both
+  // states, so it carries both facts, or a `#` comment that hides one is deleted in silence.
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'package-lock.json': '{"lockfileVersion": 3}',
+  });
+
+  const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(result.code, 0);
+  const line = result.stdout.split('\n').find((entry) => entry.includes('pnpm import'));
+  assert.ok(line, 'step 3 prints the import command');
+  assert.match(line, /package-lock\.json/, 'the step still names the foreign lockfile it reads');
+  assert.match(line, /writes pnpm-lock\.yaml/, 'the first-run reader learns what the command writes');
+  assert.match(
+    line,
+    /re-run replaces what it recorded/,
+    'the re-run reader learns that an existing recording changes',
+  );
+});
+
 test('step 3 says nothing extra while the lockfile is still owed', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
