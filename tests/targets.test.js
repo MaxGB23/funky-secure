@@ -180,7 +180,7 @@ function notApplied(entry) {
   return {
     entry,
     code: 'workspace-entry-not-applied',
-    reason: 'a negation is not applied, so its directories are still read',
+    reason: 'a negation is not applied, so it excludes nothing',
   };
 }
 
@@ -414,3 +414,21 @@ test('resolves whether a root .npmrc is tracked without a token', async (t) => {
   assert.deepEqual(withToken.facts.npmrc, { tracked: true, hasToken: true, tokenlessTracked: false });
 });
 
+
+test('reports a negation that also leaves the root, and reads nothing for it (S20, 0036)', async (t) => {
+  // The overlap the claim audit of #300 flagged: the bang is classified before the containment check,
+  // so `!..` is `not-applied` rather than `outside-root`. Saying so is the point — the entry excludes
+  // nothing — and the message must stay true, which is why it talks about the exclusion and not about
+  // whether the directories were read. Nothing outside the root is read either way.
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, 'pnpm-workspace.yaml', 'packages:\n  - "**"\n  - "!.."\n');
+
+  const { facts, targets } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(
+    facts.skippedGlobs.find((skip) => skip.code === 'workspace-entry-not-applied'),
+    notApplied('!..'),
+  );
+  assert.equal(targets.some((target) => String(target.path ?? '').includes('..')), false);
+});
