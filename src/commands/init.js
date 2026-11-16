@@ -3,6 +3,7 @@
  * offer, not a verdict: the command exits 0 whatever the plan contains.
  */
 
+import { RefusalError } from '../lib/errors.js';
 import {
   applyPlan,
   deriveNextSteps,
@@ -72,7 +73,7 @@ export async function run({
   }
 
   const writes = plan.filter((item) => item.state === 'would-write');
-  const conflicts = plan.some((item) => item.state === 'conflict');
+  const conflicts = plan.filter((item) => item.state === 'conflict').length;
 
   // An empty plan — or one where every item is already at policy — performs zero writes and only
   // says so. A plan that carries a conflict is rendered first, so the refusal is visible.
@@ -80,7 +81,7 @@ export async function run({
   // would make it unparseable, so it goes to stderr.
   const ledger = format === 'json' ? stderr ?? stdout : stdout;
 
-  if (apply && writes.length === 0 && !conflicts) {
+  if (apply && writes.length === 0 && conflicts === 0) {
     return applyPlan({ plan, allowDirty, cwd, collector: probes, stdout: ledger });
   }
 
@@ -100,12 +101,22 @@ export async function run({
 
   if (!apply) return 0;
 
-  const code = await applyPlan({ plan, allowDirty, cwd, collector: probes, stdout: ledger });
-
   // A plan that performs zero writes and carries a conflict refused every item it was asked to write
   // (0037): exit `3` is "understood and refused, nothing written", and `0` would report a success that
   // did not happen. Anything written keeps `0`, conflicts included (I-58), and the plan above already
   // names which items were refused and why.
-  if (code === 0 && writes.length === 0 && conflicts) return 3;
-  return code;
+  //
+  // The refusal is thrown, not returned, because that is what gives it the shape every other refusal of
+  // this command ends with: `cli.run` prints the `funky-secure: …` line and then the `reason: …` line, so
+  // a script reading the last line of `stderr` sees a failure. `applyPlan` is not reached for such a
+  // plan — it would print `nothing to apply`, and a refused plan is not an empty one.
+  if (writes.length === 0 && conflicts > 0) {
+    const named = `${conflicts} conflict${conflicts === 1 ? '' : 's'}`;
+    throw new RefusalError(
+      `refusing to write: the plan carries ${named} and no writable item`,
+      `resolve the ${named} in the plan by hand, then re-run init --apply`,
+    );
+  }
+
+  return applyPlan({ plan, allowDirty, cwd, collector: probes, stdout: ledger });
 }
