@@ -495,13 +495,15 @@ function ruleToRead(failing, catalog) {
 
 /**
  * The block a human `scan` ends with (S1-S5): the one command that moves the repository forward.
- * Exactly one of three shapes, decided by the report and nothing else. An automatic fix wins even
- * when the verdict is a pass, because the fixes are still available.
+ * One of four shapes, read in this order, decided by the report and by the effective policy. An
+ * automatic fix wins even when the verdict is a pass, because the fixes are still available.
  * @param {{ summary: { verdict: string }, findings: Array<object> }} report
  * @param {Array<{ id: string }>} catalog
+ * @param {{ off?: string[] }} [policy] the rules the effective policy turned off; pass it and a
+ *   passing run speaks only for the rules that ran, leave it out and the bytes are what they were
  * @returns {string[]}
  */
-function nextBlock({ summary, findings }, catalog) {
+function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
   const { head, indent } = gutter('next');
   const failing = findings.filter(
     (finding) => finding.status !== 'pass' && finding.status !== 'skip',
@@ -516,6 +518,9 @@ function nextBlock({ summary, findings }, catalog) {
   }
 
   if (summary.verdict === 'pass') {
+    // A rule at `off` never ran (9.2). The unscoped sentence would be a claim about it, so the block
+    // names the set it speaks for, and says the original sentence byte for byte when nothing is off.
+    if (off.length > 0) return [`${head}nothing to do among the rules that ran`];
     return [`${head}nothing to do: everything at or above the policy passes`];
   }
 
@@ -572,7 +577,7 @@ export function renderHuman(report, { color = false, verbose = false, off } = {}
   // nor `--verbose` because its finding has a target and no path, so no block was ever built for it.
   lines.push(...unverifiedLines(report, defaultCatalog, options, renderedSkips));
 
-  lines.push(...nextBlock(report, defaultCatalog));
+  lines.push(...nextBlock(report, defaultCatalog, { off: off ?? [] }));
 
   return `${lines.join('\n')}\n`;
 }

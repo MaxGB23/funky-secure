@@ -476,6 +476,24 @@ test('says nothing is left to do when the verdict passes', () => {
   ]);
 });
 
+test('names the set it speaks for when the policy turned a rule off (#134)', () => {
+  // The unscoped sentence is a claim about the whole catalog. Under a reduced policy the report ran
+  // six of thirteen rules, so it may only speak for the ones it ran (10.3).
+  const text = renderHuman(reportWith([]), { off: ['lockfile-committed'] });
+  assert.ok(
+    text.includes(`${NEXT}nothing to do among the rules that ran`),
+    `expected the scoped sentence, got:\n${text}`,
+  );
+});
+
+test('keeps the bytes it always had when no rule is off', () => {
+  const text = renderHuman(reportWith([]), { off: [] });
+  assert.ok(
+    text.includes(`${NEXT}nothing to do: everything at or above the policy passes`),
+    `expected the original sentence, got:\n${text}`,
+  );
+});
+
 test('says the work is manual when the verdict fails and nothing is automatic', () => {
   const report = reportWith(
     [
