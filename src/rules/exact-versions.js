@@ -485,11 +485,24 @@ export default {
     // catalogue finding's — the file that holds the entry, then the entry — so there is one reporting
     // path for what the workspace declares.
     //
-    // Only the refusal is reported. A nested glob is a documented limitation of the single-level
-    // expansion, not a refused importer: `!**/test/**` is a negation, so saying its directories are
-    // not read would be false, and a real repository (shadcn-ui/ui) carries four of them.
+    // Only the refusal is reported as a refusal. A nested glob is a documented limitation of the
+    // single-level expansion, not a refused importer, so it stays silent: no positive pattern covered
+    // the directories it would have matched. A `!` negation is the opposite case — a positive entry
+    // does cover its directories and the scan reads them anyway — so it is named, in its own words,
+    // and never as a refusal (0036).
     const skippedGlobs = Array.isArray(ctx.repo.skippedGlobs) ? ctx.repo.skippedGlobs : [];
     for (const skipped of skippedGlobs) {
+      if (skipped.code === 'workspace-entry-not-applied') {
+        findings.push({
+          status: 'skip',
+          code: 'workspace-entry-not-applied',
+          path: WORKSPACE_YAML,
+          message: `skipped: the packages entry "${skipped.entry}" in ${WORKSPACE_YAML}: ${skipped.reason}`,
+          evidence: { entry: skipped.entry, reason: skipped.code },
+          remediation: { kind: 'none' },
+        });
+        continue;
+      }
       if (skipped.code !== 'outside-root') continue;
       findings.push({
         status: 'skip',

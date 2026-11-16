@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { renderHuman } from '../../src/lib/render-human.js';
+import { buildReport } from '../../src/lib/report.js';
+import { catalog as ruleCatalog } from '../../src/rules/index.js';
 import rule from '../../src/rules/exact-versions.js';
 
 /**
@@ -458,9 +461,9 @@ test('a packages entry refused for escaping the root is named in the report (S8)
 });
 
 test('a nested glob is not reported as a refused importer (S8 names the refusal)', () => {
-  // A nested glob, including a `!` negation such as shadcn-ui/ui's `!**/test/**`, is a documented
-  // limitation of the single-level expansion and not an entry the scan refused: saying its directories
-  // were not read would be false for a negation.
+  // A nested glob is a documented limitation of the single-level expansion and not an entry the scan
+  // refused: no positive pattern covered the directories it would have matched, so it stays silent. A
+  // `!` negation is the other case and is named (0036), in its own words and never as a refusal.
   const base = ctx({
     importers: [importer('.', '{"name":"inner"}')],
     lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n" },
@@ -473,6 +476,76 @@ test('a nested glob is not reported as a refused importer (S8 names the refusal)
     rule.detect(base).filter((finding) => String(finding.code ?? '').startsWith('workspace-entry')),
     [],
   );
+});
+
+/**
+ * The skip `src/lib/targets.js` records for an entry that begins with `!` (0036). Spelled here so the
+ * two tests below cannot disagree about what the expander hands the rule.
+ */
+const NEGATION_REASON = 'a negation is not applied, so its directories are still read';
+
+function negation(entry) {
+  return { entry, code: 'workspace-entry-not-applied', reason: NEGATION_REASON };
+}
+
+function repoCtxWith(skippedGlobs) {
+  const base = ctx({
+    importers: [importer('.', '{"name":"root"}')],
+    lockfile: { path: '/repo/pnpm-lock.yaml', text: "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n" },
+  });
+  base.repo.skippedGlobs = skippedGlobs;
+  return base;
+}
+
+test('a packages negation is one skip finding naming the entry, never a refusal (S20, 0036)', () => {
+  // A negation is the one entry a reader writes to keep something out, and funky-secure reads it
+  // anyway: the line says that in those words, because saying the directories were not read — the
+  // shape the `outside-root` refusal uses — would be false.
+  const [finding] = rule.detect(repoCtxWith([negation('!**/test/**')])).filter(
+    (item) => item.code === 'workspace-entry-not-applied',
+  );
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.path, 'pnpm-workspace.yaml', 'the file that holds the entry');
+  assert.match(finding.message, /packages entry "!\*\*\/test\/\*\*"/, 'the entry is named');
+  assert.match(finding.message, /not applied/);
+  assert.match(finding.message, /still read/);
+  assert.doesNotMatch(finding.message, /refused/, 'a negation is ignored, not refused');
+  assert.deepEqual(finding.evidence, { entry: '!**/test/**', reason: 'workspace-entry-not-applied' });
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+});
+
+test('four negations are four findings, and the verdict still counts the rule once (0008)', () => {
+  // One finding per entry, because a reader who deletes one needs to see the remaining three — and the
+  // verdict counts rules, not findings, so four lines under one rule stay `1 rule not verified`.
+  const entries = ['!**/test/**', '!packages/*', '!test', '!**/generated/**'];
+  const detected = rule.detect(repoCtxWith(entries.map(negation)));
+  const named = detected.filter((finding) => finding.code === 'workspace-entry-not-applied');
+
+  assert.equal(named.length, 4);
+  assert.deepEqual(named.map((finding) => finding.evidence.entry), entries);
+
+  const report = buildReport({
+    scope: 'repo',
+    policy: { preset: 'baseline', quarantineMinutes: 1440, failOn: 'error' },
+    catalog: ruleCatalog,
+    tool: { name: 'funky-secure', version: '0.1.0' },
+    targets: [{ kind: 'repo-root', path: '.' }, { kind: 'importer', path: '.' }],
+    findings: detected.map((finding) => ({
+      ...finding,
+      rule: 'exact-versions',
+      severity: 'warn',
+      scope: 'repo',
+      target: 'importer',
+      doc: 'funky-secure explain exact-versions',
+      remediation: finding.remediation ?? { kind: 'none' },
+    })),
+  });
+  const line = renderHuman(report)
+    .split('\n')
+    .find((rendered) => rendered.startsWith('verdict'));
+
+  assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified: exact-versions)');
 });
 
 test('floating findings survive an unsupported lockfile and the comparison is one skip', () => {

@@ -172,6 +172,100 @@ test('refuses a packages: entry that resolves outside the repository root (S3)',
   ]);
 });
 
+/**
+ * The one skip a negation produces, whatever follows the bang (0036). Spelled here so the three
+ * shape tests below cannot disagree about what a negation is recorded as.
+ */
+function notApplied(entry) {
+  return {
+    entry,
+    code: 'workspace-entry-not-applied',
+    reason: 'a negation is not applied, so its directories are still read',
+  };
+}
+
+test('names a nested-glob negation instead of letting the glob decide its fate (S20, 0036)', async (t) => {
+  // `!**/test/**` reached the skip list only because it happened to carry two `*`: a negation whose
+  // shape test landed somewhere else produced no record at all. The bang is classified first, so the
+  // entry is named the same way whatever follows it, and the positive `**` that covers its directories
+  // keeps its own documented silence.
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, 'pnpm-workspace.yaml', 'packages:\n  - "**"\n  - "!**/test/**"\n');
+  write(dir, 'packages/api/package.json', JSON.stringify({ name: 'api' }));
+  write(dir, 'packages/api/test/package.json', JSON.stringify({ name: 'fixtures' }));
+
+  const { facts, targets } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(facts.skippedGlobs, [
+    {
+      entry: '**',
+      code: 'unsupported-glob',
+      reason: 'a nested glob is not expanded, so its directories are not read',
+    },
+    notApplied('!**/test/**'),
+  ]);
+  assert.deepEqual(
+    targets.map((target) => `${target.kind}:${target.path ?? ''}`),
+    ['repo-root:.', 'importer:.'],
+    'a negation is never honoured, so no directory under it becomes an importer',
+  );
+});
+
+test('names a one-glob negation the expansion branch used to swallow (S20, 0036)', async (t) => {
+  // `!packages/*` took the expansion branch, `readdir('!packages')` threw, and the catch returned an
+  // empty record set: the entry vanished with no skip to filter. Classifying the bang first means the
+  // entry never reaches the branch that can only fail.
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, 'pnpm-workspace.yaml', 'packages:\n  - "**"\n  - "!packages/*"\n');
+  write(dir, 'packages/api/package.json', JSON.stringify({ name: 'api' }));
+
+  const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(facts.skippedGlobs, [
+    {
+      entry: '**',
+      code: 'unsupported-glob',
+      reason: 'a nested glob is not expanded, so its directories are not read',
+    },
+    notApplied('!packages/*'),
+  ]);
+  assert.deepEqual(facts.importers.map((importer) => importer.dir), ['.'], 'and it expands nothing');
+});
+
+test('names a bare negation that used to be read as a literal directory (S20, 0036)', async (t) => {
+  // `!test` carries no `*`, so it was returned as `dirs: ['!test']`: the entry was not a pattern at all
+  // and the scan asked for `!test/package.json`. The bang is classified before the no-`*` return, so a
+  // bare negation is reported exactly like a glob one.
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, 'pnpm-workspace.yaml', 'packages:\n  - "**"\n  - "!test"\n');
+  write(dir, 'test/package.json', JSON.stringify({ name: 'fixtures' }));
+  write(dir, '!test/package.json', JSON.stringify({ name: 'invented' }));
+
+  const { facts, targets } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(facts.skippedGlobs, [
+    {
+      entry: '**',
+      code: 'unsupported-glob',
+      reason: 'a nested glob is not expanded, so its directories are not read',
+    },
+    notApplied('!test'),
+  ]);
+  assert.deepEqual(
+    facts.importers.map((importer) => importer.dir),
+    ['.'],
+    'the negation is not a directory, so no importer named `!test` is invented',
+  );
+  assert.deepEqual(
+    targets.map((target) => `${target.kind}:${target.path ?? ''}`),
+    ['repo-root:.', 'importer:.'],
+    'and no target is resolved from a bang-prefixed path',
+  );
+});
+
 test('records a malformed package.json instead of throwing', async (t) => {
   const dir = scratch(t);
   write(dir, 'package.json', '{ nope');
