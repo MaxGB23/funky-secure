@@ -664,6 +664,34 @@ test('counts a rule once when it skips twice, because the verdict names rules (T
   assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified: alpha)');
 });
 
+test('counts distinct rules across findings, not findings', () => {
+  const report = reportWith([
+    finding({ rule: 'alpha', status: 'skip', path: 'one/package.json', message: 'skipped: one' }),
+    finding({ rule: 'alpha', status: 'skip', path: 'two/package.json', message: 'skipped: two' }),
+    finding({ rule: 'beta', status: 'skip', path: 'three/package.json', message: 'skipped: three' }),
+  ]);
+  const line = renderedLines(report).find((entry) => entry.startsWith('verdict'));
+
+  assert.equal(line, 'verdict  PASS (threshold: error · 2 rules not verified: alpha, beta)');
+});
+
+test('wraps the named rules at 96 columns and closes on the last line', () => {
+  const ids = Array.from({ length: 8 }, (_, index) => `a-very-long-rule-identifier-number-${index}`);
+  const report = reportWith(
+    ids.map((rule) => finding({ rule, status: 'skip', path: `${rule}/package.json`, message: 'skipped' })),
+  );
+  const lines = renderedLines(report);
+  const start = lines.findIndex((entry) => entry.startsWith('verdict'));
+  const block = [lines[start]];
+  for (let index = start + 1; index < lines.length && lines[index].startsWith(' '.repeat(9)); index += 1) {
+    block.push(lines[index]);
+  }
+
+  assert.ok(block.length > 1, 'eight long ids do not fit one line');
+  for (const entry of block) assert.ok(entry.length <= 96, `${entry.length} columns: ${entry}`);
+  assert.ok(block.at(-1).endsWith(')'), 'the closing parenthesis travels with the last id');
+});
+
 test('the verdict says nothing extra when every rule was verified', () => {
   const line = renderedLines(
     reportWith([finding({ rule: 'quarantine', status: 'pass', path: null, message: 'strict and mature' })]),
