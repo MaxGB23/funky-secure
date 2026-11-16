@@ -108,6 +108,10 @@ Safety rules for `--apply`:
 - A target file with uncommitted changes is refused (exit `3`, naming the file) unless
   `--allow-dirty`. A security tool does not mix its edits with a stranger's.
 - An empty plan performs zero writes and prints `nothing to apply`.
+- A plan in which every item is a conflict performs zero writes and exits `3`, because it understood
+  the repository and refused all of it: exit `0` would report a success that did not happen (0037). A
+  conflict inside a plan that writes something is reported in the plan and does not change the code,
+  because the command did write what it was asked to write (I-58).
 - Every write is printed before it happens, with its absolute path and a content digest, on the same
   run (no dry-run/apply race).
 - `init` never runs an install, never resolves a version, never touches the network.
