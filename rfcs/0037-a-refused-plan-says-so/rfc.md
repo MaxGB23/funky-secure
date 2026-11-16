@@ -54,3 +54,16 @@ the conflicted item alone. The second is the one that fails if this record is ev
 It does not decide what to do with a conflict — neither auto-resolving it nor refusing the whole plan
 when part of it is writable. It names an outcome the tool already produces and gives it the code the
 vocabulary already has.
+
+## Errata
+
+**2026-11-16 — the shape of the refusal.** The claim audit of the implementation (#305) found that the
+refusal printed the plan, then `nothing to apply` from `applyPlan`, and then exited `3`: the last line a
+script reads said nothing was wrong. Every other refusal of this command ends with a `funky-secure: …`
+line and a `reason: …` line (`docs/spec/commands.md` §11.3), and this one now does too, naming the
+conflict count. The decision is unchanged; the record never said what the refusal's last line was, and
+silence there was read as success.
+
+The same audit found §11.2 worded as "a plan in which every item is a conflict", narrower than this
+record's "zero writes and at least one conflict": a plan carrying a `would-skip` beside a conflict writes
+nothing and is covered here, but not by that sentence. §11.2 now says what the code does.
