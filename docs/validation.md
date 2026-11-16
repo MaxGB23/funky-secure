@@ -10,7 +10,7 @@ number becomes wrong at the next release, and the suite itself is the authority 
 
 | Claim | How | Where |
 |---|---|---|
-737 tests, 736 pass, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
+765 tests, 764 pass, 0 fail, 1 skipped (a Windows symlink case) | `node --test` | the whole tree |
 The repository passes its own audit | `node bin/funky-secure.js scan --scope repo --fail-on warn`, exit 0 | CI |
 Every documented flag is accepted by the command the document names | `tests/docs-contract.test.js` | documentation contract |
 The spec stays a true slice of the record, and every amendment names a shipped record | `tests/drift.test.js` | the drift gate |
