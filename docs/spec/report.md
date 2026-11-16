@@ -183,7 +183,9 @@ Skips collapse by target. Two or more skipped rules in one target print one `–
 labels that were not verified and the command that expands them, `funky-secure scan --verbose`,
 instead of one block per skip. A target with exactly one skipped rule prints that rule's own block,
 symbol `–`: one reason and its verifying command fit in three lines, and a human should not have to
-pass a flag to read them. Neither shape changes the JSON document.
+pass a flag to read them. Neither shape changes the JSON document. The verdict counts the rules it
+did not verify once each and names them, so its count and its names agree even when a rule could not
+verify several files: a rule counted twice would be a name the reader cannot find.
 
 No rendered line exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
 86. Messages and actions wrap, never truncate. The single exception is a machine path — the store and

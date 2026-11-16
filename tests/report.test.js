@@ -652,6 +652,18 @@ test('the verdict names what it did not verify, so PASS is never read as checked
   assert.ok(line.length <= 96, 'the verdict stays inside the column bound');
 });
 
+test('counts a rule once when it skips twice, because the verdict names rules (T16, 0008)', () => {
+  // `summary.skip` counts skip findings, and the verdict printed that count as rules: two unreadable
+  // files made it say "2 rules not verified" about one rule (0008, I-53).
+  const report = reportWith([
+    finding({ rule: 'alpha', status: 'skip', path: 'one/package.json', message: 'skipped: one' }),
+    finding({ rule: 'alpha', status: 'skip', path: 'two/package.json', message: 'skipped: two' }),
+  ]);
+  const line = renderedLines(report).find((entry) => entry.startsWith('verdict'));
+
+  assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified: alpha)');
+});
+
 test('the verdict says nothing extra when every rule was verified', () => {
   const line = renderedLines(
     reportWith([finding({ rule: 'quarantine', status: 'pass', path: null, message: 'strict and mature' })]),
