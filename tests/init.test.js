@@ -184,10 +184,13 @@ test('a repository already at policy plans nothing and --apply writes nothing', 
   assert.match(preview.stdout.text, /nothing to apply/);
   assert.deepEqual(snapshot(dir), before);
 
+  // An empty plan is not a refusal: it is the one zero-write plan with no conflict, so it keeps its
+  // `nothing to apply` line and exits `0` rather than throwing the 0037 refusal (§11.2, #306).
   const applied = runner(dir, { tracked });
   assert.equal(await applied.run(['init', '--apply']), 0);
   assert.match(applied.stdout.text, /nothing to apply/);
   assert.equal(writeCount(applied.stdout.text), 0);
+  assert.equal(applied.stderr.text, '', 'an empty plan has nothing to refuse');
   assert.deepEqual(snapshot(dir), before);
 });
 
@@ -749,11 +752,15 @@ test('a savePrefix declared outside the managed block is a conflict, never a sec
   assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), "savePrefix: '^'\n");
 });
 
-test('a plan whose every item is a conflict exits 3 and writes nothing (0037, #303)', async (t) => {
-  // Every item the plan carries is refused, so the plan performs zero writes: exit `3` says
-  // "understood and refused, nothing written" (10.4). `0` would report a success that did not happen,
-  // and a script running `init --apply && funky-secure scan` would proceed as if the repository had been
-  // initialised when it had not (0037).
+/**
+ * The repository whose plan performs zero writes and carries two conflicts: W1c's `savePrefix` declared
+ * outside the managed block, and W3b's `devEngines.packageManager` disagreeing with the pin. It is the
+ * refused side of the 0037 line, so no byte of it may move.
+ *
+ * @param {import('node:test').TestContext} t
+ * @returns {{ dir: string, tracked: string[] }}
+ */
+function conflictOnlyRepo(t) {
   const dir = scratch(t);
   // The `.gitignore` of the fixture the suite already proves is at policy: W2 then plans nothing, so the
   // only items left are the two the repository genuinely refuses.
@@ -778,7 +785,15 @@ test('a plan whose every item is a conflict exits 3 and writes nothing (0037, #3
     )}\n`,
   );
   writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
-  const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
+  return { dir, tracked: ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'] };
+}
+
+test('a plan whose every item is a conflict exits 3 and writes nothing (0037, #303)', async (t) => {
+  // Every item the plan carries is refused, so the plan performs zero writes: exit `3` says
+  // "understood and refused, nothing written" (10.4). `0` would report a success that did not happen,
+  // and a script running `init --apply && funky-secure scan` would proceed as if the repository had been
+  // initialised when it had not (0037).
+  const { dir, tracked } = conflictOnlyRepo(t);
   const before = snapshot(dir);
 
   // The fixture really reaches zero writes: without this the exit code below would prove nothing.
@@ -816,6 +831,62 @@ test('a plan whose every item is a conflict exits 3 and writes nothing (0037, #3
   assert.match(applied.stdout.text, /already declares devEngines\.packageManager/);
   assert.equal(writeCount(applied.stdout.text), 0, 'a refused plan writes nothing');
   assert.deepEqual(snapshot(dir), before, 'every file stays byte-identical');
+});
+
+test('a refused plan ends with the refusal lines every other refusal ends with (11.2, #306)', async (t) => {
+  // Issue #306: the refusal printed the plan, then `nothing to apply` from `applyPlan`, and exited `3`,
+  // so the last line a script read said nothing was wrong. It ends the way every other refusal of this
+  // command ends (11.2, 11.3): the `funky-secure: …` line names the action, and the `reason: …` line
+  // names the fact a script cannot otherwise read — the conflict count.
+  const { dir, tracked } = conflictOnlyRepo(t);
+  const before = snapshot(dir);
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 3);
+
+  const lines = applied.stderr.text.split('\n').filter((line) => line !== '');
+  assert.deepEqual(lines, [
+    'funky-secure: resolve the 2 conflicts in the plan by hand, then re-run init --apply',
+    'reason: refusing to write: the plan carries 2 conflicts and no writable item',
+  ]);
+  assert.equal(
+    lines.at(-1),
+    'reason: refusing to write: the plan carries 2 conflicts and no writable item',
+    'the last line a script reads is the reason, never a line that reads as success',
+  );
+  assert.equal(applied.stderr.text.includes('nothing to apply'), false, applied.stderr.text);
+
+  // The plan is still printed first, so the reader sees which items were refused and why.
+  assert.match(applied.stdout.text, /^conflicts$/m);
+  assert.equal(writeCount(applied.stdout.text), 0);
+  assert.deepEqual(snapshot(dir), before, 'a refusal writes nothing');
+});
+
+test('with --format json a refused plan keeps the document parseable and the refusal on stderr (11.2)', async (t) => {
+  // `--format json` carries the plan document on stdout and the ledger on stderr, so the refusal lines
+  // land on stderr beside the ledger and the document stays one parseable document.
+  const { dir, tracked } = conflictOnlyRepo(t);
+  const before = snapshot(dir);
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--format', 'json', '--apply']), 3);
+
+  const document = JSON.parse(applied.stdout.text);
+  assert.deepEqual(document.refused, []);
+  assert.deepEqual(
+    document.plan.filter((item) => item.state === 'would-write'),
+    [],
+    'the document still names the plan that was refused',
+  );
+  assert.equal(document.plan.filter((item) => item.state === 'conflict').length, 2);
+
+  const lines = applied.stderr.text.split('\n').filter((line) => line !== '');
+  assert.equal(lines[0], 'funky-secure: resolve the 2 conflicts in the plan by hand, then re-run init --apply');
+  assert.equal(
+    lines.at(-1),
+    'reason: refusing to write: the plan carries 2 conflicts and no writable item',
+  );
+  assert.deepEqual(snapshot(dir), before, 'a refusal writes nothing');
 });
 
 test('a conflict inside a plan that writes something keeps exit 0 (I-58, 0037)', async (t) => {
