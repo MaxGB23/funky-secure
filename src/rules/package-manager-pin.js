@@ -160,6 +160,10 @@ export default {
   detect(ctx) {
     const observed = ctx.machine?.version ?? null;
     const executable = ctx.machine?.executable ?? null;
+    // The probe that did not answer, from the machine facts and printed verbatim (#354): two states
+    // leave the version unavailable — the resolution running out, and `pnpm --version` failing after it
+    // answered — and naming the wrong one described a command nobody ran.
+    const unansweredProbe = ctx.machine?.unansweredProbe ?? null;
     const declared = declaredPin(ctx);
     const evidence = { declared, observed, executable };
 
@@ -205,7 +209,7 @@ export default {
           status: 'skip',
           code: 'no-pnpm',
           path: PATH,
-          message: 'skipped: pnpm --version did not answer, so the pin cannot be verified',
+          message: `skipped: the probe "${unansweredProbe}" did not answer, so the pin cannot be verified`,
           evidence,
           remediation: { kind: 'none' },
           probeUnavailable: true,

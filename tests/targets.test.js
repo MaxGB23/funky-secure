@@ -82,6 +82,32 @@ test('reports a machine without pnpm as unavailable instead of failing', async (
   assert.deepEqual(targets, [{ kind: 'machine', detail: 'pnpm unavailable on this machine' }]);
 });
 
+test('carries the probe that did not answer, so the two absences stay different facts (#354)', async () => {
+  const over = (version) => ({
+    async pnpmVersion() {
+      return version;
+    },
+    async pnpmConfig() {
+      return { ok: false, reason: 'failed' };
+    },
+  });
+
+  const unresolvable = await machineFacts(over({ ok: false, reason: 'not-on-path', probe: 'where pnpm', installations: [] }));
+  const failed = await machineFacts(over({ ok: false, reason: 'failed', probe: 'pnpm --version' }));
+  const answered = await machineFacts(
+    over({ ok: true, version: '12.3.4', major: 12, executable: 'C:\\pnpm\\pnpm.exe', installations: [] }),
+  );
+
+  assert.equal(unresolvable.facts.unansweredProbe, 'where pnpm');
+  assert.equal(failed.facts.unansweredProbe, 'pnpm --version');
+  assert.equal(answered.facts.unansweredProbe, null, 'a version that answered leaves no probe to name');
+  assert.deepEqual(
+    unresolvable.targets,
+    failed.targets,
+    'the machine target is unchanged: which probe ran out belongs to the finding, not to the target list',
+  );
+});
+
 test('reports the version, the store and the version ambiguity as separate facts', async () => {  const agreeing = await machineFacts(
     collectorOver({ config: { storeDir: 'M:/.pnpm-store', userAgent: 'pnpm/12.3.4 npm/? node/? win32 x64' } }),
   );

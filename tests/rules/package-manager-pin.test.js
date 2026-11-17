@@ -10,7 +10,20 @@ import { buildFixtureCollector } from '../../scripts/gen-golden.js';
 
 const EXECUTABLE = 'C:/tools/pnpm/bin/pnpm.cmd';
 
-function machine(version) {
+/**
+ * The resolution probe this platform runs, spelled the way `resolvePnpm` spells it. A fixture collector
+ * stands in for a machine, and *which probe ran out* is part of what a machine reports (`probes.js` is
+ * the producer, #354).
+ */
+const RESOLUTION_PROBE = process.platform === 'win32' ? 'where pnpm' : 'which pnpm';
+
+/**
+ * The machine facts a rule receives. `unansweredProbe` is the fact #354 added: the two absences — the
+ * resolution running out and `pnpm --version` failing — are different states, and the machine reports
+ * which probe did not answer. A double has to name one; the default is what a machine with no pnpm
+ * reports, and a test that needs the version failure says so.
+ */
+function machine(version, unansweredProbe = RESOLUTION_PROBE) {
   return {
     available: version !== null,
     version,
@@ -22,6 +35,7 @@ function machine(version) {
     userAgent: null,
     reportedVersion: null,
     versionAmbiguous: false,
+    unansweredProbe: version === null ? unansweredProbe : null,
   };
 }
 
@@ -35,14 +49,14 @@ function manifest(json) {
   return { path: 'C:/repo/package.json', text: JSON.stringify(json), json, error: null };
 }
 
-function context({ version = '12.3.4', packageManager = 'pnpm@12.3.4', packageJson: file } = {}) {
+function context({ version = '12.3.4', packageManager = 'pnpm@12.3.4', packageJson: file, unansweredProbe = RESOLUTION_PROBE } = {}) {
   return {
     scope: 'all',
     cwd: 'C:/repo',
     root: 'C:/repo',
     env: {},
     configPath: null,
-    machine: machine(version),
+    machine: machine(version, unansweredProbe),
     repo: {
       root: 'C:/repo',
       inGit: true,
@@ -282,6 +296,39 @@ test('no pnpm answering is a skip, not a wrong pin', () => {
     observed: null,
     executable: null,
   });
+});
+
+test('a pnpm that could not be resolved names the resolution probe that ran, not one it never reached (#354)', () => {
+  // The field report: `where pnpm` exited 1, and the sentence blamed `pnpm --version`, a command nobody
+  // ran — the report contradicted itself in the next field, where no executable answered. An
+  // unverifiable pin is still not a wrong pin, so only the sentence moves.
+  const [finding] = rule.detect(context({ version: null, unansweredProbe: 'where pnpm' }));
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'no-pnpm');
+  assert.equal(
+    finding.message,
+    'skipped: the probe "where pnpm" did not answer, so the pin cannot be verified',
+  );
+  assert.doesNotMatch(finding.message, /pnpm --version/, 'the version probe was never reached');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+  assert.equal(finding.probeUnavailable, true, 'and --strict-probes still refuses it');
+});
+
+test('a pnpm that resolved and then failed names the version probe, and reads unlike the resolution skip (#354)', () => {
+  const [resolution] = rule.detect(context({ version: null, unansweredProbe: 'where pnpm' }));
+  const [version] = rule.detect(context({ version: null, unansweredProbe: 'pnpm --version' }));
+
+  assert.equal(version.status, 'skip');
+  assert.equal(version.code, 'no-pnpm');
+  assert.equal(
+    version.message,
+    'skipped: the probe "pnpm --version" did not answer, so the pin cannot be verified',
+  );
+  // Both states are one `no-pnpm` skip, so the sentence is the only thing that separates an exhausted
+  // resolution from a version command that answered nothing: one test cannot hold that distinction.
+  assert.notEqual(version.message, resolution.message);
+  assert.deepEqual(version.remediation, { kind: 'none' });
 });
 
 test('there is no repository root to read a pin from', () => {
@@ -621,12 +668,24 @@ async function scanFixture(name, args = []) {
   const dir = join(FIXTURES, name);
   const stdout = stream();
   const stderr = stream();
+  // The fixture collector stands in for a machine, and which probe ran out is part of what a machine
+  // reports (`probes.js` is the producer, #354). The double predates that fact — this fixture carries
+  // no `machine.json` at all, so its pnpm never resolved — and it is completed here rather than in
+  // `scripts/gen-golden.js`, which belongs to the golden gate.
+  const base = buildFixtureCollector({ dir });
+  const collector = {
+    ...base,
+    pnpmVersion: async () => {
+      const version = await base.pnpmVersion();
+      return version.ok ? version : { ...version, probe: RESOLUTION_PROBE };
+    },
+  };
   const code = await run(['scan', ...args], {
     cwd: dir,
     env: {},
     stdout,
     stderr,
-    collector: buildFixtureCollector({ dir }),
+    collector,
   });
   return { name, code, stdout: stdout.text, stderr: stderr.text };
 }
@@ -849,7 +908,12 @@ test('a version probe that never answered skips with no-pnpm, and is never a wro
   const [finding] = skipped.findings;
   assert.equal(finding.status, 'skip');
   assert.equal(finding.code, 'no-pnpm');
-  assert.match(finding.message, /did not answer/, 'the fact is the absence of a version, not a wrong one');
+  assert.equal(
+    finding.message,
+    `skipped: the probe "${RESOLUTION_PROBE}" did not answer, so the pin cannot be verified`,
+    'the absence of a version is the fact, and the probe named is the one that ran (#354)',
+  );
+  assert.doesNotMatch(finding.message, /pnpm --version/, 'the version probe was never reached');
   assert.deepEqual(finding.remediation, { kind: 'none' });
 
   // The page's claim: under `--strict-probes` the engine turns that skip into an error.

@@ -22,6 +22,7 @@ and the version on the machine's `PATH` is evidence rather than a verdict (0024)
 | `packageManager` names a manager other than pnpm | `skip` | `not-pnpm`, whatever `devEngines.packageManager` declares |
 | `packageManager` names pnpm in a shape this rule cannot compare | `fail` | `pin-conflict` |
 | `devEngines.packageManager` names another manager or another version than the pin | `skip` | `self-managed-pin`, whatever pnpm answers |
+| `where pnpm` (win32) / `which pnpm` (POSIX) did not answer | `skip` | `no-pnpm` |
 | `pnpm --version` did not answer | `skip` | `no-pnpm` |
 | Machine facts are out of scope (`--scope repo`) | `skip` | `no-pnpm` |
 | The root `package.json` is missing | `skip` | `no-package-json` |
@@ -71,9 +72,16 @@ finding is the ordinary `pass`, and `pin-differs-from-machine` is reserved for a
 another version. A pre-release is not the release (`12.3.4-beta.1` is not `12.3.4`), so a machine
 answering the release does not confirm a pin on the pre-release, and the row above applies.
 
-An unverifiable pin is not a wrong pin, so an unavailable version probe is a skip rather than a
-failure; under `--strict-probes` the engine turns that skip into an error. A `--scope repo` scan
-never probes the machine, so its skip is an out-of-scope fact and is not reported as an unavailable
+An unverifiable pin is not a wrong pin, so an unavailable pnpm is a skip rather than a failure; under
+`--strict-probes` the engine turns that skip into an error. Two probes can leave the pin unverified, and
+the message names the one that did not answer rather than one that was never reached. When
+`where pnpm` (win32) or `which pnpm` (POSIX) finds nothing, the sentence is
+`skipped: the probe "where pnpm" did not answer, so the pin cannot be verified` — `pnpm --version` was
+never run, so it is not mentioned. When the resolution answers and `pnpm --version` fails, the sentence
+names that probe instead: `skipped: the probe "pnpm --version" did not answer, so the pin cannot be
+verified`. The name comes from the probe's own result (12.1) and is printed verbatim, not chosen by this
+rule, so the sentence cannot contradict the evidence beside it. A `--scope repo` scan never probes the
+machine, so its skip is an out-of-scope fact and is not reported as an unavailable
 required probe: the message says the pin was not compared with the pnpm that answers and names the
 command that verifies it (S6), `funky-secure scan --scope all`. Severity is `error` in both presets
 and friction is 0: the declaration is one line in a file every Node repository has.
@@ -83,7 +91,9 @@ and friction is 0: the declaration is one line in a file every Node repository h
 `{ declared, observed, executable }`:
 
 - `declared` — the exact `packageManager` string, or `null` when it is absent.
-- `observed` — the version `pnpm --version` reported, or `null` when it did not answer.
+- `observed` — the version `pnpm --version` reported, or `null` when no version was obtained; the
+  message then names the probe that did not answer, which is the resolution probe when `pnpm --version`
+  was never reached.
 - `executable` — the path of the binary that answered, or `null`.
 
 A manifest the rule could not interpret adds `problem` to that evidence: `byte-order-mark`,

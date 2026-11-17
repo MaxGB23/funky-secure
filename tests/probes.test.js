@@ -188,6 +188,54 @@ test('reads the effective configuration as JSON and rejects a malformed answer',
   assert.equal(malformed.reason, 'unparsable');
 });
 
+test('names the probe that ran out, taken from the closed list, so a skip cannot blame one it never reached (#354)', async () => {
+  const unresolved = createCollector({
+    cwd: '.',
+    platform: 'win32',
+    spawn: spawnTable({ 'where pnpm': { code: 1, stdout: '' } }).spawn,
+    env: {},
+    readText: async () => '',
+  });
+  const unresolvedPosix = createCollector({
+    cwd: '.',
+    platform: 'linux',
+    spawn: spawnTable({ 'which pnpm': { code: 1, stdout: '' } }).spawn,
+    env: {},
+    readText: async () => '',
+  });
+  const versionFailed = createCollector({
+    cwd: '.',
+    platform: 'win32',
+    spawn: spawnTable({
+      'where pnpm': { code: 0, stdout: 'C:\\pnpm\\bin\\pnpm.exe\n' },
+      'C:\\pnpm\\bin\\pnpm.exe --version': { code: 1, stdout: '' },
+    }).spawn,
+    env: {},
+    readText: async () => '',
+  });
+
+  const absent = await unresolved.pnpmVersion();
+  const absentPosix = await unresolvedPosix.pnpmVersion();
+  const failed = await versionFailed.pnpmVersion();
+
+  assert.deepEqual({ ok: absent.ok, reason: absent.reason, probe: absent.probe }, {
+    ok: false,
+    reason: 'not-on-path',
+    probe: 'where pnpm',
+  });
+  assert.equal(absentPosix.probe, 'which pnpm', 'the half of the closed-list entry this platform runs');
+  assert.deepEqual({ ok: failed.ok, reason: failed.reason, probe: failed.probe }, {
+    ok: false,
+    reason: 'failed',
+    probe: 'pnpm --version',
+  });
+  assert.ok(PROBES.includes(failed.probe), 'the name is the entry the closed list carries');
+  assert.ok(
+    PROBES.includes('where pnpm (win32) / which pnpm (POSIX)') && absent.probe.startsWith('where pnpm'),
+    'and the resolution name is the half that ran of that entry',
+  );
+});
+
 test('never falls back to a second command when the declared probe fails', async () => {
   const { spawn, calls } = spawnTable({
     'where pnpm': { code: 0, stdout: 'C:\\pnpm\\bin\\pnpm.exe\n' },

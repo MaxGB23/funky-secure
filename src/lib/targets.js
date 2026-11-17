@@ -229,7 +229,9 @@ export function workspacePackageEntries(text) {
 /**
  * Resolves the machine facts of RFC 12.1/12.2. A missing probe yields `available: false`; the
  * version ambiguity between `--version` and the reported `userAgent` is reported, never resolved by
- * picking one.
+ * picking one. Which probe did not answer is a fact of its own (`unansweredProbe`, #354): an exhausted
+ * resolution and a failed version command leave the same `null` version, and a rule that has to name
+ * one of them must not choose between them.
  */
 export async function machineFacts(collector, { withConfig = true } = {}) {
   const version = await collector.pnpmVersion();
@@ -245,6 +247,10 @@ export async function machineFacts(collector, { withConfig = true } = {}) {
   const facts = {
     available: version.ok || configuration.ok,
     version: observed,
+    // The probe that did not answer, exactly as the collector reported it — `where pnpm`/`which pnpm`
+    // when the resolution ran out, `pnpm --version` when that probe answered nothing (#354). `null`
+    // when a version was obtained, so there is no absence to name.
+    unansweredProbe: version.ok ? null : (version.probe ?? null),
     major: observed === null ? null : majorOf(observed),
     executable: version.ok ? version.executable : null,
     installations: version.ok ? version.installations : [],

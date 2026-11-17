@@ -29,6 +29,27 @@ export const PROBES = Object.freeze([
 const MAX_OUTPUT = 8 * 1024 * 1024;
 
 /**
+ * The two probes a pnpm fact comes from, read out of the closed list rather than restated beside it: a
+ * fact names the entry that did or did not answer, so no sentence can blame a command the list does not
+ * carry. `PROBES` spells both halves of the resolution in one entry because the fact is one, and the
+ * half this platform runs is what a reader is told about (#354).
+ */
+const VERSION_PROBE = PROBES.find((probe) => probe.startsWith('pnpm ') && probe.endsWith('--version'));
+const RESOLUTION_ENTRY = PROBES.find(
+  (probe) => probe.includes('where pnpm') && probe.includes('which pnpm'),
+);
+
+/**
+ * The resolution probe as this platform actually runs it.
+ * @param {boolean} isWindows
+ * @returns {string} `where pnpm` or `which pnpm`
+ */
+function resolutionProbe(isWindows) {
+  const [win32Half, posixHalf] = RESOLUTION_ENTRY.split(' / ');
+  return (isWindows ? win32Half : posixHalf).replace(/\s*\((?:win32|POSIX)\)$/, '');
+}
+
+/**
  * Runs one process and resolves; it never rejects. A spawn failure is a fact, not an exception.
  * @param {string} file
  * @param {string[]} args
@@ -129,7 +150,7 @@ export async function resolvePnpm({
   cwd,
 } = {}) {
   const isWindows = platform === 'win32';
-  const source = isWindows ? 'where pnpm' : 'which pnpm';
+  const source = resolutionProbe(isWindows);
   const listing = await runProcess(isWindows ? 'where' : 'which', ['pnpm'], { cwd, env, spawn });
 
   if (!listing.ok || listing.code !== 0) {
@@ -198,18 +219,28 @@ export function createCollector({
   const pnpmVersion = () =>
     memo('pnpmVersion', async () => {
       const resolved = await pnpm();
-      if (resolved.file === null) return { ok: false, reason: resolved.reason, installations: resolved.installations };
+      if (resolved.file === null) {
+        // The probe that ran out is the resolution, not `pnpm --version`, which was never reached
+        // (#354): `probe` names the command that did or did not answer, and a rule prints it verbatim
+        // instead of choosing one of them itself.
+        return {
+          ok: false,
+          reason: resolved.reason,
+          probe: resolved.source,
+          installations: resolved.installations,
+        };
+      }
       // Outside the scanned repository, deliberately. pnpm 12 with a `packageManager` declared treats
       // any invocation as an occasion to record that manager in the project's own lockfile, so asking
       // for a version from inside the repository rewrote a file this tool promises never to touch
       // (0019, and the read-only test that now guards it). Reading a version needs no project.
       const result = await run(resolved.file, [...resolved.prefixArgs, '--version'], { cwd: tmpdir() });
-      if (!result.ok) return { ok: false, reason: 'spawn-failed', error: result.error };
-      if (result.code !== 0) return { ok: false, reason: 'failed' };
+      if (!result.ok) return { ok: false, reason: 'spawn-failed', probe: VERSION_PROBE, error: result.error };
+      if (result.code !== 0) return { ok: false, reason: 'failed', probe: VERSION_PROBE };
       const version = (result.stdout ?? '').trim();
       const major = Number(version.split('.')[0]);
       if (!/^\d+\.\d+\.\d+/.test(version) || !Number.isInteger(major)) {
-        return { ok: false, reason: 'unparsable' };
+        return { ok: false, reason: 'unparsable', probe: VERSION_PROBE };
       }
       return {
         ok: true,
