@@ -247,16 +247,10 @@ test('the three scopes select what 7.2 says, and an excluded rule states its ski
     const finding = perRule.get(id);
     assert.equal(finding.status, 'skip', `${id} must skip when the repository is excluded`);
     assert.match(finding.message, /excluded by --scope machine/, `${id} names the exclusion`);
-    // 10.1: `no-repo` is the code that means "no repository facts in this scope". One rule does not
-    // hold it: `package-manager-pin` answers `no-package-json`, a code naming an absent file the
-    // excluded scope never looked for, although its message names the exclusion. Measured by T14 and
-    // reported as a defect; the line keeps the exception visible instead of blessing it, so a fix
-    // changes it and nothing passes silently.
-    if (id === 'package-manager-pin') {
-      assert.equal(finding.code, 'no-package-json', 'the measured exception: the code names a file');
-    } else {
-      assert.match(String(finding.code), /^no-repo/, `${id} states its exclusion in its code`);
-    }
+    // 10.1: `no-repo` is the code that means "no repository facts in this scope", so every excluded
+    // rule states the exclusion in its code and no rule carries a file's code for a scope that never
+    // looked for the file.
+    assert.match(String(finding.code), /^no-repo/, `${id} states its exclusion in its code`);
   }
   // The human side names the excluded rules as well, or the fact is only machine-readable.
   assert.match((await scan(dir, ['--scope', 'machine'])).stdout, /excluded by --scope machine/);

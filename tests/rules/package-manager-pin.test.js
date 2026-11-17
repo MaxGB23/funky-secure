@@ -338,7 +338,10 @@ test('there is no repository root to read a pin from', () => {
   const [finding] = rule.detect(ctx);
 
   assert.equal(finding.status, 'skip');
-  assert.equal(finding.code, 'no-package-json');
+  // Nothing resolved the repository, which is the other half of `no-repo` (10.1): the code states the
+  // absence that was measured, and no manifest was ever looked for (#398).
+  assert.equal(finding.code, 'no-repo');
+  assert.equal(finding.message, 'skipped: no repository was resolved, so the pin cannot be read');
   assert.equal(finding.probeUnavailable, undefined);
 });
 
@@ -375,10 +378,55 @@ test('a repository excluded by the scope says so instead of claiming the root ha
   const [finding] = rule.detect(ctx);
 
   assert.equal(finding.status, 'skip');
-  assert.equal(finding.code, 'no-package-json');
+  // The sentence named the exclusion since #342; the code says the same fact (#398), because
+  // `no-package-json` asserted a file absence the excluded scope never measured.
+  assert.equal(finding.code, 'no-repo');
   assert.equal(
     finding.message,
     'skipped: the repository was excluded by --scope machine, so the pin cannot be read',
+  );
+});
+
+test('the scope answers its own code: an excluded repository is no-repo, a measured absent manifest is no-package-json (#398)', async () => {
+  // Direction 1: `--scope machine` excludes the repository before anything is resolved, so no manifest
+  // was ever looked for. Report 10.1 says `no-repo` means no repository facts in this scope, and the
+  // message — which already named the exclusion (#342) — is what states which of the two it was.
+  const excluded = answered(
+    await scanFixture('fail-pin-missing', [
+      '--scope',
+      'machine',
+      '--only',
+      'package-manager-pin',
+      '--format',
+      'json',
+    ]),
+  );
+
+  assert.equal(excluded.code, 0, 'a skip is not a failure');
+  assert.equal(excluded.findings.length, 1, 'the excluded scope answers one finding');
+  const [excludedFinding] = excluded.findings;
+  assert.equal(excludedFinding.status, 'skip');
+  assert.equal(excludedFinding.code, 'no-repo', 'the excluded scope measured no manifest at all');
+  assert.equal(
+    excludedFinding.message,
+    'skipped: the repository was excluded by --scope machine, so the pin cannot be read',
+  );
+
+  // Direction 2: the scope did not exclude the repository, the root resolved, and it really carries no
+  // manifest. That is the rule's own measured fact, and flattening it into the scope's code would
+  // replace a measured absence with a scope verdict.
+  const measured = answered(
+    await scanFixture('skip-no-package-json', ['--only', 'package-manager-pin', '--format', 'json']),
+  );
+
+  assert.equal(measured.code, 0, 'a skip is not a failure');
+  assert.equal(measured.findings.length, 1, 'the resolved root answers one finding');
+  const [measuredFinding] = measured.findings;
+  assert.equal(measuredFinding.status, 'skip');
+  assert.equal(measuredFinding.code, 'no-package-json', 'the manifest is absent and was measured');
+  assert.equal(
+    measuredFinding.message,
+    'skipped: the repository root has no package.json to read the pin from',
   );
 });
 
