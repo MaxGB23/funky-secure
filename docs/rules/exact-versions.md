@@ -110,9 +110,10 @@ instead of one global skip that says nothing about which importer is missing fro
 importer's specifiers are not compared and every other importer's still are; the skip is an
 unavailable probe, so `--strict-probes` turns it into an error rather than accepting a slightly
 smaller comparison. A repository with no importer at all — no root `package.json` and no workspace
-package — reports one `skip: unreadable-package-json` instead of a pass (and `no-lockfile` when there
-is no lockfile either), because a clean claim about specifiers it never read would be a false
-negative.
+package — reports one `skip: unreadable-package-json` instead of a pass when there is a lockfile to
+compare against, because a clean claim about specifiers it never read would be a false negative.
+With no lockfile either the single skip is `no-lockfile`: the lockfile is the fact the comparison was
+missing, and the run does not additionally name the importer it never read.
 
 **A refused workspace entry is reported.** A `packages:` entry in `pnpm-workspace.yaml` that resolves
 outside the repository root is refused before any file under it is read, and the refusal reaches the
