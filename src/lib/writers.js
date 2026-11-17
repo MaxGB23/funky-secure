@@ -584,6 +584,40 @@ function declaredPinVersion(json) {
 }
 
 /**
+ * Whether the manifest declares a guard at all — `devEngines.packageManager` present, whatever it
+ * carries. A value this writer cannot interpret is a declaration, not an absence (0027).
+ * @param {object | null} json the parsed manifest
+ * @returns {boolean}
+ */
+function declaresGuard(json) {
+  if (json === null || typeof json !== 'object' || Array.isArray(json)) return false;
+  const declared = json.devEngines;
+  if (declared === null || typeof declared !== 'object' || Array.isArray(declared)) return false;
+  return Object.hasOwn(declared, 'packageManager');
+}
+
+/**
+ * The pin item a declared guard withholds (11.2, W3b). Its state is a `conflict` and not a
+ * `would-skip`: nothing here is already at policy, and the pin is exactly what is missing. There are no
+ * bytes because writing them is what W3b forbids — a pin beside a guard the plan will not touch is the
+ * pair that must never be written disagreeing.
+ *
+ * @param {object} pinItem the item the pin writer planned
+ * @param {{ version: string, guard: unknown }} facts the withheld value and the declaration it would disagree with
+ * @returns {object}
+ */
+function withheldPin(pinItem, { version, guard }) {
+  return planItem({
+    target: pinItem.target,
+    operation: pinItem.operation,
+    path: pinItem.path,
+    relative: pinItem.relative,
+    state: 'conflict',
+    reason: `${PACKAGE_JSON_RELATIVE} already declares devEngines.packageManager ${JSON.stringify(guard)}, so packageManager "pnpm@${version}" is not written beside it; the two declarations are never written disagreeing`,
+  });
+}
+
+/**
  * W3 and W3b, in the order the plan prints them: the pin, then the guard beside it.
  *
  * Two plan items over one file on purpose — the plan is the only place a human sees what will be
@@ -599,6 +633,10 @@ function declaredPinVersion(json) {
  *   own bytes and carries the version that declaration names — never the answering one;
  * - the pin is a conflict, so nothing establishes a version and no guard is planned. The two
  *   declarations are then never written disagreeing.
+ * - the guard is a conflict — the manifest declares one this writer will not overwrite — so the pin is
+ *   withheld with it. Writing the pin would create the disagreement the guard write is forbidden to
+ *   create: a run that reported the conflict, wrote `packageManager` anyway and left the two declaring
+ *   another version is issue 353.
  *
  * Nothing is emitted for a file this plan would not touch: a repository carrying both declarations gets
  * no `package.json` item at all.
@@ -615,19 +653,19 @@ export function planPackageManagerWrites(ctx, { version = null, pinFailing = fal
 
   let guardInput = packageJsonText;
   let established = null;
+  let pinItem = null;
 
   if (pinFailing) {
     const pin = writePackageManagerPin({ packageJsonText, version });
-    const pinItem = planTarget(ctx, {
+    pinItem = planTarget(ctx, {
       relative: PACKAGE_JSON_RELATIVE,
       operation: 'set packageManager',
       result: pin,
     });
-    items.push(pinItem);
 
     // A conflict — the writer's or the write-target guard's — is the whole answer: nothing establishes
     // the version the guard would carry.
-    if (pinItem.state === 'conflict') return items;
+    if (pinItem.state === 'conflict') return [pinItem];
 
     established = version;
     if (pin.ok === true && pin.state === 'would-write') guardInput = pin.content;
@@ -637,7 +675,9 @@ export function planPackageManagerWrites(ctx, { version = null, pinFailing = fal
     if (established === null) return items;
   }
 
-  if (typeof established !== 'string' || established === '') return items;
+  if (typeof established !== 'string' || established === '') {
+    return pinItem === null ? items : [pinItem];
+  }
 
   const guard = writeDevEnginesPackageManager({
     packageJsonText: guardInput,
@@ -648,6 +688,26 @@ export function planPackageManagerWrites(ctx, { version = null, pinFailing = fal
     operation: 'set devEngines.packageManager',
     result: guard,
   });
+
+  // A guard the manifest already declares is a `conflict` naming the value found, never an overwrite —
+  // and the pin this plan was about to write is withheld with it, because a pin beside a guard the
+  // writer will not touch is the pair that must never be written disagreeing (11.2, W3b, #353). Only a
+  // declared guard withholds it: a `devEngines` that is not an object declares none, so there is nothing
+  // for a pin to disagree with.
+  const withholdsPin =
+    declaresGuard(packageJson) &&
+    guardItem.state === 'conflict' &&
+    pinItem !== null &&
+    pinItem.state === 'would-write';
+
+  if (withholdsPin) {
+    return [
+      withheldPin(pinItem, { version: established, guard: packageJson.devEngines.packageManager }),
+      guardItem,
+    ];
+  }
+
+  if (pinItem !== null) items.push(pinItem);
 
   // Already at policy with nothing else over this file: no item, because this plan would not touch it.
   if (items.length === 0 && guardItem.state === 'would-skip') return items;
