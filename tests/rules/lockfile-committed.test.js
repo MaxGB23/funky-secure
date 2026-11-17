@@ -175,12 +175,26 @@ test('a missing ignore verdict is a pass with the gap stated', () => {
   assert.equal(finding.evidence.ignored, null);
 });
 
-test('outside a repository context the rule skips', () => {
+test('outside a repository context the rule skips, naming the reason the context carries', () => {
   const ctx = context();
   ctx.repo = null;
 
-  const [finding] = rule.detect(ctx);
+  const [absent] = rule.detect(ctx);
 
-  assert.equal(finding.status, 'skip');
-  assert.equal(finding.code, 'no-repo-root');
+  assert.equal(absent.status, 'skip');
+  assert.equal(absent.code, 'no-repo-root');
+  assert.equal(
+    absent.message,
+    'skipped: no repository was resolved, so the lockfile cannot be located',
+  );
+
+  // #334: `--scope machine` excluded the repository before anything was resolved, and the clause this
+  // rule appends survives the reason it now names.
+  const [excluded] = rule.detect({ ...ctx, repoOutOfScope: true });
+
+  assert.equal(excluded.code, 'no-repo-root');
+  assert.equal(
+    excluded.message,
+    'skipped: the repository was excluded by --scope machine, so the lockfile cannot be located',
+  );
 });

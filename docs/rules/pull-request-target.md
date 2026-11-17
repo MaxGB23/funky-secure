@@ -41,7 +41,7 @@ Any other answer is one finding for the whole repository, never one per workflow
 - `no-ci` — the repository has no workflow at all.
 - `unparseable-workflow` — a workflow the reader cannot attribute is skipped per file, and no pass is
   added on top of it: the rule never guesses from a line scan.
-- `no-repo` — no repository facts were collected.
+- `no-repo` — the repository was excluded by `--scope machine`, or nothing resolved one.
 
 Friction is 1. Severity is `error` in `baseline` and `error` in `strict`: this is a declared
 deviation from the friction table of RFC 4.2/9.1, where friction 1 starts at `warn` in `baseline`.

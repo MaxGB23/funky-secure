@@ -196,11 +196,20 @@ test('skips outside git instead of guessing the tracked set', () => {
   assert.equal(findings[0].probeUnavailable, true);
 });
 
-test('skips when no repository facts were collected', () => {
-  const findings = rule.detect(context({ repo: null }));
+test('skips when no repository facts were collected, naming the reason the context carries', () => {
+  const absent = rule.detect(context({ repo: null }));
 
-  assert.equal(findings.length, 1);
-  assert.equal(findings[0].status, 'skip');
-  assert.equal(findings[0].code, 'no-repo');
-  assert.equal(findings[0].probeUnavailable, true);
+  assert.equal(absent.length, 1);
+  assert.equal(absent[0].status, 'skip');
+  assert.equal(absent[0].code, 'no-repo');
+  assert.equal(absent[0].probeUnavailable, true);
+  assert.equal(absent[0].message, 'skipped: no repository was resolved');
+
+  // #334: the scope excluded the repository, which is not the same fact as an absent one, and the
+  // decision keeps the code because the caller that passed the flag already holds it.
+  const excluded = rule.detect(context({ repo: null, repoOutOfScope: true }));
+
+  assert.equal(excluded.length, 1);
+  assert.equal(excluded[0].code, 'no-repo');
+  assert.equal(excluded[0].message, 'skipped: the repository was excluded by --scope machine');
 });

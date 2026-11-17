@@ -31,7 +31,10 @@ separate document (11.2).
 
 `code` is optional and, when present, stable: one rule may produce findings for different reasons
 (`exact-versions` → `floating-range`, `lockfile-desync`) and a consumer must be able to tell them
-apart without parsing a message. Rule ids are the public contract (6.2); codes are too.
+apart without parsing a message. Rule ids are the public contract (6.2); codes are too. `no-repo`
+means no repository facts in this scope: the scope excluded the repository, or nothing resolved one,
+and the rule's message names which of the two it was rather than asserting an absence it never
+measured.
 
 **What is serialized.** `findings[]` carries the `fail`, `skip` and `error` findings only. `pass`
 findings are counted in `summary.pass` and never listed: a repository with thirteen passing rules does

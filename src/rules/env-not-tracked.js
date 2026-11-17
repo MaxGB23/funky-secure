@@ -9,6 +9,8 @@
  * in the message, because no command can undo a secret that already reached history.
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
+
 /**
  * The template names that are not spelled `.example` (RFC 8.2 R6, E4). The `.example` family itself
  * is matched by suffix, not by enumeration: a template is a file meant to be copied, and
@@ -75,7 +77,11 @@ export default {
    */
   detect(ctx) {
     const repo = ctx.repo;
-    if (!repo) return [skip('no-repo', 'no repository facts were collected')];
+    if (!repo) {
+      return [
+        { status: 'skip', code: 'no-repo', message: repoSkipMessage(ctx), probeUnavailable: true },
+      ];
+    }
 
     const tracked = repo.tracked;
     if (tracked === null || tracked === undefined) {

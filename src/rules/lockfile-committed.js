@@ -9,6 +9,8 @@
  * remediation is the command a person runs, never a silent `none`.
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
+
 const DOC = 'docs/rules/lockfile-committed.md';
 const LOCKFILE = 'pnpm-lock.yaml';
 
@@ -41,7 +43,7 @@ export default {
         finding(
           'skip',
           'no-repo-root',
-          'skipped: no repository root was resolved, so the lockfile cannot be located',
+          repoSkipMessage(ctx, 'the lockfile cannot be located'),
           { path: LOCKFILE, present: null, tracked: null, ignored: null },
         ),
       ];

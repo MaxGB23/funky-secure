@@ -12,6 +12,7 @@
  * never empty (RFC 4.6).
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
 import { declaresTrigger, parseWorkflow } from '../lib/workflows.js';
 
 const BOT_ACTOR = /dependabot\[bot\]|renovate\[bot\]/i;
@@ -140,7 +141,11 @@ export default {
    */
   detect(ctx) {
     const repo = ctx.repo;
-    if (!repo) return [skip('no-repo', 'no repository facts were collected')];
+    if (!repo) {
+      return [
+        { status: 'skip', code: 'no-repo', message: repoSkipMessage(ctx), probeUnavailable: true },
+      ];
+    }
 
     const botFiles = repo.botFiles ?? [];
     const findings = [];

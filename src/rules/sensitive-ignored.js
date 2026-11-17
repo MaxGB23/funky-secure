@@ -9,6 +9,7 @@
  * fact, `<redacted>` is the value (RFC 12.3).
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
 import {
   GITIGNORE_RELATIVE,
   findingsOf,
@@ -53,7 +54,7 @@ export default {
           code: 'no-repo',
           scope: 'repo',
           target: 'repo-root',
-          message: 'skipped: no repository was resolved',
+          message: repoSkipMessage(ctx),
           probeUnavailable: true,
         },
       ];

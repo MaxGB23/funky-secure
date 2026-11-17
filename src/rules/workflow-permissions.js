@@ -22,6 +22,7 @@
  * overrides the narrow default with everything.
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
 import { parseWorkflow } from '../lib/workflows.js';
 
 const DOC = 'docs/rules/workflow-permissions.md';
@@ -117,7 +118,11 @@ export default {
    */
   detect(ctx) {
     const repo = ctx.repo;
-    if (!repo) return [skip('no-repo', 'no repository facts were collected')];
+    if (!repo) {
+      return [
+        { status: 'skip', code: 'no-repo', message: repoSkipMessage(ctx), probeUnavailable: true },
+      ];
+    }
 
     const workflows = repo.workflows ?? [];
     if (workflows.length === 0) {
