@@ -494,9 +494,12 @@ the pin alone is the declaration, and nothing about it is skipped.
   download is read, never the upload that produced it), does not decide whether a fork can start the
   producer branch it targets, and does not resolve a producer in another repository or one reached
   through a reusable workflow. A producer name more than one workflow carries names no producer, so
-  the pair is a skip and never a resolution. A `with:` map written as a flow collection is invisible
-  to the reader today, so the `uses` signal is the one that always answers, and the listed workflows
-  are read only from a block map: any other spelling of `on:` is a skip, never a guessed list.
+  the pair is a skip and never a resolution. Both spellings of a `with:` map are read — the block
+  map and a flow collection on the key's own line (`with: { run-id: x }`) — so neither hides an input
+  the workflow declares; a `with:` map that cannot be attributed (no closing brace, or a block body
+  under a flow map) is `skip: unparseable-workflow` on that file and never a pass. The listed
+  workflows are read only from a block map: any other spelling of `on:` is a skip, never a guessed
+  list.
 
 ### 8.3 Deferred catalog (six rules, none of them in 0.2)
 
