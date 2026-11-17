@@ -33,8 +33,8 @@ download:
 | a step whose `with.run-id` reads `github.event.workflow_run.id` | `run-id`, with the expression in the evidence |
 
 The finding is one `workflow-run-artifact` per downloading step, at the line of that step, so the
-line a reader is sent to is the line the fix edits. It is reported only when all four declarations
-hold:
+line a reader is sent to is the line the fix edits. Measured, two downloads in one job are two
+findings, at each step's line. It is reported only when all four declarations hold:
 
 1. the workflow declares `workflow_run`;
 2. a step downloads an artifact;
@@ -43,7 +43,10 @@ hold:
    and the rest are one token, and `id-token: write` alone is enough. The job's own `permissions:`
    wins over the workflow's, exactly as GitHub applies it, so a job that narrows the workflow grant
    to `contents: read` holds no write here;
-4. the producer resolves, and it declares `pull_request`.
+4. the producer resolves, and it declares `pull_request`. One resolved producer that declares
+   `pull_request` makes the finding even when the trigger lists a name that resolves to nothing; a
+   name more than one workflow carries is a skip for the whole trigger instead, because it cannot be
+   ruled out as the producer.
 
 The message and `evidence.scopes` name every write scope the governing declaration holds, in
 catalog order, and never a scope the rule did not read. `id-token: write` is the case that made this
@@ -57,6 +60,11 @@ producer" and "the producer is trusted" must not print the same:
 
 - `producer-unresolved-name` - no workflow in the repository carries the `name:` the trigger names,
   or more than one does: a shared name names no producer, so it is never resolved to one of them.
+  A trigger that lists several workflows resolves only when every name it lists does: a name that
+  resolves to nothing is this skip even beside a name that resolves, because the pass it would
+  otherwise print says "every producer the `workflow_run` trigger names resolves", which would be
+  false about the name it did not find. The message names only the names that did not resolve, and
+  `evidence.workflows` keeps the whole list the trigger wrote.
 - `producer-unresolved-trigger` - the `on:` block is a form the reader does not model (a flow
   collection), so the names cannot be read out of it.
 - `producer-unresolved-config` - a key the rule reads is absent or `null`: a `workflows:` list the
@@ -69,6 +77,15 @@ Four passes, each naming the furthest leg the rule did reach:
 - `no-write-permission` - a downloading `workflow_run` job holds no write scope.
 - `trusted-producer` - every resolved producer declares no `pull_request`.
 
+A pass is one line of `summary.pass` and never a row: neither format prints it, so its code and its
+message are unreachable through `scan` — measured, `--format json` answers `"findings": []` and the
+human report says `all 1 rule pass`. Parity between the two formats is therefore the count for a
+pass, and the path, line and message for a finding or a skip.
+
+The legs are ordered, so an unresolved name only preempts the pass that reads the producer: a
+consumer that holds no write scope is still `no-write-permission` whatever the trigger names,
+because that answer never resolved anything, and `trusted-producer` is the one a skip replaces.
+
 A repository with no workflow is `skip: no-ci`, not a pass. A workflow the reader cannot parse yields
 `skip: unparseable-workflow` for that file and no pass is added on top. No repository facts in this scope is
 `skip: no-repo`.
@@ -77,6 +94,14 @@ Friction is 1, and severity is `error` in `baseline` and in `strict`: a declared
 friction table, for the reason `pull-request-target` gives. The finding fires on the conjunction of
 four declarations, removing any one of them clears it, and no repository that never writes
 `workflow_run` is touched, so the friction class of the finding is not the friction of the fix.
+
+`starter`, the day-zero preset, turns this rule `off`: it runs its six rules and nothing else, and
+this is not one of them, so a `starter` run carries neither a finding nor a count for it and fails no
+run. Measured, a repository that fails this rule reports `summary` with every count at zero and
+`"findings": []` under `--preset starter`, and the human report names it in the `off by policy:`
+line. `--ignore workflow-run-artifact` and `"rules": { "workflow-run-artifact": "off" }` in the
+repository config answer the same. An `--only` list that names other rules drops this one entirely —
+it has no row and contributes no count — while the summary carries whatever the named rules found.
 
 ## Evidence
 
@@ -101,6 +126,12 @@ was read; `evidence.scopes` lists every write scope the token rests on, in catal
 Printing the artifact, hashing it or copying it into a comment are all reads of untrusted bytes,
 whatever the job does with them next. The tool never edits a workflow.
 
+Measured: applying each route to issue #153's pair clears the finding and turns the run into one
+counted pass, and neither route discards anything else the author wrote. The split removes exactly
+the `permissions:` declaration it rewrites — the download step, its `with:` map and the comment step
+survive, and the producer file is byte-identical. The API route removes exactly the four lines of
+the step the finding names, and keeps the write declaration it does not need to narrow.
+
 ## Limits
 
 It proves that a declared trigger, a declared step and a declared permission name the pair, and that
@@ -119,7 +150,11 @@ a workflow carrying the producer name declares `pull_request`:
 - **It reads only the spelling of the download it models.** An artifact fetched outside a step's
   `uses` or `with.run-id` is not seen: `pnpm/pnpm` reads fork-produced artifacts with `gh run download`
   and the artifacts API inside a `run:` block, and that read never reached this rule. The workflow
-  holds no write scope, so the answer there was right for a reason the rule did not read.
+  holds no write scope, so the answer there was right for a reason the rule did not read. The pass
+  measured on `t3-create-t3-app` rests on the same silence: `prerelease-comment.yml` lists the run's
+  artifacts through `github.rest.actions.listWorkflowRunArtifacts` inside a `script:`, so the rule
+  answers a counted pass without having read the read — the file declares no `permissions:` at all,
+  which is why the verdict is right and why it is not evidence that the read was seen.
 - **It follows no artifact into a reusable workflow.** A job that passes the artifact to a reusable
   workflow, or reads it inside one, is outside what the reader attributes, so a producer reached that
   way names no producer here and a read reached that way is invisible.
