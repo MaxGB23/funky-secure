@@ -27,8 +27,16 @@ import { parseWorkflow } from '../lib/workflows.js';
 
 const DOC = 'docs/rules/workflow-permissions.md';
 
-/** The remediation of an absent workflow-level declaration. */
-const MISSING_FIX = 'add "permissions:" with "contents: read" at the top level, and widen it only in the job that needs it';
+/**
+ * The remediation of an absent workflow-level declaration. Both shapes, because they are not
+ * interchangeable: a workflow-level block cannot be widened for one job without granting that scope to
+ * every job, so a job that needs more than the workflow grants is a fix of its own. No job is named, so
+ * the sentence cannot name one the file does not have.
+ */
+const MISSING_FIX =
+  'add "permissions:" with "contents: read" at the workflow level, or declare it on the job that needs ' +
+  'more than the workflow grants. Widening the workflow-level block for one job would grant that scope ' +
+  'to every job';
 
 /** The remediation of a workflow-level grant of everything. */
 const WORKFLOW_FIX = 'replace the workflow-level "permissions: write-all" with the exact scopes the workflows write';
@@ -97,9 +105,11 @@ export default {
     'level workflow or job, at the line of the declaration that grants write-all; a job-level ' +
     'finding also carries the job id and is reported at the line of that job permissions declaration.',
   remediation:
-    'Manual, printed as the declaration to write: add a top-level permissions: with contents: read ' +
-    'and widen it only in the job that needs it, or replace write-all with the exact scopes. The ' +
-    'tool never edits a workflow.',
+    'Manual, printed as the declaration to write, and there are two shapes because they are not ' +
+    'interchangeable: a workflow-level permissions: with contents: read for a workflow whose jobs all ' +
+    'need the same scopes, or a per-job permissions: on the job that needs more than the workflow ' +
+    'grants — the workflow-level block cannot be widened for one job without granting that scope to ' +
+    'every job. A write-all is replaced by the exact scopes written. The tool never edits a workflow.',
   limits:
     'Proves what the workflow declares; it does not prove the token a job receives. The ' +
     'declaration is not the effective grant: a repository setting decides the default for a ' +
