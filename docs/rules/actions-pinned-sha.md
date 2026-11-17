@@ -16,6 +16,9 @@ attributes each step to its job, and the rule decides per step with a `uses` val
 - `owner/repo@<40 hex>` passes. Lowercase and uppercase hex are both accepted.
 - `owner/repo@v1`, `owner/repo@main` and `owner/repo@abc1234` fail as `unpinned-action` with
   `form` `tag`, `branch` or `short-sha`.
+- `owner/repo@` and `owner/repo` name no ref at all, so they fail as `unpinned-action` with `form`
+  `none`: there is no tag, branch or SHA to group them under, and the message says the reference
+  names none.
 - `docker://image:tag` fails as `mutable-docker-tag`; `docker://image@sha256:<64 hex>` passes.
 - `docker://image` with no tag at all fails the same way: Docker resolves `latest` for it, which
   moves under you exactly as a tag does, so the message says it names no tag instead of calling
@@ -28,8 +31,9 @@ The image is read the way Docker reads it: only a `:` that comes after the last 
 `docker://registry:5000/image` is that image with no tag rather than a tag of `5000/image`.
 
 The form is a lexical classification, not a git lookup: a `v`-prefixed or dotted numeric ref is a
-tag, an all-hex ref shorter than 40 characters is a short SHA, and everything else is a branch. No
-probe, no network, no `git ls-remote`. Zero unpinned references is a pass.
+tag, an all-hex ref shorter than 40 characters is a short SHA, and everything else is a branch. A
+reference that names no ref at all is `none`, never the branch it never named. No probe, no network,
+no `git ls-remote`. Zero unpinned references is a pass.
 
 A workflow the reader cannot parse yields one `skip: unparseable-workflow` for that file, and the
 rule never adds a pass on top of it: a malformed input is not a verified clean workflow.
@@ -45,8 +49,9 @@ the repository was excluded, because there is no workflow to read at that scope.
 ## Evidence
 
 `file:line`, the raw reference exactly as written — quotes and trailing comment included — and the
-offending form. A trailing `# vX.Y.Z` comment is preserved as evidence and never trusted as the
-version; the reference, not the comment, is what runs.
+offending form: `tag`, `branch`, `short-sha`, `docker-tag`, or `none` when the reference names no ref
+at all. A trailing `# vX.Y.Z` comment is preserved as evidence and never trusted as the version; the
+reference, not the comment, is what runs.
 
 ## Remediation
 
@@ -75,8 +80,8 @@ command is documented here instead of being run for you.
   with the character count or the algorithm named, and the printed form replaces the digest rather
   than appending to it.
 - A ref that is neither version-shaped nor all-hex is labelled a branch. The label is lexical; the
-  finding is the same whichever branch or tag it is. A remote `uses` with no ref at all is reported
-  the same way, because it names no commit.
+  finding is the same whichever branch or tag it is. A remote `uses` that names no ref at all —
+  `owner/repo@` or `owner/repo` — carries `form` `none`, because it names no commit to classify.
 - A workflow the reader cannot attribute is skipped per file: the rule never guesses from a line
   scan, and `--strict-probes` does not promote this skip, because the workflow was read and refused
   rather than unavailable.

@@ -728,7 +728,74 @@ test('a reference that stops at the @ names no ref instead of claiming a branch'
 
   assert.equal(finding.code, 'unpinned-action');
   assert.match(finding.message, /^actions\/checkout@ names no ref; pin the 40-character commit SHA/);
+  assert.deepEqual(
+    finding.evidence,
+    { uses: 'actions/checkout@', form: 'none' },
+    'a reference that names no ref is grouped under none, never under branch',
+  );
   assert.deepEqual(finding.remediation, { kind: 'manual', command: 'uses: actions/checkout@<sha>' });
+});
+
+/// #377: `form` is a report field a consumer groups by, so both spellings that name no ref answer
+/// `none` and the four values that do name a shape keep the bytes they had.
+
+test('a reference written with no @ at all also names no ref, and its form is none', () => {
+  const [finding] = rule.detect(
+    context([
+      workflow('.github/workflows/none.yml', [
+        'name: none',
+        'on: push',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout',
+      ]),
+    ]),
+  );
+
+  assert.equal(finding.code, 'unpinned-action');
+  assert.match(finding.message, /^actions\/checkout names no ref; pin the 40-character commit SHA/);
+  assert.deepEqual(finding.evidence, { uses: 'actions/checkout', form: 'none' });
+  assert.deepEqual(finding.remediation, { kind: 'manual', command: 'uses: actions/checkout@<sha>' });
+});
+
+test('the form vocabulary is pinned: tag, branch, short-sha, docker-tag and none', () => {
+  const sha = '11bd71901bbe5b1630ceea73d27597364c9af683';
+  const digest = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  const findings = rule.detect(
+    context([
+      workflow('.github/workflows/forms.yml', [
+        'name: forms',
+        'on: push',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: pnpm/action-setup@main',
+        '      - uses: actions/cache@abc1234',
+        '      - uses: docker://alpine:3.20',
+        '      - uses: actions/checkout@',
+        '      - uses: actions/checkout',
+        `      - uses: actions/checkout@${sha}`,
+        `      - uses: docker://ghcr.io/owner/image@sha256:${digest}`,
+      ]),
+    ]),
+  );
+
+  assert.deepEqual(
+    findings.map((finding) => [finding.evidence.uses, finding.evidence.form]),
+    [
+      ['actions/checkout@v4', 'tag'],
+      ['pnpm/action-setup@main', 'branch'],
+      ['actions/cache@abc1234', 'short-sha'],
+      ['docker://alpine:3.20', 'docker-tag'],
+      ['actions/checkout@', 'none'],
+      ['actions/checkout', 'none'],
+    ],
+    'five values and no others; a full SHA and a digest are immutable and carry no finding',
+  );
 });
 
 /// Obligation two of `S4`: the two formats agree on status, path, count and message. No rule prints a
