@@ -95,6 +95,10 @@ a guess.
 
 ## Remediation
 
+`auto` while the writer can write, `manual` where it refuses: the finding prints the route that
+works from its own state, because a remediation the reader follows into a refusal is the defect RFC
+8.2 R3's sentence exists to prevent.
+
 `auto`: `funky-secure init --apply` writes one managed block in `pnpm-workspace.yaml` that carries
 `minimumReleaseAgeStrict: true`, the age itself — `minimumReleaseAge: 1440` under `baseline` and
 `4320` under `--preset strict`, always written rather than inherited (0017) — and `savePrefix: ''`.
@@ -111,12 +115,28 @@ only on that one laptop. The effective value above stays the finding's evidence;
 input. The same key declared **outside** the block is refused as a conflict — two sources for one
 setting is the defect this product reports.
 
-That refusal is what the finding's `auto` command does on the repository whose own
-`pnpm-workspace.yaml` hand-wrote the flag, which is the shape a field run measured: `init --apply`
-prints `pnpm-workspace.yaml already declares minimumReleaseAgeStrict outside the managed block; two
-sources for one setting are not written` and the finding stands until the hand-written key is
-removed. The command clears the finding when the key sits **inside** the managed block, where the
-write rewrites that block instead of adding a second source.
+That refusal is the state the finding answers `manual` in, and it is the shape a field run measured:
+the repository's own `pnpm-workspace.yaml` hand-wrote `minimumReleaseAge: 4320` and
+`minimumReleaseAgeStrict: false`, and `init --apply` answers
+`pnpm-workspace.yaml already declares minimumReleaseAgeStrict outside the managed block; two sources
+for one setting are not written`, writes nothing to that file and exits `0` — the conflict is
+reported, not a failed write. Promising `init --apply` there prints a command that cannot clear the
+finding (`#361`).
+
+So in that state the finding is `manual` and names the edit, not the command it knows will refuse:
+
+```text
+edit pnpm-workspace.yaml by hand: set minimumReleaseAgeStrict: true on the declaration the file
+already carries (funky-secure init --apply refuses to add a second source for one setting)
+```
+
+`quarantine-below-policy` names the age to raise the same way (`raise minimumReleaseAge to 4320`),
+which is also what `pnpm config set minimum-release-age 4320 --location=project` writes. A key
+**inside** the managed block keeps the `auto` route: the write rewrites that block instead of adding
+a second source, so the command that really clears the finding is not turned into a manual one.
+
+The writer's own verdict decides the kind — `writeQuarantineGate`, the function `init` plans from —
+never a second reading of the file, so the finding and the plan cannot disagree about a conflict.
 
 Manual equivalents: `pnpm config set minimum-release-age-strict true --location=project` and
 `pnpm config set minimum-release-age 4320 --location=project`. In pnpm 12 both write
@@ -132,6 +152,10 @@ mode. An exemption is a reviewed line in `pnpm-workspace.yaml`, not a silent aut
   (E8). This rule can only see what `pnpm config list --json` reports, so such a file cannot be
   detected as a wrong setting; the report says what pnpm will apply, not what a file claims.
 - The effective value has no attributable source (E2). The rule never says "global" or "workspace".
+- The kind follows the repository's own file, so `--scope machine` keeps `auto`: that scope never
+  reads the repository (RFC 7.2), the report says `quarantine not verified (repository excluded)`, and
+  the finding does not claim to know which shape the file would present. `--scope all`, the default,
+  reads it and prints the state's own route.
 - When `pnpm --version` is unavailable the active major is unknown and the 11/12 line default is
   used. That direction can only under-report a gate, never fabricate one: an inherited value is
   non-strict and fails anyway.
