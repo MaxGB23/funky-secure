@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,9 +39,10 @@ function committedEnvironmentRepository(t) {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   writeFileSync(join(dir, 'package.json'), '{\n  "name": "field-loop",\n  "private": true\n}\n');
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
   writeFileSync(join(dir, '.env'), 'TOKEN=not-a-real-value\n');
   git(dir, ['init', '-q', '-b', 'main']);
-  git(dir, ['add', 'package.json', '.env']);
+  git(dir, ['add', 'package.json', 'pnpm-lock.yaml', '.env']);
   git(dir, ['commit', '-qm', 'the committed environment file']);
   mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
 
@@ -283,4 +284,218 @@ test('the binary fails a committed .env from a nested directory as tracked, not 
   assert.equal(finding.path, '.env');
   assert.deepEqual(finding.evidence, { path: '.env' });
   assert.deepEqual(finding.remediation, { kind: 'manual', command: 'git rm --cached .env' });
+});
+
+/// The four sides of S3 and the obligations of S4, measured through the binary on a repository the
+/// test builds in the OS temp directory: a constructed context is not a repository, and a fixture
+/// written by the same hand as the parser proves only the shape its author imagined (S5).
+
+/**
+ * Runs `scan --scope repo --format json` in a fixture and returns its result with the report parsed.
+ * @param {string} dir
+ * @param {string[]} args
+ * @returns {{ status: number, stdout: string, stderr: string, report: object }}
+ */
+function scan(dir, args) {
+  const result = spawnSync(
+    process.execPath,
+    [BIN, 'scan', '--scope', 'repo', '--format', 'json', ...args],
+    { cwd: dir, encoding: 'utf8', env: process.env },
+  );
+  return { ...result, report: result.stdout === '' ? null : JSON.parse(result.stdout) };
+}
+
+/**
+ * The same run in the human format, which is presentation and carries no `code`.
+ * @param {string} dir
+ * @param {string[]} args
+ * @returns {{ status: number, stdout: string, stderr: string }}
+ */
+function scanHuman(dir, args) {
+  return spawnSync(process.execPath, [BIN, 'scan', '--scope', 'repo', ...args], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: process.env,
+  });
+}
+
+/** A repository with no environment file at all: the passing side of S3. */
+function cleanRepository(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-env-clean-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "field-loop",\n  "private": true\n}\n');
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  git(dir, ['init', '-q', '-b', 'main']);
+  git(dir, ['add', 'package.json', 'pnpm-lock.yaml']);
+  git(dir, ['commit', '-qm', 'a repository with no environment file']);
+
+  return dir;
+}
+
+test('the two formats agree on a committed environment file (S4)', (t) => {
+  const dir = committedEnvironmentRepository(t);
+  const args = ['--only', 'env-not-tracked'];
+
+  const machine = scan(dir, args);
+  const human = scanHuman(dir, args);
+
+  assert.equal(machine.stderr, '');
+  assert.equal(human.stderr, '');
+  assert.equal(machine.status, 1, 'a committed environment file fails the run');
+  assert.equal(human.status, 1, 'both formats agree on the status, which is the exit code');
+
+  assert.equal(machine.report.summary.error, 1);
+  assert.equal(machine.report.summary.pass, 0);
+  const [finding] = machine.report.findings;
+  assert.equal(finding.rule, 'env-not-tracked');
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'env-tracked');
+  assert.equal(finding.path, '.env');
+
+  // The same facts a human reads: the failing symbol, the rule's label, the path and the count.
+  assert.match(human.stdout, /✖ {2}Environment files {2}· {2}\.env/);
+  assert.match(human.stdout, /1 error · 0 warnings · 0 info · 0 passing · 0 skipped/);
+  assert.match(human.stdout, /verdict {2}FAIL \(threshold: error\)/);
+  assert.match(human.stdout, /is tracked by git/);
+  assert.match(human.stdout, /must be rotated/);
+  assert.ok(
+    human.stdout.includes(`→ ${finding.remediation.command}`),
+    'the human report prints the command the finding carries',
+  );
+
+  // The human format carries no `code` for any rule, so parity is status, path and count — never a
+  // comparison of a field the format does not print.
+  assert.ok(!human.stdout.includes('env-tracked'), 'the human report prints no code');
+});
+
+test('the printed remediation clears the finding and leaves the working copy byte for byte (S4)', (t) => {
+  const dir = committedEnvironmentRepository(t);
+  const before = readFileSync(join(dir, '.env'), 'utf8');
+
+  const failing = scan(dir, ['--only', 'env-not-tracked']);
+  assert.equal(failing.status, 1);
+  const [finding] = failing.report.findings;
+  assert.equal(finding.remediation.kind, 'manual');
+  assert.equal(finding.remediation.command, 'git rm --cached .env');
+
+  // The command the finding prints, run exactly as printed, in the disposable copy.
+  const [executable, ...words] = finding.remediation.command.split(' ');
+  const removal = spawnSync(executable, [...IDENTITY, ...words], { cwd: dir, encoding: 'utf8' });
+  assert.equal(removal.status, 0, `${finding.remediation.command} failed:\n${removal.stderr}`);
+  git(dir, ['commit', '-qm', 'stop tracking the environment file']);
+
+  // S5: the absence is asserted directly, and the copy the command promised to keep is intact.
+  assert.ok(!git(dir, ['ls-files']).split('\n').includes('.env'), 'the path is out of the index');
+  assert.equal(readFileSync(join(dir, '.env'), 'utf8'), before, 'git rm --cached deletes nothing');
+
+  const cleared = scan(dir, ['--only', 'env-not-tracked']);
+  assert.equal(cleared.status, 0, 'the finding the command named is gone');
+  assert.deepEqual(cleared.report.summary, {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 1,
+    skip: 0,
+    verdict: 'pass',
+  });
+  assert.deepEqual(cleared.report.findings, []);
+});
+
+test('a repository with no environment file passes, and the pass is counted (S3)', (t) => {
+  const dir = cleanRepository(t);
+
+  const machine = scan(dir, ['--only', 'env-not-tracked']);
+  assert.equal(machine.status, 0);
+  assert.deepEqual(machine.report.summary, {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 1,
+    skip: 0,
+    verdict: 'pass',
+  });
+  assert.deepEqual(machine.report.findings, [], 'a pass is counted in the summary, never listed as a finding');
+
+  const human = scanHuman(dir, ['--only', 'env-not-tracked']);
+  assert.equal(human.status, 0);
+  assert.match(human.stdout, /0 errors · 0 warnings · 0 info · 1 passing · 0 skipped/);
+  assert.match(human.stdout, /all 1 rule pass/);
+});
+
+test('outside a repository the rule skips with no-git, and --strict-probes refuses the green run (S3)', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-env-nogit-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "field-loop",\n  "private": true\n}\n');
+
+  const skipped = scan(dir, ['--only', 'env-not-tracked']);
+  assert.equal(skipped.status, 0, 'a skip is not a policy violation');
+  assert.deepEqual(skipped.report.summary, {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 0,
+    skip: 1,
+    verdict: 'pass',
+  });
+  const [finding] = skipped.report.findings;
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'no-git');
+  assert.equal(finding.message, 'skipped: git is not available, so the tracked set is unknown');
+
+  const strict = scan(dir, ['--only', 'env-not-tracked', '--strict-probes']);
+  assert.equal(strict.status, 1, '--strict-probes turns the skip into a failure');
+  assert.equal(strict.report.summary.error, 1);
+  assert.equal(strict.report.summary.skip, 0);
+  assert.equal(strict.report.findings[0].code, 'no-git', 'the code survives the escalation');
+  assert.match(strict.report.findings[0].message, /git is not available/);
+});
+
+test('policy turns the rule off, leaving neither a finding nor a count (S3)', (t) => {
+  const dir = committedEnvironmentRepository(t);
+
+  const baseline = scan(dir, []);
+  assert.equal(baseline.report.policy.preset, 'baseline');
+  const envFindings = baseline.report.findings.filter((finding) => finding.rule === 'env-not-tracked');
+  assert.equal(envFindings.length, 1, 'the baseline preset runs the rule');
+  assert.equal(envFindings[0].status, 'fail');
+
+  // The `starter` preset lists six rules and turns every other one off (RFC 9.4).
+  const starter = scan(dir, ['--preset', 'starter']);
+  assert.equal(starter.report.policy.preset, 'starter');
+  assert.deepEqual(
+    starter.report.findings.filter((finding) => finding.rule === 'env-not-tracked'),
+    [],
+    'an off rule contributes no finding',
+  );
+  assert.equal(
+    starter.report.summary.error,
+    baseline.report.summary.error - 1,
+    'an off rule contributes no count either',
+  );
+
+  const ignored = scan(dir, ['--ignore', 'env-not-tracked']);
+  assert.deepEqual(ignored.report.findings.filter((finding) => finding.rule === 'env-not-tracked'), []);
+  assert.equal(ignored.report.summary.error, baseline.report.summary.error - 1);
+
+  // `--only` names another rule: this one is neither a finding nor a count in the narrowed run.
+  const narrowed = scan(dir, ['--only', 'lockfile-committed']);
+  assert.deepEqual(narrowed.report.findings, []);
+  assert.deepEqual(narrowed.report.summary, {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 1,
+    skip: 0,
+    verdict: 'pass',
+  });
+
+  writeFileSync(
+    join(dir, 'funky-secure.config.json'),
+    '{\n  "rules": {\n    "env-not-tracked": "off"\n  }\n}\n',
+  );
+  const byConfig = scan(dir, []);
+  assert.equal(byConfig.report.policy.preset, 'baseline');
+  assert.deepEqual(byConfig.report.findings.filter((finding) => finding.rule === 'env-not-tracked'), []);
+  assert.equal(byConfig.report.summary.error, baseline.report.summary.error - 1);
 });

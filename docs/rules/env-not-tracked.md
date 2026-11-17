@@ -11,8 +11,8 @@ From the complete tracked set the collector already resolved, the rule keeps eve
 basename starts with `.env`, at any depth, then excludes the template family: the fixed names
 `.env.sample`, `.env.template` and `.env.dist`, plus **every** name ending in `.example` —
 `.env.example`, `.env.local.example`, `.env.production.example`. Each remaining path is one
-`env-tracked` finding. No tracked environment file is a pass. Outside git the tracked set is
-unknown and the rule skips with `no-git`.
+`env-tracked` finding. A complete tracked set with none of them is a `no-env-tracked` pass, and the
+pass is counted like any other.
 
 The RFC states this rule as `git ls-files -z -- ':(glob)**/.env*'`. The `:(glob)` magic exists
 because a pathspec without it misses a root `.env` (E4). This implementation runs no pathspec at
@@ -25,6 +25,12 @@ tracked set that `lockfile-committed` and `sensitive-ignored` also read.
 
 The match is prefix-based, exactly like the RFC glob: `.envrc` is included, and only the template
 family is excluded.
+
+When a fact it needs is absent the rule skips, and the code names the fact: `no-git` —
+"skipped: git is not available, so the tracked set is unknown" — when the directory is not a
+repository; and `no-repo` when no repository was resolved at all, or when the scope excluded it
+("skipped: the repository was excluded by --scope machine"). An unknown tracked set is never
+reported as a clean one.
 
 A template is a file meant to be copied, so the exemption covers the family and not the two
 spellings the RFC happens to name. `vercel/nextjs-subscription-payments` tracks `.env.example` and
@@ -62,3 +68,7 @@ while keeping the secret live is the accident this rule exists to catch.
   empty one.
 - Outside git the rule returns `skip: no-git`. An unknown tracked set is not a clean one, and
   `--strict-probes` turns that skip into an error rather than a green run that measured nothing.
+- Severity is `error` under `baseline` and `strict`. The `starter` preset runs six rules and turns
+  this one `off`, so under `starter` it contributes neither a finding nor a count. `--only` naming
+  another rule, `--ignore env-not-tracked`, and `"rules": { "env-not-tracked": "off" }` in
+  `funky-secure.config.json` have the same effect: the count disappears with the finding.
