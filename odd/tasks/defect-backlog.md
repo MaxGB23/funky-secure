@@ -140,3 +140,32 @@ row are marked with what proved them.
   `docs/rules/workflow-permissions.md:59` for `#390`, and the pages that quote a changed message for the rest.
 - **`T0` exists because of the judges**: two reproductions were wrong and one decision rested on a command that
   does not exist. Nothing is fixed before it is re-run.
+
+**L4** — `T0` ran before the first fix, and it paid for itself. Every reproduction was re-executed with the binary
+from a `mktemp` fixture, never from the repository: **14 hold · 3 hold with a corrected reproduction · 2 no
+longer hold · 0 unreachable.** The two that no longer hold are `#375` and `#385`, closed by `0a1966d` and
+`0f3bd82` (merged at `5aea132`), so the batch is **seventeen**, not nineteen, and `T1`/`T2` are done.
+- **`#359` needed a corrected reproduction.** The fixture must sit on a **non-default branch**: on `main` with no
+  remote, `migrate --apply` refuses for the *branch* reason and masks the lockfile refusal. On a feature branch
+  the issue's three lines reproduce exactly — `refusing to remove package-lock.json: pnpm-lock.yaml is absent`,
+  exit 3 — and `pnpm import` followed by the migrate clears it.
+- **`#373` needed its trigger corrected.** `.npmrc` `frozen-lockfile=true` is **ignored by pnpm 12.3.4**
+  (`pnpm config get frozen-lockfile` answers `undefined`). The trigger is `CI=true`, which produces
+  `ERR_PNPM_OUTDATED_LOCKFILE` and exit 1, while `pnpm install --lockfile-only` under the same `CI=true` exits 0.
+- **`#395` is confirmed and its snippet corrected**: flow-style `steps:` yields `unparseable-workflow`; the
+  block-form step yields `pass: 1` with the returned message `every workflow declares permissions:, and none
+  grants write-all…` for a per-job-only declaration.
+- **`#390`'s line numbers drifted**: the three strings are at `src/rules/pull-request-target.js:197`,
+  `src/rules/workflow-run-artifact.js:236` and `src/rules/workflow-permissions.js:129`, with three goldens and
+  `docs/cli.md:365,369` and `docs/rules/workflow-permissions.md:59` carrying them.
+- **`#353` is worse than filed**: `init --apply` exits **0** while writing `packageManager: pnpm@12.3.4` beside a
+  `devEngines.packageManager` of `12.16.0`, and `src/lib/writers.js:601` still says the pair is "never written
+  disagreeing". A test that asserts the pair agrees would pass today on the exit code alone; the assertion is
+  the two values.
+- **`#361` is confirmed with the file untouched**: `init --apply` prints the conflict and exits 0, the workspace
+  file's sha does not move, and the finding stands. The `auto` remediation cannot clear the shape it most often
+  meets.
+- **The measurement did not touch the repository**: `git status --porcelain` was empty before and after, `HEAD`
+  unchanged, and the tree's sha identical — after an earlier attempt had overwritten `package.json` by running an
+  applying command from the repository root. The lesson is now a rule for every task here: **an applying command
+  runs with its `cwd` inside a fixture, never inside the repository being delivered.**
