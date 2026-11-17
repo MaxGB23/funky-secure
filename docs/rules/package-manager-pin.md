@@ -119,7 +119,10 @@ sentences below name the version, never the file.
 ## Remediation
 
 - `pin-missing` — `auto`: `funky-secure init --apply` performs write W3 (RFC 11.2) and sets
-  `packageManager` to `"pnpm@<observed version>"`. The message names that exact value. Write W3 is the
+  `packageManager` to `"pnpm@<observed version>"`. The message names that exact value. **Where the plan
+  withholds the pin — the guard case two sentences below — the same finding carries `manual` instead**,
+  because there `init` answers two conflicts and writes nothing, and a finding that advertises a command
+  the writer refuses is two answers to one question (#447). Write W3 is the
   only path that touches the declaration: a pin that already exists is never rewritten. A manifest that
   already declares a `devEngines.packageManager` this plan will not match withholds the pin with the
   guard: W3b writes the pair from one established version or writes neither, because a pin beside a
