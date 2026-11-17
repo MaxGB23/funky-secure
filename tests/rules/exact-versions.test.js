@@ -1225,6 +1225,10 @@ async function pnpmFor(t, dir) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key) && key.toUpperCase() !== 'CI'),
   );
+  // A runner may also carry `frozen-lockfile=true` in a config file the fixture never sees, and the
+  // printed `pnpm install` exists to update the lockfile after the step before it edited the manifest.
+  // Pinning it here keeps the printed words verbatim while the fixture stops inheriting the runner.
+  env.npm_config_frozen_lockfile = 'false';
   return (args) =>
     spawnSync(pnpm.file, [...(pnpm.prefixArgs ?? []), ...args], { cwd: dir, env, encoding: 'utf8' });
 }
