@@ -86,8 +86,8 @@ issue reference, exactly one checked type, the evidence of what you ran, and the
       sequence of reviewable work units, not one commit per file.
 - [ ] `node --test` passes, and the command and its counts are in the test plan.
 - [ ] Behavior changes are test-first: the new test fails before the change and passes after it, and it is
-      admissible by [`docs/testing.md`](docs/testing.md)'s five tests — a finding from
-      [`docs/field-loop.md`](docs/field-loop.md) becomes a test there. Tests
+      admissible by [`docs/testing.md`](docs/testing.md)'s five tests, and a finding from
+      [`docs/field-loop.md`](docs/field-loop.md) lands in `tests/` as a case. Tests
       assert every observable effect (exit code, exact stdout and stderr, and that rejected input
       leaves stored files and counters untouched) through the public interface.
 - [ ] A rule or library change has its `docs/rules/<id>.md` page updated; a command, flag or message

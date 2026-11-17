@@ -15,6 +15,7 @@ settled; the present is edited freely, in its own pull request.
 | `odd/tasks/` | Feature records: specs, tasks and an append-only Log. |
 | `src/` | The code, with the suite in `tests/` and the golden generator in `scripts/`. |
 | `docs/testing.md` | When a test is required, when it is not, and what makes one admissible. |
+| `docs/field-loop.md` | How a defect the suite could not see is found before a release; a finding becomes a test (11.4). |
 | `CONTRIBUTING.md` | The hard rules, the issue and pull request ritual, and the local checks. |
 
 ## Working rules
