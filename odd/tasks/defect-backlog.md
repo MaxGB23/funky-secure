@@ -334,3 +334,42 @@ unassessed rather than covered by a verdict nobody ran.
 Both judges read a record that was wrong in ways a run could settle, and both were right about the part that
 mattered: the numbers were prose, and prose does not add up. `L7` exists because the Log is append-only — a
 closing entry that needed correcting is corrected by the next entry, never by rewriting the last one.
+
+**L8** — the unassessed candidates of `L7` are now assessed, and the number that made them "thirteen" was
+wrong. The batch produced **forty pull requests**: eighteen that move behaviour and twenty-two that move
+only documentation or the spec. `L7` said "the batch's twenty pull requests", which counted neither
+correctly, and "thirteen unassessed" was the remainder of a figure nobody had added up.
+
+**All eighteen behavioural pull requests have now been assessed, each against its own base** — the seven
+`L5` records plus the seventeen below (the seventh of `L5`, `#406`, is itself one of the eighteen, which is
+why the two lists overlap by one and sum to eighteen):
+
+| PR | merge | base | paths | lines | verdict |
+|---|---|---|---|---|---|
+| `#415` | `db316a9` | `2a6e0d2` | 12 | 75 | `review_due: false`, `under_budget`, `medium` |
+| `#416` | `ff363a6` | `db316a9` | 4 | 42 | same |
+| `#417` | `9bea2ab` | `ff363a6` | 6 | 243 | same |
+| `#418` | `50410ad` | `9bea2ab` | 7 | 221 | same |
+| `#422` | `9a798a2` | `9792a4c` | 3 | 272 | same |
+| `#423` | `43be6ba` | `9a798a2` | 5 | 115 | same |
+| `#425` | `cfcc96e` | `de98ce8` | 4 | 85 | same |
+| `#426` | `de98ce8` | `0da1516` | 3 | 66 | same |
+| `#427` | `49ff92b` | `cfcc96e` | 5 | 183 | same |
+| `#428` | `788b19e` | `49ff92b` | 3 | 100 | same |
+| `#430` | `e6e6382` | `f48b4de` | 3 | 192 | same |
+| `#431` | `d04e7fa` | `e6e6382` | 3 | 50 | same |
+| `#434` | `812043d` | `518aaa7` | 3 | 215 | same |
+| `#435` | `78a300b` | `812043d` | 4 | 202 | same |
+| `#436` | `18ed85f` | `78a300b` | 7 | 173 | same |
+| `#438` | `33c105a` | `bc13754` | 4 | 148 | same |
+| `#449` | `e64e3a3` | `5c58857` | 4 | 66 | same |
+
+**No review was due for any behavioural candidate of this batch**, measured slice by slice rather than
+inferred from seven. The twenty-two documentation pull requests are `passive` by construction — `assess`
+reports `non_executable_only` and no review is due — so the sentence `L5` could only assert for seven is
+now true of the whole batch.
+
+**The numbers above are measured, and that is the difference from `L5`.** They come from `assess` against
+each merge's first parent, run in a detached checkout and recorded here; the withdrawn `L5` column did not
+reproduce. A retrospective assessment of merged code cannot change it, which is why this is a record and
+not a repair: what it settles is the claim, not the code.
