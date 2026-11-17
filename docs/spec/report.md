@@ -38,6 +38,14 @@ findings are counted in `summary.pass` and never listed: a repository with thirt
 not print thirteen lines of reassurance. A rule set to `off` (9.2) contributes nothing at all — no
 finding and no count.
 
+**Naming a rule that answered silently.** Because a passing finding is never listed, a rule that answered and
+emitted nothing is absent from `findings[]`, and it is named by the set difference against the complete catalog
+`explain --list`. `summary.pass` counts findings and never rules, so the two are not interchangeable: a run with
+one passing machine rule and twelve excluded repository rules reports `"pass": 1, "skip": 12`, lists only the
+twelve skips, and the thirteenth id is the rule that answered. `provenance` speaks about what was verified of
+the **repository**; a `not verified (repository excluded)` line there says the repository's declaration was not
+read, never that the rule did not run.
+
 ### 10.2 JSON output
 
 ```json
