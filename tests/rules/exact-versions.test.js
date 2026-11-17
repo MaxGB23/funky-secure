@@ -1022,6 +1022,57 @@ test('an override for another name does not exempt a desync', () => {
   );
 });
 
+test('a workspace range is pinned to workspace:*, and a registry range still names the recorded version', () => {
+  const text = `{
+  "dependencies": {
+    "bare": "workspace:^",
+    "waved": "workspace:~",
+    "versioned": "workspace:^1.3.0",
+    "registry": "^1.3.0"
+  }
+}`;
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    '',
+    'importers:',
+    '',
+    '  .:',
+    '    dependencies:',
+    '      bare:',
+    '        specifier: workspace:^',
+    '        version: link:../lib',
+    '      waved:',
+    '        specifier: workspace:~',
+    '        version: link:../lib',
+    '      versioned:',
+    '        specifier: workspace:^1.3.0',
+    '        version: link:../lib',
+    '      registry:',
+    '        specifier: ^1.3.0',
+    '        version: 1.3.0',
+    '',
+  ].join('\n');
+
+  const commands = rule
+    .detect(ctx({ importers: [importer('.', text)], lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile } }))
+    .filter((finding) => finding.code === 'floating-range')
+    .map((finding) => finding.remediation.command);
+
+  assert.deepEqual(
+    commands,
+    [
+      // An internal package's resolved version is a path. Writing it replaces the protocol and takes
+      // the package out of the workspace while the finding clears (#368); the exact form is the one
+      // Detection names for an internal package.
+      `pnpm pkg set 'dependencies["bare"]=workspace:*' && pnpm install`,
+      `pnpm pkg set 'dependencies["waved"]=workspace:*' && pnpm install`,
+      `pnpm pkg set 'dependencies["versioned"]=workspace:*' && pnpm install`,
+      `pnpm pkg set 'dependencies["registry"]=1.3.0' && pnpm install`,
+    ],
+    'a workspace range keeps the protocol and a registry range keeps the version the lockfile records',
+  );
+});
+
 test('the remediation names the importer that owns the manifest', () => {
   // create-t3-app, 80 of 96 findings: `pnpm pkg set` run at the repository root wrote into the ROOT
   // package.json, not into the manifest the finding is about.
@@ -1189,13 +1240,15 @@ function repository(t, files) {
 /**
  * The only shape that re-resolves without a registry: a workspace link. `pnpm install` is genuinely
  * run below, so the fixture is a real workspace and its own `.npmrc` refuses the network.
- * @param {{ manifest: string, lockSpecifier: string }} shape
+ * `libVersion` is the workspace package's own version, which a versioned range has to satisfy for the
+ * first install to be the shape a real repository would have.
+ * @param {{ manifest: string, lockSpecifier: string, libVersion?: string }} shape
  */
-function workspace(t, { manifest, lockSpecifier }) {
+function workspace(t, { manifest, lockSpecifier, libVersion = '1.0.0' }) {
   return repository(t, {
     'package.json': '{\n  "name": "fixture-root",\n  "private": true\n}\n',
     'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n",
-    'packages/lib/package.json': '{\n  "name": "@fixture/lib",\n  "version": "1.0.0"\n}\n',
+    'packages/lib/package.json': `{\n  "name": "@fixture/lib",\n  "version": "${libVersion}"\n}\n`,
     'packages/app/package.json': `{"name":"@fixture/app","version":"1.0.0","dependencies":{"@fixture/lib":"${manifest}"}}\n`,
     '.npmrc': 'registry=http://127.0.0.1:9/\noffline=true\n',
     'pnpm-lock.yaml': `lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\n  packages/app:\n    dependencies:\n      '@fixture/lib':\n        specifier: '${lockSpecifier}'\n        version: link:../lib\n\n  packages/lib: {}\n`,
@@ -1357,43 +1410,87 @@ test('obligation: both formats agree in every state the rule reaches, and neithe
 /// S4, the remediation: the command a fail prints clears that fail on a disposable copy. The
 /// printed one-liner is executed token for token, without a shell, so the quoting is the only part a
 /// shell would have added.
+///
+/// 368: clearing the finding is not the assertion. Pinning an internal package to the path the
+/// lockfile records as its resolved version replaces the `workspace:` protocol, so the package stops
+/// being a workspace member and nothing said so. What is asserted is the specifier left behind.
 
-test('obligation: the printed pin clears the floating finding, and the printed desync command resolves one', async (t) => {
-  const floating = workspace(t, { manifest: 'workspace:^', lockSpecifier: 'workspace:^' });
-  const pin = await pnpmFor(t, floating);
-  if (pin === null) return;
+test('obligation: applied to a workspace range the printed pin leaves the workspace protocol in place', async (t) => {
+  // The two shapes measured on pnpm 12.3.4: a bare protocol range and a versioned one. Both are
+  // floating, and both accept the same exact form.
+  const shapes = [
+    { manifest: 'workspace:^', lockSpecifier: 'workspace:^', libVersion: '1.0.0' },
+    { manifest: 'workspace:^1.3.0', lockSpecifier: 'workspace:^1.3.0', libVersion: '1.4.0' },
+  ];
 
-  const before = await reportOf(floating);
-  const [finding] = before.report.findings;
-  assert.equal(finding.code, 'floating-range');
-  assert.equal(finding.path, 'packages/app/package.json', 'the finding names the manifest that declares the range');
-  assert.equal(
-    finding.remediation.command,
-    `pnpm -C packages/app pkg set 'dependencies["@fixture/lib"]=link:../lib' && pnpm -C packages/app install`,
-  );
+  for (const shape of shapes) {
+    const floating = workspace(t, shape);
+    const pin = await pnpmFor(t, floating);
+    if (pin === null) return;
 
-  // The whole printed sequence is executed, and the one refusal it can meet is not hidden: a runner
-  // with `frozen-lockfile` on refuses the install half *because* the manifest and the lockfile
-  // disagree, which is the state the pin exists to fix. That refusal is a fact about the environment,
-  // and it is reported as a skip with its reason — never as a pass, and never as a red suite. It is
-  // also a finding of its own: the printed command cannot clear this finding under frozen-lockfile.
-  for (const args of argvOf(finding.remediation.command)) {
-    const ran = pin(args);
-    if (ran.status !== 0 && /ERR_PNPM_OUTDATED_LOCKFILE/.test(ran.stderr ?? '')) {
-      t.skip('this environment sets frozen-lockfile, so the install half of the printed sequence refuses by design');
-      return;
+    const before = await reportOf(floating);
+    const [finding] = before.report.findings;
+    assert.equal(finding.code, 'floating-range', `${shape.manifest}: the range was not reported`);
+    assert.equal(
+      finding.path,
+      'packages/app/package.json',
+      `${shape.manifest}: the finding names the manifest that declares the range`,
+    );
+
+    // The value the command writes is the defect: `link:../lib` is the path the lockfile records as
+    // this dependency's resolved version, and writing it over `workspace:^` stops the package being a
+    // workspace member. Clearing the finding is not what this asserts.
+    assert.equal(
+      finding.remediation.command,
+      `pnpm -C packages/app pkg set 'dependencies["@fixture/lib"]=workspace:*' && pnpm -C packages/app install`,
+      `${shape.manifest}: the pin names a value that is not the internal package's exact form`,
+    );
+
+    // The whole printed sequence is executed, and the one refusal it can meet is not hidden: a runner
+    // with `frozen-lockfile` on refuses the install half *because* the manifest and the lockfile
+    // disagree, which is the state the pin exists to fix. That refusal is a fact about the environment,
+    // and it is reported as a skip with its reason — never as a pass, and never as a red suite. It is
+    // also a finding of its own: the printed command cannot clear this finding under frozen-lockfile.
+    for (const args of argvOf(finding.remediation.command)) {
+      const ran = pin(args);
+      if (ran.status !== 0 && /ERR_PNPM_OUTDATED_LOCKFILE/.test(ran.stderr ?? '')) {
+        t.skip('this environment sets frozen-lockfile, so the install half of the printed sequence refuses by design');
+        return;
+      }
+      assert.equal(ran.status, 0, `a printed command failed: ${args.join(' ')}\n${ran.stderr}`);
     }
-    assert.equal(ran.status, 0, `a printed command failed: ${args.join(' ')}\n${ran.stderr}`);
-  }
-  assert.equal(
-    JSON.parse(readFileSync(join(floating, 'packages/app/package.json'), 'utf8')).dependencies['@fixture/lib'],
-    'link:../lib',
-    'the pin wrote the version the lockfile records',
-  );
-  const cleared = await reportOf(floating);
-  assert.deepEqual(cleared.report.findings, [], 'the printed pin did not clear its own finding');
-  assert.equal(cleared.report.summary.pass, 1, 'and the cleared state is a counted pass');
 
+    const written = JSON.parse(readFileSync(join(floating, 'packages/app/package.json'), 'utf8')).dependencies[
+      '@fixture/lib'
+    ];
+    assert.equal(
+      written,
+      'workspace:*',
+      `${shape.manifest}: the manifest is ${written}, so the dependency left the workspace it was declared in`,
+    );
+    assert.match(written, /^workspace:/, 'the resulting specifier carries the workspace protocol');
+    assert.match(
+      readFileSync(join(floating, 'pnpm-lock.yaml'), 'utf8'),
+      /specifier: workspace:\*/,
+      `${shape.manifest}: the lockfile records no workspace specifier after the pin`,
+    );
+    assert.equal(
+      realpathSync(join(floating, 'packages/app/node_modules/@fixture/lib')),
+      realpathSync(join(floating, 'packages/lib')),
+      'the package is still linked into the workspace, not copied from a path',
+    );
+
+    const cleared = await reportOf(floating);
+    assert.deepEqual(cleared.report.findings, [], `${shape.manifest}: the printed pin did not clear its own finding`);
+    assert.deepEqual(
+      cleared.report.summary,
+      { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' },
+      'the cleared state is one counted pass and nothing else',
+    );
+  }
+});
+
+test('obligation: the printed desync command resolves the desync it names', async (t) => {
   const desynced = workspace(t, { manifest: 'workspace:*', lockSpecifier: 'workspace:^' });
   const refresh = await pnpmFor(t, desynced);
   if (refresh === null) return;

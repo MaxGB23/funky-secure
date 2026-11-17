@@ -160,6 +160,22 @@ with the section of the entry (`dependencies`, `devDependencies`, `optionalDepen
 version `pnpm-lock.yaml` records in that importer's dependency block. `pnpm install` then refreshes
 the lockfile and `node_modules` from the new specifier.
 
+**Inside the workspace the pin is `workspace:*`, not the recorded version.** For an internal package
+the resolved version the lockfile records is a path — `version: link:../lib` for a `workspace:^`
+dependency — so writing it replaces the protocol and the package stops being a workspace member while
+the finding clears. That is the remediation deleting something the author declared. A `workspace:`
+range is therefore pinned to `workspace:*`, the exact form Detection already names for an internal
+package, whatever kind of range it was (`workspace:^`, `workspace:~`, `workspace:^1.3.0`):
+
+```sh
+pnpm -C <importer dir> pkg set 'devDependencies["<name>"]=workspace:*' && pnpm -C <importer dir> install
+```
+
+Measured on pnpm 12.3.4: the value is written as given, the lockfile records
+`specifier: workspace:*` against `version: link:../lib`, and `node_modules` keeps its link into the
+workspace package. The branch needs no lookup — the range says where the exact form is — so a
+`workspace:` range prints this pin even when no lockfile records a version.
+
 The `-C <importer dir>` is not decoration. `pnpm pkg set` acts on the manifest of the directory it
 runs in, so a command printed for a finding at `cli/package.json` and run at the repository root
 writes into the **root** `package.json` — measured on create-t3-app, where it is 80 of 96 findings.
@@ -167,9 +183,10 @@ writes into the **root** `package.json` — measured on create-t3-app, where it 
 root. The root importer keeps the bare form (`pnpm pkg set … && pnpm install`), because the root is
 the directory the reader is already in.
 
-That version is the only one this rule may print: it is read from the repository, and the tool
-resolves nothing (RFC 4.9). When the lockfile records no version for the dependency — no lockfile, an
-unsupported shape, or the inline dependency form — the remediation resolves first and re-measures:
+That version is the only one this rule may print for a registry dependency: it is read from the
+repository, and the tool resolves nothing (RFC 4.9). When the lockfile records no version for such a
+dependency — no lockfile, an unsupported shape, or the inline dependency form — the remediation
+resolves first and re-measures:
 
 ```sh
 pnpm install --lockfile-only && funky-secure scan --only exact-versions
