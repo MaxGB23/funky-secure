@@ -217,7 +217,13 @@ the pin alone is the declaration, and nothing about it is skipped.
   repository can also split it: `"exact-versions": { "dependencies": "error", "devDependencies": "warn" }`
   is **not** supported in v0.1; it is a v2 extension.
 - **Remediation:** `pnpm pkg set '<section>["<name>"]=<resolved version>' && pnpm install`, written one
-  command per finding, with the version the lockfile records (S4). The property path is **bracketed**:
+  command per finding, with the version the lockfile records (S4) — **except for an internal package,
+  whose resolved version is a path.** For a `workspace:` range the pin is `workspace:*`, the exact form
+  Detection already names, and never the `link:../lib` the lockfile records as that range's resolved
+  version: replacing the protocol with a path takes the package out of the workspace while clearing the
+  finding, which is the remediation destroying something the author wrote. Measured on pnpm 12.3.4: with
+  `workspace:*` the lockfile records `specifier: workspace:*` and the package keeps its symlink into the
+  workspace. The property path is **bracketed**:
   `pnpm pkg set 'devDependencies.@types/node=1'` fails on pnpm 12.3.4 with
   `ERR_PNPM_PKG_INVALID_PROPERTY_PATH`, because a dot path cannot carry an `@`, and scoped names are
   most of a modern dependency set; the bracket form works unchanged for an unscoped name. `pnpm add
