@@ -224,7 +224,9 @@ A human `scan` ends by naming the next command, not only the verdict. After `sum
 `next` block uses the same label gutter and says one of these, in this order, so a report that fits two
 of them is never ambiguous: when at least one failing finding carries an `auto` remediation,
 `funky-secure init` together with the number of fixes it can make and the fact that nothing is written
-yet; when the verdict is `pass` and the effective policy sets a rule `off`, exactly
+yet; when the verdict is `pass` and a finding names a command the reader can run, that command — a run
+that lists an action never closes by saying there is nothing to do; when the verdict is `pass` and the
+effective policy sets a rule `off`, exactly
 `nothing to do among the rules that ran`, because the unscoped sentence would be a claim about rules
 nobody measured and this one names the set it speaks for; when the verdict is `pass` and no rule is off,
 `nothing to do: everything at or above the policy passes`, in the bytes it has always had; when the
