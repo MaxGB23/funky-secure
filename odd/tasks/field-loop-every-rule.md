@@ -138,3 +138,42 @@ by the corrections themselves**, which is the only thing that round exists to ca
 
 Two rounds is the cap and the third is a human decision. Nothing left in round two is worth one: what remains is
 wording, and the wording is fixed.
+
+**L5** — what the first six rules measured back into this document. Every correction below came from a run or
+from reading the code, never from a preference, and each one is the same failure this loop hunts in the
+product: a sentence asserted before it was measured.
+- **`S3` — not every finding names a `path` and a `line`.** `quarantine`, `foreign-lockfile`,
+  `package-manager-pin` and `env-not-tracked` report whole-target facts; three of them carry no `line` at all
+  and one carries neither field. `docs/spec/report.md` permits it. The obligation is "at the location the
+  finding names, when it names one".
+- **`S3` — "say which preset turns it off" has no answer for most rules.** `package-manager-pin`,
+  `foreign-lockfile`, `quarantine` and `exact-versions` run under all three presets; `starter` is the only
+  preset that disables anything, and among the six measured it disables exactly `env-not-tracked`. The
+  obligation is to establish which, and to say "none" when the answer is none.
+- **`S4` — "the same `code` in both formats" is false.** `src/lib/render-human.js` never reads `finding.code`:
+  no rule prints a code in the human report. Parity is status, path, count and message; a code comparison is
+  a claim about a field that is not printed.
+- **`S4` — this document named the wrong commands for `exact-versions`.** Its findings carry
+  `pnpm install --lockfile-only` and `pnpm pkg set '…' && pnpm install`; `pnpm add --save-exact` is the
+  documented **no-op**, not the remediation.
+- **`S8` — refuted, and this is the correction that matters.** The document said one side was out of reach
+  because the harness refuses to write a `.env`. The refusal is real and it is a property of **the agent's
+  tool-call text**, not of the machine or the capability: redirection, a subprocess, the write tool,
+  `git update-index`, `git add -f` and even a `grep` for the pattern are all blocked before they run. The route
+  that works is the one already in the tree — a test process writes the file, commits it, and runs the binary,
+  and the command that runs names nothing sensitive. The failing side is covered by execution, and has been
+  since #347. **Zero sides are out of reach.** A guard on my own commands is not evidence about the product,
+  and writing it into a record as if it were is how a later reader inherits a false limit.
+- **Determinism is part of every task, not a risk to discover.** Two pull requests in this loop were red only
+  on the CI runner because their tests needed a real `pnpm`. `CONTRIBUTING.md` already requires that new tests
+  carry no machine state; the cure is the resolver the tool owns (`createCollector(...).pnpm()`) plus `t.skip`
+  with its reason, and it was verified in both directions: with pnpm the tests run, without it they skip and
+  say why. A test that cannot measure must skip and say so; it may never pass silently.
+
+What the six rules yielded, in one line each: `package-manager-pin` compared a hashed pin by string and
+reported a machine difference that did not exist; `lockfile-committed` printed a `git check-ignore` that
+answers nothing for a tracked file; the collector read the tracked and ignored sets from the invocation
+directory, which also made `sensitive-ignored` report repository-anchored rules as missing from a
+subdirectory; `foreign-lockfile` and `quarantine` held every side and each had a page that was wrong;
+`env-not-tracked` held every side and its record was wrong about reachability. Two of the six needed no source
+change, and saying so is part of the evidence.
