@@ -117,6 +117,95 @@ jobs:
   assert.equal(byRun[0].line, 9);
 });
 
+test('flags a head reached by pull request number, not only by an expression', () => {
+  const NUMBER = '${{ github.event.pull_request.number }}';
+  const runWorkflow = (command) => `name: ci
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ${command}
+`;
+  const shapes = [
+    ['a checkout of refs/pull/<number>/head', headCheckout('pull_request_target', `refs/pull/${NUMBER}/head`)],
+    ['a checkout of refs/pull/<number>/merge', headCheckout('pull_request_target', `refs/pull/${NUMBER}/merge`)],
+    ['gh pr checkout <number>', runWorkflow(`gh pr checkout ${NUMBER}`)],
+    [
+      'a pull/<number>/head fetch and a FETCH_HEAD checkout',
+      runWorkflow(`git fetch origin pull/${NUMBER}/head && git checkout FETCH_HEAD`),
+    ],
+  ];
+
+  for (const [shape, text] of shapes) {
+    const findings = rule.detect(context({ workflows: [workflow(text)] }));
+    assert.equal(findings.length, 1, `${shape}: ${JSON.stringify(findings)}`);
+    assert.equal(findings[0].status, 'fail', shape);
+    assert.equal(findings[0].code, 'pull-request-target-checkout', shape);
+    assert.equal(findings[0].line, 9, shape);
+  }
+});
+
+test('reads a pull request number as a literal reference, resolved by nothing', () => {
+  const byRef = rule.detect(
+    context({ workflows: [workflow(headCheckout('pull_request_target', 'refs/pull/7/head'))] }),
+  );
+  assert.equal(byRef[0].code, 'pull-request-target-checkout');
+  assert.deepEqual(byRef[0].evidence, {
+    job: 'build',
+    step: 0,
+    kind: 'uses',
+    expression: 'refs/pull/7/head',
+  });
+
+  const byMerge = rule.detect(
+    context({ workflows: [workflow(headCheckout('pull_request_target', 'refs/pull/7/merge'))] }),
+  );
+  assert.equal(byMerge[0].code, 'pull-request-target-checkout');
+});
+
+test('joins a pull head fetch and a FETCH_HEAD checkout written on two lines', () => {
+  const text = [
+    'name: ci',
+    'on:',
+    '  pull_request_target:',
+    '    types: [opened]',
+    'jobs:',
+    '  build:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - run: |',
+    '          git fetch origin pull/${{ github.event.pull_request.number }}/head',
+    '          git checkout FETCH_HEAD',
+  ].join('\n');
+
+  const findings = rule.detect(context({ workflows: [workflow(text)] }));
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'fail');
+  assert.equal(findings[0].code, 'pull-request-target-checkout');
+  assert.equal(findings[0].line, 9);
+});
+
+test('does not flag a pull head fetched but a different ref checked out', () => {
+  const text = [
+    'name: ci',
+    'on:',
+    '  pull_request_target:',
+    '    types: [opened]',
+    'jobs:',
+    '  build:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - run: git fetch origin pull/7/head && git checkout main',
+  ].join('\n');
+
+  const findings = rule.detect(context({ workflows: [workflow(text)] }));
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].code, 'pull-request-target-without-head-checkout');
+});
+
 test('does not flag the trigger alone, or a head checkout without it', () => {
   const alone = rule.detect(context({ workflows: [workflow(plainCheckout('pull_request_target'))] }));
   assert.equal(alone[0].status, 'pass');
@@ -312,6 +401,56 @@ test('side one: each offending step is one fail at its own line, under a declare
     report.findings.map((finding) => [finding.line, finding.evidence.step, finding.evidence.kind]),
     [[8, 0, 'uses'], [11, 1, 'run']],
   );
+});
+
+/// Side one, widened: the head is reached by a pull request number, not only by an expression.
+
+test('side one: a head reached by pull request number fails at the step line', async (t) => {
+  const NUMBER = '${{ github.event.pull_request.number }}';
+  const preamble = [
+    'name: ci',
+    'on:',
+    '  pull_request_target:',
+    'jobs:',
+    '  build:',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+  ];
+  const shapes = [
+    [
+      'refs/pull/<number>/head',
+      [...preamble, `      - uses: actions/checkout@${SHA}`, '        with:', `          ref: refs/pull/${NUMBER}/head`],
+    ],
+    [
+      'refs/pull/<number>/merge',
+      [...preamble, `      - uses: actions/checkout@${SHA}`, '        with:', `          ref: refs/pull/${NUMBER}/merge`],
+    ],
+    ['gh pr checkout <number>', [...preamble, `      - run: gh pr checkout ${NUMBER}`]],
+    [
+      'a pull/<number>/head fetch and a FETCH_HEAD checkout',
+      [...preamble, `      - run: git fetch origin pull/${NUMBER}/head && git checkout FETCH_HEAD`],
+    ],
+  ];
+
+  for (const [shape, lines] of shapes) {
+    const dir = scratch(t);
+    writeWorkflow(dir, lines);
+    const json = await scan(dir, ['--format', 'json']);
+    assert.equal(json.stderr, '', shape);
+    assert.equal(json.code, 1, shape);
+    const report = JSON.parse(json.stdout);
+    assert.deepEqual(
+      report.summary,
+      { error: 1, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'fail' },
+      shape,
+    );
+    assert.deepEqual(
+      projection(report),
+      [['fail', 'pull-request-target-checkout', 'ci', '.github/workflows/ci.yml', 8]],
+      shape,
+    );
+    assert.equal(report.findings[0].remediation.kind, 'manual', shape);
+  }
 });
 
 /// Side two: it passes, and the pass is counted rather than merely absent.
