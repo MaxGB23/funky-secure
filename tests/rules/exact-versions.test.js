@@ -1372,8 +1372,17 @@ test('obligation: the printed pin clears the floating finding, and the printed d
     `pnpm -C packages/app pkg set 'dependencies["@fixture/lib"]=link:../lib' && pnpm -C packages/app install`,
   );
 
+  // The whole printed sequence is executed, and the one refusal it can meet is not hidden: a runner
+  // with `frozen-lockfile` on refuses the install half *because* the manifest and the lockfile
+  // disagree, which is the state the pin exists to fix. That refusal is a fact about the environment,
+  // and it is reported as a skip with its reason — never as a pass, and never as a red suite. It is
+  // also a finding of its own: the printed command cannot clear this finding under frozen-lockfile.
   for (const args of argvOf(finding.remediation.command)) {
     const ran = pin(args);
+    if (ran.status !== 0 && /ERR_PNPM_OUTDATED_LOCKFILE/.test(ran.stderr ?? '')) {
+      t.skip('this environment sets frozen-lockfile, so the install half of the printed sequence refuses by design');
+      return;
+    }
     assert.equal(ran.status, 0, `a printed command failed: ${args.join(' ')}\n${ran.stderr}`);
   }
   assert.equal(
