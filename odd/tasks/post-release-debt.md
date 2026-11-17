@@ -120,11 +120,12 @@ code. Commit: none of its own; the record lands with T6.
 
 **T4 — the two lineages recorded** (`S2.5`, `S5`). The Log carries what `S5` attributes: the states, the
 tiers and lineage 1's `base_tree` as the record holds them; lineage 2's recorded `345ff6fa` beside the
-`3ddd6913` the status printed and the fact that it is `main`'s tree; and the two `review recover` commands
-**as this session received them**, with the sentence that no repository artifact can confirm them and with
-L9's measurement that the escalated lineage absorbs every delivery candidate here. Nothing is executed.
-Route: no code. Commit: none of its own; the record lands
-with T6.
+`3ddd6913` the status printed and the fact that it is `main`'s tree; the disposition each one answers with;
+and which of them the provider can still move. **The opaque values are deliberately not reproduced** — a
+revision hash and a six-input recovery command pasted into a published record invite a replay nobody
+authorized, so the Log names the options and not their values. It also carries L9's measurement that the
+escalated lineage absorbs every delivery candidate here. Nothing is executed. Route: no code. Commit: none
+of its own; the record lands with T6.
 
 **T5 — the field loop** (`S2.4`, `S3`, `S7`). Two outputs, neither optional:
 - **The five rows of `docs/validation.md:66-70`.** `actions-pinned-sha` and `foreign-lockfile` are measured
@@ -235,3 +236,20 @@ preflight is unavailable", which is gentle-pi's catch-all: the preflight's ten-s
 cause, because a native assess over the same range answers in 0.7 s with `review due: no`. T4 therefore
 stops being a record-only task: the authority has to be released before a pull request can open, and only
 the owner can authorize it (`S5`).
+
+**L10** — T4, the two lineages as the record and the provider answer hold them. Both are non-terminal
+compact entries; `review-4bde784c5bbb85fe` is `correction_required` at tier `medium` with `base_tree`
+`c11f014`, and answers `action: recover` with disposition `scope_changed` and a six-option native command;
+`review-d0d20c0eca69eb78` is `escalated` at tier `high`, its `review-state.json` records `base_tree`
+`345ff6fa`, and the status prints `3ddd6913` — which is `main`'s own tree, not a base. The second answers
+`action: recover` with disposition `escalated` and emits **no** transition, and `abandon` refuses it as
+ineligible; `repair --preflight` reports `unsupported` and `inspect-authority` reports the store complete
+and valid. The opaque revisions and option values are not reproduced here, on purpose (T4). Nothing was
+executed, and *inert* is not a word this record uses any more.
+
+**L11** — T3 closed. `git stash show -p stash@{0}` went to
+`C:/Users/cb147/.agents/backup/stash/park-f4-tree-probe.patch` — 314 562 bytes, 8 198 lines, `sha256
+59cd3cd3…` — outside the repository. `git apply --check` against the extracted tree of `1e08692` (57
+files) exited `0`, and only then was the stash dropped: `1d7abf9` is gone and the stash list is empty. The
+patch carries the tree and not the staging split, and the third parent was the empty tree, so nothing
+untracked is lost (M2).
