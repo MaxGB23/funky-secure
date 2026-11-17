@@ -32,6 +32,12 @@ download:
 | `uses: actions/download-artifact@<ref>` | `uses`, with the raw reference in the evidence |
 | a step whose `with.run-id` reads `github.event.workflow_run.id` | `run-id`, with the expression in the evidence |
 
+Both spellings of the `with:` map are read: the block map and the flow form
+`with: { run-id: … }` written on the key's own line, which is valid YAML and which GitHub accepts
+(I-82). A download whose **only** signal is a flow-style `with` is therefore the download, and can be
+the finding: what the rule accepts as a download did not change, what it could see did. `uses`
+answers first because it is the spelling every consumer writes, not because the other is weaker.
+
 The finding is one `workflow-run-artifact` per downloading step, at the line of that step, so the
 line a reader is sent to is the line the fix edits. Measured, two downloads in one job are two
 findings, at each step's line. It is reported only when all four declarations hold:
@@ -160,8 +166,11 @@ a workflow carrying the producer name declares `pull_request`:
   way names no producer here and a read reached that way is invisible.
 - **The scope that carries the bytes to a service is not classified.** Any `write` value counts, and
   the message names the scopes rather than judging which of them the downloaded bytes can reach.
-- **A `with:` map written as a flow collection is invisible to the reader today**, so a download that
-  only a flow-style `with` carries is not seen; the `uses` signal is the one that always answers.
+- **A `with:` map is read in both spellings YAML gives it**, so a download that only a flow-style
+  `with` carries is seen rather than skipped over: `uses` is the signal that always answers, and it
+  is no longer the only one that does. A `with:` map that does not close on its own line, or that
+  carries a block body under it, is a spelling the reader cannot attribute, so the file is a
+  per-file `skip: unparseable-workflow` and never a pass.
 - **The listed workflows are read only from a block map.** Any other spelling of `on:` is a skip,
   never a guessed list.
 

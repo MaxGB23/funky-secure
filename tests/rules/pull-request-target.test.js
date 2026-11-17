@@ -85,6 +85,29 @@ function workflow(text) {
   return { path: '.github/workflows/ci.yml', text };
 }
 
+/** A pull request number as an expression, written from a string so no template literal reads it. */
+const NUMBER_EXPR = '${{ github.event.pull_request.number }}';
+
+/**
+ * The workflow `headCheckout` writes, with its `with:` map written in flow style instead: the same
+ * mapping on the key's own line, which YAML defines and GitHub accepts (#405).
+ * @param {string} trigger
+ * @param {string} mapping the map's source, braces included
+ */
+function flowCheckout(trigger, mapping) {
+  return `name: ci
+on:
+  ${trigger}:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@${SHA}
+        with: ${mapping}
+`;
+}
+
 test('flags a pull_request_target workflow that checks the pull request head out', () => {
   const findings = rule.detect(context({ workflows: [workflow(headCheckout('pull_request_target'))] }));
 
@@ -204,6 +227,61 @@ test('does not flag a pull head fetched but a different ref checked out', () => 
   const findings = rule.detect(context({ workflows: [workflow(text)] }));
   assert.equal(findings[0].status, 'pass');
   assert.equal(findings[0].code, 'pull-request-target-without-head-checkout');
+});
+
+test('reads a head named in a flow-style with map, at the step line', () => {
+  const byNumber = `refs/pull/${NUMBER_EXPR}/head`;
+  const shapes = [
+    ['a reference a pull request number addresses', `{ ref: ${byNumber} }`, byNumber],
+    ['an expression', `{ ref: ${HEAD_EXPR} }`, HEAD_EXPR],
+    ['the same map with another key beside it', `{ fetch-depth: 0, ref: ${byNumber} }`, byNumber],
+  ];
+
+  for (const [shape, mapping, expression] of shapes) {
+    const findings = rule.detect(
+      context({ workflows: [workflow(flowCheckout('pull_request_target', mapping))] }),
+    );
+    assert.equal(findings.length, 1, `${shape}: ${JSON.stringify(findings)}`);
+    assert.equal(findings[0].status, 'fail', shape);
+    assert.equal(findings[0].code, 'pull-request-target-checkout', shape);
+    assert.equal(findings[0].line, 9, shape);
+    assert.deepEqual(findings[0].evidence, { job: 'build', step: 0, kind: 'uses', expression }, shape);
+  }
+});
+
+test('answers a flow-style with map with the bytes of the block spelling', () => {
+  const ref = `refs/pull/${NUMBER_EXPR}/head`;
+  const blocked = rule.detect(
+    context({ workflows: [workflow(headCheckout('pull_request_target', ref))] }),
+  );
+  const flowed = rule.detect(
+    context({ workflows: [workflow(flowCheckout('pull_request_target', `{ ref: ${ref} }`))] }),
+  );
+
+  assert.deepEqual(flowed, blocked);
+});
+
+test('a flow-style with map that names no head is still a pass', () => {
+  for (const mapping of ['{ ref: refs/heads/main }', '{}']) {
+    const findings = rule.detect(
+      context({ workflows: [workflow(flowCheckout('pull_request_target', mapping))] }),
+    );
+    assert.equal(findings.length, 1, mapping);
+    assert.equal(findings[0].status, 'pass', mapping);
+    assert.equal(findings[0].code, 'pull-request-target-without-head-checkout', mapping);
+  }
+});
+
+test('a flow-style with map it cannot attribute skips the file instead of guessing', () => {
+  for (const mapping of ['{ ref:', '{ ref: refs/pull/7/head']) {
+    const findings = rule.detect(
+      context({ workflows: [workflow(flowCheckout('pull_request_target', mapping))] }),
+    );
+    assert.equal(findings.length, 1, mapping);
+    assert.equal(findings[0].status, 'skip', mapping);
+    assert.equal(findings[0].code, 'unparseable-workflow', mapping);
+    assert.match(findings[0].message, /line 10/, mapping);
+  }
 });
 
 test('does not flag the trigger alone, or a head checkout without it', () => {

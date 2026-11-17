@@ -7,7 +7,9 @@
  * the rules report `skip: unparseable-workflow` instead of guessing.
  *
  * Shape it understands: block and flow-style step maps, quoted values, trailing comments kept as
- * evidence, `with:` maps (including their block scalars), block scalars (`run: |`, `run: >-`, and either
+ * evidence, `with:` maps (including their block scalars, and including a flow mapping written on the
+ * key's own line — `with: { ref: … }` — which is the one map the reader models in flow style besides
+ * `permissions:`), block scalars (`run: |`, `run: >-`, and either
  * of them with an explicit indentation indicator — `run: |2`, `run: >2-`, `run: |-2` — whose indicator
  * decides where the body starts) whose bodies are never steps, `docker://image:tag`,
  * `docker://image@sha256:…` and local `./path` actions.
@@ -17,7 +19,9 @@
  * Shapes it refuses, each naming the line: anchors/aliases/merge keys, tabs, multi-document streams,
  * sequences or flow maps where a job map is expected, a `uses:` value written as a block scalar
  * (the reference cannot be attributed from a joined scalar without guessing), and a trigger list item
- * that is itself a map (a scalar list cannot carry it).
+ * that is itself a map (a scalar list cannot carry it). A `with:` map in flow style is read (I-82),
+ * and its broken forms — one that does not close on its line, one with a block body under it — are
+ * refused like every other spelling the reader cannot attribute.
  *
  * The reader also models the workflow `name:` and the trigger block, as data a rule can consume: `on:`
  * in every spelling YAML gives it, one event per trigger with the line it was declared on and its own
@@ -760,6 +764,30 @@ class Reader {
   }
 
   /**
+   * The `with:` map of a step, in either spelling YAML gives a mapping: a block map under the key,
+   * which is the shape every workflow writes, or a flow mapping on the key's own line
+   * (`with: { ref: … }`), which YAML defines and GitHub accepts.
+   *
+   * The flow spelling is modelled here and nowhere else, and this method is called only for `with:`
+   * (#405, I-82): a step's inputs are the one map a rule has to read to answer, so a flow spelling of
+   * it is attributed instead of being silently dropped, while a general flow parser stays out of this
+   * reader. An empty flow map (`with: {}`) declares no input, which is a fact. A flow map the reader
+   * cannot attribute — one that does not close on its own line, or one carrying a block body under
+   * it, which is not YAML — is refused naming the line, so the file is skipped as
+   * `unparseable-workflow` rather than read as an input map it never declared.
+   * @param {WorkflowEntry} entry
+   * @returns {Record<string, string>}
+   */
+  withValue(entry) {
+    if (!entry.value.startsWith('{')) return this.mapValue(entry, 'with');
+    const body = this.next(entry.bodyStart);
+    if (body < entry.bodyEnd) {
+      fail(`"with" at line ${entry.line} is a flow map with a block body, which the reader does not attribute`);
+    }
+    return parseFlowMap(entry.value, entry.line);
+  }
+
+  /**
    * @param {WorkflowEntry} entry
    * @param {string} key
    * @returns {Record<string, string>}
@@ -929,7 +957,7 @@ class Reader {
       else step.run = unquote(entry.value);
       return;
     }
-    if (entry.key === 'with') step.with = this.mapValue(entry, 'with');
+    if (entry.key === 'with') step.with = this.withValue(entry);
     if (entry.key === 'env') step.env = this.mapValue(entry, 'env');
   }
 }
