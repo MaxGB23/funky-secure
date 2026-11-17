@@ -255,8 +255,12 @@ the pin alone is the declaration, and nothing about it is skipped.
   the output; the exit code (`0`/`1`) is an aggregate over the batch and is never read as one path's
   answer. Additionally report tracked instances of `*.pem`, `*.key` and a root `.npmrc` containing a
   literal `_authToken=` (presence only, value redacted).
-- **Remediation:** `init --apply` appends a managed block (section 11.2) with the missing entries.
-  Manual alternative: the exact lines to add are printed.
+- **Remediation:** `init --apply` appends the **fixed** managed block of section 11.2 — the entries this
+  rule asks for and two it does not (`.env.*` and `node_modules/`), because the block is one block and
+  not a per-rule list. The plan prints the block's entries as a **description**, never as lines:
+  `managed block (adds .env, .env.*, !.env*.example, *.pem, *.key, node_modules/, .npmrc …)`. No
+  command prints the lines themselves, so a reader who will not run `--apply` takes them from section
+  11.2.
 - **Scope note:** the rule does not demand that `.npmrc` be ignored when the project legitimately
   commits one without tokens; the token check is separate evidence and drives the severity of that
   instance only.
