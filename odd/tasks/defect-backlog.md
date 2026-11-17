@@ -200,8 +200,11 @@ times and not enough to restore a per-slice figure the run no longer supports. *
 seven slices were assessed and no review was due for any of them. **[Corrected: the table was withdrawn for the
 reason stated, not replaced with other numbers.]**
 
-**No review was due for any candidate**, which is the fact the omission denied me: skipping `assess` left
-"nothing was owed" as an assumption for twenty pull requests. It was owed nothing, and now that is measured.
+**Seven of the batch's twenty pull requests were assessed, and no review was due for any of them.** The
+other thirteen were not, so the honest statement is narrower than the one this entry first carried: skipping
+`assess` left "nothing was owed" as an assumption, seven slices turned that assumption into a measurement,
+and the thirteen unassessed are unassessed. What the gate said about the accumulated branch is a separate
+object (below).
 - **The `due review` the gate reported was about something else.** When the delivery preflight ran out of its
   10 s budget it was projecting a **retained base 90 commits behind `HEAD`**, not a slice; with a large enough
   budget that same range denies with *"Native assessment reports a due review"*. So the message was true of the
@@ -308,3 +311,26 @@ first fix" denied the order its own commits carry. The routing rows and the coun
 were written, the size table is withdrawn rather than restated, and `#368`'s story is the omission its own
 `git grep` proves. Leaving any of them would have been the defect this batch was closed to fix — a record
 asserting what it had not measured — and a document that survives a judge unchanged is not a record.
+
+**L7** — this entry was read by a second round of two judges, and it left two things out. Both are
+**post-close findings**, filed after the first draft of `L6` and therefore invisible from its counts:
+
+- **`#442` — a stray `scan.json` with this machine's paths was in the repository.** It entered with `b0173e1`
+  (`docs(spec): R5 says manual…`, PR `#437`) because that commit staged everything, was tracked at `4e487b5`,
+  and was removed by `906fda3` (PR `#444`). It is the batch's own failure mode — a claim or a file that
+  nobody read — committed by the hand that was busy closing other people's. `git add -A` stages stray
+  artifacts; the diff has to be read before the commit, and this one was not.
+- **`#439` — the exit table still sent a strict-probe failure to `2`.** `#414` moved the behaviour and the
+  flag's description in one PR and left `docs/spec/report.md` assigning the same finding to the usage code,
+  while `commands.md` called it an `error`. Measured with `PATH` broken: the binary exits `1`. Fixed by
+  `2a4c94c` (PR `#440`) and `9c3d2e9` (PR `#441`). A fix that moves a rule and not the table that summarises
+  it is half a fix, and the half that was left was the normative one.
+
+**And one sentence of `L6` was too wide**, corrected here rather than rewritten: "no review was due for any
+candidate" was measured over **seven** of the batch's twenty pull requests. The other thirteen were never
+assessed, so what stands is "no review was due for the seven that were", and the thirteen are named as
+unassessed rather than covered by a verdict nobody ran.
+
+Both judges read a record that was wrong in ways a run could settle, and both were right about the part that
+mattered: the numbers were prose, and prose does not add up. `L7` exists because the Log is append-only — a
+closing entry that needed correcting is corrected by the next entry, never by rewriting the last one.
