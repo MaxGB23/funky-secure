@@ -58,6 +58,16 @@ const WHY_START_AGAIN =
   'the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git';
 
 /**
+ * One printed step: the line the reader runs, and the unnumbered line it may carry.
+ *
+ * The note travels inside the entry that owns it, so the renderer never recognises a step by its
+ * text: a rewritten constant, an added flag or a formatter change cannot separate the two (R2-001,
+ * 11.7). The indentation is the renderer's business, because only it knows the index.
+ *
+ * @typedef {{ text: string, note?: string }} PlanStep
+ */
+
+/**
  * The steps printed in a directory that is not a repository yet.
  *
  * Nothing past `git init` is derivable there: R7 `sensitive-ignored` declares `outside git, skip`, so W2
@@ -65,14 +75,15 @@ const WHY_START_AGAIN =
  * printed from this directory is one that `init --apply` contradicts one step later (0031).
  *
  * @param {{ repo: object | null }} state
- * @returns {string[]}
+ * @returns {PlanStep[]}
  */
 function pendingBootSteps({ repo }) {
-  const steps = ['git init'];
+  /** @type {PlanStep[]} */
+  const steps = [{ text: 'git init' }];
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
-    steps.push('pnpm init');
+    steps.push({ text: 'pnpm init' });
   }
-  steps.push(START_AGAIN_STEP);
+  steps.push({ text: START_AGAIN_STEP });
   return steps;
 }
 
@@ -210,12 +221,16 @@ function foreignLockfiles(repo) {
  * own and cannot contradict the report about the same repository (S3).
  *
  * @param {{ repo: object | null, writes: number }} state
- * @returns {string[]}
+ * @returns {PlanStep[]}
  */
 function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [], trackLockfile = false }) {
   const present = Array.isArray(repo?.present) ? repo.present : [];
   const foreign = foreignLockfiles(repo);
+  /** @type {PlanStep[]} */
   const steps = [];
+  // A step and the one line it may carry are created together, so no later reader has to match the
+  // step's text to learn whether it owns a note (R2-001).
+  const push = (text, note) => steps.push(note === undefined ? { text } : { text, note });
   // A manifest that declares another manager blocks every pnpm command, so each one carries the flag
   // that runs it under that declaration. A pnpm pin and no pin at all print the plain commands.
   const flag = pnpmFlag(repo);
@@ -230,35 +245,36 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   const trackFiles = ['pnpm-lock.yaml', ...foreign];
   const trackStep = `git add ${trackFiles.join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
 
-  if (repo?.inGit !== true) steps.push('git init');
+  if (repo?.inGit !== true) push('git init');
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
-    steps.push('pnpm init');
+    push('pnpm init');
   }
   // The block can only be written over a committed tree, so the commit is a step and not a footnote.
-  if (writes > 0 && uncommitted) steps.push(COMMIT_STEP);
+  if (writes > 0 && uncommitted) push(COMMIT_STEP);
   // The block first, then one resolve under it, then the foreign lockfile: `migrate --apply` refuses to
   // remove the only lockfile, so it needs the `pnpm-lock.yaml` the install writes, and the install has
   // to read a block that already exists.
   if (writes > 0) {
-    steps.push(
+    push(
       `funky-secure init --apply  plan the ${plural(writes, 'write', 'writes')}`,
     );
     // `init --apply` leaves the manifest dirty, and `pin --apply` refuses that state. The commit names
     // the files the plan wrote, so an untracked tool cache beside them is not swept in.
-    steps.push(commitWrites);
+    push(commitWrites);
   }
   if (foreign.length > 0) {
     // `pnpm import` reads the foreign lockfile and writes `pnpm-lock.yaml` with the versions it
     // recorded. `pnpm install` never reads it: it resolves from the manifest, so the pins the user
     // migrated from are gone before `migrate` deletes the file that held them (0021).
-    steps.push(`pnpm import${flag}`);
+    push(`pnpm import${flag}`);
   }
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
-    steps.push(`pnpm add${flag} <your first dependency>`);
+    push(`pnpm add${flag} <your first dependency>`);
     // The add records the dependency in the manifest and the next writer refuses that state, so the
-    // commit that produces the clean tree follows it (0018). It prints only where the add printed.
-    steps.push(ADD_STEP);
+    // commit that produces the clean tree follows it (0018). It prints only where the add printed, and
+    // the note is the one line 11.7 defines for a step whose outcome the plan cannot see.
+    push(ADD_STEP, ADD_STEP_NOTE);
   }
   // `pin` copies the version it writes from `pnpm-lock.yaml`, so a lockfile that records none gives it
   // nothing to copy and the path would announce the ranges and write none of them (0034). The resolve
@@ -267,34 +283,34 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // resolve, and a foreign lockfile was resolved by `pnpm import` — so the step answers the state the
   // field measured, a lockfile whose only entries are the managed pnpm and its platform packages.
   if (pins > 0 && foreign.length === 0 && present.includes('pnpm-lock.yaml')) {
-    steps.push(resolveLockfileStep(repo));
+    push(resolveLockfileStep(repo));
   }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.
   if (pins > 0) {
-    steps.push(
+    push(
       `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} package.json declares`,
     );
   }
   if (pins > 0) {
-    steps.push(resolveLockfileStep(repo));
+    push(resolveLockfileStep(repo));
     // The pin has a commit of its own, immediately after the resolve it requires: it leaves the
     // manifest dirty and the next writer refuses that state (0028). It prints only where `pin`
     // printed, because a commit that stages nothing is never printed.
     // The step that tracks a lockfile prints for one that is not committed; a repository that
     // already tracks its own has no such step, so this commit is the only one that can carry the
     // resolve's rewrite of it.
-    steps.push(pinStep(present.includes('pnpm-lock.yaml') && !trackLockfile));
+    push(pinStep(present.includes('pnpm-lock.yaml') && !trackLockfile));
   }
   if (foreign.length > 0) {
-    steps.push(`git switch -c ${FEATURE_BRANCH}`);
-    steps.push(
+    push(`git switch -c ${FEATURE_BRANCH}`);
+    push(
       'funky-secure migrate --apply  on a feature branch: it refuses to remove a lockfile on main',
     );
   }
   // The last scan reads a tracked lockfile. Whether one will exist is knowable here — the install above
   // writes it, or it is already present — so the step is printed from a fact and not from a guess.
-  if (lockfileAtEnd) steps.push(trackStep);
+  if (lockfileAtEnd) push(trackStep);
 
   return steps;
 }
@@ -323,7 +339,7 @@ async function hasUncommitted({ plan, ctx, collector }) {
 }
 
 /**
- * @param {{ off: string[], catalog: Array<object>, pending: string[], migrate: boolean, foreignPin?: string | null, boot?: boolean }} options
+ * @param {{ off: string[], catalog: Array<object>, pending: PlanStep[], migrate: boolean, foreignPin?: string | null, boot?: boolean }} options
  * @returns {string}
  */
 function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot = false }) {
@@ -334,17 +350,21 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
   } else {
     // The steps are numbered as printed, so a repository missing only the lockfile starts at 1. A
     // directory that is not a repository stops at the step that asks again, so it appends no scan.
-    const printed = boot ? pending : [...pending, SCAN_STEP];
-    for (const [index, step] of printed.entries()) {
-      lines.push(`  ${index + 1}  ${step}`);
+    const printed = boot ? pending : [...pending, { text: SCAN_STEP }];
+    for (const [index, entry] of printed.entries()) {
+      lines.push(`  ${index + 1}  ${entry.text}`);
       // A step whose outcome depends on a choice the plan cannot see carries one unnumbered line under
-      // it, and step 14 is today's only case (11.7).
-      if (step === ADD_STEP) lines.push(`${' '.repeat(String(index + 1).length + 4)}${ADD_STEP_NOTE}`);
+      // it, and step 14 is today's only case (11.7). The line arrives with the entry, so no rewrite of
+      // the step's own text can drop it, and the width is computed here because only this loop knows
+      // the number it has to sit under.
+      if (entry.note !== undefined) {
+        lines.push(`${' '.repeat(String(index + 1).length + 4)}${entry.note}`);
+      }
     }
 
     // Every pnpm step begins with `pnpm `, so the reference is derived from the list that was just
     // printed: no probe decides it, and a path that needs no pnpm step argues for nothing (0033).
-    if (printed.some((step) => step.startsWith('pnpm '))) lines.push('', `  ${PNPM_REFERENCE}`);
+    if (printed.some((entry) => entry.text.startsWith('pnpm '))) lines.push('', `  ${PNPM_REFERENCE}`);
 
     if (boot) {
       lines.push('', `  ${WHY_START_AGAIN}`);
@@ -352,12 +372,12 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
       // `why this order` explains an order, so it is printed only when there is one to explain.
       lines.push('', 'why this order', ...WHY_ORDER.map((line) => `  ${line}`));
       // Each reason is printed only when its step is, so the block never argues for a step that is absent.
-      if (pending.some((step) => step.includes('git commit'))) lines.push(`  ${WHY_COMMIT_AFTER}`);
-      if (pending.some((step) => step.includes('pin --apply'))) lines.push(`  ${WHY_PIN}`);
+      if (pending.some((entry) => entry.text.includes('git commit'))) lines.push(`  ${WHY_COMMIT_AFTER}`);
+      if (pending.some((entry) => entry.text.includes('pin --apply'))) lines.push(`  ${WHY_PIN}`);
       if (migrate) lines.push(`  ${WHY_MIGRATE_AFTER}`);
       // The reason is printed only where a step carries the flag, so the block never argues for a
       // condition no printed command meets.
-      if (foreignPin !== null && pending.some((step) => step.includes(FOREIGN_PIN_FLAG))) {
+      if (foreignPin !== null && pending.some((entry) => entry.text.includes(FOREIGN_PIN_FLAG))) {
         lines.push(`  ${whyForeignPin(foreignPin)}`);
       }
       // No line predicts which root an install resolves to. The project's own `pnpm-workspace.yaml` is
@@ -377,7 +397,7 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
   // A refusal is the one thing the path cannot demonstrate, so it names what to read instead. It is
   // printed only where a step writes, for the same reason every other reason is: a line that argues
   // for a step the reader does not have is a line about nothing.
-  if (pending.some((step) => step.includes('--apply'))) lines.push('', `  ${WHEN_A_WRITER_REFUSES}`);
+  if (pending.some((entry) => entry.text.includes('--apply'))) lines.push('', `  ${WHEN_A_WRITER_REFUSES}`);
 
   return `${lines.join('\n')}\n`;
 }
