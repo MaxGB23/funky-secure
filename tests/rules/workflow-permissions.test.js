@@ -74,6 +74,76 @@ test('flags a workflow that declares no permissions block', () => {
   assert.equal(findings[0].line, 1);
 });
 
+test('a workflow whose several jobs inherit says so with a plural verb (issue 332)', () => {
+  const manyJobs = `name: ci
+on:
+  pull_request:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  e:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  f:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+`;
+  const findings = rule.detect(context({ workflows: [workflow(manyJobs)] }));
+
+  assert.equal(
+    findings[0].message,
+    'the workflow declares no permissions:, so 5 of its 6 jobs (a, b, c, d, e) inherit the scopes the repository setting allows',
+  );
+});
+
+test('a workflow whose one job inherits keeps the singular verb (issue 332)', () => {
+  const oneOfThree = `name: ci
+on:
+  pull_request:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  b:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+  c:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+`;
+  const findings = rule.detect(context({ workflows: [workflow(oneOfThree)] }));
+
+  assert.equal(
+    findings[0].message,
+    'the workflow declares no permissions:, so 1 of its 3 jobs (a) inherits the scopes the repository setting allows',
+  );
+});
+
 test('flags write-all at the workflow level', () => {
   const writeAll = `name: ci
 on:
