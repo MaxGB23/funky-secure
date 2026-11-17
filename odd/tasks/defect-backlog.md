@@ -91,25 +91,31 @@ name the surfaces quoting it is not ready.
 | T6 | strict probes say what they mean | 364 | one |
 | T7 | the compound step keeps its other commands | 383 | spec, then code |
 | T8 | `foreign-lockfile` prints a sequence that works | 359 | spec, then code |
-| T9 | `quarantine` says `manual` where it cannot clear | 361 | verify, then spec, then code |
+| T9 | `quarantine` says `manual` where it cannot clear | 361 | verify, then one (`#430`) |
 | T10 | `exact-versions` keeps the workspace protocol | 368 | spec, then code |
 | T11 | the pin that works under a frozen lockfile | 373 | spec, then code |
 | T12 | the no-lockfile skip names its fact | 369 | one |
-| T13 | `evidence.form` stops claiming `branch` | 377 | spec, then code |
-| T14 | the scope wins for `package-manager-pin` | 398 | spec, then code |
-| T15 | the permissions remediation names both shapes | 407 | one |
+| T13 | `evidence.form` stops claiming `branch` | 377 | one (`#428`) — `report.md` documents no `evidence.form` |
+| T14 | the scope wins for `package-manager-pin` | 398 | one (`#425`) |
+| T15 | the permissions remediation names both shapes | 407 | two: spec, then code (`#421`, `#423`) |
 | T16 | the permissions pass message is true | 395 | one |
-| T17 | `init --apply` writes both declarations from one pin | 353 | spec, then code |
+| T17 | `init --apply` writes both declarations from one pin | 353 | one (`#435`) |
 | T18 | the quoted argument's limit is stated | 384 | one docs |
-| T19 | the reader models a flow `with:` map | 405 | spec, then code |
+| T19 | the reader models a flow `with:` map | 405 | one (`#436`), and the stale R13 `Limits` sentence in its own spec PR (`#443`) |
+| T20 | the record is repaired against a second judge round, and `L6` closes it | — | one docs (this document) |
 
 ## Log
 
 **L1** — the owner's request, verbatim, is `S1`. It sets two constraints: nothing stays pending, and the small
 fixes are decided here rather than deferred. It also names the instrument: `funky judge`.
 
-**L2** — the triage was frozen at `1ab826b0` and judged by `jd-judge-a` and `jd-judge-b`, blind to each other,
-over the same eleven questions (`C0`–`C10`).
+**L2** — the triage was judged by `jd-judge-a` and `jd-judge-b`, blind to each other, over the same eleven
+questions (`C0`–`C10`). The version they read was a **working copy that was never committed**, and the hash
+printed for it (`1ab826b0`) names nothing: `git cat-file -t 1ab826b0` answers `Not a valid object name`, no
+object in this repository begins with those bytes, and the plan as first committed (`8fea477`) hashes to
+`4ffa4799…` instead. **No artifact of the pre-adjudication plan exists**, so `L3` is the only surviving
+description of what the first round changed. **[Corrected: this entry said the triage "was frozen at
+`1ab826b0`", which read as a surviving record. It was a hash of a working copy and nothing was frozen.]**
 
 **L3** — the adjudication. Every finding below was checked against a run or a file, and the ones that decided a
 row are marked with what proved them.
@@ -141,10 +147,14 @@ row are marked with what proved them.
 - **`T0` exists because of the judges**: two reproductions were wrong and one decision rested on a command that
   does not exist. Nothing is fixed before it is re-run.
 
-**L4** — `T0` ran before the first fix, and it paid for itself. Every reproduction was re-executed with the binary
-from a `mktemp` fixture, never from the repository: **14 hold · 3 hold with a corrected reproduction · 2 no
-longer hold · 0 unreachable.** The two that no longer hold are `#375` and `#385`, closed by `0a1966d` and
-`0f3bd82` (merged at `5aea132`), so the batch is **seventeen**, not nineteen, and `T1`/`T2` are done.
+**L4** — `T0` re-ran the nineteen reproductions, and it paid for itself. Every reproduction was re-executed with
+the binary from a `mktemp` fixture, never from the repository: **14 hold · 3 hold with a corrected
+reproduction · 2 no longer hold · 0 unreachable** — nineteen, which is `T0`'s own count and the number the task
+list carries. The two that no longer held are `#375` and `#385`, and they stopped holding because the batch's
+own first two fixes were already in when the evidence was written: `#385` at `8d0005a` (PR `#409`, commit
+`0f3bd82`, 00:10:41) and `#375` at `5aea132` (PR `#410`, commit `0a1966d`, 00:14:51), both ahead of the `T0`
+evidence commit (`b06645b`, 00:23:36, merged as `150fd355` at 00:26:57). So the batch is **seventeen**, not
+nineteen, and `T1`/`T2` are done.
 - **`#359` needed a corrected reproduction.** The fixture must sit on a **non-default branch**: on `main` with no
   remote, `migrate --apply` refuses for the *branch* reason and masks the lockfile refusal. On a feature branch
   the issue's three lines reproduce exactly — `refusing to remove package-lock.json: pnpm-lock.yaml is absent`,
@@ -168,21 +178,27 @@ longer hold · 0 unreachable.** The two that no longer hold are `#375` and `#385
 - **The measurement did not touch the repository**: `git status --porcelain` was empty before and after, `HEAD`
   unchanged, and the tree's sha identical — after an earlier attempt had overwritten `package.json` by running an
   applying command from the repository root. The lesson is now a rule for every task here: **an applying command
-  runs with its `cwd` inside a fixture, never inside the repository being delivered.**
+  runs with its `cwd` inside a fixture, never inside the repository being delivered.** **[Corrected: this entry
+  opened by saying `T0` "ran before the first fix" and gave `5aea132` as the merge for both closed issues. The
+  record's own timestamps put both `A` fixes ahead of the `T0` evidence, and `#385` merged at `8d0005a`; without
+  both, "2 no longer hold" contradicted "before the first fix".]**
 
 **L5** — `T21`, the review debt, measured rather than assumed. Seven delivered slices were assessed with an
 explicit base (`gentle-ai review assess --base-ref <the merge's first parent> --committed-only --json`), chosen
-for being the ones that touched a security rule or a shared reader:
+for being the ones that touched a security rule or a shared reader: `actions-pinned-sha` (`#379`),
+`workflow-run-artifact` (`#401`), `pull-request-target` (`#406`), the collector (`#356`), `lockfile-committed`
+(`#351`), `ci-no-safety-overrides` (`#386`) and `no-bot-auto-merge` (`#381`). **All seven answered
+`review_due: false`, reason `under_budget`, risk `medium`.**
 
-| Slice | `review_due` | reason | risk | changed |
-|---|---|---|---|---|
-| #379 `actions-pinned-sha` | false | `under_budget` | medium | 44 paths / 4 333 lines |
-| #401 `workflow-run-artifact` | false | `under_budget` | medium | 34 / 1 717 |
-| #406 `pull-request-target` | false | `under_budget` | medium | 31 / 1 049 |
-| #356 the collector | false | `under_budget` | medium | 52 / 5 843 |
-| #351 `lockfile-committed` | false | `under_budget` | medium | 91 / 7 703 |
-| #386 `ci-no-safety-overrides` | false | `under_budget` | medium | 37 / 3 165 |
-| #381 `no-bot-auto-merge` | false | `under_budget` | medium | 39 / 3 576 |
+**The `changed` column is withdrawn.** This entry carried one — 44 paths / 4 333 lines for the first slice and
+figures of that order for the other six — and **the run that produced it cannot be reproduced from this
+repository**: no artifact of the seven `assess` runs survives (no receipt, no state file, and
+`grep -rl under_budget .git` answers nothing), and re-measuring the same slices with
+`git diff --shortstat <merge>^1 <merge>` does not produce those numbers. The seven measure between 2 and 5
+paths and between 182 and 525 changed lines each, which is enough to show the column was wrong by about ten
+times and not enough to restore a per-slice figure the run no longer supports. **What stands is the verdict:**
+seven slices were assessed and no review was due for any of them. **[Corrected: the table was withdrawn for the
+reason stated, not replaced with other numbers.]**
 
 **No review was due for any candidate**, which is the fact the omission denied me: skipping `assess` left
 "nothing was owed" as an assumption for twenty pull requests. It was owed nothing, and now that is measured.
@@ -198,3 +214,97 @@ for being the ones that touched a security rule or a shared reader:
   not that a review happened. And a `cancelled or timed out` refusal is the clock, not authority: the preflight
   projects the **retained** base, its cost grows with `base..HEAD`, and the cure is to seat a narrow base with
   `assess {"baseRef":"<current tip>","committedOnly":true}` before issuing the delivery again.
+
+**L6** — the batch closed **twenty-two issues: twenty-one fixed, one refuted.** The set is the plan's nineteen
+rows, plus `#391`, whose spec and code landed before the plan was written (`9fc86ca`, `d3f52a7`), plus
+`#414`; `#394` is the refuted one. `#378` and `#400` are **not** in it: both are field-loop slices that closed
+before the plan existed, by the pull requests `#379` and `#401`, and a record that counts a pull request as an
+issue is the same error as counting a pass on a file nobody read.
+
+**What `S2` actually cost.** Eight of the twenty-one needed a spec PR and then a code PR: `#391`
+(`#404`→`#406`), `#354` (`#412`→`#418`), `#360` (`#413`→`#417`), `#359` (`#424`→`#427`), `#383`
+(`#419`→`#422`), `#407` (`#421`→`#423`), `#368` (`#433`→`#434`) and `#373` (`#437`→`#438`). **Four were
+documentation only**, and the contract or the page was the whole change: `#375` (`0a1966d`), `#385` (`0f3bd82`),
+`#414` (`da9e547`) and `#384` (`3079794`), whose spec PR stated a limit rather than correcting a sentence. **Nine
+landed in code alone**: `#353` (`#435`), `#361` (`#430`), `#364` (`#416`), `#369` (`#431`), `#377` (`#428`),
+`#390` (`#415`), `#395` (`#426`), `#398` (`#425`) and `#405` (`#436`) — with one qualification that is `T19`'s:
+`#436` left §8.2 R13 saying a flow `with:` map was "invisible to the reader today", and that sentence moved in
+its own spec PR (`#443`, branch `docs/spec-flow-with`), so the ninth pair is real but arrived after the count.
+Every figure above is one
+`gh issue view <n> --json closedByPullRequestsReferences` and one `git diff --name-only <merge>^1 <merge>`: the
+four documentation-only PRs close their issue themselves, and each pair is a `Refs` spec PR followed by the code
+PR that closes it — `#437` is the one spec PR that also says `Closes`, which is why `#373` names two.
+
+**What the routing column recorded.** The plan sends eleven rows spec-first. Seven landed that way — `T4`, `T5`,
+`T7`, `T8`, `T10`, `T11` and `T15` — and `T15` is the row that was routed as **one** pull request and was
+**two** (`#421`, then `#423`). `T9` was routed `verify, then spec, then code` and landed as the verification then
+one code PR (`#430`): `T0` confirmed it and no spec sentence moved. Four rows routed spec-first landed in code
+alone, because there was no spec sentence to move: `T13`/`#377` (`report.md` documents no `evidence.form` at
+all), `T14`/`#398` (`#425`), `T17`/`#353` (`#435`) and `T19`/`#405` (`#436`, with the spec sentence following in
+`#443`). The plan's `C` line says all five of its class are spec-first; four of the five were, and `#361` is
+the one that was not.
+
+**What the fixes were, once each.** Seven were a **remediation that cannot clear, or clears by destroying
+something else**: `#383` replaced a whole `run:` body and lost `pnpm build` beside the flag, `#359` printed a
+migrate that refuses in the state it was printed for, `#361` said `auto` where the writer refuses the file,
+`#368` replaced `workspace:^` with `link:../lib` and dropped the membership, `#373` printed a pin that cannot
+clear under a declared freeze, `#353` wrote one declaration while its guard conflicted, and `#407` named only
+the workflow-level block — the shape whose widening, in `#423`'s own words, "would grant that scope to every
+job". Eight were a **message, field or skip code that named a fact it had not measured**: `#354` a probe that
+never ran, `#360` "nothing to do" after listing an action, `#364` `skipped:` under an `error`, `#369` a fact
+never named without a lockfile, `#377` `form: branch` for a reference that names no ref, `#390` a directory
+where the missing thing is a file, `#395` a pass sentence false for a per-job declaration, `#398` the rule's
+`no-package-json` for a scope that excluded the repository. Two were a **detection that missed a spelling**,
+with opposite dispositions: `#391` reads `refs/pull/<n>/head`, its `…/merge` sibling and `gh pr checkout <n>`
+and reports them (spec `#404`, code `#406`), and `#384` **states the limit** instead of widening the rule
+(`#429`), because telling an argument from prose means deciding what the command is. One was a **reader that
+dropped input and counted a pass**: `#405`, whose
+`with: { … }` map answered an empty map and a pass. Three were a **spec sentence false on its face**: `#375`
+promised printed lines no command prints, `#385` named two skip codes where the rule emits three, `#414` sent a
+strict-probe failure to exit `2` where the binary answers `1`. `#394` is in none of them: it was refuted, and it
+is the reason `T0` exists.
+
+**`#368` was an omission, not a contradiction.** The batch's first reading was that R5's own Remediation
+prescribed the `link:` value its Detection forbade. It did not: `git grep -n "link:" c18a75c -- docs/spec/`
+answers nothing, and the word enters `docs/spec/rules.md` for the first time with `#433` (`423d26e`) — as the
+value to avoid. The spec was **silent** on which spelling an internal range becomes while the rule wrote
+`link:../lib`, so what the spec PR corrected was a gap in the contract, not a spec contradicting itself.
+
+**Four decisions were refuted, each by someone other than the person who took it.** `#394` was **not a defect**
+— its remediation is prose and there is nothing to indent, so its own reproduction could not hold and it closed
+as written (`L3`). `#395`'s reproduction used a flow `steps:` map, which is `unparseable-workflow`, so the
+failure it described was not the failure it had. `#398`'s first shape answered `no-repo` for **every** rule and
+would have deleted a legitimate `no-repo-root`; the final shape answers `no-repo` only where the scope excluded
+the repository. `#375`'s decision named `init --plan`, a flag `src/commands/init.js` does not declare —
+`init` without `--apply` already prints the plan. And two routings inverted after the batch started: `#377` was
+routed spec-first although the spec documents no `evidence.form`, and `#368` was routed as code until the spec
+was read and found silent, which is the omission above and not a contradiction.
+
+**`#373` refuted its own brief twice before a line was written.** The worker stopped, measured, and brought
+back a table: `.npmrc`'s `frozen-lockfile` is a spelling pnpm 12.3.4 ignores, `CI=true` is a machine fact a
+repo-scoped rule cannot see and must not see, and the freeze a repository *declares* in `pnpm-workspace.yaml`
+is visible — but `pnpm install --lockfile-only`, the brief's own offered cure, refuses there too. The only route
+that works anywhere carries `--no-frozen-lockfile`, the flag `R10` exists to report, so the finding prints the
+hand edit and no command. A one-line cure became a spec amendment (`#437`), a measured table and `I-83`.
+
+**`T21` measured the review debt instead of assuming it** — `L5`, whose size table is withdrawn there. Seven
+slices, each assessed against its own base: `review_due: false`, reason `under_budget`, risk `medium`, for all
+seven. No review was due for any candidate; the "due review" the delivery gate reported was about the retained
+base ninety commits behind `HEAD`, never about a slice. The debt was procedural and it is now a rule in the
+global `AGENTS.md`.
+
+**`T0` re-ran every reproduction** (`L4`): fourteen held, three needed a corrected reproduction (`#359` on a
+non-default branch, `#373` under `CI=true`, `#395` in block form), two no longer held because `A` had already
+landed (`#375`, `#385`), and none was unreachable — nineteen in all, which is `T0`'s own count. One of the three,
+`#395`, had described a failure it did not have; `#394` was not a defect at all; and one decision rested on a
+command that does not exist. **A reproduction is evidence only after it has been re-run.**
+
+**What the second round changed in this document, and why.** A second judge round read this record and was right
+about five of its claims: the split in `L6` said thirteen pairs and nine documentation-only where the pull
+requests show eight and four, the routing column sent eleven rows through a spec PR where four of them never had
+one and one had two, `L5`'s `changed` column carried sizes about ten times the slices they described from a run
+no artifact supports, `L2`'s frozen hash named an object that is not in the repository, and `L4`'s "before the
+first fix" denied the order its own commits carry. The routing rows and the counts are corrected where they
+were written, the size table is withdrawn rather than restated, and `#368`'s story is the omission its own
+`git grep` proves. Leaving any of them would have been the defect this batch was closed to fix — a record
+asserting what it had not measured — and a document that survives a judge unchanged is not a record.
