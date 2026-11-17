@@ -57,7 +57,11 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
 - **Evidence:** declared value, observed value, path of the answering binary.
 - **Remediation:** `init --apply` writes `packageManager` when it is missing (auto), and only then; a
   declaration that already exists is never rewritten, whatever the machine runs. The same plan writes
-  the `devEngines.packageManager` that the manifest does not declare (11.2, W3b).
+  the `devEngines.packageManager` that the manifest does not declare (11.2, W3b). **The `auto` is a
+  promise the plan keeps.** Where `package.json` already declares a `devEngines.packageManager` this
+  plan will not match, W3b withholds the pin, so the finding is `manual` and names the edit instead —
+  a finding that advertises a write the writer refuses is a route the reader cannot take, the class
+  361 belongs to and 353 created the shape of. Every other shape keeps `auto` and its command bytes.
 - **Why it is free:** one line in a file every Node repository has; it makes the accidental use of
   another manager detectable without blocking anything.
 - **False positives:** a repository deliberately on another manager is a `skip`, not a finding: the
