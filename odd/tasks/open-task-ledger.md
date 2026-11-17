@@ -52,10 +52,10 @@ than silently trimmed.
 | id | task | specs | status | issue | route |
 |---|---|---|---|---|---|
 | T0 | two blind judges on the plan, adjudicated in this Log | S2, S6 | landed | — | one |
-| T1 | the `## Errata` entry naming `#320`/`ba5491e`/`abd6db3` for `T11` and `#297`/`e9251d1` for `T16`, never an edit to the rows | S4 | open | — | one |
-| T2 | `docs/testing.md`: the five admission tests, the two absences, what was adopted and what was rejected, and the `AGENTS.md` / `CONTRIBUTING.md` / `docs/README.md` links | S3, S6 | open | — | one |
-| T3 | the check over this table: a row with `status: open` and no `#<issue>` fails — RED observed on this document before the `issue` column is filled | S5 | open | — | test-first |
-| T4 | claim audit over the feature before it closes | S2 | open | — | one |
+| T1 | the `## Errata` entry naming `#320`/`ba5491e`/`abd6db3` for `T11` and `#297`/`e9251d1` for `T16`, never an edit to the rows | S4 | open | #451 | one |
+| T2 | `docs/testing.md`: the five admission tests, the two absences, what was adopted and what was rejected, and the `AGENTS.md` / `CONTRIBUTING.md` / `docs/README.md` links | S3, S6 | open | #452 | one |
+| T3 | the check over this table: a row with `status: open` and no `#<issue>` fails — RED observed on this document before the `issue` column is filled | S5 | open | #454 | test-first |
+| T4 | claim audit over the feature before it closes | S2 | open | #453 | one |
 
 The mutation-testing rider (`S7`) is **not** a task of this feature: `T17`'s parent row names it, this document
 names it, and it stays where it belongs — in the ledger, unwritten, rather than half-done here.
@@ -119,3 +119,10 @@ issues, then the column filled and the suite green in one pull request.
 form the freeze takes after `L3`'s defect: a reader recomputes it with `git show 43b2acb:odd/tasks/open-task-ledger.md
 | sha256sum`, and the number cannot describe bytes other than the committed ones. Both judges read the
 **previous** plan, are quoted in `L4`, and no finding of theirs was carried over unverified.
+
+**L7** — `T3` was observed, not asserted. With the table's `issue` column still empty, `node --test
+tests/open-task-ledger.test.js` failed for its own reason: *an open task with no issue is the leak this ledger
+exists to close* — `actual: [ T1 (issue: —), T2 (issue: —), T3 (issue: —), T4 (issue: —) ], expected: []`. The
+four issues were then opened (`#451`, `#452`, `#454`, `#453`), the column filled, and the same command passed
+2/2. The RED is four rows and the GREEN is the same four rows naming their issues; nothing else changed between
+the two runs.
