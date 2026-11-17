@@ -25,6 +25,7 @@ and the version on the machine's `PATH` is evidence rather than a verdict (0024)
 | `where pnpm` (win32) / `which pnpm` (POSIX) did not answer | `skip` | `no-pnpm` |
 | `pnpm --version` did not answer | `skip` | `no-pnpm` |
 | Machine facts are out of scope (`--scope repo`) | `skip` | `no-pnpm` |
+| The scope excluded the repository (`--scope machine`) | `skip` | `no-repo` |
 | The root `package.json` is missing | `skip` | `no-package-json` |
 
 **An unreadable manifest is a failure, not an absence.** A `package.json` that exists and cannot be
@@ -71,6 +72,14 @@ shape. The hash belongs to the declaration, so a machine that answers `12.3.4` a
 finding is the ordinary `pass`, and `pin-differs-from-machine` is reserved for a machine that answers
 another version. A pre-release is not the release (`12.3.4-beta.1` is not `12.3.4`), so a machine
 answering the release does not confirm a pin on the pre-release, and the row above applies.
+
+**The scope answers its own code, and a measured absence keeps its own.** `--scope machine` excludes
+the repository before anything is resolved, so the manifest was never looked for: the skip is
+`no-repo`, the code that means no repository facts in this scope (report 10.1), and its message names
+the exclusion — `skipped: the repository was excluded by --scope machine, so the pin cannot be read`.
+`no-package-json` is reserved for the absence this rule actually measured: the repository resolved and
+its root carries no manifest. Answering the file's code for an excluded scope asserted an absence
+nobody measured (#398), so the two states are told apart by the code and not only by the sentence.
 
 An unverifiable pin is not a wrong pin, so an unavailable pnpm is a skip rather than a failure; under
 `--strict-probes` the engine turns that skip into an error. Two probes can leave the pin unverified, and
@@ -127,7 +136,8 @@ sentences below name the version, never the file.
 - `self-managed-pin` — `none`: pnpm 12 with `devEngines.packageManager` answers with the version the
   project declares, not the one on `PATH`. The probe runs outside the repository (0019), so a
   difference here is not evidence that the pin is wrong, and the rule never recommends a downgrade.
-- `no-pnpm`, `no-package-json` — `none`: the rule cannot answer, so it does not recommend a write.
+- `no-pnpm`, `no-repo`, `no-package-json` — `none`: the rule cannot answer, so it does not recommend
+  a write.
   A scope-contract skip is not a missing fact: it still names the command that answers the question
   (`funky-secure scan --scope all`), inside the message.
 - `unparseable-package-json` — `none`: nothing is written to a file this rule could not read, and
