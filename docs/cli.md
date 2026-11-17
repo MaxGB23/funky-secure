@@ -394,16 +394,17 @@ and by the effective policy, and read in this order:
   and the action`.
 
 The second shape is the one that used to contradict itself: a foreign lockfile that stands alone is a
-`warn`, so the run passes while the finding names the migration. From `--only foreign-lockfile`:
+`warn`, so the run passes while the finding names the route that clears it. From `--only
+foreign-lockfile`:
 
 ```text
 REPO-ROOT
   ⚠  Foreign lockfile
      package-lock.json is still present; another package manager still shapes this
      repository
-     → funky-secure migrate --from npm --apply
+     → pnpm import && funky-secure migrate --from npm --apply
 
-next     funky-secure migrate --from npm --apply
+next     pnpm import && funky-secure migrate --from npm --apply
 ```
 
 The block is human output only: the JSON document of RFC 10.2 gains no field for it, because a

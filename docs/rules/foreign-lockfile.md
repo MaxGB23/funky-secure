@@ -38,23 +38,25 @@ finding nor a count.
 
 ## Remediation
 
-`manual`, through the migrate plan (RFC 11.3):
+`manual`, through the migrate plan (RFC 11.3). The printed route is the sequence that works from the
+state, not one command that refuses in it: removing a foreign lockfile is step 4 of the plan, and it
+runs only after `pnpm-lock.yaml` exists, so a repository without that file is told to create it first.
 
-- `funky-secure migrate --from npm --apply` when `package-lock.json` is present.
-- `funky-secure migrate --from yarn --apply` when `yarn.lock` is the foreign lockfile.
-- `funky-secure migrate --from auto --apply` when only a bun lockfile is present; the plan resolves
-  the origin.
+- `pnpm import && funky-secure migrate --from npm --apply` when `package-lock.json` is present.
+- `pnpm import && funky-secure migrate --from yarn --apply` when `yarn.lock` is the foreign lockfile.
+- `pnpm import && funky-secure migrate --from auto --apply` when only a bun lockfile is present; the
+  plan resolves the origin.
+
+While `pnpm-lock.yaml` coexists with the foreign lockfile the lockfile step is already done, so the
+finding prints `funky-secure migrate --from npm --apply` alone. Never delete the only lockfile a
+repository has: asked to, `migrate` refuses (exit 3, nothing written) and names `pnpm import` as the
+step to run first — the refusal the sequence exists to keep the reader out of.
 
 The rule's location is the repository root: the finding carries no `path`, lists the files it found in
 `evidence.files`, and a report counts it in the `REPO-ROOT` block.
 
-The removal of a foreign lockfile is step 4 of that plan, and it runs only after `pnpm-lock.yaml`
-exists. Never delete the only lockfile a repository has: on a repository with no `pnpm-lock.yaml` the
-printed command refuses (exit 3, nothing written) and names `pnpm import` as the step to run first;
-then the same command removes the foreign lockfile and the finding clears.
-
 A foreign lockfile that stands alone is a `warn`, so `scan` passes the run at the default threshold
-while the finding names the command above. The closing `next` block names that same command instead of
+while the finding names the route above. The closing `next` block names that same route instead of
 `nothing to do`, because a run that lists an action cannot end by saying there is nothing to do (RFC
 10.3, #360):
 
@@ -62,9 +64,9 @@ while the finding names the command above. The closing `next` block names that s
   ⚠  Foreign lockfile
      package-lock.json is still present; another package manager still shapes this
      repository
-     → funky-secure migrate --from npm --apply
+     → pnpm import && funky-secure migrate --from npm --apply
 
-next     funky-secure migrate --from npm --apply
+next     pnpm import && funky-secure migrate --from npm --apply
 ```
 
 ## Limits

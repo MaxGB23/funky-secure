@@ -334,7 +334,8 @@ test('scan human output shows the verdict', async (t) => {
 
 test('a warn-only run that lists an action ends by naming that action (#360)', async (t) => {
   // `foreign-lockfile` standing alone is a `warn`, so the default threshold passes the run. The block
-  // used to answer `nothing to do` directly under the line that named `migrate`.
+  // used to answer `nothing to do` directly under the line that named `migrate`; it names the route
+  // the finding prints, which is the sequence that works from that state (#359).
   const dir = scratch(t);
   writeFileSync(join(dir, 'package-lock.json'), '{}\n');
   const streams = io(dir, { root: dir });
@@ -344,8 +345,8 @@ test('a warn-only run that lists an action ends by naming that action (#360)', a
   const next = streams.stdout.text.split('\n').filter((line) => line.startsWith('next'));
   assert.deepEqual(
     next,
-    ['next     funky-secure migrate --from npm --apply'],
-    `the next block names the action the run lists:\n${streams.stdout.text}`,
+    ['next     pnpm import && funky-secure migrate --from npm --apply'],
+    `the next block names the route the run lists:\n${streams.stdout.text}`,
   );
   assert.equal(
     streams.stdout.text.includes('nothing to do'),
