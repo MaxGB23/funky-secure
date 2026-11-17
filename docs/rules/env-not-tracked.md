@@ -67,7 +67,10 @@ while keeping the secret live is the accident this rule exists to catch.
   template whatever its values; a template that carries a live secret is not distinguished from an
   empty one.
 - Outside git the rule returns `skip: no-git`. An unknown tracked set is not a clean one, and
-  `--strict-probes` turns that skip into an error rather than a green run that measured nothing.
+  `--strict-probes` turns that skip into an error rather than a green run that measured nothing. The
+  escalated message keeps the code and states the same fact without the skip verb —
+  `git is not available, so the tracked set is unknown (required probe unavailable)` — because the
+  verb belongs to the status and the suffix names why the severity moved (#364).
 - Severity is `error` under `baseline` and `strict`. The `starter` preset runs six rules and turns
   this one `off`, so under `starter` it contributes neither a finding nor a count. `--only` naming
   another rule, `--ignore env-not-tracked`, and `"rules": { "env-not-tracked": "off" }` in
