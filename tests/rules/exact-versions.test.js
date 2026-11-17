@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { run } from '../../src/cli.js';
 import { renderHuman } from '../../src/lib/render-human.js';
+import { createCollector } from '../../src/lib/probes.js';
 import { buildReport } from '../../src/lib/report.js';
 import { catalog as ruleCatalog } from '../../src/rules/index.js';
 import rule from '../../src/rules/exact-versions.js';
@@ -1097,4 +1104,323 @@ test('a root finding keeps the bare pnpm form', () => {
     .filter((entry) => entry.code === 'floating-range');
 
   assert.equal(finding.remediation.command, `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install`);
+});
+
+/// S3's four sides and S4's three obligations, driven through the binary over fixtures built at
+/// runtime. Side one starts from the desync fixture at `:301`: the same shape — a specifier the
+/// lockfile records differently — with no registry name, because the runnable copies below re-resolve
+/// the lockfile and a registry name would need a network the suite is not allowed to use (S5, 7.4).
+
+/** The identity the suite's commits use: a global hook on the development machine refuses others. */
+const IDENTITY = ['-c', 'user.email=82458865+MaxGB23@users.noreply.github.com', '-c', 'user.name=MaxGB23'];
+
+const manifest = (specifier) => `{
+  "name": "demo",
+  "dependencies": {
+    "left-pad": "${specifier}",
+    "yaml": "2.9.0"
+  }
+}
+`;
+/** The :301 shape: the manifest floats, the lockfile records the `1.3.0` a resolution wrote. */
+const LOCK_AGREEING = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    specifiers:
+      left-pad: 1.3.0
+      yaml: 2.9.0
+`;
+
+function capture() {
+  return {
+    text: '',
+    write(chunk) {
+      this.text += chunk;
+      return true;
+    },
+    isTTY: false,
+  };
+}
+
+/** One CLI run over a fixture, with the real probes the tool ships. */
+async function cliOn(dir, argv) {
+  const stdout = capture();
+  const stderr = capture();
+  const code = await run(argv, { cwd: dir, env: process.env, stdout, stderr });
+  return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+function scanOn(dir, argv = []) {
+  return cliOn(dir, ['scan', '--scope', 'repo', '--only', 'exact-versions', ...argv]);
+}
+
+async function reportOf(dir, argv = []) {
+  const { code, stdout, stderr } = await scanOn(dir, [...argv, '--format', 'json']);
+  assert.equal(stderr, '');
+  return { code, report: JSON.parse(stdout) };
+}
+
+/** The counts and threshold the human report prints, read back out of its own lines. */
+function humanSummary(text) {
+  const counts = /^summary {2}(\d+) errors? · (\d+) warnings? · (\d+) info · (\d+) passing · (\d+) skipped$/m.exec(text);
+  assert.ok(counts !== null, `the human report printed no summary line:\n${text}`);
+  const verdict = /^verdict {2}(PASS|FAIL) \(threshold: (\w+)/m.exec(text);
+  assert.ok(verdict !== null, `the human report printed no verdict line:\n${text}`);
+  const [error, warn, info, pass, skip] = counts.slice(1).map(Number);
+  return { error, warn, info, pass, skip, verdict: verdict[1], failOn: verdict[2] };
+}
+
+/** A committed repository: the tracked and ignored sets are repository facts this rule's run reads. */
+function repository(t, files) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-exact-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(join(dir, name, '..'), { recursive: true });
+    writeFileSync(join(dir, name), text);
+  }
+  for (const args of [['init', '-q', '-b', 'main'], ['add', '-A'], ['commit', '-qm', 'fixture']]) {
+    execFileSync('git', [...IDENTITY, ...args], { cwd: dir, encoding: 'utf8' });
+  }
+  return dir;
+}
+
+/**
+ * The only shape that re-resolves without a registry: a workspace link. `pnpm install` is genuinely
+ * run below, so the fixture is a real workspace and its own `.npmrc` refuses the network.
+ * @param {{ manifest: string, lockSpecifier: string }} shape
+ */
+function workspace(t, { manifest, lockSpecifier }) {
+  return repository(t, {
+    'package.json': '{\n  "name": "fixture-root",\n  "private": true\n}\n',
+    'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n",
+    'packages/lib/package.json': '{\n  "name": "@fixture/lib",\n  "version": "1.0.0"\n}\n',
+    'packages/app/package.json': `{"name":"@fixture/app","version":"1.0.0","dependencies":{"@fixture/lib":"${manifest}"}}\n`,
+    '.npmrc': 'registry=http://127.0.0.1:9/\noffline=true\n',
+    'pnpm-lock.yaml': `lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\n  packages/app:\n    dependencies:\n      '@fixture/lib':\n        specifier: '${lockSpecifier}'\n        version: link:../lib\n\n  packages/lib: {}\n`,
+  });
+}
+
+/** The tokens a printed one-liner stands for: `a && b` is two commands, each without its `pnpm`. */
+function argvOf(command) {
+  return command.split(' && ').map((step) =>
+    (step.match(/'[^']*'|"[^"]*"|\S+/g) ?? [])
+      .map((token) => (token.startsWith("'") ? token.slice(1, -1) : token))
+      .slice(1),
+  );
+}
+
+/** The resolver the tool owns answers which pnpm to run; without it the run cannot be measured. */
+async function pnpmFor(t, dir) {
+  const pnpm = await createCollector({ cwd: dir, env: process.env }).pnpm();
+  if (pnpm.file === null) {
+    t.skip(`pnpm did not answer (${pnpm.reason}), so the printed command cannot be run here`);
+    return null;
+  }
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key)));
+  return (args) =>
+    spawnSync(pnpm.file, [...(pnpm.prefixArgs ?? []), ...args], { cwd: dir, env, encoding: 'utf8' });
+}
+
+/// Side one: it fails, on a floating range and on a lockfile-desync, at the path it names.
+
+test('side one: a floating range and a lockfile-desync fail at package.json, the path each names', async (t) => {
+  const dir = repository(t, { 'package.json': manifest('^1.3.0'), 'pnpm-lock.yaml': LOCK_AGREEING });
+
+  const { code, report } = await reportOf(dir);
+  assert.equal(code, 0, 'a warning is below the default threshold, so the run exits 0');
+  assert.deepEqual(report.summary, { error: 0, warn: 2, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings.map((finding) => finding.code), ['floating-range', 'lockfile-desync']);
+  assert.deepEqual(report.findings.map((finding) => finding.path), ['package.json', 'package.json']);
+  assert.deepEqual(report.findings.map((finding) => finding.line), [4, 4], 'the line of the dependency key');
+  assert.equal((await scanOn(dir, ['--fail-on', 'warn'])).code, 1, '--fail-on warn makes the warning a gate');
+});
+
+/// Side two: it passes, and the pass is counted rather than merely absent.
+
+test('side two: exact specifiers that agree with the lockfile pass, and the pass is counted', async (t) => {
+  const dir = repository(t, { 'package.json': manifest('1.3.0'), 'pnpm-lock.yaml': LOCK_AGREEING });
+
+  const { code, report } = await reportOf(dir);
+  assert.equal(code, 0);
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings, [], 'a pass is counted and never listed');
+  assert.match((await scanOn(dir)).stdout, /^ {5}all 1 rule pass$/m, 'the human print names the pass it counted');
+});
+
+/// Side three: it skips for want of a fact, with the code and the fact it names.
+
+test('side three: an unparseable package.json skips with unparseable-package-json and names the fact', async (t) => {
+  const dir = repository(t, { 'package.json': '{ "dependencies": {', 'pnpm-lock.yaml': LOCK_AGREEING });
+
+  const { code, report } = await reportOf(dir);
+  assert.equal(code, 0, 'a skip is not a failure');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' });
+  const [finding] = report.findings;
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'unparseable-package-json');
+  assert.equal(finding.path, 'package.json');
+  assert.match(finding.message, /^skipped: package\.json is not valid JSON \(/);
+  assert.match(finding.message, /so its specifiers were not compared against pnpm-lock\.yaml$/);
+  assert.equal(finding.evidence.problem, 'invalid-json', 'the skip names which problem it found');
+});
+
+/// Side four: off by policy, leaving neither a finding nor a count. Measured: no preset is the off switch.
+
+test('side four: no preset turns the rule off, and --ignore, --only or config off leave no trace', async (t) => {
+  const dir = repository(t, { 'package.json': manifest('^1.3.0'), 'pnpm-lock.yaml': LOCK_AGREEING });
+
+  for (const [preset, severity] of [['baseline', 'warn'], ['strict', 'error'], ['starter', 'warn']]) {
+    const { report } = await reportOf(dir, ['--preset', preset]);
+    assert.equal(report.findings.length, 2, `${preset}: no preset turns this rule off`);
+    assert.deepEqual(
+      report.findings.map((finding) => finding.severity),
+      [severity, severity],
+      `${preset}: the preset decides the severity`,
+    );
+  }
+
+  const ignored = await reportOf(dir, ['--ignore', 'exact-versions', '--only', 'exact-versions']);
+  assert.deepEqual(ignored.report.findings, [], '--ignore leaves no finding, even beside --only');
+  assert.deepEqual(ignored.report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+
+  // `--only` of another rule is spelled here rather than through `scanOn`, which would add this rule back.
+  const narrowed = JSON.parse(
+    (await cliOn(dir, ['scan', '--scope', 'repo', '--only', 'lockfile-committed', '--format', 'json'])).stdout,
+  );
+  assert.equal(narrowed.findings.some((finding) => finding.rule === 'exact-versions'), false);
+  assert.equal(narrowed.summary.warn, 0, '--only another rule leaves this rule no count either');
+  assert.equal(narrowed.summary.skip, 0);
+
+  writeFileSync(join(dir, 'funky-secure.config.json'), '{\n  "rules": {\n    "exact-versions": "off"\n  }\n}\n');
+  const off = await reportOf(dir);
+  assert.deepEqual(off.report.findings, []);
+  assert.deepEqual(off.report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  const human = await scanOn(dir);
+  assert.match(human.stdout, /off by policy: Dependency ranges/);
+});
+
+/// S4, the two formats: the same flags answer the same status, location, count and verdict. Neither
+/// format prints a `code`: the JSON document carries `code`, the human print carries the rule's label,
+/// so the parity this asserts is the one both formats have.
+
+test('obligation: both formats agree in every state the rule reaches, and neither prints a code twice', async (t) => {
+  const states = [
+    ['fail', repository(t, { 'package.json': manifest('^1.3.0'), 'pnpm-lock.yaml': LOCK_AGREEING })],
+    ['pass', repository(t, { 'package.json': manifest('1.3.0'), 'pnpm-lock.yaml': LOCK_AGREEING })],
+    ['skip', repository(t, { 'package.json': '{ "dependencies": {', 'pnpm-lock.yaml': LOCK_AGREEING })],
+  ];
+
+  for (const [state, dir] of states) {
+    const json = await scanOn(dir, ['--format', 'json']);
+    const human = await scanOn(dir);
+    const report = JSON.parse(json.stdout);
+
+    assert.equal(human.code, json.code, `${state}: the formats disagree about the exit code`);
+    assert.equal(human.stderr, '', `${state}: the human run wrote to stderr`);
+    const printed = humanSummary(human.stdout);
+    assert.deepEqual(
+      [printed.error, printed.warn, printed.info, printed.pass, printed.skip],
+      [report.summary.error, report.summary.warn, report.summary.info, report.summary.pass, report.summary.skip],
+      `${state}: the human counts differ from summary in the JSON document`,
+    );
+    assert.equal(printed.verdict, report.summary.verdict.toUpperCase(), `${state}: the verdicts differ`);
+    assert.equal(printed.failOn, report.policy.failOn, `${state}: the thresholds differ`);
+
+    const flat = human.stdout.replace(/\s+/g, ' ');
+    for (const code of ['floating-range', 'lockfile-desync', 'unparseable-package-json']) {
+      assert.equal(human.stdout.includes(code), false, `${state}: the human print carries a code (${code})`);
+    }    const [finding] = report.findings;
+    if (finding === undefined) {
+      assert.equal(/Dependency ranges {2}·/.test(human.stdout), false, `${state}: the human print lists a finding`);
+      continue;
+    }
+    assert.ok(flat.includes(finding.message.replace(/\s+/g, ' ')), `${state}: the message differs`);
+    assert.ok(flat.includes(finding.path), `${state}: the human print omits the path the JSON names`);
+    if (finding.remediation.command) {
+      assert.ok(flat.includes(finding.remediation.command), `${state}: the command differs`);
+    }
+  }
+});
+
+/// S4, the remediation: the command a fail prints clears that fail on a disposable copy. The
+/// printed one-liner is executed token for token, without a shell, so the quoting is the only part a
+/// shell would have added.
+
+test('obligation: the printed pin clears the floating finding, and the printed desync command resolves one', async (t) => {
+  const floating = workspace(t, { manifest: 'workspace:^', lockSpecifier: 'workspace:^' });
+  const pin = await pnpmFor(t, floating);
+  if (pin === null) return;
+
+  const before = await reportOf(floating);
+  const [finding] = before.report.findings;
+  assert.equal(finding.code, 'floating-range');
+  assert.equal(finding.path, 'packages/app/package.json', 'the finding names the manifest that declares the range');
+  assert.equal(
+    finding.remediation.command,
+    `pnpm -C packages/app pkg set 'dependencies["@fixture/lib"]=link:../lib' && pnpm -C packages/app install`,
+  );
+
+  for (const args of argvOf(finding.remediation.command)) {
+    const ran = pin(args);
+    assert.equal(ran.status, 0, `a printed command failed: ${args.join(' ')}\n${ran.stderr}`);
+  }
+  assert.equal(
+    JSON.parse(readFileSync(join(floating, 'packages/app/package.json'), 'utf8')).dependencies['@fixture/lib'],
+    'link:../lib',
+    'the pin wrote the version the lockfile records',
+  );
+  const cleared = await reportOf(floating);
+  assert.deepEqual(cleared.report.findings, [], 'the printed pin did not clear its own finding');
+  assert.equal(cleared.report.summary.pass, 1, 'and the cleared state is a counted pass');
+
+  const desynced = workspace(t, { manifest: 'workspace:*', lockSpecifier: 'workspace:^' });
+  const refresh = await pnpmFor(t, desynced);
+  if (refresh === null) return;
+
+  const [desync] = (await reportOf(desynced)).report.findings;
+  assert.equal(desync.code, 'lockfile-desync');
+  assert.deepEqual(desync.remediation, { kind: 'manual', command: 'pnpm install --lockfile-only' });
+  const resolved = refresh(argvOf(desync.remediation.command)[0]);
+  assert.equal(resolved.status, 0, `the printed command failed:\n${resolved.stderr}`);
+  const after = await reportOf(desynced);
+  assert.deepEqual(after.report.findings, [], 'the printed command did not resolve the desync it named');
+  assert.equal(after.report.summary.pass, 1);
+});
+/// S4, the page: it describes what the run does. One sentence did not, and it is corrected here.
+
+test('obligation: the page names every command the run prints, and describes the no-importer skip', async (t) => {
+  const page = await readFile(new URL('../../docs/rules/exact-versions.md', import.meta.url), 'utf8');
+
+  const withLockfile = repository(t, { 'package.json': manifest('^1.3.0'), 'pnpm-lock.yaml': LOCK_AGREEING });
+  const commands = new Set(
+    (await reportOf(withLockfile)).report.findings.map((finding) => finding.remediation.command),
+  );
+  assert.deepEqual(
+    [...commands],
+    ['pnpm install --lockfile-only && funky-secure scan --only exact-versions', 'pnpm install --lockfile-only'],
+  );
+  for (const command of commands) {
+    assert.ok(page.includes(command), `the page never names \`${command}\`, which the finding prints`);
+    // The plan says this rule's findings carry `pnpm add` commands; measured, not one does.
+    assert.equal(command.startsWith('pnpm add'), false);
+  }
+  assert.ok(page.includes('pnpm -C <importer dir> pkg set'), 'the page documents the pin the run prints');
+  assert.match(page, /pkg set '\.?\w*Dependencies\["<name>"\]/u, 'the page uses the bracket property path');
+  assert.match(page, /pnpm add --save-exact <name>@<range>\` is a measured no-op/, 'the page keeps the measurement');
+
+  // The corrected sentence: with no lockfile and no importer, the run reports `no-lockfile` alone.
+  const noImporter = repository(t, { 'pnpm-lock.yaml': LOCK_AGREEING });
+  const unreadable = (await reportOf(noImporter)).report.findings;
+  assert.deepEqual(unreadable.map((finding) => finding.code), ['unreadable-package-json']);
+  const bare = repository(t, { 'README.md': 'x\n' });
+  const bareFindings = (await reportOf(bare)).report.findings;
+  assert.deepEqual(
+    bareFindings.map((finding) => finding.code),
+    ['no-lockfile'],
+    'with no lockfile either, the single skip names the lockfile and not the missing importer',
+  );
+  assert.equal(page.includes('and `no-lockfile` when there is no lockfile either'), false, 'the wrong sentence survived');
+  assert.match(page, /the single skip is `no-lockfile`/);
 });
