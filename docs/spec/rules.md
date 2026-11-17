@@ -122,7 +122,10 @@ the pin alone is the declaration, and nothing about it is skipped.
   11.3). The message no longer changes register with the state: one wording names the state, and the
   severity carries the weight, because a `warn` finding cannot fail a run whose `--fail-on` is the
   default `error` (10.5, 0029). `migrate` remains the remedy and the product's suggestion, never a
-  requirement.
+  requirement. **The printed route is the sequence that works from that state, not the single command:**
+  `migrate` refuses while `pnpm-lock.yaml` is absent (`never delete the only lockfile`), so the
+  remediation names `pnpm import` first and `funky-secure migrate --from npm --apply` after it. A
+  remediation the reader follows into a refusal is the defect this sentence exists to prevent.
 
 #### R4 — `quarantine` · friction 2 · sev `warn`/`error` · fix `auto`
 
