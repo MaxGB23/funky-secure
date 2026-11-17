@@ -8,9 +8,10 @@
  * Two shapes are deliberate:
  * - **One plan item per file.** `applyPlan` writes each item's whole content, so two items for one
  *   `package.json` would leave only the last one's edit behind.
- * - **Root importer only.** The scan collects a fixed set of files; a workspace importer's manifest is
- *   not among them, so those pins are reported as not written instead of read with a probe `pin` would
- *   be the only command to need.
+ * - **Root importer only.** A scan reads each workspace package's manifest as an importer, so those
+ *   specifiers are visible to it; `pin` writes the root manifest alone, because resolving another
+ *   importer would need a probe this command alone would use (RFC 11.9). The plan names the lockfile
+ *   importers it does not write, so the incomplete pin is reported instead of left silent.
  */
 
 import { planTarget } from './writers.js';
@@ -31,10 +32,10 @@ function detectIndent(text) {
  * Every pin the root manifest needs, from the lockfile's own record.
  *
  * @param {{ packageJsonText?: string | null, lockfileText?: string | null }} options
- * @returns {{ pins: Array<{ section: string, name: string, from: string, to: string }>, exact: string[], unrecorded: string[], workspace: number, reason: string | null }}
+ * @returns {{ pins: Array<{ section: string, name: string, from: string, to: string }>, exact: string[], unrecorded: string[], unwritten: string[], reason: string | null }}
  */
 export function collectPins({ packageJsonText = null, lockfileText = null } = {}) {
-  const empty = { pins: [], exact: [], catalogue: [], unrecorded: [], workspace: 0, reason: null };
+  const empty = { pins: [], exact: [], catalogue: [], unrecorded: [], unwritten: [], reason: null };
   if (typeof packageJsonText !== 'string') {
     return { ...empty, reason: `${PACKAGE_JSON} could not be read` };
   }
@@ -82,8 +83,10 @@ export function collectPins({ packageJsonText = null, lockfileText = null } = {}
     }
   }
 
-  const workspace = Object.keys(parsed?.importers ?? {}).filter((key) => key !== ROOT_IMPORTER).length;
-  return { pins, exact, catalogue, unrecorded, workspace, reason: null };
+  // Named, not counted: the lockfile's importer keys are not all workspace members (`cli/template/base`
+  // in create-t3-app is one), so the note lists them instead of claiming a membership it never checked.
+  const unwritten = Object.keys(parsed?.importers ?? {}).filter((key) => key !== ROOT_IMPORTER);
+  return { pins, exact, catalogue, unrecorded, unwritten, reason: null };
 }
 
 /**
@@ -146,9 +149,10 @@ export function planPins({ ctx }) {
         'pnpm-workspace.yaml, and pinning one here would delete the reference',
     );
   }
-  if (collected.workspace > 0) {
+  if (collected.unwritten.length > 0) {
+    const count = collected.unwritten.length;
     notes.push(
-      `${collected.workspace} workspace importer${collected.workspace === 1 ? '' : 's'} not pinned: their manifests are outside the files the scan collects`,
+      `${count} lockfile importer${count === 1 ? '' : 's'} not pinned (${collected.unwritten.join(', ')}): pin writes the root importer only`,
     );
   }
 
