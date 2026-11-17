@@ -67,6 +67,14 @@ claim, because coverage claimed is coverage nobody tests again (`docs/field-loop
 growth clause is a mechanism, not permission: if the loop outgrows one work unit it is split by the boundary
 T5 names in advance, never trimmed.
 
+**S8** — the loop's floor, adopted by the owner after this plan was read back against `S7` (`L13`). `S7` states
+the stance; this states what a run must cover, so intensity is auditable instead of remembered: **one run per
+surface axis** — human/`--format json` parity with identical flags, the four exit codes against `--fail-on`,
+`--scope machine` on this host, a real workspace, a manifest that does not parse, and the three `--apply` paths on a
+disposable copy with the tree hash before and after — **the scenarios the clone map enables, plus one mutation round
+whose surviving mutants are listed by name**, and **one attempt to refute each row `T5a` moved**. An axis that was
+not run is written as not run, never as passed.
+
 ## Measured before planning
 
 Runs, not readings. Each one either survives the plan or corrects it.
@@ -150,6 +158,23 @@ count a copy of a shape an earlier round already covered as a new scenario (`doc
 to"). Acceptance: no defect fixed without a case, no row moved without a named repository, the command and
 the observed output, and the number of scenarios reported rather than promised. Route: measurement plus
 docs; needs no network for a clone that already exists. Commit: this PR for T5a.
+
+**T5b's floor** (`S8`). The intensity is measured, not asserted, and the six axes get exactly one run each:
+
+| Axis | The one run that proves it |
+|---|---|
+| Parity | one repository, one flag set, human and `--format json`: same verdict, same per-rule status, same counts |
+| Exit codes | `--fail-on` at each threshold over a repository that fails, and the input that produces `0`, `1`, `2` and `3` |
+| Machine scope | `--scope machine` on this host, where `quarantine` emits a verdict instead of the `skip` every repo scan emits |
+| Workspace | a real workspace, where an importer is named as not pinned rather than silently skipped |
+| Unreadable manifest | a `package.json` that does not parse: a `skip` with its message, never a crash |
+| The write paths | `init --apply`, `migrate --apply` and `pin --apply` on a disposable copy, with the tree hash before and after |
+
+The floor is those six, plus the scenarios the clone map enables, plus one mutation round whose surviving mutants
+are listed. The fourth obligation is the cheapest and the one the first release's loop skipped: every row `T5a`
+moved is a claim, so each gets one attempt to break it — the command re-run from another directory, the finding read
+in `--format json`, the number recounted. A row that survives is reported as surviving; a row that does not becomes
+a defect with its own issue.
 
 **T6 — this document lands naming its commits** (`S1`). Each task gets the commit that produced it; T3 and
 T4 record this one. A commit cannot contain its own hash, so the document names none for itself: the pull
@@ -268,3 +293,18 @@ for a wide base — `assess --base-ref 3508f17` alone took 5.4 s. Two routes rem
 the switch off: re-seat the retained base, which the registry keeps per session and which a workspace
 assessment does not erase, or open a session whose registry is empty, where the preflight asks for the base
 in its own words and the next assessment sets it.
+
+**L13** — `S8` is the owner's, in one message. This plan was read back against `S7` and found to state the stance
+without measuring it: no floor on effort ("the number of scenarios reported rather than promised" punishes
+overclaiming, not slowness), no enumerated adversarial surface, and "refutar" aimed at the field's reports rather
+than at our own claims. The owner's answer was *"dale, aplicalo rápidamente"*, adopting the floor as `S8` and as
+the table in `T5`. `S7` keeps the request verbatim, nothing else in this document changes, and `T5b` still lives as
+long as its findings do.
+
+**L14** — the delivery gate's cure is verified, not inferred. `L12` named two routes; this session took the second.
+`gentle_review` with `assess {"baseRef":"main","committedOnly":true}` seated the base (`3b737f3`, tier `medium`,
+`reviewDue: false`), after which the same `git push` that had been refused ran. T1, T2 and T5a are `#328`, `#329`
+and `#330`, merged as `4537478`, `8871148` and `707e374` on a matrix with no state outside `SUCCESS`. One
+operational fact worth keeping: the preflight resolves a **single literal** command, so a `for` loop or a shell
+function containing a delivery command is refused with *"The delivery repository cannot be resolved"* — a different
+message from the empty-range one, cured by splitting the command, never by touching the switch.
