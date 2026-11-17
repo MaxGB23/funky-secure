@@ -321,8 +321,8 @@ the pin alone is the declaration, and nothing about it is skipped.
   `ci-lifecycle-scripts-enabled`. The `.npmrc` keys `frozen-lockfile=false`, `ignore-scripts=false`
   and `enable-pre-post-scripts=true` are the same two findings, at the 1-based line of the key. A
   quoted word and a comment are not a command. No override is one pass (`ci-safety-defaults`); no
-  workflow and no `.npmrc` skips (`no-ci`), and an unparseable workflow skips
-  (`unparseable-workflow`) without a pass on top of it.
+  workflow and no `.npmrc` skips (`no-ci`), an unparseable workflow skips (`unparseable-workflow`)
+  without a pass on top of it, and a repository the scope excludes skips (`no-repo`).
 - **Evidence:** for a workflow, the job, the step index, the offending word and the command line that
   carries it, at the step line; for `.npmrc`, the key and its value, at the 1-based line of the key.
 - **Severity:** `warn` in `baseline`, `error` in `strict`. Friction 1 starts at `warn` in `baseline`
