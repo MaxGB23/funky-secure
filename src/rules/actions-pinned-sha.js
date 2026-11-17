@@ -178,8 +178,10 @@ function compositeFindings(file) {
 }
 
 /**
- * Lexical classification of a ref. It is not a git answer: no network and no probe (RFC 4.9).
- * @param {string} ref
+ * Lexical classification of a ref. It is not a git answer: no network and no probe (RFC 4.9). A ref
+ * that is empty is not classified here at all: it names no ref, so it is `none` (issue 377), and
+ * folding it into `branch` told a consumer grouping by `form` that the reference followed a branch.
+ * @param {string} ref a non-empty ref, the part after the `@`
  * @returns {'short-sha' | 'tag' | 'branch'}
  */
 function formOf(ref) {
@@ -231,8 +233,8 @@ function unpinned(path, step) {
   const ref = at === -1 ? '' : uses.slice(at + 1);
   if (FULL_SHA.test(ref)) return null;
 
-  const form = at === -1 ? 'branch' : formOf(ref);
-  const what = at === -1 || ref === '' ? 'names no ref' : why(form);
+  const form = ref === '' ? 'none' : formOf(ref);
+  const what = ref === '' ? 'names no ref' : why(form);
   return {
     status: 'fail',
     code: 'unpinned-action',
@@ -284,7 +286,8 @@ export default {
     'steps and reports nothing.',
   evidence:
     'file:line, the raw reference as written (quotes and trailing comment included) and the form: ' +
-    'tag, branch, short-sha or docker-tag. A trailing version comment is evidence, never trusted.',
+    'tag, branch, short-sha, docker-tag or none when the reference names no ref. A trailing version ' +
+    'comment is evidence, never trusted.',
   remediation:
     'Manual, printed as uses: owner/repo@<sha> # vX.Y.Z, and as uses: docker://registry:port/image' +
     '@sha256:<64 hex> # tag for a container reference, which keeps its registry and its port. ' +
@@ -292,7 +295,8 @@ export default {
     'a network call (gh api repos/owner/repo/git/refs/tags/vX.Y.Z) and v0.1 makes none.',
   limits:
     'Proves the reference is a full commit SHA, not that the SHA is the release the comment claims. ' +
-    'The tag/branch/short-sha form is a lexical classification, not a git lookup. A workflow the ' +
+    'The tag/branch/short-sha form is a lexical classification, not a git lookup, and a reference ' +
+    'that names no ref at all is none rather than a branch it never named. A workflow the ' +
     'reader cannot attribute is skipped per file; the rule never guesses from a line scan. Only the ' +
     'action metadata file is read, so a `uses:` in an action\'s own script is out of reach.',
   docs: 'docs/rules/actions-pinned-sha.md',
