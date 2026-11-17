@@ -318,6 +318,32 @@ test('no root package.json is a skip', () => {
   assert.equal(finding.probeUnavailable, undefined);
 });
 
+test('a repository excluded by the scope says so instead of claiming the root has no manifest (issue 342)', () => {
+  const ctx = context();
+  ctx.repo = null;
+  ctx.repoOutOfScope = true;
+
+  const [finding] = rule.detect(ctx);
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'no-package-json');
+  assert.equal(
+    finding.message,
+    'skipped: the repository was excluded by --scope machine, so the pin cannot be read',
+  );
+});
+
+test('a root that resolved without a manifest keeps the manifest sentence (issue 342)', () => {
+  const [finding] = rule.detect(context({ packageJson: null }));
+
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'no-package-json');
+  assert.equal(
+    finding.message,
+    'skipped: the repository root has no package.json to read the pin from',
+  );
+});
+
 function scratch(t) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-pin-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

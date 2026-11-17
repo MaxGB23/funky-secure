@@ -6,6 +6,7 @@
  */
 
 import { manifestProblem } from '../lib/targets.js';
+import { repoSkipMessage } from '../lib/scope.js';
 import { findingsOf, planPackageManagerWrites } from '../lib/writers.js';
 
 const DOC = 'docs/rules/package-manager-pin.md';
@@ -194,12 +195,19 @@ export default {
     }
 
     if (file === null) {
+      // `file` is null for two different facts, and they send a reader in opposite directions: the
+      // scope excluded the repository before anything was resolved, or the root resolved and carries
+      // no manifest. Claiming the second when the first is true asserts an absence nobody measured
+      // (#342), so the sentence follows the cause.
+      const noRepositoryFacts = ctx.repo === null || ctx.repo === undefined;
       return [
         {
           status: 'skip',
           code: 'no-package-json',
           path: PATH,
-          message: 'skipped: the repository root has no package.json to read the pin from',
+          message: noRepositoryFacts
+            ? repoSkipMessage(ctx, 'the pin cannot be read')
+            : 'skipped: the repository root has no package.json to read the pin from',
           evidence,
           remediation: { kind: 'none' },
         },
