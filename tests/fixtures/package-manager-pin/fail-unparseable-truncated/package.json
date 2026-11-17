@@ -1,0 +1,7 @@
+{
+  "name": "funky-secure",
+  "version": "0.13.0",
+  "description": "Supply-chain auditor and initializer for Node repositories: stateless rules, a read-only scan, pnpm as the recommended target, a migration path off npm, and a write plan you review before anything is applied.",
+  "license": "MIT",
+  "author": {
+    "name": "Maximi

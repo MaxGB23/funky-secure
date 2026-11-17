@@ -1,0 +1,68 @@
+{
+  "name": "funky-secure",
+  "version": "0.13.0",
+  "description": "Supply-chain auditor and initializer for Node repositories: stateless rules, a read-only scan, pnpm as the recommended target, a migration path off npm, and a write plan you review before anything is applied.",
+  "license": "MIT",
+  "author": {
+    "name": "Maximiliano González Ballesteros",
+    "url": "https://github.com/MaxGB23"
+  },
+  "type": "module",
+  "bin": {
+    "funky-secure": "bin/funky-secure.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "docs/cli.md",
+    "docs/guide.md",
+    "docs/concept.md",
+    "docs/rules/",
+    "docs/images/diagram.jpg",
+    "./README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test",
+    "golden": "node scripts/gen-golden.js",
+    "self": "node bin/funky-secure.js scan --scope repo --fail-on warn",
+    "prepublishOnly": "node --test && node bin/funky-secure.js scan --scope repo --fail-on warn && node scripts/release-guard.js && node scripts/pack-guard.js && node scripts/pack-smoke.js",
+    "pack:smoke": "node scripts/pack-smoke.js",
+    "pack:check": "node scripts/pack-guard.js"
+  },
+  "keywords": [
+    "supply-chain",
+    "pnpm",
+    "lockfile",
+    "audit",
+    "quarantine",
+    "dependency-audit",
+    "funky",
+    "funky-secure"
+  ],
+  "pi": {
+    "skills": [
+      "skills"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaxGB23/funky-secure.git"
+  },
+  "homepage": "https://github.com/MaxGB23/funky-secure#readme",
+  "bugs": {
+    "url": "https://github.com/MaxGB23/funky-secure/issues"
+  },
+  "packageManager": "pnpm@12.16.0",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.3.4",
+      "onFail": "download"
+    }
+  }
+}
