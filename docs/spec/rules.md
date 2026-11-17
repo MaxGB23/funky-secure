@@ -223,7 +223,23 @@ the pin alone is the declaration, and nothing about it is skipped.
   version: replacing the protocol with a path takes the package out of the workspace while clearing the
   finding, which is the remediation destroying something the author wrote. Measured on pnpm 12.3.4: with
   `workspace:*` the lockfile records `specifier: workspace:*` and the package keeps its symlink into the
-  workspace. The property path is **bracketed**:
+  workspace. **Except where the repository declares that it freezes its own lockfile** —
+  `frozenLockfile: true` in `pnpm-workspace.yaml`, which is where pnpm 12 keeps project configuration —
+  **where the finding is `manual`**: it names the manifest edit and says the lockfile has to move, and
+  prints no command, because no command clears the finding there. `pnpm pkg set` still succeeds; it is
+  the install that refuses, and `pnpm install` and `pnpm install --lockfile-only` both exit 1 with
+  `ERR_PNPM_OUTDATED_LOCKFILE` (measured on pnpm 12.3.4, with and without `CI`). Only adding
+  `--no-frozen-lockfile` records the pin, and this product never prints that flag: it is a safety
+  override, and `R10` reports it. A reader whose project freezes its lockfile decides how to update it;
+  what this rule owes them is the fact, not a route that fails. The freeze an environment imposes without
+  declaring it — `CI=true`, which pnpm 12.3.4 reads as `--frozen-lockfile` — is not a repository fact and
+  is not read: `--scope repo` never sees the caller's environment, and a scan whose output depended on it
+  would not be deterministic. There the printed pin keeps the form it has, and the refusal under `CI` is
+  a stated limit, not a defect. Two spellings are deliberately not read because pnpm does not honour
+  them: `frozen-lockfile=true` in `.npmrc` and the kebab `frozen-lockfile:` in `pnpm-workspace.yaml`
+  (`pnpm config get frozen-lockfile` answers `undefined` for the first, and pnpm warns that it ignores
+  the second, while the install exits 0 in both — measured). Reading either would turn a lockfile that
+  updates fine into a `manual` finding and print no route for it. The property path is **bracketed**:
   `pnpm pkg set 'devDependencies.@types/node=1'` fails on pnpm 12.3.4 with
   `ERR_PNPM_PKG_INVALID_PROPERTY_PATH`, because a dot path cannot carry an `@`, and scoped names are
   most of a modern dependency set; the bracket form works unchanged for an unscoped name. `pnpm add
