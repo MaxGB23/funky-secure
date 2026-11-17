@@ -92,7 +92,13 @@ floating findings it did establish and adds one `skip: unsupported-lockfile-shap
 comparison. That skip names `pnpm-lock.yaml` and keeps the line the reader stopped at
 (`skipped: expected "key: value" at line 3`), because a line number with no file is not something a
 reader can open. With no lockfile at all it reports the same floating findings plus one
-`skip: no-lockfile`.
+`skip: no-lockfile`, whose message is
+`skipped: no pnpm-lock.yaml, so the specifier-versus-lockfile comparison did not run`: the missing
+lockfile is the fact measured, and the sentence is scoped to the comparison that lockfile would have
+enabled. A repository whose `package.json` declares a range and has no lockfile therefore reports that
+`floating-range` finding beside the skip, so the skip never reads as if the rule had not run. It names
+no importer either: the same skip is the one line a repository with no `package.json` at all prints,
+and there is no importer there to name.
 
 **A truncated lockfile is not a supported one.** The reader stops at the subset it needs, so a document
 cut inside a block used to parse as the part it managed to read. pnpm writes every flow collection on
@@ -112,8 +118,8 @@ unavailable probe, so `--strict-probes` turns it into an error rather than accep
 smaller comparison. A repository with no importer at all — no root `package.json` and no workspace
 package — reports one `skip: unreadable-package-json` instead of a pass when there is a lockfile to
 compare against, because a clean claim about specifiers it never read would be a false negative.
-With no lockfile either the single skip is `no-lockfile`: the lockfile is the fact the comparison was
-missing, and the run does not additionally name the importer it never read.
+With no lockfile either the single skip is `no-lockfile`, and the run does not additionally name the
+importer it never read.
 
 **A refused workspace entry is reported.** A `packages:` entry in `pnpm-workspace.yaml` that resolves
 outside the repository root is refused before any file under it is read, and the refusal reaches the

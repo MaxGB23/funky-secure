@@ -1407,6 +1407,39 @@ test('obligation: the printed pin clears the floating finding, and the printed d
   assert.deepEqual(after.report.findings, [], 'the printed command did not resolve the desync it named');
   assert.equal(after.report.summary.pass, 1);
 });
+/// 369: the no-lockfile skip names the fact it measured. The lockfile was not there, so the
+/// specifier-versus-lockfile comparison did not run — and the run still walked every manifest it
+/// found, so the sentence may claim nothing about importers and may not read as a whole-rule skip.
+
+/** The one sentence both no-lockfile fixtures must print, verbatim. */
+const NO_LOCKFILE_MESSAGE =
+  'skipped: no pnpm-lock.yaml, so the specifier-versus-lockfile comparison did not run';
+
+test('with neither package.json nor a lockfile, the one skip names the lockfile the comparison missed', async (t) => {
+  const empty = repository(t, { 'README.md': 'x\n' });
+  const { code, report } = await reportOf(empty);
+
+  assert.deepEqual(report.findings.map((finding) => finding.code), ['no-lockfile']);
+  assert.equal(code, 0, 'a skip with no error under the threshold is not a failure');
+  assert.equal(report.findings[0].message, NO_LOCKFILE_MESSAGE);
+  assert.doesNotMatch(report.findings[0].message, /importer/, 'the message claims nothing about an importer');
+});
+
+test('with a manifest and no lockfile, the same skip sits beside the floating ranges the run did establish', async (t) => {
+  const floating = repository(t, { 'package.json': ROOT_FLOATING });
+  const { report } = await reportOf(floating);
+  const codes = report.findings.map((finding) => finding.code);
+  const skip = report.findings.find((finding) => finding.code === 'no-lockfile');
+
+  assert.equal(codes.filter((code) => code === 'floating-range').length, 5, 'the importer was read');
+  assert.deepEqual(
+    codes.filter((code) => code !== 'floating-range'),
+    ['no-lockfile'],
+    'the comparison is the only thing the missing lockfile skipped',
+  );
+  assert.equal(skip.message, NO_LOCKFILE_MESSAGE);
+  assert.equal(report.summary.skip, 1, 'one skip, not one per importer');
+});
 /// S4, the page: it describes what the run does. One sentence did not, and it is corrected here.
 
 test('obligation: the page names every command the run prints, and describes the no-importer skip', async (t) => {
