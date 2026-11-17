@@ -195,6 +195,28 @@ into T15a `3befd3f` (#296) and T15b, which names its own two. The document is ap
 dated `## Errata` naming each commit — never an edit. Route: docs only. Commit: this PR. Drop it if the owner
 prefers the record to stand as written.
 
+## Commits
+
+Each task and the commit that produced it. A commit cannot contain its own hash, so this document names none
+for itself: the pull request body names the commit that lands it.
+
+| Task | Commit | Pull request |
+|---|---|---|
+| T1 — `start`: the step carries its note | `3508f17` | #328 |
+| T2 — `workflows`: the block header parsed once | `39d5cbe` | #329 |
+| T3 — the stash exported, then dropped | none of its own; recorded here | — |
+| T4 — the two lineages recorded | none of its own; recorded here | — |
+| T5a — the sweep and the evidence page | `abd6db3` | #330 |
+| T5b — the field round's evidence | `a5fa98c` | #337 |
+| T5b — `workflow-permissions`: the verb agrees with the number | `7667168` | #335 |
+| T5b — `pin`: the note names a limit the scan has | `48698dd` | #336 |
+| T6 — this document lands naming its commits | the pull request body names it | this one |
+| T7 — the record's stale rows | `300ae06`, with the floor's amendment | this one |
+
+Two of `T5b`'s findings carry a recorded decision and no commit yet: **#333**, whose cure is a paragraph in
+the report spec, and **#334**, whose cure is the skip message naming the exclusion. `T5b` lives as long as
+its findings do, and both are findings.
+
 ## Not in this document
 
 - **Any mutation of review authority.** `recover`, `abandon` and `reset` need a fresh human authorization and
@@ -202,6 +224,11 @@ prefers the record to stand as written.
 - **Pushing, merging or publishing.** Merge and push follow `S6`; this plan authors nothing remote.
 - **A task for `S2.6`.** Exercising the rewritten skills is what this document's own rounds do; the outcome
   is recorded in the Log (L5) instead of becoming work about work.
+- **The loop over every rule, in depth.** `T5b` reached all thirteen rules and found that every one answers;
+  what it did not do is take each rule's four sides — fails, passes, skips for want of a fact, off by policy —
+  with its own fixture, its own parity check and the truth of its remediation. That is its own feature with its
+  own document, one task per rule and a list of the sides this machine cannot reach, and the owner deferred it
+  until this batch lands.
 
 ## Log
 
@@ -322,3 +349,18 @@ and two of the seven verify nothing (`package-manager-pin`, `quarantine`), so a 
 would have tested a majority of the product and reported on all of it. The floor gains a seventh axis: one
 `--only <id>` run per rule, with `skip` and off-by-policy reported as themselves. The cost is thirteen cheap runs;
 the thing it buys is that no rule can be counted as covered because it was never asked.
+
+**L16** — `T5b`, the round the floor asked for, measured at `fc77fc2`: 45 scenarios and about 140 command
+executions over the real repositories at `M:/pruebas/real` and this one. Seven axes, a result for each. Five
+mutations, none surviving — and two of them held by **exactly one test** each, the quarantine skip message and
+the symlink escape, which is the round's real finding: a mutation one test holds dies with the next refactor of
+that test. The highest-value class was hunted and not found: no write path left a repository in a state it
+claimed it would not. Four defects. `#331` — `pin`'s note named a reason the tool does not have, fixed in
+`48698dd`. `#332` — a plural subject with a singular verb, fixed in `7667168`. `#333` and `#334` carry a
+decision instead of a commit, because the owner left both to this session: the first is not a defect but an
+undocumented derivation — thirteen catalog ids minus the serialized skips names a silent pass, and `provenance`
+answers about the repository declaration, not about whether a rule ran — and the second changes the message and
+never the skip code, because a caller that passed `--scope machine` already holds the exclusion. One claim of my
+own the round refuted: `workflow-permissions` does not warn on `repro-steps-indent`, it passes, and the page
+already said so. The round also found a shape nobody chose — `M:/pruebas` is an unborn repository, so a scan run
+from its children audits a root it never names.
