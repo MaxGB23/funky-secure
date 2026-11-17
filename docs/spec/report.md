@@ -245,8 +245,8 @@ change that presentation, as long as the report remains valid on its own.
 | Code | Meaning |
 |---|---|
 | `0` | No finding at or above `--fail-on`. Skips and infos do not fail. |
-| `1` | At least one policy violation at or above `--fail-on`. |
-| `2` | The tool could not answer: bad usage, unreadable input, malformed config, unavailable required probe under `--strict-probes`. Never used for a policy violation, and never used for a refusal. |
+| `1` | At least one policy violation at or above `--fail-on`, **and** an unavailable required probe under `--strict-probes`, which is an `error` finding like any other. |
+| `2` | The tool could not answer: bad usage, unreadable input, malformed config. Never used for a policy violation, never used for a refusal, and never for a probe that did not answer: that is a finding, and a finding is `1` (I-83's neighbour, `#414`). |
 | `3` | The tool understood the situation and refused to act: the branch is the default one, the target is dirty, the foreign lockfile is the only one. Nothing was written. |
 
 `2` is the fail-closed code and `3` is the refusal: an exit code names exactly one thing, so a script
