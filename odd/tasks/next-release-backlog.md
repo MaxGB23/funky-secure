@@ -391,3 +391,7 @@ written.
   describes is not there. **Nothing is owed on this row either.**
 
 What survives from that pair is `T17` alone, and it is `odd/tasks/open-task-ledger.md`'s subject.
+
+> **Corrected the same day, in this entry's own voice.** The `T16` bullet above says *"nineteen minutes"*; the
+> measured interval is `19:17:21 -> 19:26:33`, which is **nine minutes and twelve seconds**. The word is left as
+> written because this record is append-only, and the number is corrected here rather than overwritten.

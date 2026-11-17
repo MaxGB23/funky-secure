@@ -126,3 +126,24 @@ exists to close* — `actual: [ T1 (issue: —), T2 (issue: —), T3 (issue: —
 four issues were then opened (`#451`, `#452`, `#454`, `#453`), the column filled, and the same command passed
 2/2. The RED is four rows and the GREEN is the same four rows naming their issues; nothing else changed between
 the two runs.
+
+**L8** — the closing claim audit, done by the parent because the judge allocated for it **timed out on an
+infrastructure fault** (`No models match pattern "opencode-go/crouton-alpha-free"`), not on a verdict: no finding
+was produced and none is implied. Every claim below was re-run here.
+
+- **`L4` says `T16` was closed "nineteen minutes after its row was written", and that is wrong.** Measured:
+  `3befd3f` (the row) `2026-11-15T19:17:21-06:00`, `e9251d1` (the fix) `2026-11-15T19:26:33-06:00` — **nine
+  minutes and twelve seconds**. `L4` is not rewritten; this entry corrects it, and the errata entry in
+  `next-release-backlog.md` carries the same correction in its own words.
+- **`docs/testing.md` cited one assertion at the wrong line.** The `typeof rule.detect === 'function'` assertion is
+  at `tests/rules/ci-no-safety-overrides.test.js:121`, not `:120`, and the page is corrected in place because a
+  page is not a record.
+- **Everything else the audit touched reproduced.** `src/lib/render-human.js:397` is a JSDoc sentence;
+  `docs/spec/report.md` `:200-202` carries the sentence the errata quotes; `docs/README.md:11` routes a message
+  change to `spec/report.md` §10.3; `tests/report.test.js:552` really is
+  `assert.equal(renderHuman(report), renderHuman(report))`; `tests/open-pr.test.js:971`'s test destructures
+  `{ code }` alone; the five measured counts in the page (51 files, zero clock or network, twelve absolute
+  fixtures, ten `t.skip`, eight resolvers, thirty-one `src/lib` importers) each re-ran to the number written.
+- **The audit's own limit, stated.** It checked the claims its list named, not every sentence in three
+  documents. A judge with a broader lens was allocated and did not run; this entry records the substitution
+  instead of presenting the parent's audit as equivalent.
