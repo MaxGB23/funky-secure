@@ -334,9 +334,13 @@ the pin alone is the declaration, and nothing about it is skipped.
   (9.1), and the rule deviates from it in neither direction: removing a flag is one edit, and the
   finding names an explicit override of pnpm's own CI default rather than a preference, so a
   repository that never overrides the default is never touched.
-- **Remediation:** manual, printed as the step or the removal to perform — `run: pnpm install
-  --frozen-lockfile` or `run: pnpm install --ignore-scripts` for a workflow, deleting the key from
-  `.npmrc` for the configuration. The tool never edits a workflow and never rewrites `.npmrc`.
+- **Remediation:** manual, printed as the edit to perform **inside** the step — the offending word
+  replaced by the one that clears it, `--no-frozen-lockfile` → `--frozen-lockfile` and
+  `--ignore-scripts=false` → `--ignore-scripts`, with the rest of the `run:` body left as written,
+  because a compound step (`pnpm install --no-frozen-lockfile && pnpm build`) loses its other commands
+  if the whole body is replaced; or the key deleted from `.npmrc`. A step whose body cannot be rewritten
+  that way is printed as a sentence naming the edit, never as a replacement that discards anything. The
+  tool never edits a workflow and never rewrites `.npmrc`.
 - **Limits:** proves that no declared step and no root `.npmrc` key names the override. It does not
   prove the install was frozen, because an inherited environment, a global config, a composite action
   or a script the step calls can still pass the same flag. A word is classified by its own text, not
