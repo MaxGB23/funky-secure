@@ -1,70 +1,116 @@
-# open-task-ledger — recover the three orphaned tasks, and stop the next one being orphaned
+# open-task-ledger — one real orphan, two stale rows, and a check that does not police prose
 
-Three tasks were found open in `odd/tasks/next-release-backlog.md` while the `defect-backlog` campaign was
-closing: `T11`, `T16`, `T17`. None of the three has a GitHub issue, and open issues are zero, so nothing — not
-`gh issue list`, not a todo list, not a pull-request gate — could surface them. This feature gives each one its
-issue, and adds the mechanical check that would have failed the day they were left behind.
+The analysis that opened this feature counted three orphaned tasks. Two judges and two measurements later, it
+counts one: `T17`. The other two — `T11` and `T16` — were closed by work that landed *before* the plan was
+written, and their rows never said so. This document replaces the plan with what the repository actually says,
+and shrinks the mechanical check to something that can be green without inventing a grammar for prose it would
+have to police.
 
 ## Specs
 
 **S1** — the owner's instruction, verbatim: «por qué se ha olvidado de realizar? hay mas tareas olvidadas?
 para meter todo en backlog nuevo. dame un analisis primero, sin implementar nada».
 
-**S2** — the owner's approval, verbatim: «me gusta el plan, ya sabes que hacer, jueces para el plan y para
+**S2** — the owner's approval, verbatim: «me gusta el plan, ya sabes qué hacer, jueces para el plan y para
 afirmaciones, a empezar».
 
-**S3** — the three tasks, in the words their own document gave them, and nothing re-scoped:
+**S3** — **one task is open, and it is `T17`.** The row is `odd/tasks/next-release-backlog.md:330-349`; the page
+it asks for, `docs/testing.md`, does not exist, and `grep -n "field-loop" AGENTS.md CONTRIBUTING.md` returns
+nothing, so both cross-references it names are missing. It has never had an issue: `gh issue list --state all`
+carries 189 and none covers a testing policy.
 
-- **`T11`** — `odd/tasks/next-release-backlog.md:172`, whose row says *«Debt (b) — the five one-sided rules are
-  measured or declared — S15. **Still open.** Spec: the page itself. Judge: plan, before the sweep. Commit: —»*.
-- **`T16`** — `odd/tasks/next-release-backlog.md:309-322`: the verdict prints `16 rules not verified` while
-  `plural(summary.skip, 'rule', 'rules')` counts skip **findings**, measured at `PASS … 16 rules not verified`
-  over **10** names in a repository with two unparseable workflows. *«Spec: 10.3 and the 0008 errata it needs.
-  Judge: plan, STANDARD. Commit: —»*.
-- **`T17`** — `odd/tasks/next-release-backlog.md:329-348`: a testing policy. *«Today the rules are scattered —
-  `CONTRIBUTING.md:87-107` asks for a green suite with its counts, test-first for a behaviour change, the drift
-  and docs-contract gates, goldens, and determinism — and no page states when a test is required or when one is
-  inadmissible. Proposed, not yet judged.»*
+**S4** — **two rows are stale, and the record is append-only, so they are corrected by a dated `## Errata`, never
+by editing them.** The backlog says so in its own words: *"the cure is a dated `## Errata` naming each commit —
+never an edit"* (`odd/tasks/post-release-debt.md:195-196`). The two stale rows:
 
-**S4** — one issue per task, opened before any work, and named in the task's own row. A task that has no issue
-is not in this feature.
+- **`T11`** — `next-release-backlog.md:172`. Closed by issue **#320** (and **#327**) with `ba5491e`, and the
+  measurement branch of `S15` landed in `abd6db3` (`docs/validation.md:65-87`: both sides of all five rules).
+- **`T16`** — `next-release-backlog.md:309-318`. Closed by **`e9251d1`** (#297), merged nineteen minutes after
+  the row was written: `docs/spec/report.md` §10.3 now says the verdict *counts the rules it did not verify once
+  each and names them*, `src/lib/render-human.js:405-420` implements `unverifiedIds`, and `tests/report.test.js`
+  gained `+40` lines pinning it. No errata names it, which is why it read as open.
 
-**S5** — the mechanical check. A test reads `odd/tasks/*.md` and fails when a row is **open** — it says
-`Still open`, `Proposed`, `not yet judged`, or carries `Commit: —` with no commit named in `## Errata` — and
-names **no** `#<issue>`. It must fail on the tree as it stands today, for `T11`, `T16` and `T17`, and that RED
-is the evidence the leak was real; it must pass once the three rows name their issues.
+**S5** — **the mechanical check is narrowed to this document, and it acquires the syntax it needs.** The two
+judges refuted the first version on measured grounds and the refutation stands: over `odd/tasks/*.md` the
+predicate's true positives were 1 of 11 (a single real orphan among eight errata rows and three prose
+sentences), it matched its own specification twice (`:19` quotes `**Still open.**` and `Commit: —`), it could
+not tell an issue from a pull request (`T16`'s only token is `#296`, a PR), and it could not see an open row
+whose issue had been closed — the `T11` shape. So it does not police legacy prose. It reads **this document's
+own task table** and fails when a row with `status: open` names no `#<issue>`. The table therefore carries
+`status` and `issue` columns, and that is the syntax the check reads.
 
-**S6** — repository policy is not re-decided here: a behaviour change starts in `docs/spec/` in its own pull
-request (`CONTRIBUTING.md`, `AGENTS.md`), and the judges read the plan and the claims as `funky-judge-protocol`
-says — blind to each other, before implementation.
+**S6** — repository policy is not re-decided: a behaviour change starts in `docs/spec/` in its own pull request,
+and a new page must answer `docs/README.md`'s map or say why it fits none of its rows.
+
+**S7** — `T17`'s own rider is not dropped. The row asks for a page with five admission tests *and* two mechanical
+debts, one of which is *"a list of tests that cannot fail, found by mutation and forbidden to grow"*. A mutation
+campaign is not a page; it is named here as the one item this feature defers, with the deferral written rather
+than silently trimmed.
 
 ## Tasks
 
-| id | task | specs | route | commit |
-|---|---|---|---|---|
-| T0 | freeze this plan and have two blind judges rule on it, then adjudicate every finding in the Log | S2, S6 | one | — |
-| T1 | open the three issues, one per task, and write each issue number into its row | S3, S4 | one | — |
-| T2 | the leak check: a test over `odd/tasks/*.md` that fails today on `T11`, `T16`, `T17` and passes when they name issues | S5 | test-first | — |
-| T3 | `T16`: the verdict names what it did not verify instead of counting findings as rules — spec 10.3 plus the 0008 errata it needs, then the code | S3 | spec, then code | — |
-| T4 | `T17`: the testing policy page and the two links — `AGENTS.md`'s Paths table and `CONTRIBUTING.md`'s checklist both reach `docs/field-loop.md` | S3 | one | — |
-| T5 | `T11`: the five one-sided rules measured or declared, the page carrying the result | S3 | one | — |
-| T6 | claim audit over the whole feature before it closes | S2 | one | — |
+| id | task | specs | status | issue | route |
+|---|---|---|---|---|---|
+| T0 | two blind judges on the plan, adjudicated in this Log | S2, S6 | landed | — | one |
+| T1 | the `## Errata` entry naming `#320`/`ba5491e`/`abd6db3` for `T11` and `#297`/`e9251d1` for `T16`, never an edit to the rows | S4 | open | — | one |
+| T2 | `docs/testing.md`: the five admission tests, the two absences, what was adopted and what was rejected, and the `AGENTS.md` / `CONTRIBUTING.md` / `docs/README.md` links | S3, S6 | open | — | one |
+| T3 | the check over this table: a row with `status: open` and no `#<issue>` fails — RED observed on this document before the `issue` column is filled | S5 | open | — | test-first |
+| T4 | claim audit over the feature before it closes | S2 | open | — | one |
+
+The mutation-testing rider (`S7`) is **not** a task of this feature: `T17`'s parent row names it, this document
+names it, and it stays where it belongs — in the ledger, unwritten, rather than half-done here.
 
 ## Log
 
-**L1** — the owner's request, verbatim, is `S1`; the approval is `S2`. `S1` set the order — analysis first, no
-implementation — and `S2` named the instrument: judges for the plan and for the claims.
+**L1** — the owner's request is `S1`, the approval is `S2`. `S1` set the order — analysis first, no
+implementation — and `S2` named the instrument.
 
-**L2** — the analysis that produced `S3`, from the repository and not from memory. `grep -rc "Commit: —"` over
-`odd/tasks/*.md` returned nine rows, of which **six are false positives**: `T2`, `T5`, `T6`, `T8`/`T15a` carry
-`Commit: —` because their commits are recorded in the document's own `## Errata`, and two more are sentences
-*about* that errata in `release-0.13.0.md:129` and `post-release-debt.md:192`. The remaining three are `T11`,
-`T16` and `T17`. The mechanism of the loss, which is the part worth writing down: `T17` sits under a heading
-`## Tasks opened after the release` **below** `L16`, which opens *«The campaign closed with three artifacts it
-should not have opened»* — an open list inside a document that declares itself closed — and no document
-mentions the other, so the `defect-backlog` campaign could not see it. None of the three has an issue, and open
-issues are zero, so no surface existed on which they could appear.
+**L2** — the first plan's analysis, **corrected**. It said `grep -rc "Commit: —" odd/tasks/*.md` returned nine
+rows of which six were false positives. Measured at `7081f77`, before this document existed: **eleven lines.
+Eight false positives** — five landed rows whose commits the `## Errata` names (`T2`, `T5`, `T6`, `T8`, `T15a`)
+and three sentences *about* that errata (`next-release-backlog.md:360`, `release-0.13.0.md:129`,
+`post-release-debt.md:192`) — **and three rows the errata does not cover** (`T11`, `T16`, `T17`). The old
+sentence also read a `grep -c` per-file count as a row count, called `T8` and `T15a` one row, and claimed "no
+document mentions the other" while `release-0.13.0.md:68` names `T11` by number.
 
-**L3** — the plan was frozen at `a59f7539fe964905…` (sha256 of this file before any judgment) and sent to
-`jd-judge-a` and `jd-judge-b`, blind to each other, with the same ten questions. Their findings and the
-adjudication follow before a line of any task is written.
+**L3** — the first plan's freeze hash was **wrong and is withdrawn**: it was taken before two Log entries were
+appended, so `a59f7539…` matches nothing in history. The committed blob of that plan is `4184319a…`. The lesson
+is `T0`'s: a freeze hash is only a freeze if it is taken of the bytes that are committed, and recorded in a
+place that lets a reader recompute it — `git show <commit>:<path> | sha256sum`.
+
+**L4** — **the adjudication of both judges, and what each of their findings cost the plan.** They were read
+independently and agreed on the critical points; every one below was re-verified against the repository before it
+was written, because a judge's finding is a claim and not evidence.
+
+- **The premise (`S3`): accepted, and it changes the feature.** `T16` was closed by `e9251d1` (#297) and `T11` by
+  `#320`/`#327` with `ba5491e` and `abd6db3` — both verified here (`git merge-base --is-ancestor e9251d1 HEAD`;
+  `gh issue view 320`; `docs/validation.md:65-87`). The plan called them open and planned work that is already
+  done. **Two tasks left the table; two rows entered it.**
+- **`L2`'s count: accepted.** Eleven lines, eight false positives, three rows, one open. The old arithmetic could
+  not sum to nine under any reading.
+- **The check (`S5`): accepted in full, and the answer is to narrow it, not to widen it.** Self-match,
+  issue-versus-PR, closed-issue blindness, id collisions across six documents, and a true-positive rate of one in
+  eleven. **The strongest argument against building it at all** — that `scripts/check-pr-policy.js` already forces
+  an issue the moment anyone starts an orphaned task, which is exactly how `T11` got `#320` and `#327` — is
+  recorded here rather than dismissed: it is why the check no longer claims to police the record, only this
+  document's own table.
+- **The order (`T1` before `T2`): accepted.** The RED was unobservable in that order. `T3` now precedes the
+  filling of its own `issue` column, and `scripts/open-pr.js` refuses a red suite — so the RED is captured in the
+  Log and the green lands in the same pull request.
+- **`T1` against append-only: accepted, and it was the plan's own policy violation.** Writing issue numbers into
+  those rows would edit a record that says *"never an edit"*. The cure is the `## Errata` entry, which is what
+  `T1` now is.
+- **`T3` already landed: accepted.** §10.3, `verdictLine` and the tests shipped on 2026-11-15. Nothing re-does it.
+- **`T5` already satisfied: accepted.** `T11`'s disjunction was closed on both branches. It is errata, not a
+  sweep.
+- **`T4`'s dropped rider: accepted.** The mutation debt is named in `S7` and deferred explicitly, and the
+  `docs/README.md` link B found — the map whose closing line says a page that fits no row should probably not
+  exist — joins the other two.
+- **`T17`'s stale measurement: accepted, and left quoted as history.** The row's *"765 `test(` declarations in 48
+  files"* is from a tree two weeks younger; `T2` measures the page's counts when it writes them, and does not
+  repeat a number it did not run.
+
+**L5** — the table's `issue` column is `—` on purpose, and that is the RED `T3` observes. The first draft of this
+revision wrote issue numbers before the issues existed, which is the same defect the plan is about: a row
+claiming a link nobody opened. The order is `T3`'s test first (red on this table, captured below), then the four
+issues, then the column filled and the suite green in one pull request.
