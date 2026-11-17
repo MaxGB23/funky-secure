@@ -114,3 +114,8 @@ was written, because a judge's finding is a claim and not evidence.
 revision wrote issue numbers before the issues existed, which is the same defect the plan is about: a row
 claiming a link nobody opened. The order is `T3`'s test first (red on this table, captured below), then the four
 issues, then the column filled and the suite green in one pull request.
+
+**L6** — this plan is frozen at commit `43b2acb`, whose blob hashes to `6a903bd4be55ab89…`. That is the
+form the freeze takes after `L3`'s defect: a reader recomputes it with `git show 43b2acb:odd/tasks/open-task-ledger.md
+| sha256sum`, and the number cannot describe bytes other than the committed ones. Both judges read the
+**previous** plan, are quoted in `L4`, and no finding of theirs was carried over unverified.
