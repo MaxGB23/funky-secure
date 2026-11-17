@@ -153,10 +153,15 @@ export default {
             line: 1,
             message:
               'the workflow declares no permissions:, so ' +
+              // The verb agrees with the number, and the two shapes are not the same shape: "every job
+              // inherits" is singular, "5 of its 6 jobs inherit" is plural, and "1 of its 3 jobs inherits"
+              // is singular again. A single template cannot serve all three.
               (uncovered.length === parsed.jobs.length
-                ? 'every job'
-                : `${uncovered.length} of its ${parsed.jobs.length} jobs (${uncovered.join(', ')})`) +
-              ' inherits the scopes the repository setting allows',
+                ? 'every job inherits'
+                : `${uncovered.length} of its ${parsed.jobs.length} jobs (${uncovered.join(', ')}) ${
+                    uncovered.length === 1 ? 'inherits' : 'inherit'
+                  }`) +
+              ' the scopes the repository setting allows',
             evidence: { level: 'workflow', jobs: uncovered },
             remediation: { kind: 'manual', command: MISSING_FIX },
           });
