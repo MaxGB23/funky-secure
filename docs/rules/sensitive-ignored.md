@@ -19,9 +19,19 @@ The rule reads the resolved facts collected once per scan: `ctx.repo.ignored`, t
 verdict (E3).
 
 For each candidate path not present in that result — `.env`, `.env.local`, `.env.production`,
-`secrets.pem`, `server.key`, `.npmrc` — the rule fails. The missing entries are reported as **one**
+`secrets.pem`, `server.key`, `.npmrc` — the rule fails, **whether or not the file exists**. The probe
+answers from the ignore rules alone, so a repository that holds none of these files and no ignore file
+fails all six; that is the contract, not a false positive. The missing entries are reported as **one**
 `not-ignored` finding carrying the whole list, so one rule keeps one line in the report and the
 remediation is one append.
+
+`--no-index` is what keeps the index out of the question, and it is not decoration. Measured on git
+2.47.1: without it the same call prints nothing and exits `1` for a path git already tracks, so a
+tracked candidate would be reported `not-ignored` forever and the one append could never clear it.
+With it the answer is the ignore rules alone — a committed `.env` the ignore file covers is **not**
+this rule's finding (`env-not-tracked` is the rule that answers for tracking), while a committed
+`*.pem` or `*.key` is still reported here by the tracked check below, because ignore coverage came
+too late for a file already in the index.
 
 Two further facts are reported independently:
 
@@ -48,7 +58,11 @@ All candidates ignored, nothing sensitive tracked and no token is a pass.
 
 ## Remediation
 
-`auto`: `funky-secure init --apply` appends the missing entries to the managed `.gitignore` block.
+`auto`: `funky-secure init --apply` appends the managed block (section 11.2) to `.gitignore`. Its
+entries cover every candidate — `.env`, `.env.*`, `*.pem`, `*.key`, `.npmrc` — and the same block
+carries `node_modules/` and the `!.env*.example` negation, which this rule does not ask for. The write
+is one block written once, not a list of the paths this run found missing, and it is behavioral: `git
+check-ignore --no-index` answers all six candidates after it, on the same paths that failed before it.
 
 A tracked sensitive file is manual: `git rm --cached <path>`. Removing a file from the index does not
 remove it from history, so a credential that was committed must be rotated — the removal command
