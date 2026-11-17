@@ -32,6 +32,49 @@ import {
 const DOC = 'docs/rules/quarantine.md';
 const AUTO = { kind: 'auto', command: 'funky-secure init --apply' };
 
+/**
+ * The route that works from the state where the writer refuses (R3's sentence, 11.2's block rules).
+ *
+ * `init --apply` clears this finding only where it can write its managed block. When this repository's
+ * own `pnpm-workspace.yaml` already owns one of the block's keys — the hand-written
+ * `minimumReleaseAge: 4320` / `minimumReleaseAgeStrict: false` pair a field run measured — the writer
+ * answers `pnpm-workspace.yaml already declares minimumReleaseAgeStrict outside the managed block; two
+ * sources for one setting are not written`, writes nothing and exits 0. A remediation the reader
+ * follows into that refusal is the defect the spec sentence exists to prevent, so the finding is
+ * `manual` there and names the edit, in the file the repository owns (#361).
+ *
+ * The writer's own verdict decides, never a second reading of the file: `writeQuarantineGate` is the
+ * function `init` plans from, so the finding cannot disagree with the plan about a conflict.
+ *
+ * @param {object} ctx resolved context
+ * @param {string} preset the effective preset, for the age the block would write
+ * @returns {boolean} whether `init --apply` refuses to write here
+ */
+function writeRefused(ctx, preset) {
+  // The repository is out of contract in its own way (`--scope machine` never asks for it), and a
+  // write that works there must not be reported as manual on a guess.
+  if (ctx.repo === null || ctx.repo === undefined) return false;
+  const result = writeQuarantineGate({
+    workspaceYaml: ctx.repo.files?.workspaceYaml?.text ?? null,
+    exists: (ctx.repo.present ?? []).includes(WORKSPACE_RELATIVE),
+    preset,
+  });
+  return result.state === 'conflict';
+}
+
+/**
+ * The manual route: the edit the reader makes in the file they own, because the tool will not write a
+ * second source for one setting.
+ * @param {string} change what to change, as the sentence names it
+ * @returns {{ kind: 'manual', command: string }}
+ */
+function manualEdit(change) {
+  return {
+    kind: 'manual',
+    command: `edit ${WORKSPACE_RELATIVE} by hand: ${change} on the declaration the file already carries (funky-secure init --apply refuses to add a second source for one setting)`,
+  };
+}
+
 export default {
   id: 'quarantine',
   title: 'Quarantine is a gate, not an approval list',
@@ -47,7 +90,7 @@ export default {
   evidence:
     'effective value, inherited or configured, effective strictness, the preset floor, and the minimumReleaseAgeExclude entries (count and values).',
   remediation:
-    'funky-secure init --apply writes minimumReleaseAgeStrict: true (and the 4320 floor under --preset strict), plus savePrefix: \'\' so a later pnpm add cannot save a caret. Manual: pnpm config set minimum-release-age-strict true --location=project, which in pnpm 12 writes pnpm-workspace.yaml and never a .npmrc — a hand-written .npmrc value is ignored (E8), and .npmrc is where sensitive-ignored requires tokens to stay. The hotfix escape hatch is minimumReleaseAgeExclude.',
+    'auto: funky-secure init --apply writes minimumReleaseAgeStrict: true (and the 4320 floor under --preset strict), plus savePrefix: \'\' so a later pnpm add cannot save a caret. Manual where the writer refuses — the same key declared outside the managed block: edit pnpm-workspace.yaml by hand, because init --apply writes no second source for one setting. Manual equivalents: pnpm config set minimum-release-age-strict true --location=project, which in pnpm 12 writes pnpm-workspace.yaml and never a .npmrc — a hand-written .npmrc value is ignored (E8), and .npmrc is where sensitive-ignored requires tokens to stay. The hotfix escape hatch is minimumReleaseAgeExclude.',
   limits:
     'The effective listing merges global, workspace and environment configuration and cannot attribute a value to its source (E2), so the report never claims one. A hand-written .npmrc value is silently ignored by pnpm and cannot be detected here (E8). An unavailable version leaves the active major unknown and the 11/12 line default is used.',
   docs: DOC,
@@ -106,6 +149,7 @@ export default {
       ? config.minimumReleaseAgeExclude
       : [];
     const evidence = { effective, inherited, strict, policy: floor, exclusions };
+    const refused = writeRefused(ctx, policy?.preset ?? 'baseline');
 
     if (!strict) {
       return [
@@ -116,7 +160,7 @@ export default {
           target: 'repo-root',
           message: `quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (${inherited ? 'inherited' : 'configured'} ${effective})`,
           evidence,
-          remediation: AUTO,
+          remediation: refused ? manualEdit('set minimumReleaseAgeStrict: true') : AUTO,
         },
       ];
     }
@@ -130,7 +174,7 @@ export default {
           target: 'repo-root',
           message: `quarantine is ${effective} minutes, below the ${floor}-minute policy floor`,
           evidence,
-          remediation: AUTO,
+          remediation: refused ? manualEdit(`raise minimumReleaseAge to ${floor}`) : AUTO,
         },
       ];
     }

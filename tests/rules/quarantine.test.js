@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -138,6 +139,74 @@ test('an explicit non-strict flag fails even when the value meets the floor', ()
   assert.equal(finding.evidence.inherited, false);
   assert.equal(finding.evidence.strict, false);
   assert.ok(finding.message.endsWith('(configured 8640)'));
+});
+
+/// The defect this pair closes (#361): the finding printed `auto`, and `init --apply` answers that
+/// command with a conflict, writes nothing to the file and exits 0 — a route the reader follows into
+/// a refusal. The writer's own verdict decides the kind, so the rule cannot disagree with it.
+
+const OUTSIDE = 'minimumReleaseAge: 4320\nminimumReleaseAgeStrict: false\n';
+const OUTSIDE_GATE = (change) =>
+  `edit pnpm-workspace.yaml by hand: ${change} on the declaration the file already carries (funky-secure init --apply refuses to add a second source for one setting)`;
+
+test('a declaration outside the managed block is manual, naming the file the reader owns', (t) => {
+  const dir = scratch(t);
+  const context = withRepo(
+    ctx({ minimumReleaseAge: 4320, minimumReleaseAgeStrict: false }),
+    dir,
+    OUTSIDE,
+  );
+
+  const [finding] = rule.detect(context, { policy: { quarantineMinutes: 1440 } });
+
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'quarantine-not-strict');
+  assert.deepEqual(finding.remediation, {
+    kind: 'manual',
+    command: OUTSIDE_GATE('set minimumReleaseAgeStrict: true'),
+  });
+});
+
+test('a below-policy declaration outside the managed block is manual, naming the age to raise', (t) => {
+  const dir = scratch(t);
+  const context = withRepo(
+    ctx({ minimumReleaseAge: 1440, minimumReleaseAgeStrict: true }),
+    dir,
+    'minimumReleaseAge: 1440\nminimumReleaseAgeStrict: true\n',
+  );
+
+  const [finding] = rule.detect(context, { policy: { quarantineMinutes: 4320 } });
+
+  assert.equal(finding.code, 'quarantine-below-policy');
+  assert.deepEqual(finding.remediation, {
+    kind: 'manual',
+    command: OUTSIDE_GATE('raise minimumReleaseAge to 4320'),
+  });
+});
+
+test('a declaration inside the managed block keeps the auto route that really clears it', (t) => {
+  // The write rewrites that block instead of adding a second source, so the working `auto` stays.
+  const dir = scratch(t);
+  const context = withRepo(
+    ctx({ minimumReleaseAge: 4320, minimumReleaseAgeStrict: false }),
+    dir,
+    [BEGIN, 'minimumReleaseAgeStrict: false', 'minimumReleaseAge: 4320', END, ''].join('\n'),
+  );
+
+  const [finding] = rule.detect(context, { policy: { quarantineMinutes: 1440 } });
+
+  assert.equal(finding.code, 'quarantine-not-strict');
+  assert.deepEqual(finding.remediation, { kind: 'auto', command: 'funky-secure init --apply' });
+});
+
+test('a repository with no workspace file keeps the auto route, which creates it', (t) => {
+  const dir = scratch(t);
+  const context = withRepo(ctx({ registry: 'https://registry.npmjs.org/' }), dir);
+
+  const [finding] = rule.detect(context);
+
+  assert.equal(finding.code, 'quarantine-not-strict');
+  assert.deepEqual(finding.remediation, { kind: 'auto', command: 'funky-secure init --apply' });
 });
 
 test('reports the minimumReleaseAgeExclude entries, never hiding an exemption', () => {
@@ -594,4 +663,41 @@ test('the remediation is true: init --apply writes the gate and the finding clea
   const after = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
   assert.deepEqual(after.report.findings, []);
   assert.equal(after.report.summary.pass, 1);
+});
+
+test('the manual route is the one that works: init --apply leaves the hand-written file alone (#361)', async (t) => {
+  // The measurement the finding now prints instead of promising: same fixture the field run used, the
+  // file's sha before and after the apply, and the finding standing on the other side of it.
+  if (!(await pnpmAnswers(t))) return;
+  const dir = repositoryFixture(t, OUTSIDE);
+  const file = join(dir, 'pnpm-workspace.yaml');
+  const sha = () => createHash('sha256').update(readFileSync(file)).digest('hex');
+  const before = sha();
+  assert.equal(readFileSync(file, 'utf8'), OUTSIDE);
+
+  const scanned = await reportOf(dir, ['--scope', 'all', '--only', 'quarantine']);
+  const [finding] = scanned.report.findings;
+  assert.equal(finding.code, 'quarantine-not-strict');
+  assert.deepEqual(finding.remediation, {
+    kind: 'manual',
+    command: OUTSIDE_GATE('set minimumReleaseAgeStrict: true'),
+  });
+
+  const init = await cliOn(dir, ['init', '--apply']);
+  assert.equal(init.code, 0, init.stderr);
+  assert.ok(
+    collapsed(init.stdout).includes(
+      'pnpm-workspace.yaml already declares minimumReleaseAgeStrict outside the managed block; two sources for one setting are not written',
+    ),
+    `the refusal the finding names is the one init prints:\n${init.stdout}`,
+  );
+  assert.equal(sha(), before, 'the apply wrote nothing to the file the finding is about');
+  assert.equal(readFileSync(file, 'utf8'), OUTSIDE);
+
+  const after = await reportOf(dir, ['--scope', 'all', '--only', 'quarantine']);
+  assert.equal(after.report.findings[0].code, 'quarantine-not-strict');
+  assert.deepEqual(after.report.findings[0].remediation, {
+    kind: 'manual',
+    command: OUTSIDE_GATE('set minimumReleaseAgeStrict: true'),
+  });
 });
