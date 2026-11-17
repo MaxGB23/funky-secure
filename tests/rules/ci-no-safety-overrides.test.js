@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { run } from '../../src/cli.js';
 import rule from '../../src/rules/ci-no-safety-overrides.js';
 
 /** A complete repository fact set, as `src/lib/targets.js` resolves it. */
@@ -114,4 +119,321 @@ test('the catalog entry declares its identity, severity and page', () => {
   assert.deepEqual(rule.severity, { baseline: 'warn', strict: 'error' });
   assert.equal(rule.docs, 'docs/rules/ci-no-safety-overrides.md');
   assert.equal(typeof rule.detect, 'function');
+});
+
+/// The four sides of `S3` and the three obligations of `S4`, driven through the binary over
+/// repositories built at runtime (`S5`). No fixture family is committed; every path is a `mkdtempSync`
+/// directory, and the child environment is scrubbed of `CI` and every `npm_config_*`. This rule reads
+/// files only — no pnpm probe answers any side — so nothing here depends on the machine.
+
+function capture() {
+  return { text: '', isTTY: false, write(chunk) { this.text += chunk; return true; } };
+}
+
+/** One command of the binary, with the runner's environment taken out. */
+async function cli(dir, argv) {
+  const env = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name !== 'CI' && !/^npm_config_/i.test(name)) env[name] = value;
+  }
+  const stdout = capture();
+  const stderr = capture();
+  const code = await run(argv, { cwd: dir, env, stdout, stderr });
+  return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+/** One `scan` of this rule at repository scope, so no machine fact reaches the counts. */
+function scan(dir, argv = []) {
+  return cli(dir, ['scan', '--scope', 'repo', '--only', 'ci-no-safety-overrides', ...argv]);
+}
+
+function scratch(t) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-ci-flags-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function writeWorkflow(dir, lines, name = 'ci.yml') {
+  mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
+  writeFileSync(join(dir, '.github', 'workflows', name), `${lines.join('\n')}\n`);
+}
+
+/** Both codes twice — a workflow step and an `.npmrc` key each — plus the quoted sentence. */
+function failingRepo(t) {
+  const dir = scratch(t);
+  writeWorkflow(dir, [
+    'name: ci', // 1
+    'on:', // 2
+    '  push:', // 3
+    '    branches: [main]', // 4
+    'jobs:', // 5
+    '  build:', // 6
+    '    runs-on: ubuntu-latest', // 7
+    '    steps:', // 8
+    '      - run: pnpm install --no-frozen-lockfile', // 9
+    '      - run: pnpm install --ignore-scripts=false', // 10
+    '      - run: echo "--frozen-lockfile=false" # --ignore-scripts=false', // 11
+  ]);
+  writeFileSync(join(dir, '.npmrc'), 'frozen-lockfile=false\n# ignore-scripts=false\nignore-scripts=false\n');
+  return dir;
+}
+
+/** Everything pnpm's CI defaults already do, plus the quoted sentence and the commented key. */
+function passingRepo(t) {
+  const dir = scratch(t);
+  writeWorkflow(dir, [
+    'name: ci', 'on: push', 'jobs:', '  build:', '    runs-on: ubuntu-latest', '    steps:',
+    '      - run: pnpm install',
+    '      - run: pnpm install --frozen-lockfile',
+    '      - run: pnpm install --ignore-scripts',
+    '      - run: echo "--no-frozen-lockfile"',
+    '      - run: echo hi # --no-frozen-lockfile',
+  ]);
+  writeFileSync(join(dir, '.npmrc'), '# frozen-lockfile=false\nauto-install-peers=true\n');
+  return dir;
+}
+
+/** `[status, code, target, path, line]`, ordered so the report's own order is not a fact. */
+function projection(report) {
+  return report.findings
+    .map((finding) => [finding.status, finding.code, finding.target, finding.path, finding.line])
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+}
+
+/** The counts and the verdict the human report prints, read back from its own lines. */
+function humanSummary(text) {
+  const counts = /^summary {2}(\d+) errors? · (\d+) warnings? · (\d+) info · (\d+) passing · (\d+) skipped$/m.exec(text);
+  assert.ok(counts !== null, `the human report printed no summary line:\n${text}`);
+  const verdict = /^verdict {2}(PASS|FAIL) \(threshold: (\w+)/m.exec(text);
+  assert.ok(verdict !== null, `the human report printed no verdict line:\n${text}`);
+  const [error, warn, info, pass, skip] = counts.slice(1).map(Number);
+  return { error, warn, info, pass, skip, verdict: verdict[1].toLowerCase() };
+}
+
+/// Side one: it fails, with its own code, at the line the finding names.
+
+test('side one: both codes fail at the named line, and the quoted sentence is not a command', async (t) => {
+  const dir = failingRepo(t);
+  const workflowPath = join(dir, '.github', 'workflows', 'ci.yml');
+  const workflowBefore = readFileSync(workflowPath, 'utf8');
+  const npmrcBefore = readFileSync(join(dir, '.npmrc'), 'utf8');
+
+  const { code, stdout, stderr } = await scan(dir, ['--format', 'json', '--fail-on', 'warn']);
+  assert.equal(stderr, '');
+  assert.equal(code, 1, 'four warnings above a `warn` threshold is a failing run');
+  const report = JSON.parse(stdout);
+
+  assert.deepEqual(report.summary, { error: 0, warn: 4, info: 0, pass: 0, skip: 0, verdict: 'fail' });
+  assert.deepEqual(projection(report), [
+    ['fail', 'ci-frozen-lockfile-disabled', 'ci', '.github/workflows/ci.yml', 9],
+    ['fail', 'ci-frozen-lockfile-disabled', 'repo-root', '.npmrc', 1],
+    ['fail', 'ci-lifecycle-scripts-enabled', 'ci', '.github/workflows/ci.yml', 10],
+    ['fail', 'ci-lifecycle-scripts-enabled', 'repo-root', '.npmrc', 3],
+  ]);
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.line, finding.message]).sort((a, b) => a[0] - b[0]),
+    [
+      [1, '.npmrc sets frozen-lockfile=false; pnpm freezes the lockfile in CI by default'],
+      [3, '.npmrc sets ignore-scripts=false; the install runs dependency lifecycle scripts, which are off by default'],
+      [9, 'job "build" runs --no-frozen-lockfile; the frozen lockfile is what makes the install reproducible from the commit'],
+      [10, 'job "build" runs --ignore-scripts=false; dependency lifecycle scripts run arbitrary code at install time'],
+    ],
+  );
+  const frozenStep = report.findings.find((finding) => finding.line === 9);
+  assert.deepEqual(frozenStep.evidence, {
+    job: 'build',
+    step: 0,
+    flag: '--no-frozen-lockfile',
+    command: 'pnpm install --no-frozen-lockfile',
+  });
+  assert.deepEqual(frozenStep.remediation, { kind: 'manual', command: 'run: pnpm install --frozen-lockfile' });
+
+  assert.equal(readFileSync(workflowPath, 'utf8'), workflowBefore, 'a scan is read-only');
+  assert.equal(readFileSync(join(dir, '.npmrc'), 'utf8'), npmrcBefore, 'a scan is read-only');
+});
+
+/// Side two: it passes, and the pass is counted rather than merely absent.
+
+test('side two: the defaults leave one counted pass, not an absence', async (t) => {
+  const dir = passingRepo(t);
+  const json = await scan(dir, ['--format', 'json']);
+  const report = JSON.parse(json.stdout);
+
+  assert.equal(json.code, 0);
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings, []);
+  const human = await scan(dir);
+  assert.deepEqual(humanSummary(human.stdout), report.summary, 'the pass is counted in both formats');
+  assert.equal(/^ {2}– {2}/m.test(human.stdout), false, 'a pass is not a skip in disguise');
+});
+
+/// The sentence the page states about the count, measured.
+
+test('the page count: a word repeated in one step is one finding, at the step line', async (t) => {
+  const dir = scratch(t);
+  writeWorkflow(dir, [
+    'name: ci', 'on: push', 'jobs:', '  build:', '    runs-on: ubuntu-latest', '    steps:',
+    '      - run: pnpm install --no-frozen-lockfile --no-frozen-lockfile',
+    '      - run: |',
+    '          pnpm install',
+    '          pnpm add x --no-frozen-lockfile',
+  ]);
+  const report = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.code, finding.line, finding.evidence.command]),
+    [
+      ['ci-frozen-lockfile-disabled', 7, 'pnpm install --no-frozen-lockfile --no-frozen-lockfile'],
+      ['ci-frozen-lockfile-disabled', 8, 'pnpm add x --no-frozen-lockfile'],
+    ],
+  );
+});
+
+/// Side three: it skips for want of a fact, with the code and the fact in the message, and no skip is
+/// ever a pass.
+
+test('side three: no-ci, unparseable-workflow and no-repo name their fact, and none is a pass', async (t) => {
+  const empty = scratch(t);
+  const json = await scan(empty, ['--format', 'json']);
+  const report = JSON.parse(json.stdout);
+
+  assert.equal(json.code, 0, 'a skip is not a failure');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' });
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.status, finding.code, finding.message, finding.remediation]),
+    [['skip', 'no-ci', 'skipped: there is no workflow and no root .npmrc, so no CI install fact exists', { kind: 'none' }]],
+  );
+  const human = await scan(empty);
+  assert.match(human.stdout, /^summary {2}0 errors · 0 warnings · 0 info · 0 passing · 1 skipped$/m);
+  assert.match(human.stdout, /1 rule not verified: ci-no-safety-overrides/);
+
+  const broken = scratch(t);
+  writeWorkflow(broken, ['jobs: [oops']);
+  const brokenReport = JSON.parse((await scan(broken, ['--format', 'json'])).stdout);
+  assert.deepEqual(brokenReport.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' });
+  assert.equal(brokenReport.findings[0].code, 'unparseable-workflow');
+  assert.equal(brokenReport.findings[0].path, '.github/workflows/ci.yml');
+  assert.match(brokenReport.findings[0].message, /^skipped: unparseable workflow — /);
+
+  const mixed = scratch(t);
+  writeWorkflow(mixed, ['jobs: [oops'], 'bad.yml');
+  writeWorkflow(mixed, ['name: ci', 'on: push', 'jobs:', '  build:', '    runs-on: ubuntu-latest', '    steps:', '      - run: pnpm install'], 'good.yml');
+  assert.deepEqual(
+    JSON.parse((await scan(mixed, ['--format', 'json'])).stdout).summary,
+    { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' },
+    'the rule never adds a pass on top of a skipped file',
+  );
+
+  const noRepo = JSON.parse(
+    (await cli(empty, ['scan', '--scope', 'machine', '--only', 'ci-no-safety-overrides', '--format', 'json'])).stdout,
+  );
+  assert.equal(noRepo.findings[0].code, 'no-repo');
+  assert.equal(noRepo.findings[0].message, 'skipped: the repository was excluded by --scope machine');
+  assert.deepEqual(noRepo.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' });
+});
+
+/// Side four: off by policy — the preset and the veto leave neither a finding nor a count.
+
+test('side four: starter turns the rule off, and no veto leaves a finding or a count', async (t) => {
+  const dir = failingRepo(t);
+
+  const baseline = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  assert.deepEqual([baseline.summary.warn, baseline.findings.length], [4, 4]);
+  assert.equal(baseline.findings.every((finding) => finding.severity === 'warn'), true);
+
+  const strict = JSON.parse((await scan(dir, ['--format', 'json', '--preset', 'strict'])).stdout);
+  assert.deepEqual(strict.summary, { error: 4, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'fail' });
+  assert.equal(strict.findings.every((finding) => finding.severity === 'error'), true);
+
+  const starter = await scan(dir, ['--preset', 'starter']);
+  const starterReport = JSON.parse((await scan(dir, ['--preset', 'starter', '--format', 'json'])).stdout);
+  assert.equal(starter.code, 0);
+  assert.deepEqual(starterReport.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(starterReport.findings, [], 'the preset leaves neither a finding nor a count');
+  assert.match(starter.stdout.replace(/\s+/g, ' '), /off by policy: .*CI install flags/, 'and names it');
+
+  const ignored = JSON.parse((await scan(dir, ['--ignore', 'ci-no-safety-overrides', '--format', 'json'])).stdout);
+  assert.deepEqual(ignored.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(ignored.findings, [], '--ignore leaves neither a finding nor a count');
+
+  writeFileSync(
+    join(dir, 'funky-secure.config.json'),
+    `${JSON.stringify({ rules: { 'ci-no-safety-overrides': 'off' } }, null, 2)}\n`,
+  );
+  const off = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  assert.deepEqual(off.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(off.findings, [], 'a repository that turns the rule off counts nothing either');
+});
+
+/// `S4`, the remediation: the text a fail prints clears that fail on the disposable fixture.
+
+test('obligation: the printed remediation clears its own finding', async (t) => {
+  const dir = failingRepo(t);
+  const before = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  const pick = (target, code) => before.findings.find((finding) => finding.target === target && finding.code === code);
+
+  const workflowFrozen = pick('ci', 'ci-frozen-lockfile-disabled');
+  const workflowScripts = pick('ci', 'ci-lifecycle-scripts-enabled');
+  assert.equal(workflowFrozen.remediation.command, 'run: pnpm install --frozen-lockfile');
+  assert.equal(workflowScripts.remediation.command, 'run: pnpm install --ignore-scripts');
+
+  const workflowPath = join(dir, '.github', 'workflows', 'ci.yml');
+  writeFileSync(workflowPath, readFileSync(workflowPath, 'utf8')
+    .replace('run: pnpm install --no-frozen-lockfile', workflowFrozen.remediation.command)
+    .replace('run: pnpm install --ignore-scripts=false', workflowScripts.remediation.command));
+
+  const npmrcFindings = before.findings.filter((finding) => finding.target === 'repo-root');
+  for (const finding of npmrcFindings) {
+    assert.equal(finding.remediation.command, `delete the ${finding.evidence.key} key from .npmrc`);
+  }
+  const npmrcPath = join(dir, '.npmrc');
+  writeFileSync(npmrcPath, readFileSync(npmrcPath, 'utf8').split('\n')
+    .filter((line) => !npmrcFindings.some((finding) => line.startsWith(`${finding.evidence.key}=`)))
+    .join('\n'));
+
+  const after = await scan(dir, ['--format', 'json', '--fail-on', 'warn']);
+  const report = JSON.parse(after.stdout);
+  assert.equal(after.code, 0, 'the cleared state no longer fails the run');
+  assert.deepEqual(report.findings, [], 'the printed remediation did not clear its own finding');
+  assert.deepEqual(
+    report.summary,
+    { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' },
+    'and it is a counted pass',
+  );
+});
+
+/// `S4`, the two formats: same count, path, line and message — never a code, which the human
+/// renderer does not print for any rule.
+
+test('obligation: both formats agree on count, path, line and message, and neither prints a code', async (t) => {
+  for (const [shape, dir] of [['fail', failingRepo(t)], ['pass', passingRepo(t)], ['skip', scratch(t)]]) {
+    const json = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+    const human = await scan(dir);
+    const flat = human.stdout.replace(/\s+/g, ' ');
+
+    assert.deepEqual(humanSummary(human.stdout), json.summary, `${shape}: the two formats count the same`);
+    for (const finding of json.findings) {
+      assert.ok(flat.includes(finding.message), `${shape}: no message ${JSON.stringify(finding.message)}`);
+      if (finding.path !== undefined) assert.ok(flat.includes(finding.path), `${shape}: no path ${finding.path}`);
+      if (finding.line !== undefined) assert.ok(flat.includes(`${finding.path}:${finding.line}`), `${shape}: no ${finding.path}:${finding.line}`);
+      assert.equal(human.stdout.includes(finding.code), false, `${shape}: the human report printed the code ${finding.code}`);
+    }
+  }
+});
+
+/// `S6`, the re-run from a different directory: the page says repository-root, and a checkout is the
+/// case where the invocation directory and the root differ.
+
+test('the page says repository-root: the same findings are read from a subdirectory of a checkout', async (t) => {
+  const dir = scratch(t);
+  execFileSync('git', ['init', '-q', '-b', 'main', '.'], { cwd: dir, encoding: 'utf8' });
+  writeWorkflow(dir, ['name: ci', 'on: push', 'jobs:', '  build:', '    runs-on: ubuntu-latest', '    steps:', '      - run: pnpm install --no-frozen-lockfile']);
+  writeFileSync(join(dir, '.npmrc'), 'ignore-scripts=false\n');
+  mkdirSync(join(dir, 'src'));
+
+  const report = JSON.parse((await scan(join(dir, 'src'), ['--format', 'json'])).stdout);
+  assert.deepEqual(projection(report), [
+    ['fail', 'ci-frozen-lockfile-disabled', 'ci', '.github/workflows/ci.yml', 7],
+    ['fail', 'ci-lifecycle-scripts-enabled', 'repo-root', '.npmrc', 1],
+  ]);
 });
