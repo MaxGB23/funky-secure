@@ -40,7 +40,11 @@ no version, which is the state `pin-missing` describes: there is no pin. It is n
 value that names pnpm is not evidence that the repository is on another manager, and saying so printed
 `package.json declares pnpm, so this repository is not on pnpm` — so it is its own failure,
 `pin-unversioned`. Its fix is manual only because `init --apply` never rewrites a declaration it
-finds; that is a property of the remediation, not of the verdict.
+finds; that is a property of the remediation, not of the verdict. The guard order is read
+**before the `pin-unversioned` row**: `"packageManager": "pnpm"` beside a
+`devEngines.packageManager` that declares a version is the `self-managed-pin` skip, because a guard
+that names a version is not equal to a pin that declares none, and the guard order below is what
+decides that pair.
 
 `devEngines.packageManager` — the field npm enforces, where `packageManager` is the one npm ignores —
 has three states, and this page names all three (0030). The guard is compared with the pin before the
@@ -59,6 +63,13 @@ version, keeps the skip: the probe runs outside the project, so it describes the
 project re-executes with what it declares, and no remediation is offered, because rewriting a working
 pin to the auditing machine's version is a downgrade (0020). **Absent** is unchanged: the pin alone is
 the declaration, and nothing about it is skipped.
+
+**A pin that carries its own metadata is compared by version.** pnpm writes its pins as
+`pnpm@12.3.4+sha512.…` — the version, then the hash of the tarball — and `corepack use` leaves the same
+shape. The hash belongs to the declaration, so a machine that answers `12.3.4` agrees with it: the
+finding is the ordinary `pass`, and `pin-differs-from-machine` is reserved for a machine that answers
+another version. A pre-release is not the release (`12.3.4-beta.1` is not `12.3.4`), so a machine
+answering the release does not confirm a pin on the pre-release, and the row above applies.
 
 An unverifiable pin is not a wrong pin, so an unavailable version probe is a skip rather than a
 failure; under `--strict-probes` the engine turns that skip into an error. A `--scope repo` scan
@@ -79,7 +90,12 @@ A manifest the rule could not interpret adds `problem` to that evidence: `byte-o
 `invalid-json` or `not-an-object`, so the class of defect is in the report and not only in the
 sentence.
 
-The executable path is evidence, not message text: a report body never carries an absolute path.
+The executable path is evidence, not message text. It is an **absolute path** whenever the machine scope
+is included — `--scope all`, and `--scope auto`, which resolves to it — because there the binary that
+answered is the fact, exactly as the `MACHINE` target of the report already names it; nothing
+automatically fixes that path, and a reader sharing a report is sharing it. Under `--scope repo` the
+machine facts are excluded and this evidence is `null`. What a message never carries is that path: the
+sentences below name the version, never the file.
 
 ## Remediation
 
@@ -90,9 +106,12 @@ The executable path is evidence, not message text: a report body never carries a
   difference belongs to the machine. Nothing to fix, nothing to run.
 - `not-pnpm` — `none`: the manifest declares another manager, so the pnpm pin question does not apply
   to it; the rules that need a pnpm repository already report the consequence.
-- `pin-unversioned` — `manual`: set `"packageManager": "pnpm@<observed version>"` in `package.json`,
-  and the message names that value, because "declare a version" is not an instruction without one.
-  This one is a hand edit: write W3 fills an absent declaration and never rewrites one it finds.
+- `pin-unversioned` — `manual`: `pnpm pkg set packageManager="pnpm@<observed version>"`, and the message
+  names that value, because "declare a version" is not an instruction without one. It is a command and
+  not an edit: write W3 fills an absent declaration and never rewrites one it finds, so the only route
+  to a verifiable pin here is the one a person runs, and `pnpm pkg set` writes that value into the same
+  `package.json` without disturbing the rest of it. The guard case is not this one — see the row above,
+  where a differing `devEngines.packageManager` is read first and skips.
 - `pin-conflict` — `manual`: `corepack use pnpm@<observed version>`, only for a pnpm declaration this
   rule cannot compare. A value that exists and differs is never overwritten (RFC 4.3).
 - `self-managed-pin` — `none`: pnpm 12 with `devEngines.packageManager` answers with the version the

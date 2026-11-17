@@ -97,6 +97,25 @@ function isVersionedPnpm(declared) {
 }
 
 /**
+ * The version a versioned declaration names, without the metadata it may carry after it: `pnpm` writes
+ * its pins as `pnpm@12.3.4+sha512.…`, the version and the hash of the tarball, and `corepack use` writes
+ * the same shape. The hash is a property of the declaration, so it is not a difference on the machine —
+ * comparing the whole string made a pin this project's own remediation writes report
+ * `pin-differs-from-machine` with a sentence claiming the machine answered another version, which it
+ * did not.
+ *
+ * A pre-release is kept: `12.3.4-beta.1` is not `12.3.4`, and a machine answering the release does not
+ * confirm a pin on the pre-release.
+ *
+ * @param {string} declared the `packageManager` string
+ * @returns {string|null} the version it names, or `null` for a shape this rule cannot compare
+ */
+function declaredVersion(declared) {
+  if (!isVersionedPnpm(declared)) return null;
+  return declared.slice('pnpm@'.length).split('+')[0];
+}
+
+/**
  * Whether the declaration names pnpm and gives no version to verify (`"pnpm"`, `"pnpm@"`).
  *
  * This is not `pin-missing`: the field is present, and `writePackageManagerPin` refuses to replace a
@@ -263,15 +282,12 @@ export default {
     }
 
     if (declared !== `pnpm@${observed}`) {
-      // A repository that declares a versioned pnpm is the authority for that question: pnpm
-      // re-executes itself to honour `packageManager`, so from inside the project the answering
-      // version is the declared one. The probe runs outside the repository (0019), which is why it
-      // sees the PATH binary, and comparing the two says something about THIS MACHINE. Reporting it
-      // as a violation made a correctly pinned repository fail and printed a remediation that would
-      // rewrite a deliberate pin to whatever the auditor happens to run — measured on three real
-      // repositories (shadcn-ui/ui pnpm@10.33.4, create-t3-app pnpm@10.8.0, primevue pnpm@9.6.0).
-      // It is information, and it carries no remediation (0024, S9).
-      if (guard !== null) {
+      // Whether the declaration names the version this machine answered, ignoring the metadata the
+      // declaration carries (`+sha512.…`): that is a fact about the pin, not about the machine.
+      const version = declaredVersion(declared);
+      const agreesWithMachine = version !== null && version === observed;
+
+      if (guard !== null && !agreesWithMachine) {
         // The declarations agree and the machine does not: the skip stands for the reason above, since
         // the answering pnpm is still the machine's and not the project's (0020, 0030).
         return [
@@ -286,10 +302,33 @@ export default {
         ];
       }
 
+      if (agreesWithMachine) {
+        // The declaration names the version that answered and differs from the machine's own answer
+        // only in metadata it carries: the `+sha512.…` hash pnpm writes into a pin, which `corepack use`
+        // also leaves there. There is no difference on the machine to report, so this is the ordinary
+        // verified pass, and the sentence names the declaration it read instead of a difference that
+        // is not one (S3, 0024).
+        return [
+          {
+            status: 'pass',
+            path: PATH,
+            message: `package.json pins ${declared}, whose version ${observed} is the pnpm that answered; the rest of the declaration is the pin's own metadata, not a difference on this machine`,
+            evidence,
+            remediation: { kind: 'none' },
+          },
+        ];
+      }
+
       if (isVersionedPnpm(declared)) {
-        // The repository is the authority and it is correct: pnpm honours the declaration inside the
-        // project, so there is nothing to fix. The machine's own PATH version rides along as evidence,
-        // because hiding it would leave a reader wondering why the two differ.
+        // A repository that declares a versioned pnpm is the authority for that question: pnpm
+        // re-executes itself to honour `packageManager`, so from inside the project the answering
+        // version is the declared one. The probe runs outside the repository (0019), which is why it
+        // sees the PATH binary, and comparing the two says something about THIS MACHINE. Reporting it
+        // as a violation made a correctly pinned repository fail and printed a remediation that would
+        // rewrite a deliberate pin to whatever the auditor happens to run — measured on three real
+        // repositories (shadcn-ui/ui pnpm@10.33.4, create-t3-app pnpm@10.8.0, primevue pnpm@9.6.0).
+        // It is information, and it carries no remediation (0024, S9): the machine's own PATH version
+        // rides along as evidence, because hiding it would leave a reader wondering why they differ.
         return [
           {
             status: 'pass',
