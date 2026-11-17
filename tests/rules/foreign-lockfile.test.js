@@ -10,6 +10,21 @@ import rule from '../../src/rules/foreign-lockfile.js';
 import { createCollector } from '../../src/lib/probes.js';
 import { run } from '../../src/cli.js';
 
+/**
+ * Whether a pnpm answers here, asked through the resolver the tool already owns: on win32 the manager
+ * is a `.cmd` shim, so a bare `spawnSync('pnpm')` answers ENOENT on a machine that has it. The
+ * printed remediations run pnpm, so a host without it cannot measure that obligation — and a test may
+ * not claim a measurement it did not make.
+ * @param {object} t the test context
+ * @returns {Promise<boolean>} false when the caller must return
+ */
+async function pnpmAnswers(t) {
+  const resolved = await createCollector({ cwd: process.cwd(), env: process.env }).pnpm();
+  if (resolved.file !== null) return true;
+  t.skip(`pnpm did not answer (${resolved.reason}), so the printed remediation cannot be run here`);
+  return false;
+}
+
 function context(present) {
   return {
     scope: 'all',
@@ -512,6 +527,7 @@ test('side four: no preset turns the rule off, and --ignore, --only or config of
 /// S4, the remediation: the command a fail prints clears that fail on a disposable copy.
 
 test('obligation: the printed command clears the coexistence finding on a disposable copy', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = checkout(t, { foreign: ['package-lock.json'] });
 
   const [finding] = JSON.parse((await scan(dir, ['--format', 'json'])).stdout).findings;
@@ -528,6 +544,7 @@ test('obligation: the printed command clears the coexistence finding on a dispos
 });
 
 test('obligation: with no pnpm lockfile the printed command refuses once, names pnpm import, and the sequence clears it', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = checkout(t, { pnpmLockfile: false, foreign: ['package-lock.json'] });
 
   const [finding] = JSON.parse((await scan(dir, ['--format', 'json'])).stdout).findings;
