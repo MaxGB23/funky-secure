@@ -597,6 +597,22 @@ function declaresGuard(json) {
 }
 
 /**
+ * Whether this plan would withhold the pin for a manifest. Asked by the rule that prints the
+ * remediation and by the plan that performs it (11.2, W3b, #353, #447): one judgement, one
+ * implementation, because a finding that advertises a write the writer refuses is two answers to one
+ * question about one file.
+ *
+ * @param {{ json?: object | null, version?: string | null }} [options]
+ * @returns {boolean}
+ */
+export function withholdsPinFor({ json = null, version = null } = {}) {
+  if (!declaresGuard(json)) return false;
+  if (typeof version !== 'string' || version === '') return false;
+  const guard = writeDevEnginesPackageManager({ packageJsonText: JSON.stringify(json), version });
+  return guard.state === 'conflict';
+}
+
+/**
  * The pin item a declared guard withholds (11.2, W3b). Its state is a `conflict` and not a
  * `would-skip`: nothing here is already at policy, and the pin is exactly what is missing. There are no
  * bytes because writing them is what W3b forbids — a pin beside a guard the plan will not touch is the
@@ -695,10 +711,9 @@ export function planPackageManagerWrites(ctx, { version = null, pinFailing = fal
   // declared guard withholds it: a `devEngines` that is not an object declares none, so there is nothing
   // for a pin to disagree with.
   const withholdsPin =
-    declaresGuard(packageJson) &&
-    guardItem.state === 'conflict' &&
     pinItem !== null &&
-    pinItem.state === 'would-write';
+    pinItem.state === 'would-write' &&
+    withholdsPinFor({ json: packageJson, version: established });
 
   if (withholdsPin) {
     return [

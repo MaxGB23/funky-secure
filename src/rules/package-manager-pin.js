@@ -7,7 +7,7 @@
 
 import { manifestProblem } from '../lib/targets.js';
 import { repoSkipMessage } from '../lib/scope.js';
-import { findingsOf, planPackageManagerWrites } from '../lib/writers.js';
+import { findingsOf, planPackageManagerWrites, withholdsPinFor } from '../lib/writers.js';
 
 const DOC = 'docs/rules/package-manager-pin.md';
 const PATH = 'package.json';
@@ -246,7 +246,15 @@ export default {
           path: PATH,
           message: `package.json declares no packageManager; declare "packageManager": "pnpm@${observed}"`,
           evidence,
-          remediation: { kind: 'auto', command: 'funky-secure init --apply' },
+          // The `auto` is a promise the plan keeps (R1, #447). Where the writer refuses to write the pin
+          // beside a guard it will not match, the finding names the edit instead of a command that
+          // answers two conflicts and writes nothing.
+          remediation: withholdsPinFor({ json: ctx.repo?.files?.packageJson?.json ?? null, version: observed })
+            ? {
+                kind: 'manual',
+                command: `edit package.json by hand: set "packageManager": "pnpm@${observed}" and make devEngines.packageManager agree with it — the plan refuses to write the pin beside a guard it will not match`,
+              }
+            : { kind: 'auto', command: 'funky-secure init --apply' },
         },
       ];
     }

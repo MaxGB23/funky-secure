@@ -1222,3 +1222,31 @@ test('the page names the command pin-unversioned prints, and the guard order tha
   assert.equal(guarded.code, 'self-managed-pin');
   assert.match(page, /before the `pin-unversioned` row/, 'the page must say which row wins');
 });
+
+test('a guard this plan will not match makes the missing pin manual, because init withholds it (#447)', () => {
+  // Measured: `init --apply` over this manifest answers two conflicts and writes zero bytes (#353),
+  // while the finding prints `funky-secure init --apply` as an automatic fix. The `auto` is a promise
+  // the plan keeps, so where it does not keep it the finding says so.
+  const json = { name: 'fx', version: '1.0.0', devEngines: { packageManager: { name: 'pnpm', version: '9.6.0' } } };
+  const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+
+  assert.equal(finding.code, 'pin-missing');
+  assert.equal(finding.remediation.kind, 'manual');
+  assert.equal(
+    finding.remediation.command.includes('init --apply'),
+    false,
+    'a command the writer refuses is never advertised as the fix',
+  );
+  assert.match(finding.remediation.command, /devEngines\.packageManager/);
+});
+
+test('the auto survives exactly where the plan keeps its promise (#447)', () => {
+  for (const [label, json] of [
+    ['no guard at all', { name: 'fx', version: '1.0.0' }],
+    ['a guard that agrees', { name: 'fx', version: '1.0.0', devEngines: { packageManager: { name: 'pnpm', version: '12.3.4' } } }],
+  ]) {
+    const [finding] = rule.detect(context({ version: '12.3.4', packageJson: manifest(json) }));
+    assert.equal(finding.code, 'pin-missing', label);
+    assert.deepEqual(finding.remediation, { kind: 'auto', command: 'funky-secure init --apply' }, label);
+  }
+});
