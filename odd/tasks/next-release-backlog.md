@@ -375,18 +375,19 @@ Nothing else about those rows changes: their specs, judges and acceptance are as
 append-only; what they produced is here instead, and every hash was checked against `git log -1` before it was
 written.
 
-- **T11** — *"Debt (b) — the five one-sided rules are measured or declared"*. **Both branches were closed.** The
-  issue the row never named was **#320** (with its duplicate **#327**), closed by `ba5491e` (PR #321,
-  *docs(validation): the remaining rules are declared, not measured*), which wrote the residual declaration
-  `S15` allowed. The measurement branch then landed too: `abd6db3`, *docs(validation): the sweep ran, three rows
-  moved, and the table is a table again*, which is the "Either a clone sweep finds a repository where each
-  passes" half of the spec — `docs/validation.md:65-87` records both sides of all five rules. **Nothing is owed
+- **T11** — *"Debt (b) — the five one-sided rules are measured or declared"*. **Both branches were closed, each by an
+  issue the row never named.** The declaration half is **#320** (created 2026-11-16, bundling this debt with the
+  suite count nothing checked), closed by PR **#321** -> `ba5491e`, whose commits are `44bb835` (*the suite row
+  loses a number nothing checks*), `0fd67b2` (*keep the skip disclosed, and leave the plan out*) and `232cbd5`
+  (*the 0.13.0 plan is not part of this pull request*). The measurement half is **#327** (*one side of five rules
+  is unmeasured*), closed by PR **#330** -> `abd6db3`, *docs(validation): the sweep ran, three rows moved, and
+  the table is a table again*. `docs/validation.md:65-87` records both sides of all five rules. **Nothing is owed
   on this row.**
 - **T16** — *"the verdict counts findings and calls them rules"*. Closed by `e9251d1` (PR #297, *fix(render): the
   verdict counts the rules it names*), merged nineteen minutes after this row was written. It moved
-  `docs/spec/report.md` §10.3 (*"The verdict counts the rules it did not verify once each and names them"*),
+  `docs/spec/report.md` §10.3 at `:201` (*"The verdict counts the rules it did not verify once each and names them"*),
   `src/lib/render-human.js` (`verdictLine` now takes `unverifiedIds`), and `tests/report.test.js` (+40 lines
-  pinning both). The row's evidence line, `src/lib/render-human.js:397`, is a JSDoc sentence today: the defect it
+  pinning both). Its two commits are `17adf0c` (the fix) and `e01cebd` (the tests). The row's evidence line, `src/lib/render-human.js:397`, is a JSDoc sentence today: the defect it
   describes is not there. **Nothing is owed on this row either.**
 
 What survives from that pair is `T17` alone, and it is `odd/tasks/open-task-ledger.md`'s subject.
