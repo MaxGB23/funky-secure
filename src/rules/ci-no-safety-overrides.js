@@ -27,8 +27,19 @@ const SCRIPT_FLAGS = new Set([
   '--enable-pre-post-scripts=true',
 ]);
 
-const FROZEN_FIX = 'run: pnpm install --frozen-lockfile';
-const SCRIPT_FIX = 'run: pnpm install --ignore-scripts';
+/**
+ * The word that clears each override, by the word it replaces (RFC 16 G2). The remediation is an edit
+ * inside the step: the offending word moves and the rest of the `run:` body stays as written, because
+ * replacing the whole body of a compound step (`pnpm install --no-frozen-lockfile && pnpm build`)
+ * drops every other command it runs (#383).
+ */
+const CLEARING_WORD = new Map([
+  ['--no-frozen-lockfile', '--frozen-lockfile'],
+  ['--frozen-lockfile=false', '--frozen-lockfile'],
+  ['--ignore-scripts=false', '--ignore-scripts'],
+  ['--enable-pre-post-scripts', '--ignore-scripts'],
+  ['--enable-pre-post-scripts=true', '--ignore-scripts'],
+]);
 
 /**
  * @param {string} code
@@ -39,15 +50,24 @@ function skip(code, reason) {
 }
 
 /**
- * The words of one `run:` body that are commands rather than prose, each with the line it came
- * from. A word that begins with a quote is prose (a quoted sentence is not a command), and `#` at
- * the start of a word begins a comment.
+ * The words of one `run:` body that are commands rather than prose, each with the line it came from
+ * and its own `[start, end)` span in the body, so an edit can replace exactly that word. A word that
+ * begins with a quote is prose (a quoted sentence is not a command), and `#` at the start of a word
+ * begins a comment.
  * @param {string} run
- * @returns {Array<{ word: string, line: string }>}
+ * @returns {Array<{ word: string, line: string, start: number, end: number }>}
  */
 function commandWords(run) {
   const words = [];
-  for (const line of run.split(/\r\n|\n|\r/)) {
+  // `split` with a capturing group keeps the line separators, so each content part has an offset.
+  const parts = run.split(/(\r\n|\n|\r)/);
+  let offset = 0;
+  for (let part = 0; part < parts.length; part += 1) {
+    const line = parts[part];
+    if (part % 2 === 1) {
+      offset += line.length;
+      continue;
+    }
     let i = 0;
     while (i < line.length) {
       const ch = line[i];
@@ -57,6 +77,7 @@ function commandWords(run) {
         continue;
       }
       const quoted = ch === "'" || ch === '"';
+      const start = i;
       let word = '';
       while (i < line.length && !/[\s;|&()]/.test(line[i])) {
         const current = line[i];
@@ -70,10 +91,54 @@ function commandWords(run) {
         word += current;
         i += 1;
       }
-      if (word !== '' && !quoted) words.push({ word, line: line.trim() });
+      if (word !== '' && !quoted) {
+        words.push({ word, line: line.trim(), start: offset + start, end: offset + Math.min(i, line.length) });
+      }
     }
+    offset += line.length;
   }
   return words;
+}
+
+/**
+ * The step's `run:` body with the offending word replaced by the one that clears it, or null when
+ * that rewrite is not unambiguous: the word the finding names must be in the body as written, and
+ * the body must be one line so the printed text can be the body.
+ * @param {string} run the `run:` body of the step
+ * @param {string} flag the offending word
+ * @returns {string | null}
+ */
+function editedBody(run, flag) {
+  const fix = CLEARING_WORD.get(flag);
+  if (fix === undefined) return null;
+  // A multi-line body printed as one line would keep the word and drop the other commands with it.
+  if (/[\r\n]/.test(run)) return null;
+  const spans = commandWords(run).filter(({ word }) => word === flag);
+  if (spans.length === 0) return null;
+  // A word whose own text carries a quote (`--ignore-scripts="false"`) is not the flag as written, so
+  // the flag cannot be located as a whole word and pointing the reader at one would be a guess.
+  if (spans.some(({ start, end }) => run.slice(start, end) !== flag)) return null;
+
+  let edited = '';
+  let at = 0;
+  for (const { start, end } of spans) {
+    edited += run.slice(at, start) + fix;
+    at = end;
+  }
+  return edited + run.slice(at);
+}
+
+/**
+ * The sentence a step whose body cannot be rewritten that way is printed as: the edit it names, never
+ * a replacement that discards anything.
+ * @param {string} flag
+ * @returns {string}
+ */
+function manualEdit(flag) {
+  return (
+    `edit the step by hand: replace ${flag} with ${CLEARING_WORD.get(flag)}, ` +
+    'keeping the rest of the run: body as written'
+  );
 }
 
 /**
@@ -83,15 +148,18 @@ function commandWords(run) {
  * @param {{ index: number, line: number }} step a step from the structural reader
  * @param {string} flag
  * @param {string} line the command line that carries the flag
+ * @param {string} run the whole `run:` body of the step
  * @returns {object | null}
  */
-function overrideFinding(path, job, step, flag, line) {
+function overrideFinding(path, job, step, flag, line, run) {
   const frozen = FROZEN_FLAGS.has(flag);
   if (!frozen && !SCRIPT_FLAGS.has(flag)) return null;
 
   const message = frozen
     ? `job "${job.id}" runs ${flag}; the frozen lockfile is what makes the install reproducible from the commit`
     : `job "${job.id}" runs ${flag}; dependency lifecycle scripts run arbitrary code at install time`;
+
+  const edited = editedBody(run, flag);
 
   return {
     status: 'fail',
@@ -100,7 +168,7 @@ function overrideFinding(path, job, step, flag, line) {
     line: step.line,
     message,
     evidence: { job: job.id, step: step.index, flag, command: line },
-    remediation: { kind: 'manual', command: frozen ? FROZEN_FIX : SCRIPT_FIX },
+    remediation: { kind: 'manual', command: edited === null ? manualEdit(flag) : `run: ${edited}` },
   };
 }
 
@@ -177,9 +245,12 @@ export default {
     'For a workflow: the job, the step index, the offending word and the command line that carries ' +
     'it, at the step line. For .npmrc: the key and its value, at the 1-based line of the key.',
   remediation:
-    'Manual, printed as the step or the removal to perform: run: pnpm install --frozen-lockfile or ' +
-    'run: pnpm install --ignore-scripts for a workflow, delete the key from .npmrc for the ' +
-    'configuration. The tool never edits a workflow and never rewrites .npmrc.',
+    'Manual, printed as the edit to perform inside the step: the offending word replaced by the one ' +
+    'that clears it (--no-frozen-lockfile -> --frozen-lockfile, --ignore-scripts=false -> ' +
+    '--ignore-scripts) with the rest of the run: body left as written, so a compound step keeps its ' +
+    'other commands; a body that cannot be rewritten that way is printed as a sentence naming the ' +
+    'edit. Delete the key from .npmrc for the configuration. The tool never edits a workflow and ' +
+    'never rewrites .npmrc.',
   limits:
     'Proves that no declared step or root .npmrc key names the override; it does not prove the ' +
     'install was frozen, because an inherited environment, a global config, a composite action or a ' +
@@ -227,7 +298,7 @@ export default {
           const seen = new Set();
           for (const { word, line } of commandWords(step.run)) {
             if (seen.has(word)) continue;
-            const finding = overrideFinding(file.path, job, step, word, line);
+            const finding = overrideFinding(file.path, job, step, word, line, step.run);
             if (finding === null) continue;
             seen.add(word);
             findings.push(finding);
