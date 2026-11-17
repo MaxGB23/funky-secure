@@ -231,6 +231,47 @@ jobs:
   assert.equal(findings[0].code, 'least-privilege-permissions');
 });
 
+/**
+ * The pass sentence, written out here rather than imported: a test that reads the message from the
+ * rule cannot fail when the rule's sentence stops describing what it measured (#395).
+ */
+const PASS_MESSAGE =
+  "every job's permissions come from a declaration, the workflow's or its own, and no declaration " +
+  'is write-all';
+
+test('the pass message names both shapes when every job declares its own permissions', () => {
+  // No workflow-level `permissions:` anywhere: the only declarations are per job, and this is the
+  // shape the old sentence — "every workflow declares permissions:" — was false about.
+  const perJob = `name: ci
+on:
+  push:
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+`;
+  const findings = rule.detect(context({ workflows: [workflow(perJob)] }));
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].message, PASS_MESSAGE);
+  assert.ok(
+    !findings[0].message.includes('every workflow declares permissions:'),
+    `the pass must not claim a workflow-level declaration this workflow does not have: ${findings[0].message}`,
+  );
+});
+
+test('the pass message is the same sentence for a workflow-level declaration', () => {
+  const findings = rule.detect(context({ workflows: [workflow(READ_ONLY)] }));
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].message, PASS_MESSAGE);
+});
+
 test('reports only the jobs that inherit the default when the others declare their own', () => {
   const partial = `name: ci
 on:
