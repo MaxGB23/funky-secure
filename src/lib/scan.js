@@ -119,6 +119,10 @@ export async function collectScan({
     env,
     machine: machine?.facts ?? null,
     repo: repo?.facts ?? null,
+    // `repo: null` alone cannot say why it is null: `--scope machine` never asks for the repository,
+    // while a scope that asked and found none is a different fact. Rules state the reason from here
+    // instead of re-deriving it from the flags (#334, I-21).
+    repoOutOfScope: effectiveScope === 'machine',
     configPath: loaded.path,
   };
 

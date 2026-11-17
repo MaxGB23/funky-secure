@@ -7,6 +7,8 @@
  * `error` in both, because two lockfiles are two resolutions of one manifest.
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
+
 const DOC = 'docs/rules/foreign-lockfile.md';
 const FOREIGN = ['package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 const PNPM_LOCKFILE = 'pnpm-lock.yaml';
@@ -52,7 +54,7 @@ export default {
         {
           status: 'skip',
           code: 'no-repo-root',
-          message: 'skipped: no repository root was resolved, so foreign lockfiles cannot be listed',
+          message: repoSkipMessage(ctx, 'foreign lockfiles cannot be listed'),
           evidence: { files: [], pnpmLockfile: null },
           remediation: { kind: 'none' },
         },

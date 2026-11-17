@@ -630,6 +630,79 @@ test('scan --scope repo keeps every machine fact out of the contract and says wh
   assert.match(quarantine.message, /--scope all/);
 });
 
+/**
+ * #334: `--scope machine` never asks for the repository, so a rule there has no facts by contract, not
+ * because the directory is outside one. A user who reads "no repository was resolved" from inside a
+ * repository moves directories to fix a flag they already typed.
+ */
+test('scan --scope machine names the exclusion instead of reporting an absent repository', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'fixture' }));
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n');
+
+  // The same directory is inside a repository: the repo-scope run resolves it and excludes the machine.
+  const repoSide = io(dir, { root: dir });
+  await run(['scan', '--scope', 'repo', '--format', 'json'], repoSide);
+  assert.equal(JSON.parse(repoSide.stdout.text).provenance.machine, 'excluded');
+
+  const streams = io(dir, { root: dir });
+  const code = await run(['scan', '--scope', 'machine', '--format', 'json'], streams);
+  const report = JSON.parse(streams.stdout.text);
+
+  const needing = report.findings.filter(
+    (finding) =>
+      finding.status === 'skip' && (finding.code === 'no-repo' || finding.code === 'no-repo-root'),
+  );
+
+  assert.equal(code, 0, 'nothing fails under --scope machine here');
+  assert.equal(
+    report.provenance.quarantine,
+    'not verified (repository excluded)',
+    'the same document already knows the repository was excluded, not absent',
+  );
+  assert.equal(
+    needing.length,
+    11,
+    'every rule that needs the repository facts states why it has none',
+  );
+
+  for (const finding of needing) {
+    assert.match(
+      finding.message,
+      /^skipped: the repository was excluded by --scope machine(, so |$)/,
+      `${finding.rule} claims an absent repository instead of naming the exclusion: ${finding.message}`,
+    );
+  }
+
+  // The decision: the message changes, the codes do not — a caller that passed the flag holds it.
+  assert.equal(needing.filter((finding) => finding.code === 'no-repo').length, 9);
+  assert.equal(needing.filter((finding) => finding.code === 'no-repo-root').length, 2);
+});
+
+test('a directory that is not a repository keeps its own reasons and names no exclusion', async (t) => {
+  const dir = scratch(t);
+  const streams = io(dir);
+  await run(['scan', '--scope', 'repo', '--format', 'json'], streams);
+  const report = JSON.parse(streams.stdout.text);
+
+  assert.equal(
+    report.findings.some((finding) => finding.message.includes('--scope machine')),
+    false,
+    'nothing in a genuine non-repository was excluded by a flag',
+  );
+  assert.equal(
+    report.findings.some(
+      (finding) => finding.code === 'no-repo' || finding.code === 'no-repo-root',
+    ),
+    false,
+    'outside git each rule answers for itself (no-git, no-ci), not one absent repository',
+  );
+
+  const env = report.findings.find((finding) => finding.rule === 'env-not-tracked');
+  assert.equal(env.code, 'no-git');
+  assert.equal(env.message, 'skipped: git is not available, so the tracked set is unknown');
+});
+
 /** The provenance line as printed: it may wrap, so the assertion joins its continuation line. */
 function provenanceOf(text) {
   const lines = text.split('\n');

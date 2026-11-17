@@ -7,6 +7,7 @@
  * folded values and `with:` keys (E6). A step is what the reader says is a step.
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
 import { parseWorkflow } from '../lib/workflows.js';
 
 const FULL_SHA = /^[0-9a-fA-F]{40}$/;
@@ -247,7 +248,11 @@ export default {
    */
   detect(ctx) {
     const repo = ctx.repo;
-    if (!repo) return [skip('no-repo', 'no repository facts were collected')];
+    if (!repo) {
+      return [
+        { status: 'skip', code: 'no-repo', message: repoSkipMessage(ctx), probeUnavailable: true },
+      ];
+    }
 
     const findings = [];
 

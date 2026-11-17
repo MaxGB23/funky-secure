@@ -20,6 +20,7 @@
 
 import { LOCKFILE_ONLY_STEP } from '../lib/foreign-pin.js';
 import { parseLockfile, recordedVersion, overrideTouches } from '../lib/lockfile.js';
+import { repoSkipMessage } from '../lib/scope.js';
 import { isFloating } from '../lib/specifiers.js';
 import { manifestProblem } from '../lib/targets.js';
 
@@ -330,7 +331,7 @@ export default {
           code: 'no-repo',
           scope: 'repo',
           target: 'importer',
-          message: 'skipped: no repository was resolved',
+          message: repoSkipMessage(ctx),
           probeUnavailable: true,
         },
       ];

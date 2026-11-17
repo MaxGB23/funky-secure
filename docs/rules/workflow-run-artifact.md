@@ -70,7 +70,7 @@ Four passes, each naming the furthest leg the rule did reach:
 - `trusted-producer` - every resolved producer declares no `pull_request`.
 
 A repository with no workflow is `skip: no-ci`, not a pass. A workflow the reader cannot parse yields
-`skip: unparseable-workflow` for that file and no pass is added on top. No repository facts is
+`skip: unparseable-workflow` for that file and no pass is added on top. No repository facts in this scope is
 `skip: no-repo`.
 
 Friction is 1, and severity is `error` in `baseline` and in `strict`: a declared deviation from the

@@ -9,6 +9,7 @@
  * A quoted sentence and a comment are not commands.
  */
 
+import { repoSkipMessage } from '../lib/scope.js';
 import { parseWorkflow } from '../lib/workflows.js';
 
 const DOC = 'docs/rules/ci-no-safety-overrides.md';
@@ -193,7 +194,11 @@ export default {
    */
   detect(ctx) {
     const repo = ctx.repo;
-    if (!repo) return [skip('no-repo', 'no repository facts were collected')];
+    if (!repo) {
+      return [
+        { status: 'skip', code: 'no-repo', message: repoSkipMessage(ctx), probeUnavailable: true },
+      ];
+    }
 
     const workflows = repo.workflows ?? [];
     const npmrc = repo.files?.npmrc ?? null;

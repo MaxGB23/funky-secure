@@ -47,7 +47,7 @@ Three answers:
   least privilege here.
 
 A repository with no workflow is `skip: no-ci`, not a pass. A workflow the reader cannot parse yields
-`skip: unparseable-workflow` for that file and no pass is added on top of it. No repository facts is
+`skip: unparseable-workflow` for that file and no pass is added on top of it. No repository facts in this scope is
 `skip: no-repo`.
 
 Friction is 1, severity is `warn` in `baseline` and `error` in `strict`: an absent declaration is the
