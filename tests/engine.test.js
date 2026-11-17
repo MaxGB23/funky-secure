@@ -107,9 +107,30 @@ test('promotes an unavailable probe to error only under --strict-probes', () => 
 
   assert.equal(lenient[0].status, 'skip');
   assert.equal(lenient[0].severity, 'warn');
+  assert.equal(lenient[0].message, 'skipped: no pnpm', 'a skip keeps the verb its status earns');
   assert.equal(strict[0].status, 'error');
   assert.equal(strict[0].severity, 'error');
-  assert.match(strict[0].message, /required probe unavailable/);
+  assert.equal(strict[0].code, 'no-pnpm', 'the code names the missing fact and survives the escalation');
+  // #364: the status says `error`, so the message may not claim the finding was skipped. The reason
+  // stands on its own, as every 10.1 message does, and the suffix names why the severity moved.
+  assert.equal(strict[0].message, 'no pnpm (required probe unavailable)');
+  assert.doesNotMatch(strict[0].message, /^skipped: /);
+});
+
+test('an escalated message that carries no skip prefix is left standing (#364)', () => {
+  const strict = evaluate({
+    ctx: {},
+    policy,
+    catalog: [
+      rule({
+        detect: () => [{ status: 'skip', code: 'no-pnpm', message: 'no pnpm', probeUnavailable: true }],
+      }),
+    ],
+    strictProbes: true,
+  });
+
+  assert.equal(strict[0].status, 'error');
+  assert.equal(strict[0].message, 'no pnpm (required probe unavailable)');
 });
 
 test('defaults remediation and message so a finding is always renderable', () => {

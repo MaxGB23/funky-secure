@@ -65,7 +65,11 @@ export function evaluate({ ctx, policy, catalog = [], strictProbes = false }) {
       if (strictProbes && finding.status === 'skip' && finding.probeUnavailable === true) {
         normalized.status = 'error';
         normalized.severity = 'error';
-        normalized.message = `${normalized.message} (required probe unavailable)`;
+        // #364: the verb belongs to the status. A skip says `skipped:`; this finding says `error`, so
+        // it states the same fact as a sentence (10.1) and appends why the severity moved. The strip
+        // happens here, once, because this is the only place a skip becomes an error: patching one
+        // rule's sentence would leave every other probe-based skip claiming to be skipped.
+        normalized.message = `${normalized.message.replace(/^skipped: /, '')} (required probe unavailable)`;
       }
 
       findings.push(normalized);

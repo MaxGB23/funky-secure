@@ -448,7 +448,13 @@ test('outside a repository the rule skips with no-git, and --strict-probes refus
   assert.equal(strict.report.summary.error, 1);
   assert.equal(strict.report.summary.skip, 0);
   assert.equal(strict.report.findings[0].code, 'no-git', 'the code survives the escalation');
-  assert.match(strict.report.findings[0].message, /git is not available/);
+  // #364: the status is `error`, so the sentence may not begin with the verb of a skip. The same
+  // fact is stated, and the suffix names why the severity moved.
+  assert.equal(
+    strict.report.findings[0].message,
+    'git is not available, so the tracked set is unknown (required probe unavailable)',
+  );
+  assert.doesNotMatch(strict.report.findings[0].message, /^skipped: /);
 });
 
 test('policy turns the rule off, leaving neither a finding nor a count (S3)', (t) => {
