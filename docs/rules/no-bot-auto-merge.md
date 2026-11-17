@@ -26,14 +26,22 @@ step is attributed to the job that runs it. Two failures are possible, both repo
   automerge actions: `peter-evans/enable-pull-request-automerge`, `pascalgn/automerge-action`,
   `alexwilson/enable-github-automerge-action`, `reitermarkus/automerge`.
 - `pr-target-head-checkout` — a job that runs on `pull_request_target` and checks out the PR head
-  (`github.event.pull_request.head.sha` or `refs/pull/` anywhere in that job's steps). The
-  combination hands repository secrets to untrusted code. The trigger is read from the workflow's
-  top-level `on:` declaration and from a job `if`/`name` that names it; the head checkout is
-  attributed through the reader.
+  (`github.event.pull_request.head.sha` or `refs/pull/`, in that job's steps' `uses`, `run` or
+  `with` values). The combination hands repository secrets to untrusted code. The trigger is read
+  from the workflow's top-level `on:` declaration and from a job `if`/`name` that names it; the head
+  checkout is attributed through the reader.
 
 Neither signal firing is a pass whose message states the rule: an update is merged by a person
 after reading the diff and running the gate. A workflow the reader cannot parse yields one
-`skip: unparseable-workflow` for that file, and the rule never adds a pass on top of it.
+`skip: unparseable-workflow` for that file, and the rule never adds a pass on top of it. When the
+repository is excluded by `--scope machine`, the rule yields one `skip: no-repo` whose message
+names the flag, and that run carries no pass either.
+
+**Policy.** Severity is `error` in `baseline` and `error` in `strict`. This rule is not one of the
+six day-zero rules, so `starter` turns it off: a `starter` run carries neither a finding nor a
+count for it, and it fails no run. `--ignore no-bot-auto-merge`, `--only` naming other rules, and
+`"rules": { "no-bot-auto-merge": "off" }` in the config file veto it the same way — neither a
+finding nor a count.
 
 ## Evidence
 
@@ -52,10 +60,12 @@ workflow, so printing one would be a claim the tool cannot keep.
   step`.
 - `pr-target-head-checkout` — `edit <workflow>:<line> and drop the checkout of the pull request head`.
 
-The line is the 1-based line of the step the finding reports, so an editor opens at the place to
-edit. The rule does not edit workflows and does not rewrite one: removing an automation is a review
-decision. The message states the rule that replaces it — an update is merged by a person after
-reading the diff and running the gate.
+The line is the 1-based line where the step begins, so an editor opens at the place to edit. That
+is not always the line carrying the `run:` or the `uses:`: a step written as `- name: enable
+automerge` above `uses: pascalgn/automerge-action@v0.16.3` reports the `name:` line, one above the
+action, and the edit is the whole step rather than that one line. The rule does not edit workflows
+and does not rewrite one: removing an automation is a review decision. The message states the rule
+that replaces it — an update is merged by a person after reading the diff and running the gate.
 
 ## Limits
 
@@ -66,6 +76,9 @@ reading the diff and running the gate.
   attribution.
 - `pull_request_target` is read at the trigger declaration and in job conditions. A trigger written
   in a form the scan cannot attribute produces no finding from that path rather than a guess.
+- The head checkout is recognized by one of the two spellings in a step's `uses`, `run` or `with`
+  value. A workflow that builds the ref instead — `ref: ${{ env.PR_REF }}` — checks out the head
+  and is not reported, because the reader does not evaluate expressions.
 - Whether a human actually read the diff is not observable. The rule proves that no automation path
   is declared, and stops there.
 - A workflow the reader cannot parse is skipped per file; the rule never guesses from a line scan.

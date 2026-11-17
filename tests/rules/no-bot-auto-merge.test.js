@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 
+import { run } from '../../src/cli.js';
 import rule from '../../src/rules/no-bot-auto-merge.js';
 
 /** A complete repository fact set, as `src/lib/targets.js` resolves it. */
@@ -260,4 +265,379 @@ test('never passes the merge path when a workflow could not be parsed', () => {
     ['skip:unparseable-workflow'],
     'the bot config must not stand in for a merge path this rule never read',
   );
+});
+
+/// The field loop (`odd/tasks/field-loop-every-rule.md`, T9): the four sides of `S3` and the three
+/// obligations of `S4`, measured through the binary over repositories built at run time (`S5`). No
+/// fixture family is committed, no clock, network or machine fact is read, and the rule answers from
+/// the workflow files this file writes into a fresh temp directory — a host without pnpm answers
+/// this block exactly as one with it does.
+
+/** The pass side: a bot job that merges nothing, and a human job that merges. */
+const CLEAN = [
+  'name: ci',
+  'on: pull_request',
+  'jobs:',
+  '  dependabot:',
+  "    if: github.actor == 'dependabot[bot]'",
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - run: echo awaiting review',
+  '  release:',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - run: gh pr merge --merge',
+].join('\n');
+
+/** An automatic merge in a bot job, and an automerge action whose step starts on its `name:` line. */
+const AUTOMERGE = [
+  'name: automerge',
+  'on: pull_request',
+  'jobs:',
+  '  dependabot:',
+  '    runs-on: ubuntu-latest',
+  "    if: github.actor == 'dependabot[bot]'",
+  '    steps:',
+  '      - run: gh pr merge --auto --squash',
+  '      - run: echo reviewed',
+  '  enable:',
+  '    name: renovate[bot] enable',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - name: enable automerge',
+  '        uses: pascalgn/automerge-action@v0.16.3',
+].join('\n');
+
+/** The trigger and the head checkout in one job, with a benign step after it. */
+const PR_TARGET = [
+  'name: pr target',
+  'on:',
+  '  pull_request_target:',
+  'jobs:',
+  '  build:',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+  '        with:',
+  '          ref: ${{ github.event.pull_request.head.sha }}',
+  '      - run: echo reviewed',
+].join('\n');
+
+/** The reader cannot parse a merge key, so this file is a skip and never a guess. */
+const UNPARSEABLE = [
+  'name: broken',
+  'on: pull_request',
+  'jobs:',
+  '  build:',
+  '    <<: *defaults',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - run: gh pr merge --auto',
+].join('\n');
+
+/** One repository file set: both fail codes, and the one pass for the configuration signal. */
+const FAILING = {
+  '.github/dependabot.yml': 'version: 2\nupdates: []\n',
+  '.github/workflows/automerge.yml': AUTOMERGE,
+  '.github/workflows/pr-target.yml': PR_TARGET,
+};
+
+/**
+ * The child environment, pinned: a runner's `CI` flag and whatever `npm_config_*` the surrounding
+ * shell exports must never be the reason this file measures something else. The rule reads no pnpm
+ * fact, so nothing here needs a resolver.
+ */
+function childEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) => name !== 'CI' && !name.startsWith('npm_config_'),
+    ),
+  );
+}
+
+/** A real repository in the OS temp directory: `files` written, nothing committed, git initialised. */
+function checkout(t, files) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-t9-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  execFileSync('git', ['init', '-q', '-b', 'main', '.'], { cwd: dir, encoding: 'utf8' });
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  }
+  return dir;
+}
+
+function capture() {
+  return {
+    text: '',
+    isTTY: false,
+    write(chunk) {
+      this.text += chunk;
+      return true;
+    },
+  };
+}
+
+/** One command of the binary over a real checkout, with the probes the tool ships. */
+async function cli(dir, argv) {
+  const stdout = capture();
+  const stderr = capture();
+  const code = await run(argv, { cwd: dir, env: childEnv(), stdout, stderr });
+  return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+/** One `repo`-scope scan of this rule. */
+function scan(dir, argv = []) {
+  return cli(dir, ['scan', '--scope', 'repo', '--only', 'no-bot-auto-merge', ...argv]);
+}
+
+/** Apply the printed edit mechanically: delete the step starting at `line`, through its continuations. */
+function deleteStepAt(dir, path, line) {
+  const file = join(dir, path);
+  const lines = readFileSync(file, 'utf8').split('\n');
+  const start = line - 1;
+  const indent = /^ */.exec(lines[start])[0].length;
+  let end = start + 1;
+  while (end < lines.length) {
+    const body = lines[end];
+    const deeper = /^ */.exec(body)[0].length;
+    if (body.trim() === '') {
+      end += 1;
+      continue;
+    }
+    if (deeper < indent || (deeper === indent && body.trim().startsWith('- '))) break;
+    end += 1;
+  }
+  lines.splice(start, end - start);
+  writeFileSync(file, lines.join('\n'));
+}
+
+/// Side one: it fails, with its own codes, at the path and the line each finding names.
+
+test('side one: a bot merge, a bot automerge action and a head checkout fail at their own lines', async (t) => {
+  const dir = checkout(t, FAILING);
+
+  const { code, stdout, stderr } = await scan(dir, ['--format', 'json']);
+  assert.equal(stderr, '');
+  assert.equal(code, 1, 'an error finding fails the default threshold');
+  const report = JSON.parse(stdout);
+  assert.deepEqual(report.summary, { error: 3, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'fail' });
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.status, finding.code, finding.path, finding.line]),
+    [
+      ['fail', 'automerge-for-bot', '.github/workflows/automerge.yml', 8],
+      ['fail', 'automerge-for-bot', '.github/workflows/automerge.yml', 14],
+      ['fail', 'pr-target-head-checkout', '.github/workflows/pr-target.yml', 8],
+    ],
+  );
+  assert.deepEqual(
+    report.findings.map((finding) => finding.message),
+    [
+      'job "dependabot" runs gh pr merge for a bot actor; an update is merged by a person after reading the diff and running the gate',
+      'job "enable" runs an automerge action for a bot actor; an update is merged by a person after reading the diff and running the gate',
+      'job "build" runs on pull_request_target and checks out the pull request head; repository secrets are exposed to untrusted code',
+    ],
+  );
+
+  // The line is a line of that file: 8 is the `run:` of the merge step, and 14 is the step's own
+  // `- name:` — the automerge action is one line below the line the finding names.
+  const written = readFileSync(join(dir, '.github/workflows/automerge.yml'), 'utf8').split('\n');
+  assert.equal(written[7], '      - run: gh pr merge --auto --squash');
+  assert.equal(written[13], '      - name: enable automerge');
+  assert.equal(written[14], '        uses: pascalgn/automerge-action@v0.16.3');
+});
+
+/// Side two: it passes, and the pass is counted rather than merely absent.
+
+test('side two: the clean shape passes, and both bot config files are one counted pass', async (t) => {
+  const dir = checkout(t, {
+    '.github/dependabot.yml': 'version: 2\nupdates: []\n',
+    '.github/renovate.json': '{ "extends": ["config:recommended"] }\n',
+    '.github/workflows/ci.yml': CLEAN,
+  });
+
+  const { code, stdout } = await scan(dir, ['--format', 'json']);
+  const report = JSON.parse(stdout);
+  assert.equal(code, 0);
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings, [], 'the pass is counted and never listed as a finding');
+
+  const human = await scan(dir);
+  assert.match(human.stdout, /^summary {2}0 errors · 0 warnings · 0 info · 1 passing · 0 skipped$/m);
+  assert.match(human.stdout, /all 1 rule pass/);
+
+  // The page's sentence: the configuration signal is one pass for the set, never one per file.
+  const [configuration] = rule.detect(
+    context({ botFiles: ['.github/dependabot.yml', '.github/renovate.json'] }),
+  );
+  assert.equal(configuration.status, 'pass');
+  assert.equal(configuration.code, 'bot-config-present');
+  assert.deepEqual(configuration.evidence, {
+    files: ['.github/dependabot.yml', '.github/renovate.json'],
+  });
+
+  // The limit the page states: a checkout whose ref is computed from an environment variable is
+  // neither of the two spellings, so the rule passes rather than guessing that it is not the head.
+  const [computed] = rule.detect(
+    context({
+      workflows: [
+        workflow('.github/workflows/pr-target.yml', [
+          'name: pr target',
+          'on:',
+          '  pull_request_target:',
+          'jobs:',
+          '  build:',
+          '    runs-on: ubuntu-latest',
+          '    steps:',
+          '      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683',
+          '        with:',
+          '          ref: ${{ env.PR_REF }}',
+        ]),
+      ],
+    }),
+  );
+  assert.equal(computed.status, 'pass');
+  assert.equal(computed.code, 'no-automerge-path');
+});
+
+/// Side three: it skips for want of a fact, with every code it can emit reached by a run.
+
+test('side three: an unparseable workflow and an excluded repository are the two skips', async (t) => {
+  const broken = checkout(t, {
+    '.github/dependabot.yml': 'version: 2\nupdates: []\n',
+    '.github/workflows/broken.yml': UNPARSEABLE,
+  });
+
+  const { code, stdout } = await scan(broken, ['--format', 'json']);
+  const report = JSON.parse(stdout);
+  assert.equal(code, 0, 'a skip is not a failure');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' });
+  const [skipped] = report.findings;
+  assert.equal(skipped.status, 'skip');
+  assert.equal(skipped.code, 'unparseable-workflow');
+  assert.equal(skipped.path, '.github/workflows/broken.yml');
+  assert.equal(
+    skipped.message,
+    'skipped: unparseable workflow — merge key at line 5 is not supported',
+    'the message names the fact the reader could not get, not the file alone',
+  );
+  assert.deepEqual(skipped.remediation, { kind: 'none' }, 'a skip hands nobody a command');
+
+  const excluded = await cli(broken, [
+    'scan', '--scope', 'machine', '--only', 'no-bot-auto-merge', '--format', 'json',
+  ]);
+  const [outOfScope] = JSON.parse(excluded.stdout).findings;
+  assert.equal(excluded.code, 0);
+  assert.deepEqual(
+    [outOfScope.status, outOfScope.code, outOfScope.message],
+    ['skip', 'no-repo', 'skipped: the repository was excluded by --scope machine'],
+  );
+});
+
+/// Side four: off by policy — `starter` is the preset that turns it off, and it leaves no count.
+
+test('side four: starter is the off switch, and a veto leaves neither a finding nor a count', async (t) => {
+  const dir = checkout(t, FAILING);
+
+  for (const preset of ['baseline', 'strict']) {
+    const report = JSON.parse((await scan(dir, ['--preset', preset, '--format', 'json'])).stdout);
+    assert.equal(report.summary.error, 3, `${preset}: the rule runs and its three findings survive`);
+  }
+
+  const off = await scan(dir, ['--preset', 'starter', '--format', 'json']);
+  const report = JSON.parse(off.stdout);
+  assert.equal(off.code, 0, 'a rule the policy turned off cannot fail the run');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings, [], 'off by policy leaves neither a finding nor a count');
+  assert.match(
+    (await scan(dir, ['--preset', 'starter'])).stdout.replace(/\s+/g, ' '),
+    /off by policy: .*Bot auto-merge/,
+    'the human report says who turned it off',
+  );
+
+  const ignored = JSON.parse(
+    (await scan(dir, ['--ignore', 'no-bot-auto-merge', '--format', 'json'])).stdout,
+  );
+  assert.deepEqual(ignored.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(ignored.findings, []);
+});
+
+/// Obligation one of `S4`: the printed remediation is true — the line it names is the step to
+/// delete, and deleting it clears the finding that printed it.
+
+test('obligation: the printed edit, applied at the printed line, clears every finding', async (t) => {
+  const dir = checkout(t, FAILING);
+
+  const before = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  assert.equal(before.summary.error, 3);
+
+  for (const finding of [...before.findings].sort((a, b) => b.line - a.line)) {
+    assert.equal(finding.remediation.kind, 'manual', 'no command deletes a step from a workflow');
+    const action =
+      finding.code === 'automerge-for-bot'
+        ? ' and delete the (?:automatic merge|automerge action) step$'
+        : ' and drop the checkout of the pull request head$';
+    const named = new RegExp(`^edit (.+):(\\d+)${action}`).exec(finding.remediation.command);
+    assert.ok(named, `${finding.remediation.command} names no file and line to edit`);
+    assert.equal(named[1], finding.path, 'the command names the file the finding names');
+    assert.equal(Number(named[2]), finding.line, 'and the line the finding names');
+    deleteStepAt(dir, named[1], Number(named[2]));
+  }
+
+  const after = await scan(dir, ['--format', 'json']);
+  const report = JSON.parse(after.stdout);
+  assert.equal(after.code, 0, 'the edit the finding printed clears the finding');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings, [], 'and the cleared state is a counted pass');
+});
+
+/// Obligation two of `S4`: the two formats agree on count, path, line and message. The human
+/// renderer never prints `finding.code`, so no code is compared here.
+
+test('obligation: both formats count, locate and word every finding the same way', async (t) => {
+  const shapes = [
+    ['fail', FAILING],
+    ['skip', { '.github/workflows/broken.yml': UNPARSEABLE }],
+  ];
+
+  for (const [shape, files] of shapes) {
+    const dir = checkout(t, files);
+    const json = await scan(dir, ['--format', 'json']);
+    const human = await scan(dir);
+    const report = JSON.parse(json.stdout);
+
+    assert.equal(human.code, json.code, `${shape}: the same flags decide the same verdict`);
+    const counts =
+      /^summary {2}(\d+) errors? · (\d+) warnings? · (\d+) info · (\d+) passing · (\d+) skipped$/m.exec(
+        human.stdout,
+      );
+    assert.ok(counts !== null, `${shape}: the human report printed no summary line:\n${human.stdout}`);
+    assert.deepEqual(
+      counts.slice(1).map(Number),
+      [report.summary.error, report.summary.warn, report.summary.info, report.summary.pass, report.summary.skip],
+      `${shape}: the two formats count the same`,
+    );
+
+    const flat = human.stdout.replace(/\s+/g, ' ');
+    for (const finding of report.findings) {
+      assert.ok(flat.includes(finding.path), `${shape}: the human report does not name ${finding.path}`);
+      if (finding.line !== undefined) {
+        assert.ok(
+          flat.includes(`${finding.path}:${finding.line}`),
+          `${shape}: the human report does not locate ${finding.path}:${finding.line}`,
+        );
+      }
+      assert.ok(flat.includes(finding.message), `${shape}: the human report carries another message`);
+      if (finding.remediation.command === undefined) {
+        assert.deepEqual(finding.remediation, { kind: 'none' }, `${shape}: a finding with no command`);
+      } else {
+        assert.ok(flat.includes(finding.remediation.command), `${shape}: the human report carries another command`);
+      }
+      assert.equal(
+        human.stdout.includes(finding.code),
+        false,
+        `${shape}: the human report printed the code ${finding.code}`,
+      );
+    }
+  }
 });
