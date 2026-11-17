@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { run } from '../../src/cli.js';
 import { resolvePolicy } from '../../src/lib/policy.js';
 import { collectScan } from '../../src/lib/scan.js';
+import { createCollector } from '../../src/lib/probes.js';
 import { BEGIN, END } from '../../src/lib/managed-block.js';
 import rule from '../../src/rules/quarantine.js';
 
@@ -364,6 +365,22 @@ function humanSummary(text) {
 
 const collapsed = (text) => text.replace(/\s+/g, ' ').trim();
 
+/**
+ * Whether a pnpm answers here, asked through the resolver the tool already owns: on win32 the manager
+ * is a `.cmd` shim, so a bare `spawnSync('pnpm')` answers ENOENT on a machine that has it. The
+ * release-age gate is read from the project's own configuration through `pnpm config list --json`,
+ * so a host without pnpm cannot measure either fail code or the pass. Skipping is honest; a test may
+ * not claim a measurement it did not make.
+ * @param {object} t the test context
+ * @returns {Promise<boolean>} false when the caller must return
+ */
+async function pnpmAnswers(t) {
+  const resolved = await createCollector({ cwd: process.cwd(), env: process.env }).pnpm();
+  if (resolved.file !== null) return true;
+  t.skip(`pnpm did not answer (${resolved.reason}), so the release-age gate cannot be read here`);
+  return false;
+}
+
 function fixtureDir(t) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-quarantine-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -390,6 +407,7 @@ function repositoryFixture(t, workspace, { config = null } = {}) {
 }
 
 test('fails with quarantine-not-strict from a fixture whose own pnpm-workspace.yaml sets the flag false', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = workspaceFixture(t, NOT_STRICT);
   assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), NOT_STRICT);
 
@@ -435,6 +453,7 @@ test('fails with quarantine-not-strict from a fixture whose own pnpm-workspace.y
 });
 
 test('fails with quarantine-below-policy when the gate is real and shorter than the strict floor', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = workspaceFixture(t, BELOW_FLOOR);
   assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), BELOW_FLOOR);
 
@@ -480,6 +499,7 @@ test('fails with quarantine-below-policy when the gate is real and shorter than 
 });
 
 test('passes on this host with the pass counted, and both formats print that count', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = workspaceFixture(t, GATE_BLOCK);
 
   const { report } = await collectScan({
@@ -537,6 +557,7 @@ test('skips at repository scope with machine-out-of-scope, naming the fact it di
 });
 
 test('no preset turns it off, and the policy that does leaves neither a finding nor a count', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = workspaceFixture(t, NOT_STRICT);
 
   // `starter` runs this rule at its `baseline` severity, so the finding is still reached.
@@ -557,6 +578,7 @@ test('no preset turns it off, and the policy that does leaves neither a finding 
 });
 
 test('the remediation is true: init --apply writes the gate and the finding clears', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
   const dir = repositoryFixture(t, [BEGIN, 'minimumReleaseAgeStrict: false', 'minimumReleaseAge: 4320', END, ''].join('\n'));
 
   const before = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
