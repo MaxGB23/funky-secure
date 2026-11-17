@@ -406,9 +406,11 @@ the pin alone is the declaration, and nothing about it is skipped.
   cannot read: GitHub's default for `GITHUB_TOKEN` is a repository setting, not a file, so a job that
   inherits it without declaring anything is not knowable as a deviation offline and `baseline` cannot
   call it an error. `strict` can, because there the declaration is required.
-- **Remediation:** manual, printed as the declaration to write: add a top-level `permissions:` with
-  `contents: read` and widen it only in the job that needs it, or replace `write-all` with the exact
-  scopes. The tool never edits a workflow.
+- **Remediation:** manual, printed as the declaration to write, and there are **two shapes** because they are
+  not interchangeable: a **workflow-level** `permissions:` with `contents: read` for a workflow whose jobs all
+  need the same scopes, and a **per-job** `permissions:` for a job that needs more than the workflow grants —
+  the workflow-level block cannot be widened for one job without granting that scope to every job. A
+  `write-all` is replaced by the exact scopes written. The tool never edits a workflow.
 - **Limits:** proves what the workflow declares, never the token a job receives. The declaration is
   not the effective grant: a repository setting decides the default for a workflow that declares none,
   a reusable workflow the job calls brings its own permissions, and an environment can narrow or widen
