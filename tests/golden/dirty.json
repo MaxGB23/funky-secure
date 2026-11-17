@@ -167,7 +167,7 @@
       },
       "remediation": {
         "kind": "manual",
-        "command": "add \"permissions:\" with \"contents: read\" at the top level, and widen it only in the job that needs it"
+        "command": "add \"permissions:\" with \"contents: read\" at the workflow level, or declare it on the job that needs more than the workflow grants. Widening the workflow-level block for one job would grant that scope to every job"
       },
       "doc": "funky-secure explain workflow-permissions",
       "code": "workflow-permissions-missing"

@@ -577,7 +577,12 @@ test('obligation: each printed remediation clears its own finding and leaves no 
   const wide = pick('.github/workflows/wide.yml');
   const jobwide = pick('.github/workflows/jobwide.yml');
 
-  assert.equal(missing.remediation.command, 'add "permissions:" with "contents: read" at the top level, and widen it only in the job that needs it');
+  assert.equal(
+    missing.remediation.command,
+    'add "permissions:" with "contents: read" at the workflow level, or declare it on the job that needs ' +
+      'more than the workflow grants. Widening the workflow-level block for one job would grant that scope ' +
+      'to every job',
+  );
   assert.equal(wide.remediation.command, 'replace the workflow-level "permissions: write-all" with the exact scopes the workflows write');
   assert.equal(jobwide.remediation.command, 'replace "permissions: write-all" in job "release" with the exact scopes that job writes');
 
@@ -600,6 +605,76 @@ test('obligation: each printed remediation clears its own finding and leaves no 
   for (const name of ['ci.yml', 'wide.yml', 'jobwide.yml']) {
     assert.equal(readFileSync(path(name), 'utf8').includes('write-all'), false, `${name} still grants every scope`);
   }
+});
+
+/// `S4`, the missing declaration (#407): the remediation names both shapes and why they are not
+/// interchangeable — a workflow-level block cannot be widened for one job without granting that scope to
+/// every job — and it names no job, so it cannot name one the file does not have.
+
+test('obligation: the missing-declaration remediation names both shapes and never a job (#407)', async (t) => {
+  // Jobs that do not all need the same scopes: `publish` needs more than `contents: read`, and the
+  // workflow-level block that serves `notice` cannot be widened for `publish` alone.
+  const dir = scratch(t);
+  writeWorkflow(dir, [
+    'name: release', 'on:', '  push:', 'jobs:',
+    '  publish:', '    runs-on: ubuntu-latest', '    steps:', '      - run: npm publish',
+    '  notice:', '    runs-on: ubuntu-latest', '    steps:', '      - run: echo ok',
+  ]);
+  const report = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  const missing = report.findings.find((finding) => finding.code === 'workflow-permissions-missing');
+  assert.ok(missing !== undefined, 'the fixture is the missing-declaration fail');
+
+  const fix = missing.remediation.command;
+  assert.equal(missing.remediation.kind, 'manual', 'the fix is still a human step');
+  // Neither shape replaces the other, so both are printed even when only one applies to this file.
+  assert.match(fix, /permissions:/);
+  assert.match(fix, /contents: read/);
+  assert.match(fix, /workflow level/, 'the workflow-level block is the first shape');
+  assert.match(fix, /job that needs more than the workflow grants/, 'the per-job block is the second shape');
+  // The reason the two are not interchangeable, which is what makes the second shape a fix of its own.
+  assert.match(fix, /grant that scope to every job/, 'a workflow-level widening reaches every job');
+  // A job the file does not have cannot be named here, so no job is named at all.
+  assert.equal(/\bjob\s+"/.test(fix), false, `the fix names a job: ${fix}`);
+  for (const id of ['publish', 'notice']) assert.equal(fix.includes(id), false, `the fix named job ${id}`);
+
+  // Deterministic, and independent of the workflow it is printed for: the one-job file gets the bytes
+  // of the many-job file, so the sentence is a rule, not a guess about this repository.
+  const single = scratch(t);
+  writeWorkflow(single, ['name: solo', 'on:', '  push:', 'jobs:', '  release:', '    runs-on: ubuntu-latest', '    steps:', '      - run: echo ok']);
+  const singleFix = JSON.parse((await scan(single, ['--format', 'json'])).stdout)
+    .findings.find((finding) => finding.code === 'workflow-permissions-missing').remediation.command;
+  assert.equal(singleFix, fix, 'the sentence does not change with the jobs it is printed beside');
+  assert.equal(
+    JSON.parse((await scan(dir, ['--format', 'json'])).stdout)
+      .findings.find((finding) => finding.code === 'workflow-permissions-missing').remediation.command,
+    fix,
+    'the same bytes on a second run',
+  );
+
+  // Printed in the same field, in both formats.
+  const human = await scan(dir);
+  assert.ok(human.stdout.replace(/\s+/g, ' ').includes(fix), 'the human report prints the same remediation');
+
+  // The second shape is a fix of its own, not a variant of the first: on the job that needs more it
+  // clears the finding with no workflow-level grant, which is the only way to do it without granting
+  // that scope to every job. This is the pre-existing behaviour the new sentence now names.
+  const perJob = scratch(t);
+  writeWorkflow(perJob, ['name: solo', 'on:', '  push:', 'jobs:', '  publish:', '    runs-on: ubuntu-latest', '    steps:', '      - run: echo ok']);
+  assert.equal(
+    JSON.parse((await scan(perJob, ['--only', 'workflow-permissions', '--format', 'json'])).stdout).findings[0].code,
+    'workflow-permissions-missing',
+  );
+  const file = join(perJob, '.github', 'workflows', 'ci.yml');
+  const lines = readFileSync(file, 'utf8').split('\n');
+  const at = lines.indexOf('  publish:');
+  writeFileSync(file, [...lines.slice(0, at + 1), '    permissions:', '      contents: write', ...lines.slice(at + 1)].join('\n'));
+  const cleared = await scan(perJob, ['--only', 'workflow-permissions', '--format', 'json']);
+  assert.deepEqual(
+    JSON.parse(cleared.stdout).summary,
+    { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' },
+    'the per-job block alone clears the missing declaration, with no workflow-level grant to widen',
+  );
+  assert.equal(readFileSync(file, 'utf8').includes('\npermissions:'), false, 'and the grant stayed on the one job');
 });
 
 /// `S4`, the two formats: same count, path, line and message — never a code, which the human

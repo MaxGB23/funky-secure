@@ -77,13 +77,19 @@ the ids that inherit the repository setting.
 
 `manual`, printed as the declaration to write:
 
-- absent — add `permissions:` with `contents: read` at the top level, and widen it only in the job
-  that needs it.
+- absent — two shapes, because they are not interchangeable: add `permissions:` with `contents: read` at
+  the workflow level for a workflow whose jobs all need the same scopes, or declare `permissions:` on the
+  job that needs more than the workflow grants. A workflow-level block cannot be widened for one job
+  without granting that scope to every job, so the second shape is a fix of its own and not a variant of
+  the first.
 - `write-all` — replace it with the exact scopes the workflow or that job writes.
 
 Measured: applying each printed instruction to the failing fixture clears its own finding, turns the
 run into one counted pass, and leaves no `write-all` anywhere in the file — the declaration that
-silences the finding is the declaration that narrows the grant. The workflow-level text prints "the
+silences the finding is the declaration that narrows the grant. The absent sentence prints both shapes
+and names no job, so it is the same bytes whatever the file's job ids are; its workflow-level shape
+clears the finding, and its per-job shape is the only one that clears it for a job that needs more than
+the workflow grants without granting that scope to the rest. The workflow-level text prints "the
 exact scopes the workflows write"; the job-level one prints "the exact scopes that job writes", and the
 replacement keeps the indentation of the key it replaces.
 
