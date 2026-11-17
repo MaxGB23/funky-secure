@@ -1,7 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import rule from '../../src/rules/env-not-tracked.js';
+
+const BIN = fileURLToPath(new URL('../../bin/funky-secure.js', import.meta.url));
+// The identity the suite's other commits use: this machine carries a global hook that refuses any
+// other author, and a test that fails on the developer's git config is a test nobody keeps running.
+const IDENTITY = [
+  '-c',
+  'user.email=82458865+MaxGB23@users.noreply.github.com',
+  '-c',
+  'user.name=MaxGB23',
+];
+
+/**
+ * Runs git in the fixture, with the identity a machine-wide hook accepts.
+ * @param {string} dir
+ * @param {string[]} args
+ * @returns {string}
+ */
+function git(dir, args) {
+  return execFileSync('git', [...IDENTITY, ...args], { cwd: dir, encoding: 'utf8' });
+}
+
+/**
+ * A repository that committed an environment file, with an empty nested package directory to run
+ * the binary from.
+ * @param {import('node:test').TestContext} t
+ * @returns {string} the repository directory
+ */
+function committedEnvironmentRepository(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-env-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "field-loop",\n  "private": true\n}\n');
+  writeFileSync(join(dir, '.env'), 'TOKEN=not-a-real-value\n');
+  git(dir, ['init', '-q', '-b', 'main']);
+  git(dir, ['add', 'package.json', '.env']);
+  git(dir, ['commit', '-qm', 'the committed environment file']);
+  mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
+
+  return dir;
+}
 
 /** A complete repository fact set, as `src/lib/targets.js` resolves it. */
 function repo(overrides = {}) {
@@ -212,4 +257,30 @@ test('skips when no repository facts were collected, naming the reason the conte
   assert.equal(excluded.length, 1);
   assert.equal(excluded[0].code, 'no-repo');
   assert.equal(excluded[0].message, 'skipped: the repository was excluded by --scope machine');
+});
+
+/// The collector resolves the tracked set from the repository root, not the invocation directory
+/// (#347): a committed environment file is a failure wherever the command runs.
+
+test('the binary fails a committed .env from a nested directory as tracked, not as untracked (#347)', async (t) => {
+  const dir = committedEnvironmentRepository(t);
+
+  const result = spawnSync(
+    process.execPath,
+    [BIN, 'scan', '--scope', 'repo', '--only', 'env-not-tracked', '--format', 'json'],
+    { cwd: join(dir, 'packages', 'api'), encoding: 'utf8', env: process.env },
+  );
+
+  assert.equal(result.stderr, '');
+  assert.equal(result.status, 1, `a committed environment file must fail the run:\n${result.stdout}`);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.summary, { error: 1, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'fail' });
+
+  const [finding] = report.findings;
+  assert.equal(finding.rule, 'env-not-tracked');
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'env-tracked', 'the file is tracked; the rule never reports an untracked env file');
+  assert.equal(finding.path, '.env');
+  assert.deepEqual(finding.evidence, { path: '.env' });
+  assert.deepEqual(finding.remediation, { kind: 'manual', command: 'git rm --cached .env' });
 });

@@ -293,7 +293,10 @@ export async function repoFacts({ collector, cwd, root = null }) {
       readTextFile(collector, join(at, 'pnpm-lock.yaml')),
       readTextFile(collector, join(at, '.npmrc')),
       readTextFile(collector, join(at, '.gitignore')),
-      inGit ? trackedFiles(collector) : Promise.resolve(null),
+      // The tracked set and the ignore verdicts are repository-relative names, so git answers them
+      // from the repository root: `ls-files` and `check-ignore` both resolve in the directory they
+      // run in, and from a nested invocation directory they answer about the wrong paths (#347).
+      inGit ? trackedFiles(collector, at) : Promise.resolve(null),
       inGit ? currentBranch(collector) : Promise.resolve(null),
     ]);
 
@@ -302,7 +305,7 @@ export async function repoFacts({ collector, cwd, root = null }) {
     if (await exists(join(at, name))) present.push(name);
   }
 
-  const ignored = inGit ? await ignoredPaths(collector, PROBED_IGNORE_PATHS) : null;
+  const ignored = inGit ? await ignoredPaths(collector, PROBED_IGNORE_PATHS, at) : null;
 
   // A root `.npmrc` that is tracked and carries no token is the one legitimate exception to the
   // ignore requirement (RFC 8.2 R7): the rule must not demand that it be ignored, and the write that

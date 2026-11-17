@@ -69,6 +69,25 @@ test('treats exit 1 as "none ignored" and a git failure as an unanswerable probe
   assert.deepEqual([...(await ignoredPaths(collectorFor({}), []))], []);
 });
 
+/// The repository-relative probes run from the root the caller names (#347).
+
+test('asks the tracked-set and ignore probes from the repository root when given one', async () => {
+  const collector = collectorFor({
+    'ls-files -z': { stdout: 'pnpm-lock.yaml\0' },
+    'check-ignore --no-index --stdin -z': { stdout: '.npmrc\0' },
+    'ls-files --error-unmatch -- pnpm-lock.yaml': { code: 0 },
+  });
+
+  assert.deepEqual(await trackedFiles(collector, 'M:/repo'), ['pnpm-lock.yaml']);
+  assert.deepEqual([...(await ignoredPaths(collector, ['.npmrc'], 'M:/repo'))], ['.npmrc']);
+  assert.equal(await isTracked(collector, 'pnpm-lock.yaml', 'M:/repo'), true);
+  assert.deepEqual(
+    collector.calls.map((call) => call.options.cwd),
+    ['M:/repo', 'M:/repo', 'M:/repo'],
+    'every probe that answers in repository-relative names runs from the root, not the invocation directory',
+  );
+});
+
 test('limits the dirty-tree probe to the paths it was given', async () => {
   const collector = collectorFor({ 'status --porcelain -z -- .gitignore': { stdout: ' M .gitignore\0' } });
 
