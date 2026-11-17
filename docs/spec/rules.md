@@ -51,8 +51,9 @@ Column meanings in the tables below: **friction** per 4.2, **sev** is `baseline`
   and cannot be interpreted is a failure too — `unparseable-package-json`, naming the file and what
   is wrong with it, in every scope (0027). This row does not decide a declaration that also carries a
   `devEngines.packageManager` guard: the guard order below does. `fail` with `pin-conflict` for a pnpm
-  declaration this rule cannot compare. If `pnpm --version` fails, `skip` — an unverifiable pin is not a
-  wrong pin.
+  declaration this rule cannot compare. If the manager cannot be resolved on this machine, or
+  `pnpm --version` fails, `skip` — an unverifiable pin is not a wrong pin — and the message names the
+  probe that did not answer, not a probe that was never reached.
 - **Evidence:** declared value, observed value, path of the answering binary.
 - **Remediation:** `init --apply` writes `packageManager` when it is missing (auto), and only then; a
   declaration that already exists is never rewritten, whatever the machine runs. The same plan writes
