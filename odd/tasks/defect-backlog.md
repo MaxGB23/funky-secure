@@ -169,3 +169,32 @@ longer hold · 0 unreachable.** The two that no longer hold are `#375` and `#385
   unchanged, and the tree's sha identical — after an earlier attempt had overwritten `package.json` by running an
   applying command from the repository root. The lesson is now a rule for every task here: **an applying command
   runs with its `cwd` inside a fixture, never inside the repository being delivered.**
+
+**L5** — `T21`, the review debt, measured rather than assumed. Seven delivered slices were assessed with an
+explicit base (`gentle-ai review assess --base-ref <the merge's first parent> --committed-only --json`), chosen
+for being the ones that touched a security rule or a shared reader:
+
+| Slice | `review_due` | reason | risk | changed |
+|---|---|---|---|---|
+| #379 `actions-pinned-sha` | false | `under_budget` | medium | 44 paths / 4 333 lines |
+| #401 `workflow-run-artifact` | false | `under_budget` | medium | 34 / 1 717 |
+| #406 `pull-request-target` | false | `under_budget` | medium | 31 / 1 049 |
+| #356 the collector | false | `under_budget` | medium | 52 / 5 843 |
+| #351 `lockfile-committed` | false | `under_budget` | medium | 91 / 7 703 |
+| #386 `ci-no-safety-overrides` | false | `under_budget` | medium | 37 / 3 165 |
+| #381 `no-bot-auto-merge` | false | `under_budget` | medium | 39 / 3 576 |
+
+**No review was due for any candidate**, which is the fact the omission denied me: skipping `assess` left
+"nothing was owed" as an assumption for twenty pull requests. It was owed nothing, and now that is measured.
+- **The `due review` the gate reported was about something else.** When the delivery preflight ran out of its
+  10 s budget it was projecting a **retained base 90 commits behind `HEAD`**, not a slice; with a large enough
+  budget that same range denies with *"Native assessment reports a due review"*. So the message was true of the
+  accumulated branch and never true of a candidate. Two different objects with one word.
+- **What the debt actually was, then, is procedural and it stays recorded**: the contract asks for `assess` per
+  candidate before reporting work complete, and this batch did not do it. The cost of the omission is the hour
+  spent reading a timeout as an authority problem — not a review that should have run.
+- **The cure is now in `AGENTS.md`**, under *Review authority (RDD)*: `assess` is the cheap step and the one
+  that gets skipped; skipping it does not light up the gate, because the preflight checks that the switch is on,
+  not that a review happened. And a `cancelled or timed out` refusal is the clock, not authority: the preflight
+  projects the **retained** base, its cost grows with `base..HEAD`, and the cure is to seat a narrow base with
+  `assess {"baseRef":"<current tip>","committedOnly":true}` before issuing the delivery again.
