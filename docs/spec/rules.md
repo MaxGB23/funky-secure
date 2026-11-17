@@ -347,8 +347,13 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Limits:** proves that no declared step and no root `.npmrc` key names the override. It does not
   prove the install was frozen, because an inherited environment, a global config, a composite action
   or a script the step calls can still pass the same flag. A word is classified by its own text, not
-  by resolving it: whether the command is an install is not decided here. A workflow the reader cannot
-  attribute is skipped per file; the rule never guesses from a line scan.
+  by resolving it: whether the command is an install is not decided here. **A flag inside a quoted
+  argument is therefore not a finding**, and that is a stated limit rather than an oversight:
+  `run: pnpm install "--ignore-scripts=false"` and `run: bash -c "pnpm install --no-frozen-lockfile"`
+  both reach pnpm and both pass this rule. Telling an argument from prose would mean deciding what the
+  command is, which this rule declines to do; a reader who needs that case judged needs a different
+  rule, not a wider reader. A workflow the reader cannot attribute is skipped per file; the rule never
+  guesses from a line scan.
 
 #### R11 — `pull-request-target` · friction 1 · sev `error`/`error` · fix `manual`
 
