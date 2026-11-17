@@ -487,32 +487,44 @@ export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
 
 
 /**
- * The one rule a reader should open next: the highest-severity failing finding, ties broken by the
- * catalog order — never alphabetical order and never the order the report happens to print, because
- * report order groups by target first (10.2). Two runs over the same state name the same rule.
- * @param {Array<object>} failing
+ * The one finding a reader should act on first: the highest-severity one, ties broken by the catalog
+ * order — never alphabetical order and never the order the report happens to print, because report
+ * order groups by target first (10.2). Two runs over the same state name the same finding.
+ * @param {Array<object>} findings
  * @param {Array<{ id: string }>} catalog
- * @returns {string}
+ * @returns {object}
  */
-function ruleToRead(failing, catalog) {
+function findingToActOn(findings, catalog) {
   const order = new Map(catalog.map((rule, index) => [rule.id, index]));
   const rank = (finding) => order.get(finding.rule) ?? catalog.length;
 
-  let chosen = failing[0];
-  for (const finding of failing.slice(1)) {
+  let chosen = findings[0];
+  for (const finding of findings.slice(1)) {
     const severity = severityRank(finding.severity);
     const chosenSeverity = severityRank(chosen.severity);
     if (severity > chosenSeverity || (severity === chosenSeverity && rank(finding) < rank(chosen))) {
       chosen = finding;
     }
   }
-  return chosen.rule;
+  return chosen;
+}
+
+/**
+ * The one rule a reader should open next, chosen exactly as the actionable finding is.
+ * @param {Array<object>} failing
+ * @param {Array<{ id: string }>} catalog
+ * @returns {string}
+ */
+function ruleToRead(failing, catalog) {
+  return findingToActOn(failing, catalog).rule;
 }
 
 /**
  * The block a human `scan` ends with (S1-S5): the one command that moves the repository forward.
- * One of four shapes, read in this order, decided by the report and by the effective policy. An
- * automatic fix wins even when the verdict is a pass, because the fixes are still available.
+ * One of five shapes, read in this order, decided by the report and by the effective policy. An
+ * automatic fix wins even when the verdict is a pass, because the fixes are still available; the
+ * action a passing run already printed comes next, so a run that lists an action never closes by
+ * saying there is nothing to do (#360).
  * @param {{ summary: { verdict: string }, findings: Array<object> }} report
  * @param {Array<{ id: string }>} catalog
  * @param {{ off?: string[] }} [policy] the rules the effective policy turned off; pass it and a
@@ -534,6 +546,18 @@ function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
   }
 
   if (summary.verdict === 'pass') {
+    // A pass is not the same as nothing to do: a finding below the threshold still prints its action
+    // above this block, so the block names that action instead of contradicting it (#360). The command
+    // is chosen exactly as `init`'s rule is, so the same state prints the same bytes.
+    const actionable = failing.filter((finding) => finding.remediation?.command);
+    if (actionable.length > 0) {
+      const command = findingToActOn(actionable, catalog).remediation.command;
+      // A command may be a path long enough to pass the 96-column bound (10.3), so it wraps on the
+      // gutter like every other action instead of running past the edge of the report.
+      return wrap(command, WIDTH - head.length).map((line, index) =>
+        index === 0 ? head + line : indent + line,
+      );
+    }
     // A rule at `off` never ran (9.2). The unscoped sentence would be a claim about it, so the block
     // names the set it speaks for, and says the original sentence byte for byte when nothing is off.
     if (off.length > 0) return [`${head}nothing to do among the rules that ran`];

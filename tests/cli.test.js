@@ -332,6 +332,28 @@ test('scan human output shows the verdict', async (t) => {
   assert.ok(streams.stdout.text.includes('verdict  PASS'));
 });
 
+test('a warn-only run that lists an action ends by naming that action (#360)', async (t) => {
+  // `foreign-lockfile` standing alone is a `warn`, so the default threshold passes the run. The block
+  // used to answer `nothing to do` directly under the line that named `migrate`.
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package-lock.json'), '{}\n');
+  const streams = io(dir, { root: dir });
+  const code = await run(['scan', '--scope', 'repo', '--only', 'foreign-lockfile'], streams);
+
+  assert.equal(code, 0, 'a warn at the default threshold exits 0');
+  const next = streams.stdout.text.split('\n').filter((line) => line.startsWith('next'));
+  assert.deepEqual(
+    next,
+    ['next     funky-secure migrate --from npm --apply'],
+    `the next block names the action the run lists:\n${streams.stdout.text}`,
+  );
+  assert.equal(
+    streams.stdout.text.includes('nothing to do'),
+    false,
+    'the report never contradicts the action it printed above',
+  );
+});
+
 test('explain with no argument prints the catalogue, the same bytes --list prints', async (t) => {
   const bare = io(process.cwd());
   const listed = io(process.cwd());

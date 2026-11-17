@@ -375,18 +375,36 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
          funky-secure explain lockfile-committed   what this rule wants, and why
 ```
 
-**The `next` block** names exactly one command, and it has one of four shapes, decided by the report
+**The `next` block** names exactly one command, and it has one of five shapes, decided by the report
 and by the effective policy, and read in this order:
 
 - at least one failing finding carries an `auto` remediation: `funky-secure init`, the number of
   fixes it can plan, and the fact that nothing is written yet, followed by one
   `funky-secure explain <rule>` line. `<rule>` is the highest-severity failing finding, ties broken by
   catalog order, so the same state names the same rule on every run.
+- the verdict is `pass` and a finding names a command the reader can run: that command. A pass is a
+  statement about the threshold, not about the findings: a `warn` below it still prints its action
+  above this block, so the block repeats the command rather than closing with `nothing to do`. When
+  more than one finding names a command, the highest-severity one wins, ties broken by catalog order,
+  exactly as the `explain` line above chooses its rule.
 - the verdict is `pass` and the effective policy sets a rule `off`: `nothing to do among the rules that
   ran`. The unscoped sentence would be a claim about rules the policy did not run.
 - the verdict is `pass` and no rule is off: `nothing to do: everything at or above the policy passes`.
 - the verdict is `fail` and no finding is automatic: `manual: each finding names the file, its line,
   and the action`.
+
+The second shape is the one that used to contradict itself: a foreign lockfile that stands alone is a
+`warn`, so the run passes while the finding names the migration. From `--only foreign-lockfile`:
+
+```text
+REPO-ROOT
+  ⚠  Foreign lockfile
+     package-lock.json is still present; another package manager still shapes this
+     repository
+     → funky-secure migrate --from npm --apply
+
+next     funky-secure migrate --from npm --apply
+```
 
 The block is human output only: the JSON document of RFC 10.2 gains no field for it, because a
 reader that wants the plan runs `init` for it. The rule it names is an id, never a label, because it
