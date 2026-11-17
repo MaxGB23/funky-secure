@@ -8,6 +8,7 @@
  */
 
 import { repoSkipMessage } from '../lib/scope.js';
+import { IMPORT_STEP } from '../lib/foreign-pin.js';
 
 const DOC = 'docs/rules/foreign-lockfile.md';
 const FOREIGN = ['package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb'];
@@ -17,6 +18,27 @@ function migrateCommand(files) {
   if (files.includes('package-lock.json')) return 'funky-secure migrate --from npm --apply';
   if (files.includes('yarn.lock')) return 'funky-secure migrate --from yarn --apply';
   return 'funky-secure migrate --from auto --apply';
+}
+
+/**
+ * The route to a state where the foreign lockfile can be removed (rules.md R3).
+ *
+ * `migrate` refuses while `pnpm-lock.yaml` is absent — never delete the only lockfile — so the route
+ * printed from that state creates the lockfile with `IMPORT_STEP` first and migrates after it. A
+ * remediation a reader follows into a refusal is the defect the spec sentence exists to prevent, and
+ * the reader obeys the arrow, not the page.
+ *
+ * One string joined by `&&` is what `remediation.command` already carries: `exact-versions` prints a
+ * two-step route the same way, the spec's shape is a single `command` string (report.md), and no
+ * field is invented for a sequence. The lockfile step is named only while the lockfile is missing,
+ * because coexistence already has one and the migrate clears that state alone.
+ * @param {string[]} files the foreign lockfiles found
+ * @param {boolean} pnpmLockfile whether `pnpm-lock.yaml` is present
+ * @returns {string} the command the finding prints
+ */
+function remediationCommand(files, pnpmLockfile) {
+  const migrate = migrateCommand(files);
+  return pnpmLockfile ? migrate : `${IMPORT_STEP} && ${migrate}`;
 }
 
 export default {
@@ -42,7 +64,7 @@ export default {
     'package-lock.json, yarn.lock, bun.lock or bun.lockb at the repository root. None present passes; one or more produce a single foreign-lockfile finding that lists them all. The severity follows the state, identically in baseline and in strict: a foreign lockfile that stands alone is warn, and one that coexists with pnpm-lock.yaml is error (RFC 0029, 8.2 R3).',
   evidence: '{ files, pnpmLockfile }',
   remediation:
-    'manual — funky-secure migrate --from npm --apply, or --from yarn when yarn.lock is the foreign lockfile; a bun-only repository names --from auto.',
+    'manual — pnpm import && funky-secure migrate --from npm --apply, or --from yarn when yarn.lock is the foreign lockfile; a bun-only repository names --from auto. The lockfile step is named first because migrate refuses while pnpm-lock.yaml is absent, and it is omitted once the lockfile coexists.',
   limits:
     'A foreign lockfile that stands alone is a warn, never a gate: the product recommends pnpm and does not require it, so the declared deviation from the friction table (RFC 9.1) covers that state only (0029). It lists files only: it does not read them, does not decide which tree wins and deletes nothing; the removal is step 4 of the migrate plan.',
   docs: DOC,
@@ -89,7 +111,7 @@ export default {
         code: 'foreign-lockfile',
         message,
         evidence,
-        remediation: { kind: 'manual', command: migrateCommand(files) },
+        remediation: { kind: 'manual', command: remediationCommand(files, pnpmLockfile) },
       },
     ];
   },

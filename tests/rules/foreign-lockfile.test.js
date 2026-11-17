@@ -89,7 +89,7 @@ test('a repository with only pnpm-lock.yaml passes', () => {
   assert.deepEqual(finding.evidence, { files: [], pnpmLockfile: true });
 });
 
-test('package-lock.json alone fails naming the npm migration', () => {
+test('package-lock.json alone fails naming the npm route, which creates the lockfile first', () => {
   const [finding] = rule.detect(context(['package.json', 'package-lock.json']));
 
   assert.equal(finding.status, 'fail');
@@ -98,7 +98,7 @@ test('package-lock.json alone fails naming the npm migration', () => {
   assert.deepEqual(finding.evidence, { files: ['package-lock.json'], pnpmLockfile: false });
   assert.deepEqual(finding.remediation, {
     kind: 'manual',
-    command: 'funky-secure migrate --from npm --apply',
+    command: 'pnpm import && funky-secure migrate --from npm --apply',
   });
 });
 
@@ -128,7 +128,7 @@ test('every foreign lockfile is listed in one finding', () => {
   });
   assert.deepEqual(finding.remediation, {
     kind: 'manual',
-    command: 'funky-secure migrate --from npm --apply',
+    command: 'pnpm import && funky-secure migrate --from npm --apply',
   });
 });
 
@@ -139,8 +139,24 @@ test('a bun lockfile alone names the auto migration origin', () => {
   assert.deepEqual(finding.evidence, { files: ['bun.lock'], pnpmLockfile: false });
   assert.deepEqual(finding.remediation, {
     kind: 'manual',
-    command: 'funky-secure migrate --from auto --apply',
+    command: 'pnpm import && funky-secure migrate --from auto --apply',
   });
+});
+
+test('the route names the lockfile step only while pnpm-lock.yaml is absent', () => {
+  const [alone] = rule.detect(context(['package.json', 'package-lock.json']));
+  const [beside] = rule.detect(context(['package.json', 'pnpm-lock.yaml', 'package-lock.json']));
+
+  assert.equal(
+    alone.remediation.command,
+    'pnpm import && funky-secure migrate --from npm --apply',
+    'with no lockfile the migrate refuses, so the lockfile step comes first',
+  );
+  assert.equal(
+    beside.remediation.command,
+    'funky-secure migrate --from npm --apply',
+    'coexistence already has the lockfile, so the migrate clears it alone',
+  );
 });
 
 test('outside a repository context the rule skips', () => {
@@ -246,6 +262,38 @@ async function runReal(dir, argv) {
   const stderr = capture();
   const code = await run(argv, { cwd: dir, env: process.env, stdout, stderr });
   return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+/**
+ * The route a finding prints, run as printed: every `&&`-joined step on the fixture, in order.
+ *
+ * A step the binary owns runs through `run`; a `pnpm` step runs the manager the tool's own resolver
+ * found, because on win32 the manager is a `.cmd` shim and a bare `spawnSync('pnpm')` answers ENOENT
+ * on a machine that has it. Running what the arrow prints is the only way to know a reader who obeys
+ * it does not reach a refusal (rules.md R3).
+ * @param {string} dir the repository the route runs in
+ * @param {string} command the finding's printed `remediation.command`
+ * @returns {Promise<Array<{ step: string, code: number, stdout: string, stderr: string }>>}
+ */
+async function runPrintedRoute(dir, command) {
+  const ran = [];
+  for (const step of command.split(' && ').map((piece) => piece.trim())) {
+    const argv = step.split(' ').filter((word) => word !== '');
+    if (argv[0] === 'pnpm') {
+      const pnpm = await createCollector({ cwd: dir, env: process.env }).pnpm();
+      assert.notEqual(pnpm.file, null, `the printed route names \`${step}\`, and no pnpm answers here`);
+      const child = spawnSync(pnpm.file, [...pnpm.prefixArgs, ...argv.slice(1)], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: process.env,
+      });
+      ran.push({ step, code: child.status ?? 1, stdout: child.stdout ?? '', stderr: child.stderr ?? '' });
+      continue;
+    }
+    assert.equal(argv[0], 'funky-secure', `the printed route names a step this test cannot run: ${step}`);
+    ran.push({ step, ...(await runReal(dir, argv.slice(1))) });
+  }
+  return ran;
 }
 
 test('a foreign lockfile that stands alone exits 0 under the default --fail-on error', async (t) => {
@@ -543,40 +591,49 @@ test('obligation: the printed command clears the coexistence finding on a dispos
   assert.equal(after.summary.pass, 1, 'and the cleared state is a counted pass');
 });
 
-test('obligation: with no pnpm lockfile the printed command refuses once, names pnpm import, and the sequence clears it', async (t) => {
+test('obligation: the printed route clears the standalone finding, step by step', async (t) => {
   if (!(await pnpmAnswers(t))) return;
   const dir = checkout(t, { pnpmLockfile: false, foreign: ['package-lock.json'] });
 
   const [finding] = JSON.parse((await scan(dir, ['--format', 'json'])).stdout).findings;
-  assert.equal(finding.severity, 'warn');
-  assert.deepEqual(finding.remediation, { kind: 'manual', command: 'funky-secure migrate --from npm --apply' });
+  assert.equal(finding.code, 'foreign-lockfile');
+  assert.equal(finding.severity, 'warn', 'this task moves the printed route, not the severity');
 
-  // Measured: removing the only lockfile is a refusal, not a removal, and the refusal names the step
-  // that must run first. That is the page's promise — the removal is step 4, after step 3.
+  // Run what the arrow prints, in order, and every step must exit 0 on its own. The single `migrate`
+  // this finding printed before the fix refuses here with exit 3 — never delete the only lockfile —
+  // so a reader who obeyed the arrow reached a refusal, which is the defect rules.md R3 names.
+  const ran = await runPrintedRoute(dir, finding.remediation.command);
+  for (const step of ran) {
+    assert.equal(
+      step.code,
+      0,
+      `the printed step \`${step.step}\` exited ${step.code}, so the printed route does not clear the finding:\n${step.stdout}\n${step.stderr}`,
+    );
+  }
+  assert.deepEqual(
+    ran.map((step) => step.step),
+    ['pnpm import', 'funky-secure migrate --from npm --apply'],
+    'the route creates pnpm-lock.yaml first and migrates after it',
+  );
+
+  assert.equal(existsSync(join(dir, 'package-lock.json')), false, 'the route did not remove the foreign lockfile');
+  const after = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  assert.deepEqual(after.findings, [], 'the printed route did not clear its own finding');
+  assert.equal(after.summary.pass, 1, 'and the cleared state is a counted pass');
+});
+
+/// PRESERVE: the refusal the sequence exists to avoid is unchanged. `migrate` still refuses to remove
+/// the only lockfile and still names the step that creates it; only the route the rule prints moved.
+
+test('obligation: the bare migrate on the same fixture still refuses and still names pnpm import', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
+  const dir = checkout(t, { pnpmLockfile: false, foreign: ['package-lock.json'] });
+
   const refused = await runReal(dir, ['migrate', '--from', 'npm', '--apply']);
+
   assert.equal(refused.code, 3, 'removing the only lockfile must refuse');
   assert.match(`${refused.stdout}${refused.stderr}`, /create pnpm-lock\.yaml first \(run pnpm import\)/);
   assert.equal(existsSync(join(dir, 'package-lock.json')), true, 'a refusal writes nothing');
-
-  const pnpm = await createCollector({ cwd: dir, env: process.env }).pnpm();
-  if (pnpm.file === null) {
-    t.skip(`pnpm did not answer (${pnpm.reason}), so the refusal's own next step cannot be run here`);
-    return;
-  }
-
-  const imported = spawnSync(pnpm.file, [...pnpm.prefixArgs, 'import'], {
-    cwd: dir,
-    encoding: 'utf8',
-    env: process.env,
-  });
-  assert.equal(imported.status, 0, `pnpm import failed: ${imported.stderr}`);
-
-  const applied = await runReal(dir, ['migrate', '--from', 'npm', '--apply']);
-  assert.equal(applied.code, 0, `re-running the printed command failed:\n${applied.stdout}\n${applied.stderr}`);
-
-  const after = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
-  assert.deepEqual(after.findings, []);
-  assert.equal(after.summary.pass, 1);
 });
 
 /// S4, the two formats: the same flags answer the same status, code, location and count.
