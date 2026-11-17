@@ -13,6 +13,54 @@ import { parseWorkflow } from '../lib/workflows.js';
 const FULL_SHA = /^[0-9a-fA-F]{40}$/;
 const SHORT_SHA = /^[0-9a-fA-F]{7,39}$/;
 const DOCKER_DIGEST = /@sha256:[0-9a-fA-F]{64}$/;
+const DOCKER_SCHEME = 'docker://';
+
+/**
+ * A docker reference split where Docker splits it: the tag is what follows the last `:` only when that
+ * `:` comes after the last `/`, and a reference that already carries an `@` carries a digest instead.
+ * Splitting on the last colon alone reads the scheme's own colon when the reference names no tag, a
+ * registry's port when it names one, and the algorithm's colon when it carries a digest it cannot
+ * accept, printing `uses: docker@sha256:<64 hex> # //node`,
+ * `uses: docker://registry@sha256:<64 hex> # 5000/app` and
+ * `uses: docker://alpine@sha256@sha256:<64 hex> # aaa…` — none of which is a reference the file can
+ * take, and the second silently swaps the image.
+ *
+ * @param {string} uses the whole `uses` value, scheme included
+ * @returns {{ image: string, tag: string | null, digest: string | null }} the reference without its tag
+ *   or digest, the tag, and the digest when it carries one
+ */
+function splitDocker(uses) {
+  const rest = uses.slice(DOCKER_SCHEME.length);
+  const at = rest.indexOf('@');
+  if (at !== -1) {
+    return { image: uses.slice(0, DOCKER_SCHEME.length + at), tag: null, digest: rest.slice(at + 1) };
+  }
+  const colon = rest.lastIndexOf(':');
+  if (colon === -1 || colon < rest.lastIndexOf('/')) {
+    return { image: uses, tag: null, digest: null };
+  }
+  return {
+    image: uses.slice(0, DOCKER_SCHEME.length + colon),
+    tag: rest.slice(colon + 1),
+    digest: null,
+  };
+}
+
+/**
+ * What is wrong with a container reference, as the sentence the message carries.
+ * @param {{ tag: string | null, digest: string | null }} split
+ * @returns {string}
+ */
+function dockerForm({ tag, digest }) {
+  if (digest !== null) {
+    const [algorithm, value = ''] = digest.split(':');
+    return algorithm === 'sha256'
+      ? `carries a sha256 digest of ${value.length} hex characters, not 64`
+      : `carries a ${algorithm} digest, and only sha256 is accepted`;
+  }
+  if (tag === null) return 'names no tag, so it resolves to latest and moves';
+  return 'is a mutable container tag';
+}
 
 /**
  * The shape the remediation prints, built from what the finding already knows: the action and the ref
@@ -159,18 +207,22 @@ function unpinned(path, step) {
 
   const raw = step.raw ?? uses;
 
-  if (uses.startsWith('docker://')) {
+  if (uses.startsWith(DOCKER_SCHEME)) {
     if (DOCKER_DIGEST.test(uses)) return null;
+    const split = splitDocker(uses);
     return {
       status: 'fail',
       code: 'mutable-docker-tag',
       path,
       line: step.line,
-      message: `${uses} is a mutable container tag; reference the digest instead (docker://image@sha256:<64 hex>)`,
+      message: `${uses} ${dockerForm(split)}; reference the digest instead (docker://image@sha256:<64 hex>)`,
       evidence: { uses: raw, form: 'docker-tag' },
       remediation: {
         kind: 'manual',
-        command: `uses: ${uses.slice(0, uses.lastIndexOf(':'))}@sha256:<64 hex> # ${uses.slice(uses.lastIndexOf(':') + 1)}`,
+        command:
+          split.tag === null
+            ? `uses: ${split.image}@sha256:<64 hex>`
+            : `uses: ${split.image}@sha256:<64 hex> # ${split.tag}`,
       },
     };
   }
@@ -180,7 +232,7 @@ function unpinned(path, step) {
   if (FULL_SHA.test(ref)) return null;
 
   const form = at === -1 ? 'branch' : formOf(ref);
-  const what = at === -1 ? 'names no ref' : why(form);
+  const what = at === -1 || ref === '' ? 'names no ref' : why(form);
   return {
     status: 'fail',
     code: 'unpinned-action',
@@ -224,7 +276,8 @@ export default {
     'step of a composite action under .github/actions/**/action.yml or action.yaml, whose runs: ' +
     'block is lifted into the same jobs -> job -> steps shape and read by the same reader. A uses ' +
     'value is immutable when owner/repo@<40 hex>, a local ./path, or docker://image@sha256:<64 hex>. ' +
-    'A tag (@v1), a branch (@main), a short SHA (@<7 hex>) and docker://image:tag are reported. ' +
+    'A tag (@v1), a branch (@main), a short SHA (@<7 hex>) and docker://image:tag are reported, and ' +
+    'so is docker://image (no tag, so latest) and a digest that is not 64 sha256 hex. ' +
     'A uses inside a with: map or a run: block scalar is never a step. An unparseable workflow skips. ' +
     'An action metadata file that declares no top-level runs: skips (not-an-action), and one the ' +
     'reader cannot attribute skips (unparseable-action); a javascript or docker action declares no ' +
@@ -233,7 +286,9 @@ export default {
     'file:line, the raw reference as written (quotes and trailing comment included) and the form: ' +
     'tag, branch, short-sha or docker-tag. A trailing version comment is evidence, never trusted.',
   remediation:
-    'Manual, printed as uses: owner/repo@<sha> # vX.Y.Z. The tool does not resolve the SHA: that is ' +
+    'Manual, printed as uses: owner/repo@<sha> # vX.Y.Z, and as uses: docker://registry:port/image' +
+    '@sha256:<64 hex> # tag for a container reference, which keeps its registry and its port. ' +
+    'The tool does not resolve the SHA: that is ' +
     'a network call (gh api repos/owner/repo/git/refs/tags/vX.Y.Z) and v0.1 makes none.',
   limits:
     'Proves the reference is a full commit SHA, not that the SHA is the release the comment claims. ' +

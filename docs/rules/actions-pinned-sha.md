@@ -17,7 +17,15 @@ attributes each step to its job, and the rule decides per step with a `uses` val
 - `owner/repo@v1`, `owner/repo@main` and `owner/repo@abc1234` fail as `unpinned-action` with
   `form` `tag`, `branch` or `short-sha`.
 - `docker://image:tag` fails as `mutable-docker-tag`; `docker://image@sha256:<64 hex>` passes.
+- `docker://image` with no tag at all fails the same way: Docker resolves `latest` for it, which
+  moves under you exactly as a tag does, so the message says it names no tag instead of calling
+  `latest` one. The tag is the part a reader recognises; the digest is the part that makes the
+  reference immutable.
 - `./path` is a local action and passes.
+
+The image is read the way Docker reads it: only a `:` that comes after the last `/` is a tag, so
+`docker://registry:5000/image:1.2` is the image `docker://registry:5000/image` at tag `1.2`, and
+`docker://registry:5000/image` is that image with no tag rather than a tag of `5000/image`.
 
 The form is a lexical classification, not a git lookup: a `v`-prefixed or dotted numeric ref is a
 tag, an all-hex ref shorter than 40 characters is a short SHA, and everything else is a branch. No
@@ -31,6 +39,9 @@ codes: `not-an-action` when the file declares no top-level `runs:` block, so no 
 attributed, and `unparseable-action` when it declares one the reader cannot attribute. Neither is a
 pass: a file the tool could not read is not a file it verified.
 
+When the repository is out of scope — `scan --scope machine` — the rule skips with `no-repo` and says
+the repository was excluded, because there is no workflow to read at that scope.
+
 ## Evidence
 
 `file:line`, the raw reference exactly as written — quotes and trailing comment included — and the
@@ -43,7 +54,12 @@ Manual, with the exact shape printed:
 
 ```yaml
 uses: actions/checkout@<sha> # v4.1.7
+uses: docker://alpine@sha256:<64 hex> # 3.20
 ```
+
+A container reference keeps its image, its registry and its port — `docker://registry:5000/app:1.2`
+prints `uses: docker://registry:5000/app@sha256:<64 hex> # 1.2` — and one that named no tag prints no
+comment, because there is no tag to keep.
 
 The tool does not resolve the SHA. Resolving it is `git ls-remote <host>/<owner>/<repo>
 refs/tags/<tag>`, a network call, and the tool makes none (RFC 4.9); the tag stays in the finding as
@@ -54,7 +70,10 @@ command is documented here instead of being run for you.
 
 - The rule proves a reference is a full commit SHA. It does not prove the SHA is the release the
   comment claims, and it does not check what the action does.
-- Container references are checked for a digest, not for the image's provenance.
+- Container references are checked for a digest, not for the image's provenance. A digest that is
+  not 64 sha256 hex — a truncated one, or another algorithm — is reported as `mutable-docker-tag`
+  with the character count or the algorithm named, and the printed form replaces the digest rather
+  than appending to it.
 - A ref that is neither version-shaped nor all-hex is labelled a branch. The label is lexical; the
   finding is the same whichever branch or tag it is. A remote `uses` with no ref at all is reported
   the same way, because it names no commit.
