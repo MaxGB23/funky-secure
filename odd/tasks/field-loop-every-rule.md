@@ -23,10 +23,14 @@ the message), and it is **off by policy** (it contributes neither a finding nor 
 reached on this machine is written as not reachable with its reason — never as covered.
 
 **S4** — four sides are the floor, not the depth. Every rule also owes: **the remediation is true** — where the
-finding carries a `remediation` command, running it on a disposable copy clears that finding, and where it says
-`none`, no command exists that would; **the two formats agree** — the same flags in human and `--format json`
-produce the same status, the same `code`, the same `path` and the same count; and **the page agrees** — the
-rule's `docs/rules/<id>.md` describes what the run actually does, or the page is corrected in the same commit.
+finding carries a `remediation` command, running it on a disposable copy clears that finding **and changes
+nothing else the author wrote**: the printed edit may touch only what the finding names, so a remediation that
+silences a finding by discarding a build step, swapping an image or dropping a flag is a defect of the product,
+never a test to loosen; and where it says `none`, no command exists that would; **the two formats agree** — the
+same flags in human and `--format json` produce the same status, the same `path`, the same count and the same
+message, never a `code`, because `src/lib/render-human.js` prints none; and **the page agrees** — the rule's
+`docs/rules/<id>.md` describes what the run actually does, and does not hide the fact that decides a side, or
+the page is corrected in the same change.
 
 **S5** — a fixture is taken from the agent's own files, never retyped by the person who wrote the parser: a
 fixture written by the same hand exercises only the shape its author imagined. Where the finding is an absence,
@@ -177,3 +181,35 @@ directory, which also made `sensitive-ignored` report repository-anchored rules 
 subdirectory; `foreign-lockfile` and `quarantine` held every side and each had a page that was wrong;
 `env-not-tracked` held every side and its record was wrong about reachability. Two of the six needed no source
 change, and saying so is part of the evidence.
+
+**L6** — what rules seven to ten measured back into this document, and the first entry is the one that changes
+how every remaining task is judged.
+- **`S4` — "it clears the finding" is necessary and it is not sufficient, and that gap cost two defects.** The
+  obligation as written could be satisfied by a remediation that destroys something else the author wrote, and
+  twice it was. `actions-pinned-sha` printed `uses: docker://registry@sha256:…` for `docker://registry:5000/app`:
+  the finding disappears, the image is now `registry`, and a reviewer reading a 40-hex pin approves the change
+  (#379). `ci-no-safety-overrides` printed `run: pnpm install --frozen-lockfile` for
+  `run: pnpm install --no-frozen-lockfile && pnpm build`: the finding disappears and the build step is gone
+  (#383). The obligation is now **clears the finding and changes nothing else**, and the test that proves it
+  diffs everything the printed edit did not name.
+- **`S4` — a page can be true and still mislead.** `no-bot-auto-merge` said "the line is the 1-based line of the
+  step the finding reports", which is not false; the reader needs "where the step **begins**", because a step
+  written `- name: enable automerge` above its `uses:` is reported one line above the action, and the edit is the
+  whole step — deleting that one line orphans the next. A sentence whose omission hides the fact the reader acts
+  on is now inside the page obligation.
+- **`S3` — "off by policy" has two mechanisms, and a rule can have both.** `no-bot-auto-merge` is off under
+  `starter` **and** under `--ignore`/`--only`/config; `ci-no-safety-overrides` likewise. Recording only "which
+  preset" would have hidden the flag path, and recording only the flags would have missed that a preset decides
+  it silently.
+- **A rule that resists is a result, not a failure to find something.** Seven of the ten measured rules needed
+  no source change at all: `foreign-lockfile`, `quarantine`, `exact-versions`, `env-not-tracked`,
+  `sensitive-ignored`, `no-bot-auto-merge` and `ci-no-safety-overrides` held on every side they were asked to
+  justify. Three needed code — `package-manager-pin`, `lockfile-committed`, `actions-pinned-sha` — and one
+  needed a fix that belongs to no rule at all (the collector's git coordinate, #347). What was wrong in the
+  seven was the **record**: pages silent on the fact deciding a side, and one spec
+  (`docs/spec/rules.md:259`) promising a manual alternative no command prints (#375). The loop is not a hunt for
+  changes, and a rule that answers is written down as answering.
+- **The printed-remediation class is now the loop's largest single finding.** Six of the defects found so far are
+  the same shape: a command or a line the tool prints that does not do what its own sentence says — #359, #361,
+  #368, #373, #379 and #383. That is worth naming in the closing record, because it is a property of how
+  remediations are written, not thirteen unrelated bugs.
