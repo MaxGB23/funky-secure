@@ -17,8 +17,10 @@ funky-secure scan [--scope auto|repo|machine|all] [--preset baseline|strict|star
 
 - Read-only, always. No file is created, modified or removed, in any scope.
 - Default: `--scope auto`, `--format human`, `--fail-on error`, preset from config or `baseline`.
-- `--strict-probes`: a required probe that is unavailable becomes `error` (exit `2`) instead of
-  `skip`. CI uses it to refuse a green build that measured nothing.
+- `--strict-probes`: a required probe that is unavailable becomes `error` instead of `skip`, and the run
+exits as the threshold says — `1` at the default `--fail-on error`, never `2`, because an escalated
+finding is a policy violation and `2` is reserved for a run that could not answer the question (10.4).
+CI uses it to refuse a green build that measured nothing.
 - `--require-verified`: a skipped rule makes the verdict `fail` and the run exits `1`, and
   `policy.requireVerified` records that the gate asked for it. Without the flag a skip is never a
   failure, because not knowing is not a violation (0023).
