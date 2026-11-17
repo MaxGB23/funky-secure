@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { run } from '../../src/cli.js';
 import { resolvePolicy } from '../../src/lib/policy.js';
+import { collectScan } from '../../src/lib/scan.js';
+import { createCollector } from '../../src/lib/probes.js';
 import { BEGIN, END } from '../../src/lib/managed-block.js';
 import rule from '../../src/rules/quarantine.js';
 
@@ -287,4 +291,307 @@ test('a minimumReleaseAge that is not a number is a skip, not a coerced zero', (
   assert.equal(finding.status, 'skip');
   assert.equal(finding.code, 'unreadable-minimum-release-age');
   assert.equal(finding.probeUnavailable, true);
+});
+
+/// S3's four sides and S4's obligations, measured with the real probes. `pnpm config list --json`
+/// runs with `cwd` = the invocation directory, so a fixture's own `pnpm-workspace.yaml` is the
+/// effective gate: that is what makes the failing side reachable at all (the plan's L3).
+
+/**
+ * The fixture bytes the field loop measured: a workspace file that sets the flag false. Recorded
+ * here byte for byte because a fixture retyped from prose exercises only the shape its author
+ * imagined (S5).
+ */
+const NOT_STRICT = 'minimumReleaseAge: 4320\nminimumReleaseAgeStrict: false\n';
+/** A real gate, shorter than the strict preset's 4320-minute floor. */
+const BELOW_FLOOR = 'minimumReleaseAge: 1440\nminimumReleaseAgeStrict: true\n';
+/** The shape `init --apply` writes: the managed block carries the gate and the baseline floor. */
+const GATE_BLOCK = [BEGIN, 'minimumReleaseAgeStrict: true', 'minimumReleaseAge: 4320', END, ''].join('\n');
+const IDENTITY = [
+  '-c',
+  'user.email=82458865+MaxGB23@users.noreply.github.com',
+  '-c',
+  'user.name=MaxGB23',
+];
+
+function capture() {
+  return {
+    text: '',
+    write(chunk) {
+      this.text += chunk;
+      return true;
+    },
+    isTTY: false,
+  };
+}
+
+/**
+ * One CLI run over a fixture, with the real probes.
+ * @param {string} dir
+ * @param {string[]} argv
+ * @returns {Promise<{ code: number, stdout: string, stderr: string }>}
+ */
+async function cliOn(dir, argv) {
+  const stdout = capture();
+  const stderr = capture();
+  const code = await run(argv, { cwd: dir, env: process.env, stdout, stderr });
+  return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+function scanOn(dir, argv) {
+  return cliOn(dir, ['scan', ...argv]);
+}
+
+async function reportOf(dir, argv) {
+  const { code, stdout, stderr } = await scanOn(dir, [...argv, '--format', 'json']);
+  assert.equal(stderr, '');
+  return { code, report: JSON.parse(stdout) };
+}
+
+/**
+ * The counts and verdict the human report prints, read back out of its own lines: a parity test that
+ * trusted the JSON alone would compare a format with itself.
+ * @param {string} text
+ * @returns {{ error: number, warn: number, info: number, pass: number, skip: number, verdict: string }}
+ */
+function humanSummary(text) {
+  const counts = /^summary {2}(\d+) errors? · (\d+) warnings? · (\d+) info · (\d+) passing · (\d+) skipped$/m.exec(text);
+  assert.ok(counts !== null, `the human report printed no summary line:\n${text}`);
+  const verdict = /^verdict {2}(PASS|FAIL)/m.exec(text);
+  assert.ok(verdict !== null, `the human report printed no verdict line:\n${text}`);
+  const [error, warn, info, pass, skip] = counts.slice(1).map(Number);
+  return { error, warn, info, pass, skip, verdict: verdict[1] };
+}
+
+const collapsed = (text) => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * Whether a pnpm answers here, asked through the resolver the tool already owns: on win32 the manager
+ * is a `.cmd` shim, so a bare `spawnSync('pnpm')` answers ENOENT on a machine that has it. The
+ * release-age gate is read from the project's own configuration through `pnpm config list --json`,
+ * so a host without pnpm cannot measure either fail code or the pass. Skipping is honest; a test may
+ * not claim a measurement it did not make.
+ * @param {object} t the test context
+ * @returns {Promise<boolean>} false when the caller must return
+ */
+async function pnpmAnswers(t) {
+  const resolved = await createCollector({ cwd: process.cwd(), env: process.env }).pnpm();
+  if (resolved.file !== null) return true;
+  t.skip(`pnpm did not answer (${resolved.reason}), so the release-age gate cannot be read here`);
+  return false;
+}
+
+function fixtureDir(t) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-quarantine-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+/** A directory whose own `pnpm-workspace.yaml` holds `workspace`; no repository is needed. */
+function workspaceFixture(t, workspace) {
+  const dir = fixtureDir(t);
+  writeFileSync(join(dir, 'pnpm-workspace.yaml'), workspace);
+  return dir;
+}
+
+/** A committed repository, for the scopes and the commands that need one. */
+function repositoryFixture(t, workspace, { config = null } = {}) {
+  const dir = fixtureDir(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "quarantine-fixture",\n  "private": true\n}\n');
+  if (workspace !== null) writeFileSync(join(dir, 'pnpm-workspace.yaml'), workspace);
+  if (config !== null) writeFileSync(join(dir, 'funky-secure.config.json'), config);
+  for (const args of [['init', '-q', '-b', 'main'], ['add', '-A'], ['commit', '-qm', 'fixture']]) {
+    execFileSync('git', [...IDENTITY, ...args], { cwd: dir, encoding: 'utf8' });
+  }
+  return dir;
+}
+
+test('fails with quarantine-not-strict from a fixture whose own pnpm-workspace.yaml sets the flag false', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
+  const dir = workspaceFixture(t, NOT_STRICT);
+  assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), NOT_STRICT);
+
+  const { code, report } = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  const [finding] = report.findings;
+
+  assert.equal(code, 0, 'a warning at the default threshold does not fail the run');
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'quarantine-not-strict');
+  assert.equal(finding.severity, 'warn');
+  assert.equal(
+    finding.message,
+    'quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (configured 4320)',
+  );
+  assert.deepEqual(finding.evidence, {
+    effective: 4320,
+    inherited: false,
+    strict: false,
+    policy: 1440,
+    exclusions: [],
+  });
+  assert.deepEqual(finding.remediation, { kind: 'auto', command: 'funky-secure init --apply' });
+  assert.deepEqual(report.summary, { error: 0, warn: 1, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+
+  // `--fail-on warn` is the flag a CI uses to make this a gate; the default lets a warning through.
+  assert.equal((await scanOn(dir, ['--scope', 'machine', '--only', 'quarantine', '--fail-on', 'warn'])).code, 1);
+
+  const human = await scanOn(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  assert.equal(human.code, code);
+  assert.match(human.stdout, /^ {2}⚠ {2}Quarantine$/m);
+  assert.ok(
+    collapsed(human.stdout).includes(collapsed(finding.message)),
+    'the human report carries the message the JSON document carries',
+  );
+  assert.deepEqual(humanSummary(human.stdout), {
+    error: 0,
+    warn: 1,
+    info: 0,
+    pass: 0,
+    skip: 0,
+    verdict: 'PASS',
+  });
+});
+
+test('fails with quarantine-below-policy when the gate is real and shorter than the strict floor', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
+  const dir = workspaceFixture(t, BELOW_FLOOR);
+  assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), BELOW_FLOOR);
+
+  const { code, report } = await reportOf(dir, [
+    '--scope',
+    'machine',
+    '--only',
+    'quarantine',
+    '--preset',
+    'strict',
+  ]);
+  const [finding] = report.findings;
+
+  assert.equal(code, 1);
+  assert.equal(finding.status, 'fail');
+  assert.equal(finding.code, 'quarantine-below-policy');
+  assert.equal(finding.severity, 'error');
+  assert.equal(finding.message, 'quarantine is 1440 minutes, below the 4320-minute policy floor');
+  assert.deepEqual(finding.evidence, {
+    effective: 1440,
+    inherited: false,
+    strict: true,
+    policy: 4320,
+    exclusions: [],
+  });
+  assert.deepEqual(report.summary, { error: 1, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'fail' });
+
+  const human = await scanOn(dir, ['--scope', 'machine', '--only', 'quarantine', '--preset', 'strict']);
+  assert.equal(human.code, code);
+  assert.match(human.stdout, /^ {2}✖ {2}Quarantine$/m);
+  assert.ok(collapsed(human.stdout).includes(finding.message));
+
+  // The same fixture meets the baseline floor of the active major, so only the preset decides the code.
+  const baseline = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  assert.deepEqual(baseline.report.summary, {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 1,
+    skip: 0,
+    verdict: 'pass',
+  });
+});
+
+test('passes on this host with the pass counted, and both formats print that count', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
+  const dir = workspaceFixture(t, GATE_BLOCK);
+
+  const { report } = await collectScan({
+    cwd: dir,
+    env: process.env,
+    scope: 'machine',
+    only: ['quarantine'],
+    catalog: [rule],
+  });
+  const [finding] = report.findings;
+  assert.equal(finding.status, 'pass');
+  assert.equal(finding.message, 'quarantine is a 4320-minute strict gate (policy floor 1440)');
+  assert.equal(finding.evidence.strict, true);
+
+  const json = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  assert.deepEqual(json.report.summary, {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 1,
+    skip: 0,
+    verdict: 'pass',
+  });
+  assert.deepEqual(json.report.findings, [], 'a pass is counted, not listed');
+
+  const human = await scanOn(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  assert.equal(human.code, json.code);
+  assert.match(human.stdout, /^ {5}all 1 rule pass$/m);
+  assert.deepEqual(humanSummary(human.stdout), {
+    error: 0,
+    warn: 0,
+    info: 0,
+    pass: 1,
+    skip: 0,
+    verdict: 'PASS',
+  });
+});
+
+test('skips at repository scope with machine-out-of-scope, naming the fact it did not verify', async (t) => {
+  const dir = repositoryFixture(t, NOT_STRICT);
+
+  const { code, report } = await reportOf(dir, ['--scope', 'repo', '--only', 'quarantine']);
+  const [finding] = report.findings;
+
+  assert.equal(code, 0);
+  assert.equal(finding.status, 'skip');
+  assert.equal(finding.code, 'machine-out-of-scope');
+  assert.equal(finding.probeUnavailable, undefined, 'a scope contract skip is not an unavailable probe');
+  assert.deepEqual(finding.remediation, { kind: 'none' });
+  assert.equal(
+    finding.message,
+    'skipped: the quarantine was not verified because the machine configuration is out of scope; run funky-secure scan --scope all to verify the release-age gate',
+  );
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 1, verdict: 'pass' });
+});
+
+test('no preset turns it off, and the policy that does leaves neither a finding nor a count', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
+  const dir = workspaceFixture(t, NOT_STRICT);
+
+  // `starter` runs this rule at its `baseline` severity, so the finding is still reached.
+  const starter = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine', '--preset', 'starter']);
+  assert.equal(starter.report.findings[0].code, 'quarantine-not-strict');
+
+  // `--ignore` wins over `--only`, so the rule is not even narrowed back in.
+  const ignored = await reportOf(dir, ['--scope', 'machine', '--ignore', 'quarantine', '--only', 'quarantine']);
+  assert.deepEqual(ignored.report.findings, []);
+  assert.deepEqual(ignored.report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+
+  const off = repositoryFixture(t, NOT_STRICT, { config: '{\n  "rules": {\n    "quarantine": "off"\n  }\n}\n' });
+  const configured = await reportOf(off, ['--scope', 'all', '--only', 'quarantine']);
+  assert.deepEqual(configured.report.findings, []);
+  assert.deepEqual(configured.report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  const human = await scanOn(off, ['--scope', 'all', '--only', 'quarantine']);
+  assert.match(human.stdout, /off by policy: Quarantine/);
+});
+
+test('the remediation is true: init --apply writes the gate and the finding clears', async (t) => {
+  if (!(await pnpmAnswers(t))) return;
+  const dir = repositoryFixture(t, [BEGIN, 'minimumReleaseAgeStrict: false', 'minimumReleaseAge: 4320', END, ''].join('\n'));
+
+  const before = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  assert.equal(before.report.findings[0].code, 'quarantine-not-strict');
+
+  const init = await cliOn(dir, ['init', '--apply']);
+  assert.equal(init.code, 0, init.stderr);
+
+  const written = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
+  assert.match(written, /^minimumReleaseAgeStrict: true$/m);
+  assert.match(written, /^minimumReleaseAge: 1440$/m);
+
+  const after = await reportOf(dir, ['--scope', 'machine', '--only', 'quarantine']);
+  assert.deepEqual(after.report.findings, []);
+  assert.equal(after.report.summary.pass, 1);
 });

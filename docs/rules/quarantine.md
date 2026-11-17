@@ -41,7 +41,15 @@ the floor. Two failure codes keep the reasons distinguishable without parsing a 
 - `quarantine-not-strict` — auto-approval mode. The message names the effective value and whether it
   is inherited or configured, for example
   `quarantine is non-strict: pnpm auto-approves immature packages by writing minimumReleaseAgeExclude (inherited 1440)`.
-- `quarantine-below-policy` — a real gate, shorter than the preset floor.
+- `quarantine-below-policy` — a real gate, shorter than the preset floor, for example
+  `quarantine is 1440 minutes, below the 4320-minute policy floor`.
+
+The human report prints **no `code` line**, so the sentence is how a reader tells the two apart:
+non-strict always begins `quarantine is non-strict:`, below-policy always names the two numbers in
+`quarantine is <effective> minutes, below the <floor>-minute policy floor`. The `code` itself is in
+the `--format json` document. `quarantine-below-policy` needs the `4320` strict floor —
+`--preset strict` or `quarantineMinutes` in `funky-secure.config.json` — because under `baseline`
+the floor is the built-in `1440` and a strict 1440-minute gate passes.
 
 No configuration at all (`pnpm config list --json` unavailable) is `skip: no-pnpm-config` with
 `probeUnavailable: true`, so `--strict-probes` turns it into an error instead of a silent pass. A
@@ -60,6 +68,18 @@ verifies it:
 Friction 2 would be `warn` in both presets; `strict` promotes it because that is the author's own
 bar, while `baseline` only warns on the inherited non-strict default so the rule stays adoptable
 anywhere.
+
+The severity is also the exit code, and a reader should not learn that from a CI log: under
+`baseline` a `quarantine-not-strict` is a **warning**, so the report says `verdict PASS` and the run
+exits `0` while the finding stands. `--fail-on warn` makes that run exit `1`; `--preset strict`
+promotes the finding to `error` and exits `1` on its own. `quarantine-below-policy` under `strict`
+is an `error` and exits `1`.
+
+**No preset turns this rule off.** `starter` runs it at its `baseline` severity and `strict`
+promotes it, so the only way it contributes neither a finding nor a count is a policy decision:
+`--ignore quarantine`, an `--only` list that names other rules, or `"rules": { "quarantine": "off" }`
+in `funky-secure.config.json`. The flag forms drop it from the run without a trace in the report; the
+config form also prints the `not run  12 of 13 rules; off by policy: Quarantine` line.
 
 ## Evidence
 
@@ -90,6 +110,13 @@ would otherwise make this rule pass and the block would never be written, harden
 only on that one laptop. The effective value above stays the finding's evidence; it is never a plan
 input. The same key declared **outside** the block is refused as a conflict — two sources for one
 setting is the defect this product reports.
+
+That refusal is what the finding's `auto` command does on the repository whose own
+`pnpm-workspace.yaml` hand-wrote the flag, which is the shape a field run measured: `init --apply`
+prints `pnpm-workspace.yaml already declares minimumReleaseAgeStrict outside the managed block; two
+sources for one setting are not written` and the finding stands until the hand-written key is
+removed. The command clears the finding when the key sits **inside** the managed block, where the
+write rewrites that block instead of adding a second source.
 
 Manual equivalents: `pnpm config set minimum-release-age-strict true --location=project` and
 `pnpm config set minimum-release-age 4320 --location=project`. In pnpm 12 both write
