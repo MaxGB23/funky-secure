@@ -71,8 +71,8 @@ no state outside `SUCCESS`, `SKIPPED` and `NEUTRAL`.
 Each rule task follows the same shape: the four sides of `S3`, the three obligations of `S4`, fixtures under
 `S5`, and its own commit. `T14`–`T16` are the axes that belong to no single rule.
 
-- **T1** — `package-manager-pin`. Fails with `pin-missing` (no declaration), `pin-unversioned` (a pin with no version) and `pin-conflict`; **passes** with `pin-differs-from-machine`, which is information and not a conflict — the repository is the authority and pnpm honours it inside the project, so the machine's own version rides along as evidence; skips with `no-package-json`, and with `no-pnpm` when the probe does not answer. Page: `docs/rules/package-manager-pin.md`. `S3`, `S4`.
-- **T2** — `lockfile-committed`. Fails for absent, untracked and ignored, passes when tracked, skips with `no-repo-root`. **Its remediation is never `none`**: each fail carries the command a person runs — `pnpm install`, `git add [-f] pnpm-lock.yaml`, `git check-ignore -v pnpm-lock.yaml` — and the task proves each one clears its own finding.
+- **T1** — `package-manager-pin`. Fails with **four** codes: `unparseable-package-json`, `pin-missing` (no declaration), `pin-unversioned` (a pin with no version) and `pin-conflict`; **passes** with `pin-differs-from-machine`, which is information and not a conflict — the repository is the authority and pnpm honours it inside the project, so the machine's own version rides along as evidence; skips with `no-package-json`, with `no-pnpm` when the probe does not answer, with `not-pnpm` when another manager owns the repository, and with `self-managed-pin` when the pin is managed elsewhere. Page: `docs/rules/package-manager-pin.md`. `S3`, `S4`.
+- **T2** — `lockfile-committed`. Fails for absent, untracked and ignored, passes when tracked, skips with `no-repo-root`. **No fail of this rule remediates with `none`** — its skips and passes do, by design — because each fail carries the command a person runs: `pnpm install`, `git add [-f] pnpm-lock.yaml`, `git check-ignore -v pnpm-lock.yaml`, and the task proves each one clears its own finding.
 - **T3** — `foreign-lockfile`. Fails at `error` beside a `pnpm-lock.yaml` and at `warn` when no pnpm lockfile exists, passes on the eight-of-ten shape measured in `docs/validation.md:76` — a run, not a page — and skips with `no-repo-root`.
 - **T4** — `quarantine`. Fails with `quarantine-not-strict` and `quarantine-below-policy` from **fixtures**, since the effective configuration is read from the invocation directory; passes on this host with its own sentence; skips at repository scope. Its page must say which of the two the reader is looking at.
 - **T5** — `exact-versions`. Fails on a floating range and on a `lockfile-desync`, passes on exact specifiers, skips with `unparseable-package-json`. The desync fixture already exists at `tests/rules/exact-versions.test.js:301`; the task starts from it instead of inventing one.
@@ -103,17 +103,38 @@ per rule, and the plan is judged by judges before it is implemented.
   `quarantine-not-strict` from a fixture whose `pnpm-workspace.yaml` sets `minimumReleaseAgeStrict: false`,
   because that configuration is read with `cwd` = the invocation directory. The run is the fact, the reading
   loses, and the wording that made it plausible — "it reads only the machine config" — is true and was the
-  misleading part.
+  misleading part. The command, so the next reader can re-run it: a directory whose `pnpm-workspace.yaml` holds
+  `minimumReleaseAgeStrict: false` and `minimumReleaseAge: 4320`, then `node bin/funky-secure.js scan --scope
+  machine --format json` from it, which answers `quarantine` `fail` `quarantine-not-strict` — "quarantine is
+  non-strict: pnpm auto-approves immature packages by writing …".
 - **Won, verified here by reading**: `workflow-run-artifact`'s failing side already has fixtures
   (`tests/fixtures/workflows/workflow-run-pair/`, asserted at `:89`), so "nobody has built" was false;
   `pin-differs-from-machine` is a **pass**, not a fail, so `T1` named a side that does not exist; the rule has
-  three fail codes, not two; `lockfile-committed` never remediates with `none`; a `lockfile-desync` fixture
-  already exists; `workflow-permissions-missing` is one finding per workflow at `line: 1`, not one per job;
-  the eight-of-ten count lives in `docs/validation.md:76` and not on the rule page; the mutation round is at
-  `:167-179`; `S10` omitted `open-pr.js` and the spec-first rule; `S7` attributed a question set to the protocol
-  that its own rule 9 forbids, and dropped the rule that a judge never reviews its own correction.
+  **four** fail codes, not two; `lockfile-committed` never remediates a fail with `none`; a `lockfile-desync`
+  fixture already exists; `workflow-permissions-missing` is one finding per workflow at `line: 1`, not one per
+  job; the eight-of-ten count lives in `docs/validation.md:76` and not on the rule page; the mutation round is
+  at `:167-179`; `S10` omitted `open-pr.js` and the spec-first rule; `S7` attributed a question set to the
+  protocol that its own rule 9 forbids, and dropped the rule that a judge never reviews its own correction.
 - **Lost**: the second judge's claim that the quarantine deferral was real, refuted by the run above. Also lost,
   as requirements: the same judge's reading of `T5` as unverifiable rather than false — it is false, and the
   fixture that decides it is cited now.
 - **Adopted from a judge, not from the plan**: that `T3`'s citation was wrong at the commit it named, which is
   the flow contract's own rule about citations — never stale, always unread.
+
+**L4** — round two's adjudication, and it is the round that earned its place: it found false claims **introduced
+by the corrections themselves**, which is the only thing that round exists to catch.
+- **Won**: `T1` claimed three fail codes where the rule has **four** — `unparseable-package-json` was missed by
+  the original and by its correction, and the enumeration also omitted three skips (`no-pnpm`, `not-pnpm`,
+  `self-managed-pin`). `lockfile-committed`'s "never `none`" was true of its fails and false of the rule, since
+  its skips and passes default to `none`; the sentence is scoped to fails now. Both were verified against
+  `src/rules/package-manager-pin.js:155,220,314,334,171,234,256` and `src/rules/lockfile-committed.js:17,45-51`.
+- **Refused**: that the quarantine run is unverifiable. The judge could not certify a run it did not execute,
+  which is the protocol working exactly as written; the command and its output are in `L3` now, so the claim
+  stops resting on the parent's word.
+- **Disclosed by the judge, and worth keeping**: `HEAD` moved from `5409240` to `48e5442` while it read, with
+  identical trees — the commit was re-seated onto the plan's branch after it had landed on `main` by mistake.
+  The file hash `e495f605…` never changed, which is why the round stayed valid; a hash of the commit would have
+  failed where a hash of the artifact did not.
+
+Two rounds is the cap and the third is a human decision. Nothing left in round two is worth one: what remains is
+wording, and the wording is fixed.
