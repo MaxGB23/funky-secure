@@ -61,7 +61,7 @@ exceptions named.
 2. **It can fail for its own reason.** Delete the source line it pins and it goes red. Asserting that something is
    a function, or that two calls in one process agree, satisfies no promise: `tests/report.test.js:552` compares
    `renderHuman(x)` with `renderHuman(x)` under a name that claims determinism on every run, and
-   `tests/rules/ci-no-safety-overrides.test.js:120` asserts `typeof rule.detect === 'function'`, which a rule
+   `tests/rules/ci-no-safety-overrides.test.js:121` asserts `typeof rule.detect === 'function'`, which a rule
    returning `[]` for every input still passes. Those are the shape to avoid.
 
 3. **Every observable effect of the change is asserted somewhere, and the rule's own test asserts its verdict and
