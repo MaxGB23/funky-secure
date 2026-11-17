@@ -345,16 +345,20 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Detection:** every workflow through the structural reader. The trigger is read only from the
   top-level `on:` key — as a value, a flow collection or a block key — so a token in a `run:` body, a
   comment or a job `if:` is not a declaration. In a workflow that declares `pull_request_target`, each
-  step is checked for a checkout of the head: an `actions/checkout` step whose `with.ref` is
-  `github.event.pull_request.head.sha`, `github.event.pull_request.head.ref` or `github.head_ref`
-  (`pull-request-target-checkout`), or a `run:` command that checks one of them out with
-  `git checkout` or `gh pr checkout`. Each offending step is one failure at the step line. The
-  trigger without a head checkout is one pass (`pull-request-target-without-head-checkout`); a
-  workflow set that never declares the trigger is one pass (`no-pull-request-target`); no workflow at
-  all skips (`no-ci`) and an unparseable workflow skips (`unparseable-workflow`), without a pass on
-  top.
-- **Evidence:** the job, the step index, the kind (`uses` or `run`) and the raw expression that checks
-  the head out, at the step line. A `run:` step reports the command that carries the expression.
+  step is checked for a checkout of the head: an `actions/checkout` step whose `with.ref` names the
+  head (`pull-request-target-checkout`), or a `run:` command that checks it out. The head is named in
+  one of two ways, and both count. It is named by an **expression** —
+  `github.event.pull_request.head.sha`, `github.event.pull_request.head.ref` or `github.head_ref` — or
+  by the **reference a pull request number addresses**: `refs/pull/<number>/head` and
+  `refs/pull/<number>/merge`, and `gh pr checkout <number>`, and a `pull/<number>/head` fetch followed
+  by a `FETCH_HEAD` checkout. A number-addressed head is recognized from the literal reference and
+  never by evaluating anything, so it needs no resolution and the Limits below do not reach it. Each
+  offending step is one failure at the step line. The trigger without a head checkout is one pass
+  (`pull-request-target-without-head-checkout`); a workflow set that never declares the trigger is one
+  pass (`no-pull-request-target`); no workflow at all skips (`no-ci`) and an unparseable workflow skips
+  (`unparseable-workflow`), without a pass on top.
+- **Evidence:** the job, the step index, the kind (`uses` or `run`) and the raw expression or reference
+  that checks the head out, at the step line. A `run:` step reports the command that carries it.
 - **Severity:** `error` in `baseline` and in `strict`, a declared deviation from 9.1, where friction 1
   starts at `warn` in `baseline`: the finding fires only on the combination of the trigger and a head
   checkout, removing either half is one edit, and no repository that never writes
@@ -364,10 +368,11 @@ the pin alone is the declaration, and nothing about it is skipped.
   remove the step that checks the pull request head out, so the workflow never runs fork code with
   this repository's secrets. The tool never edits a workflow.
 - **Limits:** proves that a declared workflow event and a declared step name the combination. It does
-  not read whether the job has secrets, does not evaluate `permissions:`, does not resolve the
+  not read whether the job has secrets, does not evaluate `permissions:`, does not resolve an
   expression — whether that ref is the fork head at run time is not decided here — and does not decide
-  whether the checked-out code is built or executed. A workflow the reader cannot attribute is skipped
-  per file; the rule never guesses from a line scan.
+  whether the checked-out code is built or executed. A number-addressed head is the exception that
+  proves the rule: `refs/pull/7/head` is a literal, so it is recognized without resolving anything. A
+  workflow the reader cannot attribute is skipped per file; the rule never guesses from a line scan.
 
 #### R12 — `workflow-permissions` · friction 1 · sev `warn`/`error` · fix `manual`
 
