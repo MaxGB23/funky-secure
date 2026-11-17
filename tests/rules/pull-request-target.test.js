@@ -504,7 +504,15 @@ test('side three: no-ci, unparseable-workflow and no-repo name their fact, and n
     assert.equal(report.findings.length, 1, shape);
     assert.equal(report.findings[0].status, 'skip', shape);
     assert.equal(report.findings[0].code, 'no-ci', shape);
-    assert.match(report.findings[0].message, /^skipped: /, shape);
+    // Issue #390: the fact measured is that no workflow file exists, which is the same fact whether
+    // the directory is absent or present and empty. A sentence naming the directory is false in the
+    // second shape, so it names the file.
+    assert.equal(
+      report.findings[0].message,
+      'skipped: there is no workflow file, so no workflow can declare a trigger',
+      `${shape}: the skip names the workflow file it did not find`,
+    );
+    assert.equal(report.findings[0].message.includes('directory'), false, `${shape}: it names no directory`);
   }
 
   const broken = scratch(t);
@@ -624,7 +632,12 @@ test('obligation: both formats agree on count, path, line and message, and neith
     assert.deepEqual(humanSummary(human.stdout), json.summary, `${shape}: the two formats count the same`);
     for (const finding of json.findings) {
       assert.ok(flat.includes(finding.message), `${shape}: no message ${JSON.stringify(finding.message)}`);
-      assert.ok(flat.includes(finding.path ?? '.'), `${shape}: no path ${finding.path}`);
+      // A pathless finding (the `no-ci` skip) has no location to print, so the message is all there is
+      // to compare — the message itself stopped carrying a `.github/workflows` dot with #390, which is
+      // why this reads the path only when the report has one.
+      if (finding.path !== undefined) {
+        assert.ok(flat.includes(finding.path), `${shape}: no path ${finding.path}`);
+      }
       if (finding.line !== undefined) {
         assert.ok(flat.includes(`${finding.path}:${finding.line}`), `${shape}: no ${finding.path}:${finding.line}`);
       }

@@ -126,7 +126,7 @@
       "severity": "error",
       "scope": "repo",
       "target": "ci",
-      "message": "skipped: there is no .github/workflows directory, so no workflow can declare a trigger",
+      "message": "skipped: there is no workflow file, so no workflow can declare a trigger",
       "remediation": {
         "kind": "none"
       },
@@ -139,7 +139,7 @@
       "severity": "warn",
       "scope": "repo",
       "target": "ci",
-      "message": "skipped: there is no .github/workflows directory, so no workflow can declare permissions",
+      "message": "skipped: there is no workflow file, so no workflow can declare permissions",
       "remediation": {
         "kind": "none"
       },
@@ -152,7 +152,7 @@
       "severity": "error",
       "scope": "repo",
       "target": "ci",
-      "message": "skipped: there is no .github/workflows directory, so no workflow can declare a trigger",
+      "message": "skipped: there is no workflow file, so no workflow can declare a trigger",
       "remediation": {
         "kind": "none"
       },

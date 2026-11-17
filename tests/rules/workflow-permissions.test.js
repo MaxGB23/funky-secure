@@ -480,18 +480,19 @@ test('side three: no-ci, unparseable-workflow and no-repo name their fact, and n
     [[
       'skip',
       'no-ci',
-      'skipped: there is no .github/workflows directory, so no workflow can declare permissions',
+      // Issue #390: the fact measured is that no workflow file exists, never that a directory is
+      // absent — the directory may exist and hold none, and the sentence must be true there too.
+      'skipped: there is no workflow file, so no workflow can declare permissions',
       { kind: 'none' },
     ]],
   );
+  assert.equal(emptyReport.findings[0].message.includes('directory'), false);
   const emptyHuman = await scan(empty);
   assert.match(emptyHuman.stdout, /^summary {2}0 errors · 0 warnings · 0 info · 0 passing · 1 skipped$/m);
   assert.match(emptyHuman.stdout, /1 rule not verified: workflow-permissions/);
 
   // The directory exists and holds no workflow file: the rule skips for the same reason, and prints
-  // the same sentence — measured. The wording claims an absent directory either way, which is a
-  // defect of the sentence and not of the verdict (reported, not fixed here: the same string is in
-  // `tests/golden/at-policy.json`, `docs/cli.md` and two sibling rules).
+  // the same sentence — measured, and true in both shapes since #390 made it name the file.
   const readmeOnly = scratch(t);
   mkdirSync(join(readmeOnly, '.github', 'workflows'), { recursive: true });
   writeFileSync(join(readmeOnly, '.github', 'workflows', 'README.md'), 'notes\n');
@@ -500,6 +501,11 @@ test('side three: no-ci, unparseable-workflow and no-repo name their fact, and n
   assert.deepEqual(
     readmeReport.findings.map((finding) => [finding.code, finding.message]),
     emptyReport.findings.map((finding) => [finding.code, finding.message]),
+  );
+  assert.equal(
+    readmeReport.findings[0].message,
+    'skipped: there is no workflow file, so no workflow can declare permissions',
+    'the directory exists here, so only a sentence about the file is true',
   );
 
   const broken = scratch(t);

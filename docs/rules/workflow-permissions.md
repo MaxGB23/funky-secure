@@ -55,9 +55,9 @@ Three answers:
 A repository with no workflow is `skip: no-ci`, not a pass. A workflow the reader cannot parse yields
 `skip: unparseable-workflow` for that file and no pass is added on top of it. No repository facts in this scope is
 `skip: no-repo`. `no-ci` covers both the absent directory and a `.github/workflows` directory that
-exists and holds no workflow file — measured, both report the one skip. The skip's message reads
-"there is no .github/workflows directory" in either case, which is the fact only in the first, so the
-wording is tracked as a defect while the verdict is not.
+exists and holds no workflow file — measured, both report the one skip, and the skip's message reads,
+"there is no workflow file, so no workflow can declare permissions", which is the fact in either case.
+The directory is never claimed to be missing, because it may exist and hold none.
 
 Friction is 1, and the severity belongs to the rule rather than to one of its codes: measured, a
 `write-all` fixture reports `warn` under `baseline` and `error` under `strict`, and an absent
