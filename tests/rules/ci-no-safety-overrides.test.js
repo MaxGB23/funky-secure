@@ -402,6 +402,155 @@ test('obligation: the printed remediation clears its own finding', async (t) => 
   );
 });
 
+/// `S4`, the shape of the printed edit: the offending word moves and the rest of the body stays.
+/// The page used to print a whole `run:` body, so a compound step lost its other commands (#383).
+
+/** The words of a text, so a test can say that only one of them moved. */
+function wordCounts(text) {
+  const counts = new Map();
+  for (const word of text.split(/\s+/)) counts.set(word, (counts.get(word) ?? 0) + 1);
+  return counts;
+}
+
+/** The words `after` dropped and gained relative to `before`, in document order. */
+function wordDiff(before, after) {
+  const from = wordCounts(before);
+  const to = wordCounts(after);
+  const removed = [];
+  const added = [];
+  for (const [word, count] of from) for (let i = 0; i < count - (to.get(word) ?? 0); i += 1) removed.push(word);
+  for (const [word, count] of to) for (let i = 0; i < count - (from.get(word) ?? 0); i += 1) added.push(word);
+  return { removed, added };
+}
+
+/** One step of one workflow, in a scratch repository, and the body it runs. */
+function oneStep(t, stepLines) {
+  const dir = scratch(t);
+  writeWorkflow(dir, [
+    'name: ci', 'on: push', 'jobs:', '  build:', '    runs-on: ubuntu-latest', '    steps:', ...stepLines,
+  ]);
+  return { dir, path: join(dir, '.github', 'workflows', 'ci.yml') };
+}
+
+/** The body of the one step of a written workflow, as the file now spells it. */
+function stepBody(path) {
+  const match = /^\s*- run: (.*)$/m.exec(readFileSync(path, 'utf8'));
+  assert.ok(match !== null, 'the fixture no longer carries a single-line `run:` step');
+  return match[1];
+}
+
+test('a compound step keeps its other commands: the printed text is the edited body', async (t) => {
+  const body = 'pnpm install --no-frozen-lockfile && pnpm build';
+  const { dir, path } = oneStep(t, [`      - run: ${body}`]);
+  const before = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+  const [finding] = before.findings;
+
+  assert.equal(finding.evidence.command, body, 'the evidence is the whole body, as written');
+  assert.deepEqual(finding.remediation, {
+    kind: 'manual',
+    command: 'run: pnpm install --frozen-lockfile && pnpm build',
+  });
+
+  const human = await scan(dir);
+  assert.ok(
+    human.stdout.replace(/\s+/g, ' ').includes('run: pnpm install --frozen-lockfile && pnpm build'),
+    'the human report prints the same edit',
+  );
+
+  const printed = finding.remediation.command;
+  assert.ok(printed.startsWith('run: '), 'the printed text is the step to put in place');
+  writeFileSync(path, readFileSync(path, 'utf8').replace(`- run: ${body}`, `- ${printed}`));
+
+  const applied = stepBody(path);
+  assert.deepEqual(wordDiff(body, applied), {
+    removed: ['--no-frozen-lockfile'],
+    added: ['--frozen-lockfile'],
+  }, 'only the flag moved, so no other command of the step was dropped');
+  assert.equal(applied, 'pnpm install --frozen-lockfile && pnpm build');
+
+  const after = await scan(dir, ['--format', 'json', '--fail-on', 'warn']);
+  assert.equal(after.code, 0, 'the printed edit clears the finding');
+  assert.deepEqual(JSON.parse(after.stdout).summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
+});
+
+test('every spelling of both codes moves one word of a compound step and keeps the rest', async (t) => {
+  const cases = [
+    ['pnpm install --no-frozen-lockfile && pnpm build', 'run: pnpm install --frozen-lockfile && pnpm build', 'ci-frozen-lockfile-disabled'],
+    ['pnpm install --frozen-lockfile=false && pnpm build', 'run: pnpm install --frozen-lockfile && pnpm build', 'ci-frozen-lockfile-disabled'],
+    ['pnpm install --ignore-scripts=false && pnpm test', 'run: pnpm install --ignore-scripts && pnpm test', 'ci-lifecycle-scripts-enabled'],
+    ['pnpm install --enable-pre-post-scripts && pnpm test', 'run: pnpm install --ignore-scripts && pnpm test', 'ci-lifecycle-scripts-enabled'],
+    ['pnpm install --enable-pre-post-scripts=true && pnpm test', 'run: pnpm install --ignore-scripts && pnpm test', 'ci-lifecycle-scripts-enabled'],
+  ];
+
+  for (const [body, printed, code] of cases) {
+    const { dir, path } = oneStep(t, [`      - run: ${body}`]);
+    const [finding] = JSON.parse((await scan(dir, ['--format', 'json'])).stdout).findings;
+
+    assert.equal(finding.code, code, body);
+    assert.equal(finding.remediation.command, printed, body);
+
+    writeFileSync(path, readFileSync(path, 'utf8').replace(`- run: ${body}`, `- ${printed}`));
+    assert.equal(stepBody(path), printed.slice('run: '.length), body);
+    assert.deepEqual(JSON.parse((await scan(dir, ['--format', 'json'])).stdout).findings, [], `${body} cleared`);
+  }
+});
+
+test('the edit is word-level: a word repeated in the step moves every time, prose stays as written', async (t) => {
+  const repeated = 'pnpm install --no-frozen-lockfile --no-frozen-lockfile';
+  const one = oneStep(t, [`      - run: ${repeated}`]);
+  const [finding] = JSON.parse((await scan(one.dir, ['--format', 'json'])).stdout).findings;
+  assert.equal(finding.remediation.command, 'run: pnpm install --frozen-lockfile --frozen-lockfile');
+  writeFileSync(one.path, readFileSync(one.path, 'utf8').replace(`- run: ${repeated}`, `- ${finding.remediation.command}`));
+  assert.deepEqual(JSON.parse((await scan(one.dir, ['--format', 'json'])).stdout).findings, [], 'one finding, so one edit for both words');
+
+  const prose = 'pnpm install --no-frozen-lockfile && echo "--no-frozen-lockfile"';
+  const two = oneStep(t, [`      - run: ${prose}`]);
+  const [quoted] = JSON.parse((await scan(two.dir, ['--format', 'json'])).stdout).findings;
+  assert.equal(
+    quoted.remediation.command,
+    'run: pnpm install --frozen-lockfile && echo "--no-frozen-lockfile"',
+    'a quoted sentence is not a command, so the edit leaves it alone',
+  );
+});
+
+test('a body the rule cannot rewrite is printed as a sentence naming the edit, never as a replacement', async (t) => {
+  const sentence =
+    'edit the step by hand: replace --ignore-scripts=false with --ignore-scripts, ' +
+    'keeping the rest of the run: body as written';
+
+  // The flag is not in the body as written: the word carries a quote, so the flag never appears as a
+  // whole word and pointing the reader at one would be a guess.
+  const quoted = oneStep(t, ['      - run: pnpm install --ignore-scripts="false" && pnpm build']);
+  const [fromQuoted] = JSON.parse((await scan(quoted.dir, ['--format', 'json'])).stdout).findings;
+  assert.equal(fromQuoted.code, 'ci-lifecycle-scripts-enabled', 'the quoted word is still a finding');
+  assert.deepEqual(fromQuoted.remediation, { kind: 'manual', command: sentence });
+  assert.equal(fromQuoted.remediation.command.startsWith('run: '), false, 'never printed as a replacement');
+
+  // A multi-line body: one printed line cannot carry the other commands, so the body stays whole.
+  const block = oneStep(t, [
+    '      - run: |',
+    '          pnpm install --no-frozen-lockfile',
+    '          pnpm build',
+  ]);
+  const [fromBlock] = JSON.parse((await scan(block.dir, ['--format', 'json'])).stdout).findings;
+  assert.equal(fromBlock.code, 'ci-frozen-lockfile-disabled');
+  assert.deepEqual(fromBlock.remediation, {
+    kind: 'manual',
+    command:
+      'edit the step by hand: replace --no-frozen-lockfile with --frozen-lockfile, ' +
+      'keeping the rest of the run: body as written',
+  });
+  assert.equal(fromBlock.remediation.command.startsWith('run: '), false);
+
+  // Neither sentence is applied by the tool, and the sentence discards nothing: the body it names is
+  // the body the file still carries.
+  assert.equal(
+    readFileSync(block.path, 'utf8').includes('          pnpm build'),
+    true,
+    'a scan is read-only and the step keeps both commands',
+  );
+});
+
 /// `S4`, the two formats: same count, path, line and message — never a code, which the human
 /// renderer does not print for any rule.
 

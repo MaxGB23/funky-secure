@@ -51,13 +51,23 @@ key, with `path: .npmrc` under the `repo-root` target.
 
 ## Remediation
 
-`manual`, printed as the text to put in place of the offending thing:
+`manual`, printed as the edit to perform **inside** the step:
 
-- a workflow: `run: pnpm install --frozen-lockfile` for a frozen-lockfile override, and
-  `run: pnpm install --ignore-scripts` for a lifecycle-scripts override. The printed text replaces the
-  whole `run:` body of the step rather than the flag inside it, so a compound step needs its remaining
-  commands kept by hand: the finding on `run: pnpm install --no-frozen-lockfile && pnpm build` prints
-  `run: pnpm install --frozen-lockfile`, which clears the finding and drops the build.
+- a workflow: the offending word replaced by the one that clears it, with the rest of the `run:` body
+  left as written — `--no-frozen-lockfile` → `--frozen-lockfile`, `--frozen-lockfile=false` →
+  `--frozen-lockfile`, `--ignore-scripts=false` → `--ignore-scripts`, and `--enable-pre-post-scripts`
+  (or `=true`) → `--ignore-scripts`. The printed text is the edited body, so a compound step keeps
+  its other commands: the finding on `run: pnpm install --no-frozen-lockfile && pnpm build` prints
+  `run: pnpm install --frozen-lockfile && pnpm build`, which clears the finding and keeps the build. A
+  single-command step prints the whole body because the whole body is that one command:
+  `run: pnpm install --frozen-lockfile`. A word the step repeats moves every time, and a quoted
+  sentence in the same body is left as written.
+- a workflow body that cannot be rewritten that way is printed as a sentence naming the edit, never as
+  a replacement that discards anything: the flag is not in the body as a whole word because the word
+  carries its own quote (`run: pnpm install --ignore-scripts="false"`, which passes
+  `--ignore-scripts=false` to pnpm and is still a finding), or the body is a multi-line `run:` block
+  that one printed line cannot carry. The finding then prints `edit the step by hand: replace
+  --ignore-scripts=false with --ignore-scripts, keeping the rest of the run: body as written`.
 - `.npmrc`: delete the offending key. pnpm already freezes the lockfile in CI and already skips
   dependency lifecycle scripts, so the key only restores the riskier behavior.
 
