@@ -415,13 +415,14 @@ test('a guard already equal to the pin is planned as already at policy and write
   assert.equal(json.packageManager, 'pnpm@12.3.4');
 });
 
-test('a declared guard that differs is a conflict that leaves the field as it was written (W3b)', async (t) => {
+test('a hand-written guard is a conflict, never an overwrite, and withholds the pin (W3b, #353)', async (t) => {
+  // W3b: "A manifest that already declares a guard is a `conflict` naming the value found, never an
+  // overwrite". The pin is withheld with it — writing it beside a guard naming another manager is the
+  // pair the spec says is never written disagreeing, and npm would refuse the install it creates.
   const dir = scratch(t);
   const declared = { name: 'yarn', version: '4.0.0' };
-  writeFileSync(
-    join(dir, 'package.json'),
-    `${JSON.stringify({ name: 'declared-guard', devEngines: { packageManager: declared } }, null, 2)}\n`,
-  );
+  const text = `${JSON.stringify({ name: 'declared-guard', devEngines: { packageManager: declared } }, null, 2)}\n`;
+  writeFileSync(join(dir, 'package.json'), text);
   writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
   const tracked = ['package.json', 'pnpm-lock.yaml'];
 
@@ -431,10 +432,18 @@ test('a declared guard that differs is a conflict that leaves the field as it wa
   assert.deepEqual(
     pins.map((item) => [item.operation, item.state]),
     [
-      ['set packageManager', 'would-write'],
+      ['set packageManager', 'conflict'],
       ['set devEngines.packageManager', 'conflict'],
     ],
+    'the pin is withheld and the guard it would disagree with is reported',
   );
+
+  const withheld = pins[0];
+  assert.equal(withheld.digest, null, 'a conflict carries no bytes to write');
+  assert.match(withheld.reason, /already declares devEngines\.packageManager/);
+  assert.match(withheld.reason, /"name":"yarn","version":"4\.0\.0"/, 'it names the guard it would disagree with');
+  assert.match(withheld.reason, /pnpm@12\.3\.4/, 'and the pin it withholds');
+
   const refusal = pins[1];
   assert.equal(refusal.digest, null, 'a conflict carries no bytes to write');
   assert.match(refusal.reason, /devEngines\.packageManager/);
@@ -443,9 +452,51 @@ test('a declared guard that differs is a conflict that leaves the field as it wa
   const applied = runner(dir, { tracked });
   assert.equal(await applied.run(['init', '--apply']), 0);
 
-  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.equal(
+    readFileSync(join(dir, 'package.json'), 'utf8'),
+    text,
+    'the file keeps the bytes the human wrote, both declarations included',
+  );
+  const json = JSON.parse(text);
   assert.deepEqual(json.devEngines.packageManager, declared, 'the declaration is never overwritten');
-  assert.equal(json.packageManager, 'pnpm@12.3.4', 'the pin the plan does establish is written');
+  assert.equal(Object.hasOwn(json, 'packageManager'), false, 'and no pin is written beside it');
+});
+
+test('a guard naming another pnpm version leaves the pin unwritten, so the pair never disagrees (#353)', async (t) => {
+  // The reported shape, re-run: `devEngines.packageManager` 11.0.0 and no `packageManager`. The run used
+  // to write `packageManager: pnpm@12.3.4` beside it and exit `0`, leaving the two declarations
+  // disagreeing — the rescan then answered `self-managed-pin`, which is that disagreement restated. A
+  // test asserting the exit code alone passes in exactly that state, so the assertions are the pair.
+  const dir = scratch(t);
+  writeFileSync(
+    join(dir, 'package.json'),
+    `${JSON.stringify(
+      { name: 'guarded-elsewhere', devEngines: { packageManager: { name: 'pnpm', version: '11.0.0' } } },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(join(dir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0, 'the rest of the plan is still written');
+
+  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  assert.equal(Object.hasOwn(json, 'packageManager'), false, 'no pin is written');
+  assert.deepEqual(
+    json.devEngines.packageManager,
+    { name: 'pnpm', version: '11.0.0' },
+    'and the guard keeps the value the project declared',
+  );
+
+  // The pair agrees by absence: the rescan reports the missing pin, never a declaration beside the
+  // guard that says another version.
+  const rescan = runner(dir, { tracked: [...tracked, '.gitignore'] });
+  await rescan.run(['scan', '--scope', 'all', '--format', 'json']);
+  const codes = JSON.parse(rescan.stdout.text).findings.map((finding) => `${finding.rule}:${finding.code}`);
+  assert.ok(codes.includes('package-manager-pin:pin-missing'), codes.join(', '));
+  assert.ok(!codes.includes('package-manager-pin:self-managed-pin'), codes.join(', '));
 });
 
 test('a pin the plan cannot establish writes no guard, and package.json keeps its bytes (W3b)', async (t) => {
@@ -891,31 +942,34 @@ test('with --format json a refused plan keeps the document parseable and the ref
 
 test('a conflict inside a plan that writes something keeps exit 0 (I-58, 0037)', async (t) => {
   // The side of the line that must never widen: exit `3` promises nothing was written, and something
-  // was. One write, one conflict, applied.
+  // was. One write (the `.gitignore` block, from a repository that has none) and one conflict (the
+  // declared guard W3b never overwrites), applied. `package.json` is not the write here on purpose: a
+  // plan that withholds the pin because of a declared guard is the pair #353 is about, and this test
+  // is about the exit code.
   const dir = scratch(t, 'at-policy');
   const workspaceBefore = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8');
-  writeFileSync(
-    join(dir, 'package.json'),
-    `${JSON.stringify(
-      {
-        name: 'one-write-one-conflict',
-        private: true,
-        devEngines: { packageManager: { name: 'pnpm', version: '11.0.0' } },
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.gitignore'];
+  const manifest = `${JSON.stringify(
+    {
+      name: 'one-write-one-conflict',
+      private: true,
+      packageManager: 'pnpm@12.3.4',
+      devEngines: { packageManager: { name: 'pnpm', version: '11.0.0' } },
+    },
+    null,
+    2,
+  )}\n`;
+  writeFileSync(join(dir, 'package.json'), manifest);
+  rmSync(join(dir, '.gitignore'));
+  const tracked = ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml'];
 
   const preview = runner(dir, { tracked });
   assert.equal(await preview.run(['init', '--format', 'json']), 0);
   const document = JSON.parse(preview.stdout.text);
   assert.deepEqual(
-    document.plan.map((item) => [item.operation, item.state]),
+    document.plan.map((item) => [item.target, item.state]),
     [
-      ['set packageManager', 'would-write'],
-      ['set devEngines.packageManager', 'conflict'],
+      ['package.json', 'conflict'],
+      ['.gitignore', 'would-write'],
     ],
     'the fixture carries exactly one write and one conflict',
   );
@@ -928,14 +982,23 @@ test('a conflict inside a plan that writes something keeps exit 0 (I-58, 0037)',
   );
   assert.equal(writeCount(applied.stdout.text), 1);
 
-  const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  assert.equal(json.packageManager, 'pnpm@12.3.4', 'the write the plan could perform happened');
+  assert.equal(
+    readFileSync(join(dir, 'package.json'), 'utf8'),
+    manifest,
+    'the conflicted declaration is left exactly as it was written',
+  );
+  const json = JSON.parse(manifest);
   assert.deepEqual(
     json.devEngines.packageManager,
     { name: 'pnpm', version: '11.0.0' },
     'the conflicted item is left exactly as it was declared',
   );
   assert.equal(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), workspaceBefore);
+  assert.equal(
+    blockCount(readFileSync(join(dir, '.gitignore'), 'utf8')),
+    1,
+    'the write the plan could perform happened',
+  );
 });
 
 test('next steps name the commit and funky-secure start, never an install it cannot derive (11.2.2, 0132)', async (t) => {

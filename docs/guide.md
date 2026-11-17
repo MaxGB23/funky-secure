@@ -166,7 +166,10 @@ advice and not a gate.
 same scan and turns the fixable findings into writes — the package-manager pin, the quarantine gate,
 the `.gitignore` block, the strict config — and it prints every write with its absolute path and a
 digest of the exact bytes before it happens. It refuses a file with uncommitted changes instead of
-mixing its edits with yours.
+mixing its edits with yours. It also writes nothing it would have to contradict: `packageManager` and
+`devEngines.packageManager` are written from one established version or not at all, so a manifest that
+already declares a `devEngines.packageManager` naming another version gets neither half of the pair and
+the plan reports both as conflicts to settle by hand.
 
 `init` also ends with the steps it will not take for you, in order: the `migrate --apply` that removes a
 foreign lockfile left beside the pnpm one, the commit that stages the paths it just wrote and records
@@ -192,7 +195,7 @@ the contract: commands, flags and rule ids, generated from the same table the pa
 
 | Rule (`explain <id>`) | It means | Do |
 |---|---|---|
-| `package-manager-pin` | `package.json` does not pin the pnpm that actually answers | `funky-secure init --apply` writes it; or `corepack use pnpm@<version>` |
+| `package-manager-pin` | `package.json` does not pin the pnpm that actually answers | `funky-secure init --apply` writes it; or `corepack use pnpm@<version>` — and where a declared `devEngines.packageManager` names another version, `init` writes neither declaration and reports the conflict, so make the two agree by hand |
 | `lockfile-committed` | no `pnpm-lock.yaml` in the repository, or it is present and not committed, or a git ignore rule matches it | `pnpm install` when it is missing, then `git add pnpm-lock.yaml` — `git add -f` where an ignore rule matches it |
 | `foreign-lockfile` | another manager's lockfile still resolves a second dependency tree | `funky-secure migrate --apply` |
 | `quarantine` | new releases are auto-approved instead of waiting the policy age | `funky-secure init --apply` writes the gate |

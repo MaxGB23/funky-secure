@@ -120,7 +120,15 @@ sentences below name the version, never the file.
 
 - `pin-missing` — `auto`: `funky-secure init --apply` performs write W3 (RFC 11.2) and sets
   `packageManager` to `"pnpm@<observed version>"`. The message names that exact value. Write W3 is the
-  only path that touches the declaration: a pin that already exists is never rewritten.
+  only path that touches the declaration: a pin that already exists is never rewritten. A manifest that
+  already declares a `devEngines.packageManager` this plan will not match withholds the pin with the
+  guard: W3b writes the pair from one established version or writes neither, because a pin beside a
+  guard naming another version is the pair those two declarations are never written to disagree in
+  (11.2, #353). The plan reports both items as `conflict` and leaves the field it found exactly as it
+  was written; the fix is by hand, by making the two declarations name the same version.
+  This does not change the finding: the skip that names the guard (`self-managed-pin`) is reached only
+  once a pin exists, so an absent pin beside a guard is still `pin-missing`, and the plan that cannot
+  act on it says so instead of writing a disagreement.
 - `pin-differs-from-machine` — `none`: the declaration is honoured inside the project, and the
   difference belongs to the machine. Nothing to fix, nothing to run.
 - `not-pnpm` — `none`: the manifest declares another manager, so the pnpm pin question does not apply
