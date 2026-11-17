@@ -354,7 +354,10 @@ export default {
       skip = {
         status: 'skip',
         code: 'no-lockfile',
-        message: 'skipped: no pnpm-lock.yaml to compare specifiers against',
+        // The fact measured is the absent lockfile, so the sentence names the comparison that lockfile
+        // would have enabled — never an importer (a manifest without a lockfile still yields its
+        // floating ranges) and never the whole rule, which ran (369).
+        message: 'skipped: no pnpm-lock.yaml, so the specifier-versus-lockfile comparison did not run',
       };
     } else {
       const read = parseLockfile(lockfileText);
