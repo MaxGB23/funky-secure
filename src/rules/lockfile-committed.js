@@ -31,7 +31,7 @@ export default {
     'pnpm-lock.yaml at the repository root. Outside git only existence is checked and the finding states that the tracked and ignored parts were not evaluated. Inside git a present lockfile must appear in the tracked set and must not match a git ignore rule; an absent file fails with lockfile-missing, an untracked one with lockfile-untracked, an ignored one with lockfile-ignored.',
   evidence: '{ path, present, tracked, ignored } with null where git did not answer',
   remediation:
-    'manual — git add pnpm-lock.yaml (untracked), git check-ignore -v pnpm-lock.yaml to find the ignore source (ignored), pnpm install (missing).',
+    'manual — git add pnpm-lock.yaml (untracked), git check-ignore -v --no-index pnpm-lock.yaml to find the ignore source (ignored), pnpm install (missing).',
   limits:
     'Does not compare lockfileVersion with the installed pnpm: pnpm performs that check on install and a second copy would go stale (RFC 4.1). It does not parse the lockfile, does not read .gitignore and cannot see an ignore rule git did not report through the collected facts.',
   docs: DOC,
@@ -86,13 +86,17 @@ export default {
     }
 
     if (tracked === true && ignored === true) {
+      // `--no-index` is not decoration: this finding is printed for a lockfile git already tracks, and
+      // `git check-ignore` skips tracked paths unless it is passed — measured, `git check-ignore -v
+      // pnpm-lock.yaml` in exactly this state exits 1 and prints nothing, so the reader was told to run
+      // a command that could not answer. The collector asks git the same way (RFC 12.1, E3).
       return [
         finding(
           'fail',
           'lockfile-ignored',
-          `${LOCKFILE} is tracked but matched by a git ignore rule; find the source with git check-ignore -v ${LOCKFILE} and remove it, or the file is one re-add away from leaving version control`,
+          `${LOCKFILE} is tracked but matched by a git ignore rule; find the source with git check-ignore -v --no-index ${LOCKFILE} and remove it, because git check-ignore skips a tracked file unless --no-index is passed, and this lockfile is one re-add away from leaving version control`,
           evidence,
-          { kind: 'manual', command: 'git check-ignore -v pnpm-lock.yaml' },
+          { kind: 'manual', command: 'git check-ignore -v --no-index pnpm-lock.yaml' },
         ),
       ];
     }
