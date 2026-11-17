@@ -32,6 +32,29 @@ const HEAD_REFERENCES = [
   'github.head_ref',
 ];
 
+/**
+ * A pull request number as the workflow writes it: a literal, or an expression that names one. It is
+ * matched as written and never evaluated, so a number that arrives as an expression is still a
+ * literal reference for this rule.
+ */
+const PR_NUMBER = String.raw`(?:\d+|\$\{\{[^}]*\}\})`;
+
+/**
+ * The reference a pull request number addresses: `refs/pull/<number>/head`,
+ * `refs/pull/<number>/merge`, and the `pull/<number>/head` refspec a fetch names. `pull/` with a
+ * word boundary covers the `refs/`-prefixed and the bare form without matching a longer token.
+ */
+const PULL_HEAD_REFERENCE = new RegExp(String.raw`\bpull/${PR_NUMBER}\/(?:head|merge)\b`);
+
+/** `gh pr checkout <number>`, which reaches the head by number rather than by expression. */
+const PR_NUMBER_CHECKOUT = new RegExp(String.raw`\bgh\s+pr\s+checkout\s+${PR_NUMBER}`);
+
+/** A `git fetch` that brings a pull request head into `FETCH_HEAD`. */
+const PULL_HEAD_FETCH = new RegExp(String.raw`\bgit\s+fetch\b.*\bpull/${PR_NUMBER}\/(?:head|merge)\b`);
+
+/** The checkout that reads what that fetch left in `FETCH_HEAD`. */
+const FETCH_HEAD_CHECKOUT = /\bgit\s+checkout\b.*\bFETCH_HEAD\b/;
+
 /** The commands that check a ref out, matched against one shell command of a `run:` body. */
 const CHECKOUT_COMMANDS = [/\bgit\s+checkout\b/, /\bgh\s+pr\s+checkout\b/];
 
@@ -45,7 +68,11 @@ function skip(code, reason) {
 
 /** @param {string} text */
 function namesHead(text) {
-  return HEAD_REFERENCES.some((name) => text.includes(name));
+  return (
+    HEAD_REFERENCES.some((name) => text.includes(name)) ||
+    PULL_HEAD_REFERENCE.test(text) ||
+    PR_NUMBER_CHECKOUT.test(text)
+  );
 }
 
 /**
@@ -86,10 +113,21 @@ function headCheckout(step) {
   }
 
   if (typeof step.run === 'string') {
+    let fetchedHead = null;
     for (const command of commandsOf(step.run)) {
-      if (!namesHead(command)) continue;
-      if (!CHECKOUT_COMMANDS.some((pattern) => pattern.test(command))) continue;
-      return { kind: 'run', expression: command };
+      const fetchesHead = PULL_HEAD_FETCH.test(command);
+      const checksOutFetchHead = FETCH_HEAD_CHECKOUT.test(command);
+
+      // A direct checkout that names the head in the same command. A `git fetch` of the pull head
+      // also names it, so it is only a checkout here when the same command reads `FETCH_HEAD`.
+      if (namesHead(command) && CHECKOUT_COMMANDS.some((pattern) => pattern.test(command))) {
+        if (!fetchesHead || checksOutFetchHead) return { kind: 'run', expression: command };
+      }
+
+      if (fetchesHead) fetchedHead = command;
+      if (fetchedHead !== null && checksOutFetchHead) {
+        return { kind: 'run', expression: fetchedHead };
+      }
     }
   }
 
@@ -110,26 +148,36 @@ export default {
     'Every workflow through the structural reader. The trigger is read only from the top-level on: ' +
     'key, as a value, a flow collection or a block key, so a token in a run: body, a comment or a ' +
     "job if: is not a declaration. In a workflow that declares pull_request_target, each step is " +
-    'checked for a checkout of the head: an actions/checkout step whose with.ref is ' +
-    'github.event.pull_request.head.sha, github.event.pull_request.head.ref or github.head_ref ' +
-    '(pull-request-target-checkout), or a run: command that checks one of them out with git checkout ' +
-    'or gh pr checkout. Each offending step is one fail at the step line. The trigger without a head ' +
-    'checkout is one pass (pull-request-target-without-head-checkout); workflows that never declare ' +
-    'the trigger are one pass (no-pull-request-target); no workflow at all skips (no-ci) and an ' +
-    'unparseable workflow skips (unparseable-workflow) without a pass on top.',
+    'checked for a checkout of the head: an actions/checkout step whose with.ref names the head ' +
+    '(pull-request-target-checkout), or a run: command that checks it out. The head is named by an ' +
+    'expression (github.event.pull_request.head.sha, github.event.pull_request.head.ref or ' +
+    'github.head_ref) or by the reference a pull request number addresses ' +
+    '(refs/pull/<number>/head, refs/pull/<number>/merge, gh pr checkout <number>, or a ' +
+    'pull/<number>/head fetch followed by a FETCH_HEAD checkout); both count, and a number-addressed ' +
+    'head is recognized from the literal reference without resolving it. Each offending step is one ' +
+    'fail at the step line. The trigger without a head checkout is one pass ' +
+    '(pull-request-target-without-head-checkout); workflows that never declare the trigger are one ' +
+    'pass (no-pull-request-target); no workflow at all skips (no-ci) and an unparseable workflow ' +
+    'skips (unparseable-workflow) without a pass on top.',
   evidence:
-    'The job, the step index, the kind (uses or run) and the raw expression that checks the head ' +
-    'out, at the step line. A run: step reports the command that carries the expression.',
+    'The job, the step index, the kind (uses or run) and the raw expression or reference that checks ' +
+    'the head out, at the step line. A run: step reports the command that carries the expression or ' +
+    'reference.',
   remediation:
     'Manual, printed as the choice to make: remove the pull_request_target trigger, or remove the ' +
     'step that checks the pull request head out, so the workflow never runs fork code with this ' +
     "repository's secrets. The tool never edits a workflow.",
   limits:
     'Proves that a declared workflow event and a declared step name the combination; it does not ' +
-    'read whether the job has secrets, does not evaluate permissions:, does not resolve the ' +
+    'read whether the job has secrets, does not evaluate permissions:, does not resolve an ' +
     'expression (whether that ref is the fork head at run time is not decided here), and does not ' +
-    'decide whether the checked-out code is built or executed. A workflow the reader cannot ' +
-    'attribute is skipped per file; the rule never guesses from a line scan.',
+    'decide whether the checked-out code is built or executed. A head reached by pull request number ' +
+    'is the exception: refs/pull/<number>/head, refs/pull/<number>/merge, gh pr checkout <number> ' +
+    'and a pull/<number>/head fetch followed by a FETCH_HEAD checkout are literal references, ' +
+    'recognized without resolving anything, so the expression limit does not reach them. A workflow ' +
+    'the reader cannot attribute is skipped per file; the rule never guesses from a line scan. A ' +
+    '`with:` map written in flow style (`with: { ref: ... }`) is not read at all: the structural ' +
+    'reader models block mappings, so a head named that way is not reported (I-79).',
   docs: DOC,
 
   /**

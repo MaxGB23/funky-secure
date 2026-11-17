@@ -20,13 +20,24 @@ scanning the file for the token: an `on: pull_request` workflow whose `run:` bod
 `no-bot-auto-merge`.
 
 **The steps** of every job in a workflow that declares the trigger are checked for a checkout of the
-pull request head. Code the base repository did not review is what the fork brings:
+pull request head. Code the base repository did not review is what the fork brings. The head is
+named in one of two ways, and both count:
 
-- an `actions/checkout` step whose `with.ref` is `${{ github.event.pull_request.head.sha }}`,
-  `${{ github.event.pull_request.head.ref }}` or `${{ github.head_ref }}`;
-- a `run:` command that checks one of those expressions out, with `git checkout` or
-  `gh pr checkout`. A backslash continuation joins the lines of one command, so a `git checkout` and
-  the ref it checks out are read as one command and two unrelated lines are not.
+- by an **expression** — `github.event.pull_request.head.sha`,
+  `github.event.pull_request.head.ref` or `github.head_ref`;
+- by the **reference a pull request number addresses** — `refs/pull/<number>/head`,
+  `refs/pull/<number>/merge`, `gh pr checkout <number>`, or a `pull/<number>/head` fetch followed by a
+  `FETCH_HEAD` checkout. `<number>` may be a literal (`refs/pull/7/head`) or an expression
+  (`refs/pull/${{ github.event.pull_request.number }}/head`); either way the reference is recognized
+  as written and nothing is resolved.
+
+A head is reported when:
+
+- an `actions/checkout` step's `with.ref` names it;
+- a `run:` command names it and checks it out with `git checkout` or `gh pr checkout`, or fetches
+  `pull/<number>/head` and then checks out `FETCH_HEAD`. A backslash continuation joins the lines of
+  one command, so a `git checkout` and the ref it checks out are read as one command and two
+  unrelated lines are not.
 
 Each offending step is one `fail`:
 
@@ -62,9 +73,9 @@ does the same.
 
 ## Evidence
 
-The job, the step index, the kind (`uses` or `run`) and the raw expression that checks the head out,
-reported at the step line. A `run:` step reports the command that carries the expression, so the
-expression is read in the context that made it a checkout.
+The job, the step index, the kind (`uses` or `run`) and the raw expression or reference that names
+the head, reported at the step line. A `run:` step reports the command that carries it, so it is
+read in the context that made it a checkout.
 
 ## Remediation
 
@@ -89,15 +100,21 @@ workflow is exploitable, and it does not prove it is safe:
 - It does not resolve the expression. Whether `github.head_ref` points at the fork branch at run
   time, and where git fetches it from, is decided by GitHub, not here; the strings are matched as
   written, including inside a longer expression.
-- It does not recognise the head by pull-request number. `refs/pull/<n>/head`,
-  `refs/pull/<n>/merge`, `gh pr checkout <n>` and `git fetch … pull/<n>/head` followed by
-  `git checkout FETCH_HEAD` all name the fork's code as literally as `github.head_ref` does, and
-  none of them is reported, because the expressions above are matched and these carry a number
-  instead. Measured: a `pull_request_target` workflow whose `actions/checkout` sets
-  `ref: refs/pull/${{ github.event.pull_request.number }}/head` is this rule's pass, not its fail.
+- It does not resolve an expression, and it does not need to for a head reached by pull request
+  number. `refs/pull/<n>/head`, `refs/pull/<n>/merge`, `gh pr checkout <n>` and a `pull/<n>/head`
+  fetch followed by a `FETCH_HEAD` checkout are literal references: they are recognized as written
+  without evaluating anything, so the expression limit above does not reach them. A literal number
+  (`refs/pull/7/head`) and a number that arrives as an expression
+  (`refs/pull/${{ github.event.pull_request.number }}/head`) are both references, not expressions to
+  be resolved.
 - It does not decide whether the checked-out code is built or executed. A checkout with no later
   step that runs it is reported the same way as one followed by `pnpm install && pnpm test`, because
   the rule reads the workflow's declared steps, not the behavior of a script they call.
 
 A workflow the reader cannot parse is skipped per file; a skipped file is not a pass, and a
 composite action or a reusable workflow that checks the head out is outside the step set read here.
+
+A `with:` map written in **flow style** is not read at all. `with: { ref: refs/pull/7/head }` is
+valid YAML and GitHub accepts it, and the structural reader models block mappings only
+([`docs/decisions.md`](../decisions.md), I-79), so a head named that way is not reported and the
+workflow is counted as a pass. The same `ref:` written on its own line under `with:` is reported.
