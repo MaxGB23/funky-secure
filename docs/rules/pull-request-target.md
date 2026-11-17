@@ -33,7 +33,12 @@ named in one of two ways, and both count:
 
 A head is reported when:
 
-- an `actions/checkout` step's `with.ref` names it;
+- an `actions/checkout` step's `with.ref` names it, whether the `with:` map is written as a block
+  map (`with:` and then `ref:` on its own line) or as a flow map on one line
+  (`with: { ref: refs/pull/7/head }`), which YAML defines and GitHub accepts. Both spellings answer
+  the same finding at the same step line, and the flow one was unread before I-82 — so a workflow
+  written that way can now hold a `pull-request-target-checkout` it did not have, which is a true
+  finding on a spelling that was valid all along;
 - a `run:` command names it and checks it out with `git checkout` or `gh pr checkout`, or fetches
   `pull/<number>/head` and then checks out `FETCH_HEAD`. A backslash continuation joins the lines of
   one command, so a `git checkout` and the ref it checks out are read as one command and two
@@ -114,7 +119,10 @@ workflow is exploitable, and it does not prove it is safe:
 A workflow the reader cannot parse is skipped per file; a skipped file is not a pass, and a
 composite action or a reusable workflow that checks the head out is outside the step set read here.
 
-A `with:` map written in **flow style** is not read at all. `with: { ref: refs/pull/7/head }` is
-valid YAML and GitHub accepts it, and the structural reader models block mappings only
-([`docs/decisions.md`](../decisions.md), I-79), so a head named that way is not reported and the
-workflow is counted as a pass. The same `ref:` written on its own line under `with:` is reported.
+A `with:` map may be written in **flow style** as well: `with: { ref: refs/pull/7/head }` is valid
+YAML, GitHub accepts it, and the shared reader models it (`src/lib/workflows.js`, I-82 of
+[`docs/decisions.md`](../decisions.md)), so the head that map names is reported exactly as the same
+`ref:` written on its own line under `with:` is. That is deliberately the only step map read in flow
+style: a flow mapping anywhere else — a job, an `env:` map — is not attributed, and a `with:` map
+that does not close on its own line, or that carries a block body under it, makes the workflow
+unparseable, which this rule reports as `unparseable-workflow` and never as a pass.

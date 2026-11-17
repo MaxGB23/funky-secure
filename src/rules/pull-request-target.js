@@ -149,7 +149,9 @@ export default {
     'key, as a value, a flow collection or a block key, so a token in a run: body, a comment or a ' +
     "job if: is not a declaration. In a workflow that declares pull_request_target, each step is " +
     'checked for a checkout of the head: an actions/checkout step whose with.ref names the head ' +
-    '(pull-request-target-checkout), or a run: command that checks it out. The head is named by an ' +
+    '(pull-request-target-checkout), whichever spelling that map uses — a block map under with:, or ' +
+    'the flow form with: { ref: ... } on the key line — or a run: command that checks it out. The ' +
+    'head is named by an ' +
     'expression (github.event.pull_request.head.sha, github.event.pull_request.head.ref or ' +
     'github.head_ref) or by the reference a pull request number addresses ' +
     '(refs/pull/<number>/head, refs/pull/<number>/merge, gh pr checkout <number>, or a ' +
@@ -176,8 +178,10 @@ export default {
     'and a pull/<number>/head fetch followed by a FETCH_HEAD checkout are literal references, ' +
     'recognized without resolving anything, so the expression limit does not reach them. A workflow ' +
     'the reader cannot attribute is skipped per file; the rule never guesses from a line scan. A ' +
-    '`with:` map written in flow style (`with: { ref: ... }`) is not read at all: the structural ' +
-    'reader models block mappings, so a head named that way is not reported (I-79).',
+    'with: map is read in both spellings the reader models — the block map and the flow form ' +
+    'with: { ref: ... } on the key line (I-82) — so neither spelling hides a head, and a with: map ' +
+    'that does not close on its own line makes the workflow unparseable, which is a skip and never ' +
+    'a pass.',
   docs: DOC,
 
   /**

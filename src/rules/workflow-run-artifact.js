@@ -98,9 +98,9 @@ function unresolvedName(path, names, missing) {
  * The artifact download inside one step, or null when the step neither runs the download action nor
  * names the producing run.
  *
- * `uses` is the signal the reader always carries; a `with: { run-id: ... }` written as a flow map is
- * not visible to the reader today, so the run-id expression is read as a second signal and never as
- * the only one.
+ * `uses` is the signal every consumer writes, so it answers first; the `with.run-id` expression is
+ * read in either spelling of the map — the block one, or the flow form `with: { run-id: ... }` on the
+ * key line (I-82) — so it is a second signal and never a weaker one.
  * @param {object} step a step from the structural reader
  * @returns {{ kind: 'uses' | 'run-id', value: string } | null}
  */
@@ -213,10 +213,13 @@ export default {
     'whatever the scope is called, and which scopes fork bytes can reach is not decided here, so an ' +
     'artifact read outside a step (gh run download, the artifacts API) and one a reusable workflow ' +
     'reads as an input are invisible. A producer name more than one workflow ' +
-    'carries names no producer, so it is a skip and never a resolution. A with: map written as a ' +
-    'flow collection is invisible to the reader today, so a download that only a flow-style with ' +
-    'carries is not seen, and the workflows the trigger lists are read only from a block map: any ' +
-    'other spelling of on: is a skip, never a guessed list.',
+    'carries names no producer, so it is a skip and never a resolution. A with: map is read in both ' +
+    'spellings the reader models — the block map and the flow form with: { run-id: ... } on the key ' +
+    'line (I-82) — so a download whose only signal is a flow-style with is seen and can be the ' +
+    'finding; uses answers first because it is the spelling every consumer writes, not because the ' +
+    'other is invisible, and a with: map that does not close on its own line makes the workflow ' +
+    'unparseable, which is a skip and never a pass. The workflows the trigger lists are read only ' +
+    'from a block map: any other spelling of on: is a skip, never a guessed list.',
   docs: DOC,
 
   /**
