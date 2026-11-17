@@ -212,7 +212,7 @@ test('a floating range the lockfile never resolved is reported, never pinned', a
   assert.equal(written.dependencies.ghost, '^9.9.9', 'the tool invents nothing');
 });
 
-test('a workspace importer is named as not pinned, not silently skipped', async (t) => {
+test('a non-root importer is named as not pinned, not silently skipped', async (t) => {
   const lock = `${LOCK}  packages/app:
     dependencies:
       left:
@@ -222,7 +222,54 @@ test('a workspace importer is named as not pinned, not silently skipped', async 
   const { code, stdout } = await pin(t, ['pin'], { 'package.json': MANIFEST(), 'pnpm-lock.yaml': lock });
 
   assert.equal(code, 0);
-  assert.match(stdout, /1 workspace importer not pinned: their manifests are outside the files the scan collects/);
+  assert.match(stdout, /1 lockfile importer not pinned \(packages\/app\): pin writes the root importer only/);
+});
+
+test('the not-pinned note names a limit the scan actually has', async (t) => {
+  // t3-create-t3-app (#331): the scan reads `cli/package.json` and `www/package.json` as importers and
+  // reports findings inside them, so "outside the files the scan collects" was false; and
+  // `cli/template/base` is a lockfile importer `pnpm-workspace.yaml` declares no package for, so
+  // calling the three of them "workspace importers" mislabelled one. The note states the limit the code
+  // really has — the root importer is the only one written — and the real set, by name.
+  const lock = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      left:
+        specifier: ^1.3.0
+        version: 1.3.0
+  cli:
+    dependencies:
+      left:
+        specifier: ^1.3.0
+        version: 1.3.0
+  www:
+    dependencies:
+      left:
+        specifier: ^1.3.0
+        version: 1.3.0
+  cli/template/base:
+    dependencies:
+      left:
+        specifier: ^1.3.0
+        version: 1.3.0
+`;
+  const { code, stdout, dir } = await pin(t, ['pin'], {
+    'package.json': MANIFEST(),
+    'pnpm-lock.yaml': lock,
+    'pnpm-workspace.yaml': 'packages:\n  - cli\n  - www\n',
+  });
+
+  assert.equal(code, 0);
+  assert.match(
+    stdout,
+    /3 lockfile importers not pinned \(cli, www, cli\/template\/base\): pin writes the root importer only/,
+  );
+  assert.doesNotMatch(stdout, /outside the files the scan collects/, 'the scan does collect those manifests');
+  assert.doesNotMatch(stdout, /workspace importer/, 'cli/template/base is not a workspace member');
+  assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), MANIFEST(), 'a plan writes nothing');
 });
 
 test('an uncommitted manifest is refused with exit 3 and the action that lifts it', async (t) => {

@@ -496,9 +496,10 @@ Three properties are the whole contract:
   resolution is listed under `not pinned` with its reason; the tool never guesses a version (RFC 4.9).
 - **One write per file**, because a plan item carries the whole rewritten manifest. Indentation, key
   order and line endings survive; nothing but the specifiers changes.
-- **Root `package.json` only.** Workspace importers are named under `not pinned` with their count,
-  because their manifests are outside the files the scan collects — the plan says so instead of leaving
-  a silently incomplete pin.
+- **Root `package.json` only.** The lockfile importers it does not write are named under `not pinned`
+  with their count and their paths, because `pin` resolves and writes the root importer alone; a
+  workspace package and an importer that is not one — a template's `cli/template/base` — are listed
+  alike, since the limit is the root importer and not membership of the workspace.
 
 A `catalog:` or `catalog:<name>` reference is left alone and counted apart. It is not floating, because
 it resolves to the one version the catalogue in `pnpm-workspace.yaml` holds, and it is not exact either:
