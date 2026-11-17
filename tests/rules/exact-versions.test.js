@@ -1218,7 +1218,13 @@ async function pnpmFor(t, dir) {
     t.skip(`pnpm did not answer (${pnpm.reason}), so the printed command cannot be run here`);
     return null;
   }
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key)));
+  // `npm_config_*` and `CI` are stripped on purpose: a CI runner exports `CI`, and pnpm reads it as
+  // `--frozen-lockfile`, so the printed `pnpm install` refuses with ERR_PNPM_OUTDATED_LOCKFILE after the
+  // step before it edited the manifest. The fixture is local and offline, so it is run as a developer
+  // machine would run it, not as a CI job would.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key) && key.toUpperCase() !== 'CI'),
+  );
   return (args) =>
     spawnSync(pnpm.file, [...(pnpm.prefixArgs ?? []), ...args], { cwd: dir, env, encoding: 'utf8' });
 }
