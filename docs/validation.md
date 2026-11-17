@@ -146,6 +146,65 @@ this note stays because the error is the one a reader is most likely to repeat.
 | `shadcn-ui/ui` | 277 | 2 |
 | `t3-oss/create-t3-app` | 129 | 2 |
 
+## The round at `fc77fc2`
+
+One round of the loop — the floor `odd/tasks/post-release-debt.md` states as `T5b` — was measured at
+commit `fc77fc2` on branch `docs/post-release-record`: 45 scenarios, about 140 command executions, over
+the real repositories at `M:/pruebas/real` and this repository, covering all **seven axes** the floor
+names — the six surface axes plus one run per rule id from `explain --list` — and every one of them
+produced a result. The section is additive: no row above changed.
+
+| Axis | The run, and what it observed |
+|---|---|
+| Parity | `vercel-subscriptions-copy`: one flag set in both formats — the human report reads `0 errors · 26 warnings · 0 info · 6 passing · 6 skipped`, `PASS`, exit 0, and the JSON document for the same flags carries the identical counts and verdict. `repro-steps-indent` reads `4/0/0/7/3`, `FAIL`, exit 1 in both. All 13 rule ids agree between the two formats on both repositories |
+| Exit codes | `--fail-on` at each threshold: `vercel-subscriptions-copy` answers `0` for `error`, `1` for `warn`, `1` for `info` and `0` for `none`; `repro-steps-indent` answers `1`, `1`, `1`, `0`. A usage error exits `2`. `init --apply` on a dirty tree exits `3` with nothing written, and `migrate --apply` on `main` exits `3` with the file kept |
+| The write paths | run on a disposable copy under `M:/pruebas/real/_out/t5b/`: `init --apply` wrote 3 files, the ledger's `sha256` matched the bytes on disk, `HEAD` did not move, and a second run printed `nothing to apply`. `migrate --apply` removed only `package-lock.json`, and a second run printed `nothing to remove`. `pin --apply` changed only `package.json`, 26 leaves, all specifiers, key order preserved, and a second run printed `0 writes`. **No write path left a repository in a state it claimed it would not** |
+| Machine scope | on this host `quarantine` passes, and its own message reads `quarantine is a 4320-minute strict gate (policy floor 1440)`, while `--scope machine --format json` reports `pass: 1, skip: 12` and serializes only the twelve skips, so no serialized entry names the pass. `provenance.quarantine` reads `not verified (repository excluded)` beside it. The derivation is the set difference against `explain --list`, `provenance` speaks about the repository declaration and not about whether a rule ran, and the cure is a paragraph in the report spec — issue #333, relabelled `type:docs` |
+| A real workspace | `t3-create-t3-app`, whose workspace is declared only in `pnpm-workspace.yaml`: three importers are named as not pinned, and the sentence `pin` printed to justify it was false twice — the scan had read those manifests, and one of the three is not a workspace member. That is issue #331, fixed: the clone now prints `3 lockfile importers not pinned (cli, cli/template/base, www): pin writes the root importer only` |
+| An unreadable manifest | a fixture built under `M:/pruebas/real/_out/t5b/`: a `package.json` that does not parse yields `exact-versions` with `skip`/`unparseable-package-json` and `package-manager-pin` with `fail`/`unparseable-package-json`; a JSON document that parses but is not an object yields the same shape with `does not contain a JSON object`. No stack, exit 1, and the human and JSON documents agree |
+| Every rule reachable | `explain --list` gave 13 ids, and `scan --scope all` on this repository answered every one of them with a real finding. No rule was unreachable at this commit |
+
+A mutation round ran beside the axes: five single-token mutations, each in code that carries a promise,
+each killed by the suite. No mutant survived.
+
+| Mutation | Killed by |
+|---|---|
+| `src/lib/report.js:122` — count a skip as a pass | the suite |
+| `src/commands/scan.js:50` — always exit 0 | the suite |
+| `src/lib/report.js:160` — `>=` → `>` in the threshold comparison | the suite |
+| `src/rules/quarantine.js:75` — a skip message | **exactly one test** |
+| `src/lib/paths.js:47` — `isInside` always true | **exactly one test** |
+
+Two of the five are held by exactly one test each: the quarantine skip message, and the symlink escape.
+That is the finding of the round, because a mutation one test holds dies with the next refactor of that
+test.
+
+Three claims were attacked rather than confirmed, and all three survived.
+
+| The claim attacked | What the run answered |
+|---|---|
+| `foreign-lockfile`'s passing side is narrower than the row above says | the rule passes on **8 of the 10** repositories at `M:/pruebas/real`, so the row survives |
+| `actions-pinned-sha` passes here | the 11 `uses:` in this repository are all 40 hex, so the row survives |
+| `workflow-permissions` warns on `repro-steps-indent` | it passes: `pass=1`, `findings: []`, no finding at all. The row above already said it passes, and a claim that it warned was the reviewer's error, recorded as an error and not as a defect |
+
+Three contract observations were measured and left unchanged, because each is the contract behaving as
+the spec states and none of them is a defect.
+
+| Observation | What was measured |
+|---|---|
+| `verdict: pass` can sit beside a `fail` finding at `warn` severity | `yarnpkg-berry` with `--only foreign-lockfile` prints `verdict=pass`, exits 0, and emits one finding of status `fail` at severity `warn`. Correct by the threshold contract, and a trap for a script that reads `verdict` as "the rules passed" — which is why the 8-of-10 count above reads finding status and never verdicts |
+| The negated globs in `shadcn-ui/ui`'s workspace file are not applied | four `workspace-entry-not-applied` skips say a negation is not applied, and `packages/tests/package.json` is scanned as a member. pnpm would not exclude that path for that pattern, so no importer is wrong; the limit is stated rather than hidden |
+| A scan's root is not named in its output | `M:/pruebas` is an unborn repository — `git rev-list --count --all` answers `0` — so a scan run from `_scratch` audits `M:/pruebas` and never reads `_scratch/package.json`. Every printed statement is true of that root and misleading about the working directory, and nothing in either format names the resolved root |
+
+Four checks the floor's neighbours suggest were not run, and are recorded as not run.
+
+| Not run | The reason |
+|---|---|
+| A failing `quarantine` | it needs a host whose pnpm configuration is non-strict or below the floor |
+| A failing `env-not-tracked` | the harness refuses to write a tracked `.env` fixture |
+| A failing `workflow-run-artifact` | no fixture was built |
+| `init --apply` on a conflicts-only plan | the dirty-tree refusal covers exit 3 for that axis |
+
 ## How this page stays true
 
 The table is checked in CI through `tests/docs-contract.test.js`, which asserts the facts a document can
