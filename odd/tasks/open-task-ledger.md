@@ -51,11 +51,11 @@ than silently trimmed.
 
 | id | task | specs | status | issue | route |
 |---|---|---|---|---|---|
-| T0 | two blind judges on the plan, adjudicated in this Log | S2, S6 | landed | — | one |
-| T1 | the `## Errata` entry naming `#320`/`ba5491e`/`abd6db3` for `T11` and `#297`/`e9251d1` for `T16`, never an edit to the rows | S4 | open | #451 | one |
-| T2 | `docs/testing.md`: the five admission tests, the two absences, what was adopted and what was rejected, and the `AGENTS.md` / `CONTRIBUTING.md` / `docs/README.md` links | S3, S6 | open | #452 | one |
-| T3 | the check over this table: a row with `status: open` and no `#<issue>` fails — RED observed on this document before the `issue` column is filled | S5 | open | #454 | test-first |
-| T4 | claim audit over the feature before it closes | S2 | open | #453 | one |
+| T0 | two blind judges on the plan, adjudicated in this Log | S2, S6 | landed | — (the owner's approval is the authority) | one |
+| T1 | the `## Errata` entry naming `#320`/`ba5491e`/`abd6db3` for `T11` and `#297`/`e9251d1` for `T16`, never an edit to the rows | S4 | landed | #451 | one | one |
+| T2 | `docs/testing.md`: the five admission tests, the two absences, what was adopted and what was rejected, and the `AGENTS.md` / `CONTRIBUTING.md` / `docs/README.md` links | S3, S6 | landed | #452 | one | one |
+| T3 | the check over this table: a row with `status: open` and no `#<issue>` fails — RED observed on this document before the `issue` column is filled | S5 | landed | #454 | one | test-first |
+| T4 | claim audit over the feature before it closes | S2 | landed | #453 | one |
 
 The mutation-testing rider (`S7`) is **not** a task of this feature: `T17`'s parent row names it, this document
 names it, and it stays where it belongs — in the ledger, unwritten, rather than half-done here.

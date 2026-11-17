@@ -46,8 +46,9 @@ test('every open row of the ledger names the issue it belongs to (S5)', () => {
 
   assert.ok(rows.length >= 4, `the ledger's task table is readable, ${rows.length} rows found`);
 
+  // An empty open set is legitimate: it is the state this feature ends in, and a test that demanded an open
+  // row forever would fail on the very day the ledger is closed. The rule is about what an open row must name.
   const open = rows.filter((row) => row.status === 'open');
-  assert.ok(open.length > 0, 'the ledger has at least one open row, so this test is not vacuous');
 
   const orphans = open.filter((row) => !/#\d+/.test(row.issue));
   assert.deepEqual(
