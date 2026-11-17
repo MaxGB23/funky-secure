@@ -14,7 +14,13 @@ function nul(text) {
   return text.split('\0').filter((value) => value !== '');
 }
 
-/** @returns {Promise<string | null>} the worktree root, or null outside git */
+/**
+ * The worktree root, or `null` outside git.
+ *
+ * This is the one probe that must run from the invocation directory: it is the question whose answer
+ * *is* the root, so asking it from the root would assume the fact it resolves.
+ * @returns {Promise<string | null>} the worktree root, or null outside git
+ */
 export async function repoRoot(collector) {
   const result = await collector.git(['rev-parse', '--show-toplevel']);
   if (!result.ok || result.code !== 0) return null;
@@ -22,16 +28,37 @@ export async function repoRoot(collector) {
   return root ?? null;
 }
 
-/** @returns {Promise<string[] | null>} every tracked path, repo-relative, POSIX separators */
-export async function trackedFiles(collector) {
-  const result = await collector.git(['ls-files', '-z']);
+/**
+ * Every tracked path, repo-relative, POSIX separators.
+ *
+ * `git ls-files` answers in the coordinate system of the directory it runs in: from a nested one it
+ * lists only the tracked paths below that directory, spelled relative to it. A caller that compares
+ * the answer with repository-relative names must therefore pass the repository root, or a committed
+ * `pnpm-lock.yaml` disappears from the set and the lockfile is reported untracked (issue 347).
+ * @param {ReturnType<import('./probes.js').createCollector>} collector
+ * @param {string} [cwd] the directory git runs in; the repository root, for the reason above
+ * @returns {Promise<string[] | null>} every tracked path, repo-relative, POSIX separators
+ */
+export async function trackedFiles(collector, cwd) {
+  const result =
+    cwd === undefined
+      ? await collector.git(['ls-files', '-z'])
+      : await collector.git(['ls-files', '-z'], { cwd });
   if (!result.ok || result.code !== 0) return null;
   return nul(result.stdout ?? '');
 }
 
-/** @returns {Promise<boolean | null>} tracked or not; null when git cannot answer */
-export async function isTracked(collector, path) {
-  const result = await collector.git(['ls-files', '--error-unmatch', '--', path]);
+/**
+ * Tracked or not. The pathspec is read relative to `cwd`, so a repository-relative `path` needs the
+ * repository root here for the same reason `trackedFiles` does.
+ * @param {ReturnType<import('./probes.js').createCollector>} collector
+ * @param {string} path repository-relative path
+ * @param {string} [cwd] the directory git runs in; the repository root
+ * @returns {Promise<boolean | null>} tracked or not; null when git cannot answer
+ */
+export async function isTracked(collector, path, cwd) {
+  const args = ['ls-files', '--error-unmatch', '--', path];
+  const result = cwd === undefined ? await collector.git(args) : await collector.git(args, { cwd });
   if (!result.ok) return null;
   if (result.code === 0) return true;
   if (result.code === 1) return false;
@@ -42,15 +69,21 @@ export async function isTracked(collector, path) {
  * Behavioral ignore evaluation for a batch of candidate paths (RFC 8.2 R7, E3).
  * The verdict is the per-path presence in the NUL-separated output; the aggregate exit code is
  * never read as one path's answer, and `-v` is never passed.
+ *
+ * `check-ignore` resolves every path it is given relative to the directory it runs in, so candidate
+ * paths declared repository-relative need `cwd` = the repository root: from a nested directory a
+ * root `.gitignore` rule is asked about a path it never mentioned and the answer is not ignored
+ * (issue 347).
  * @param {ReturnType<import('./probes.js').createCollector>} collector
- * @param {string[]} paths
+ * @param {string[]} paths repository-relative candidate paths
+ * @param {string} [cwd] the directory git runs in; the repository root, for the reason above
  * @returns {Promise<Set<string> | null>} the ignored paths, or null when the probe failed
  */
-export async function ignoredPaths(collector, paths) {
+export async function ignoredPaths(collector, paths, cwd) {
   if (paths.length === 0) return new Set();
-  const result = await collector.git(['check-ignore', '--no-index', '--stdin', '-z'], {
-    input: paths.map((path) => `${path}\0`).join(''),
-  });
+  const options = { input: paths.map((path) => `${path}\0`).join('') };
+  if (cwd !== undefined) options.cwd = cwd;
+  const result = await collector.git(['check-ignore', '--no-index', '--stdin', '-z'], options);
   if (!result.ok) return null;
   if (result.code !== 0 && result.code !== 1) return null;
   return new Set(nul(result.stdout ?? ''));

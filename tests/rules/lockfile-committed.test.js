@@ -1,15 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import rule from '../../src/rules/lockfile-committed.js';
 import { createCollector } from '../../src/lib/probes.js';
 import { run } from '../../src/cli.js';
 
 const LOCKFILE = 'pnpm-lock.yaml';
+const BIN = fileURLToPath(new URL('../../bin/funky-secure.js', import.meta.url));
 
 function context({ inGit = true, present = true, tracked = true, ignored = false } = {}) {
   const names = present ? [LOCKFILE] : [];
@@ -669,6 +671,30 @@ test('the human report and the JSON document answer the same thing in every stat
       );
     }
   }
+});
+
+/// The collector resolves the tracked set from the repository root, not the invocation directory (#347).
+
+test('the binary passes from a nested directory in a repository that committed its lockfile (#347)', async (t) => {
+  const dir = repository(t, 'tracked');
+  const nested = join(dir, 'packages', 'api');
+  mkdirSync(nested, { recursive: true });
+
+  const result = spawnSync(
+    process.execPath,
+    [BIN, 'scan', '--scope', 'repo', '--only', 'lockfile-committed', '--format', 'json'],
+    { cwd: nested, encoding: 'utf8', env: process.env },
+  );
+
+  assert.equal(result.stderr, '');
+  assert.equal(result.status, 0, `the run failed from a nested directory:\n${result.stdout}`);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(
+    report.summary,
+    { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' },
+    'the tracked set is resolved from the repository root, so the committed lockfile passes',
+  );
+  assert.deepEqual(report.findings, []);
 });
 
 /// S4, the page: it names the commands the findings print, or it is corrected in this change.
