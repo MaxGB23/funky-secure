@@ -17,6 +17,7 @@ Where a change goes. This page is a map, not a contract: the contract is
 | what an agent must know before touching a repository | [`../skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md), including its `version` |
 | the merge ritual, or what it refuses before creating anything | [`../AGENTS.md`](../AGENTS.md), the ritual's paragraph, and a row in [`decisions.md`](decisions.md); the arc they came from is [`../odd/tasks/open-pr-gate.md`](../odd/tasks/open-pr-gate.md) |
 | how a defect the tests could not see gets found before a release | [`field-loop.md`](field-loop.md) |
+| when a test is required, when it is not, and what makes one admissible | [`testing.md`](testing.md) |
 | how a version reaches the registry, and what gates it first | [`delivery.md`](delivery.md) |
 
 Nothing on that list fits? Then the page you want probably should not exist, and the rule belongs in
