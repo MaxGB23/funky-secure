@@ -73,6 +73,28 @@ function skip(code, reason) {
 }
 
 /**
+ * The skip a name that no workflow carries produces. `names` is every name the trigger lists, which
+ * `evidence.workflows` keeps whole, and `missing` is the ones that resolved to nothing — a message that
+ * named the resolvable ones would say the repository lacks a workflow it has.
+ * @param {string} path
+ * @param {string[]} names every name the trigger lists
+ * @param {string[]} missing the names no workflow carries
+ * @returns {object}
+ */
+function unresolvedName(path, names, missing) {
+  return {
+    status: 'skip',
+    code: 'producer-unresolved-name',
+    path,
+    message:
+      `skipped: no workflow in the repository carries the name ${missing.map((name) => `"${name}"`).join(', ')} ` +
+      'the workflow_run trigger names, so the producer cannot be resolved',
+    evidence: { workflows: names },
+    probeUnavailable: true,
+  };
+}
+
+/**
  * The artifact download inside one step, or null when the step neither runs the download action nor
  * names the producing run.
  *
@@ -317,10 +339,13 @@ export default {
       const producers = [];
       /** @type {Array<{ name: string, paths: string[] }>} */
       const shared = [];
+      /** @type {string[]} the names no workflow carries, which no pass covers */
+      const missing = [];
       for (const name of names) {
         const matches = [...(byName.get(name) ?? [])].sort((a, b) => (a.path < b.path ? -1 : 1));
         if (matches.length === 1) producers.push(matches[0]);
         else if (matches.length > 1) shared.push({ name, paths: matches.map((match) => match.path) });
+        else missing.push(name);
       }
 
       if (shared.length > 0) {
@@ -346,16 +371,7 @@ export default {
 
       if (producers.length === 0) {
         unresolved = true;
-        findings.push({
-          status: 'skip',
-          code: 'producer-unresolved-name',
-          path: file.path,
-          message:
-            `skipped: no workflow in the repository carries the name ${names.map((name) => `"${name}"`).join(', ')} ` +
-            'the workflow_run trigger names, so the producer cannot be resolved',
-          evidence: { workflows: names },
-          probeUnavailable: true,
-        });
+        findings.push(unresolvedName(file.path, names, missing));
         continue;
       }
 
@@ -363,11 +379,24 @@ export default {
         declaresTrigger(producer.text, PRODUCER_TRIGGER),
       );
 
+      // A trigger can list several workflows and GitHub starts the consumer when any of them finishes.
+      // A listed name that resolved to nothing is a producer this rule did not resolve, so it can
+      // never ride along under a pass: `trusted-producer` says *every* name the trigger lists resolved,
+      // and one that did not makes that sentence false. Only that pass is preempted — the legs before
+      // it never read the producer, so a consumer holding no write scope keeps `no-write-permission`.
+      let unresolvedHere = false;
+
       for (const { job, step, download: found } of downloads) {
         const scopes = jobScopes(job, file.parsed.permissions);
         if (scopes.length === 0) continue;
         privileged = true;
-        if (untrusted.length === 0) continue;
+        if (untrusted.length === 0) {
+          if (missing.length === 0 || unresolvedHere) continue;
+          unresolvedHere = true;
+          unresolved = true;
+          findings.push(unresolvedName(file.path, names, missing));
+          continue;
+        }
 
         const producer = untrusted[0];
         findings.push({
