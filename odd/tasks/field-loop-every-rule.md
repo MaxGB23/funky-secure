@@ -213,3 +213,43 @@ how every remaining task is judged.
   the same shape: a command or a line the tool prints that does not do what its own sentence says — #359, #361,
   #368, #373, #379 and #383. That is worth naming in the closing record, because it is a property of how
   remediations are written, not thirteen unrelated bugs.
+
+**L7** — the loop closed: thirteen rules measured, every side reached by a run, and the record is what was
+wrong. This entry is the evidence `S9` asks for — each task with the commit that holds it — and the closing
+statement of the feature.
+- **T1 `package-manager-pin`** — #355 → `f5f5132`. Code: a pin carrying `+sha512.…` was reported as a
+  difference from the machine. Spec-first for T2: #350 → `7d2d1a5`, then #351 → `71b0df5`.
+- **The collector** — #356 → `e01721d`. Three probes ran git from the invocation directory; a scan below the
+  root reported a committed lockfile as untracked. Found by T2, and it belongs to no single rule.
+- **T3 `foreign-lockfile`** #363 → `2b739a5`, **T4 `quarantine`** #362 → `0c07864`, **T5
+  `exact-versions`** #370 → `22c3fa3`, **T6 `env-not-tracked`** #366 → `eabd777`: page corrections only.
+- **`L5`** — #372 → `7488ccd`, and **`L6`** — #388 → `c13c252`: what the measurement wrote back into this
+  document, including the refutation of `S8`.
+- **T7 `sensitive-ignored`** #376 → `a51618a`, **T8 `actions-pinned-sha`** #379 → `12dbdf0` (code: the
+  printed docker remediation swapped the image), **T9 `no-bot-auto-merge`** #381 → `8445d05`, **T10
+  `ci-no-safety-overrides`** #386 → `5b76720`, **T11 `pull-request-target`** #392 → `022df81`, **T12
+  `workflow-permissions`** #396 → `1168bd7`, **T13 `workflow-run-artifact`** #401 → `bf50116` (code: a
+  producer name that resolves to nothing answered a counted pass), **T14 the invariants** #399 → `ff637e1`,
+  and **T16** this entry, with `docs/validation.md` carrying the loop's rows.
+- **T15, the mutation round**: eight single-token mutations, each a deliberate defect in code this loop
+  proved or fixed — the `+sha512` hash left on a version, `check-ignore` without `--no-index`, repository
+  facts read from the invocation directory, a docker tag split that ignores the registry slash, an existing
+  digest not recognised, a missing producer name riding under a pass, `starter` running `sensitive-ignored`,
+  and the head-sha expression no longer being one. **8 killed, 0 survived**, each by the test that owns the
+  behaviour, with the tree restored from a byte copy after every run.
+- **The result, stated plainly**: nine of the thirteen rules needed no code. The product answered its own
+  promises on every side it was asked to justify; what was wrong was the **record** — pages silent on the
+  fact that decides a side, and one spec sentence (`docs/spec/rules.md:259`) promising a manual alternative
+  no command prints. Three rules needed code (`package-manager-pin`, `lockfile-committed`,
+  `actions-pinned-sha`), one more (`workflow-run-artifact`) needed a pass that the spec already forbade, and
+  one fix belonged to no rule at all: the collector's coordinate.
+- **Nineteen defects were opened, each with a reproduction, and none was folded silently into a batch.** The
+  largest class is the one `L6` named: a command or a line the tool prints that does not do what its own
+  sentence says — #359, #361, #368, #373, #379, #383, #394 and #398. Two are security-shaped and stand at
+  the head of the queue: **#391**, where `pull-request-target` passes a head reached by pull number, and
+  **#383**, where the workflow remediation discards the rest of a compound step.
+- **What this document got wrong, kept as the lesson**: `S8` claimed one side was out of reach and was
+  refuted by a run; `S3` claimed every finding names a `path` and a `line`; `S4` claimed the two formats
+  agree on a `code` that the human renderer never prints; and `S4`'s remediation obligation was satisfiable
+  by a remediation that destroyed something else, which two defects proved. Four claims, four corrections,
+  and every correction came from a run rather than from a preference.

@@ -57,17 +57,12 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 
 ## The side each rule was measured from
 
-Two rows are exercised on one side only. The sweep that closed the other three ran over the ten
-repositories at `M:/pruebas/real` with `scan --scope repo --format json`, and the three observations are in
-the table below. What stays here is what no sweep could measure, beside the reason it could not.
-
-| Rule | The side this row reports | The side it does not |
-|---|---|---|
-| `exact-versions` | the findings, and how accurately the comparator located the ranges — `0 mismatches` and `0 desyncs` measure the locating, not the rule's pass, which is "no floating specifier and no desync" (`rules/exact-versions.md`) | a repository whose specifiers are all exact. **Swept, still missing**: nine of the ten repositories fail it and the tenth skips, and this repository passes with **0 dependencies** — a pass with no specifier in it is not the state this row names |
-| `quarantine` | the declaration that passes, and the block `init --apply` writes | a repository whose declaration fails the rule. **Swept, still missing**: all eleven scans answered `skip`, because the rule reads the machine configuration and `--scope repo` puts it out of scope |
-
-The rule table says what a rule does; this paragraph is where a reader looks for what was actually read. A
-row that gains the other side leaves this table, and the three that did are in the measured table below.
+This section used to carry two rows — `exact-versions` and `quarantine` — each measured from one side only. Both
+have since gained the other, so both left the table: `quarantine` fails in a fixture whose own
+`pnpm-workspace.yaml` sets `minimumReleaseAgeStrict: false`, because `pnpm config list --json` runs with the
+invocation directory as its `cwd`, and `exact-versions` passes in a repository whose specifiers are all exact.
+The runs are in the rule loop below. The table is empty now, and the paragraph that introduced it — a row that
+gains the other side leaves this table — is the reason it can be.
 
 ## Behaviour that was measured rather than assumed
 
@@ -130,6 +125,52 @@ repository and `git init` created a nested one; the tool's path was still the no
 is what the scenario is about. And round 2 ran inside a repository that owns a `pnpm-workspace.yaml`, so
 its installs would have escaped had `init --apply` not written the project's own workspace file first —
 which is exactly why the round met no escape and why the line `rfcs/0031` added never fired.
+
+## The rule loop, one rule at a time
+
+`odd/tasks/field-loop-every-rule.md` took each of the thirteen rules and measured it from four sides — it fails
+with its own code at the location the finding names, it passes and the pass is **counted**, it skips with the
+fact named, and it is off by policy contributing neither a finding nor a count — and then applied the three
+obligations: the printed remediation is run and must clear the finding **and change nothing else**, the two
+formats must agree, and the page must describe what the run does. Every fixture was built at run time in the
+OS temp directory and driven through the binary, so no row here rests on a developer machine's state.
+
+| Rule | What the four sides needed | The fact the run decided |
+|---|---|---|
+| `package-manager-pin` | **code** | a pin carrying `+sha512.…` was reported as a difference from the machine; the version the pin names is what is compared |
+| `lockfile-committed` | **code**, spec first | `git check-ignore -v <path>` answers nothing for a path already in the index; the printed command carries `--no-index` |
+| `foreign-lockfile` | the page | the page said "both presets" where three exist |
+| `quarantine` | the page | the two fail codes are indistinguishable in the human report, which prints no code at all |
+| `exact-versions` | the page | the page claimed two skips where the rule emits one |
+| `env-not-tracked` | the page | the `no-repo` skip was never named, and the plan's own "unreachable" claim was refuted: the refusal is on the agent's command text, not on the machine |
+| `sensitive-ignored` | the page | the rule fails whether or not the file exists, and `init --apply` writes one fixed block, not "the missing entries" |
+| `actions-pinned-sha` | **code** | the printed docker remediation swapped the image — `docker://registry:5000/app` became `docker://registry@sha256:…` — and a digest that is not 64 sha256 hex was appended, not replaced |
+| `no-bot-auto-merge` | the page | the line is where the **step begins**, not where its `run:`/`uses:` is, and the edit is the whole step |
+| `ci-no-safety-overrides` | the page | the printed remediation replaces the whole `run:` body, so a compound step loses its other commands |
+| `pull-request-target` | the page | a pass is a summary count and never a row, so no format prints the code or the message it carries |
+| `workflow-permissions` | the page | severity belongs to the rule, not to one of its codes: a `write-all` is `warn` under `baseline` too |
+| `workflow-run-artifact` | **code** | a trigger listing a name that resolves to nothing answered a counted pass; R13 says an unresolved producer is a skip |
+
+Nine of the thirteen needed no code. That is the loop's largest result and its least comfortable one: the
+product answered its own promises, and what was wrong was the record — pages silent on the fact that decides a
+side, and one spec (`docs/spec/rules.md:259`) promising a manual alternative that no command prints.
+
+### The mutation round that closed it
+
+Eight single-token mutations, each a deliberate defect in code the loop proved or fixed, each killed by the test
+that owns the behaviour. No mutant survived, and the tree was restored from a byte copy after every run, never
+from git.
+
+| Mutation | Killed by |
+|---|---|
+| the `+sha512` hash left on the declared version | `tests/rules/package-manager-pin.test.js` |
+| `check-ignore` without `--no-index` | `tests/rules/lockfile-committed.test.js` |
+| repository facts read from the invocation directory | `tests/rules/lockfile-committed.test.js` |
+| a docker tag split that ignores the registry slash | `tests/rules/actions-pinned-sha.test.js` |
+| an existing docker digest not recognised | `tests/rules/actions-pinned-sha.test.js` |
+| a missing producer name riding under the pass again | `tests/rules/workflow-run-artifact.test.js` |
+| `starter` running `sensitive-ignored` | `tests/invariants.test.js` |
+| `github.event.pull_request.head.sha` no longer a head expression | `tests/rules/pull-request-target.test.js` |
 
 ## Totals, and the mistake this page made once
 
@@ -196,14 +237,17 @@ the spec states and none of them is a defect.
 | The negated globs in `shadcn-ui/ui`'s workspace file are not applied | four `workspace-entry-not-applied` skips say a negation is not applied, and `packages/tests/package.json` is scanned as a member. pnpm would not exclude that path for that pattern, so no importer is wrong; the limit is stated rather than hidden |
 | A scan's root is not named in its output | `M:/pruebas` is an unborn repository — `git rev-list --count --all` answers `0` — so a scan run from `_scratch` audits `M:/pruebas` and never reads `_scratch/package.json`. Every printed statement is true of that root and misleading about the working directory, and nothing in either format names the resolved root |
 
-Four checks the floor's neighbours suggest were not run, and are recorded as not run.
+One check the floor's neighbours suggest was not run, and is recorded as not run.
 
 | Not run | The reason |
 |---|---|
-| A failing `quarantine` | it needs a host whose pnpm configuration is non-strict or below the floor |
-| A failing `env-not-tracked` | the harness refuses to write a tracked `.env` fixture |
-| A failing `workflow-run-artifact` | no fixture was built |
 | `init --apply` on a conflicts-only plan | the dirty-tree refusal covers exit 3 for that axis |
+
+The three that stood here — a failing `quarantine`, a failing `env-not-tracked` and a failing
+`workflow-run-artifact` — were measured by the rule loop above, and each one was reachable for a reason the
+first revision of that plan had got wrong: a fixture whose own `pnpm-workspace.yaml` decides the quarantine gate,
+a test process that writes and commits a `.env` (the harness refuses the agent's command text, not the
+machine), and the fixtures that already existed in the tree.
 
 ## How this page stays true
 
