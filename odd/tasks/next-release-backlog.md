@@ -353,3 +353,19 @@ the fourth produced one owner decision and no code.
   land as a case, taken from the agent's own files and named after the promise it broke. What no page does
   is state the admission rule, and neither `AGENTS.md` nor `CONTRIBUTING.md` points at the loop at all. So
   T17 adds one page and two cross-references; it reopens no measurement and claims none.
+
+## Errata
+
+**2026-11-17 — the rows whose commit was recorded in another document.** This record is append-only, so the four
+rows below keep the `Commit: —` they were written with; the commit each one produced is named here instead. Found
+while planning `odd/tasks/post-release-debt.md` (its T7), and every hash below was checked against `git log -1`
+before it was written.
+
+- **T2** — `745881b` (PR #284), *docs(spec): name the guard order where the unversioned pin row is read*.
+- **T5** — `6be24e7` (PR #290), *fix(workflows): a block scalar starts at its indentation indicator*.
+- **T6** — `62fa2cb` (PR #291), *chore(probe): the resolve fixture builds its section from the constant*.
+- **T8** — split before it landed, so its row names no commit and its halves name their own: **T15a** is
+  `3befd3f` (PR #296), *docs(spec): the summary counters count findings, and they are not coverage*, and **T15b**
+  already carries its two in its own row.
+
+Nothing else about those rows changes: their specs, judges and acceptance are as written.

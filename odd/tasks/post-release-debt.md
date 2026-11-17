@@ -75,6 +75,12 @@ disposable copy with the tree hash before and after — **the scenarios the clon
 whose surviving mutants are listed by name**, and **one attempt to refute each row `T5a` moved**. An axis that was
 not run is written as not run, never as passed.
 
+The rule surface is the floor's widest axis and the one a default scan hides: `explain --list` names thirteen rules,
+and `scan --scope repo` in this repository runs seven of them — one importer rule and six CI rules — of which two
+verify nothing at all. So **every rule id gets one `--only <id>` run**, and a rule that is off by policy, or that
+skips for want of a fact, is reported as exactly that, never as a pass. A rule nobody ran is the most expensive
+kind of silence this product can print, because `summary.pass` counts it as fine.
+
 ## Measured before planning
 
 Runs, not readings. Each one either survives the plan or corrects it.
@@ -169,6 +175,7 @@ docs; needs no network for a clone that already exists. Commit: this PR for T5a.
 | Workspace | a real workspace, where an importer is named as not pinned rather than silently skipped |
 | Unreadable manifest | a `package.json` that does not parse: a `skip` with its message, never a crash |
 | The write paths | `init --apply`, `migrate --apply` and `pin --apply` on a disposable copy, with the tree hash before and after |
+| Every rule | one `--only <id>` run per id from `explain --list`, thirteen in all: a verdict, a `skip` code, or off by policy — never a pass by omission |
 
 The floor is those six, plus the scenarios the clone map enables, plus one mutation round whose surviving mutants
 are listed. The fourth obligation is the cheapest and the one the first release's loop skipped: every row `T5a`
@@ -308,3 +315,10 @@ and `#330`, merged as `4537478`, `8871148` and `707e374` on a matrix with no sta
 operational fact worth keeping: the preflight resolves a **single literal** command, so a `for` loop or a shell
 function containing a delivery command is refused with *"The delivery repository cannot be resolved"* — a different
 message from the empty-range one, cured by splitting the command, never by touching the switch.
+
+**L15** — the owner asked *"se correran todas las reglas en field loop o solo algunas?"* and the honest answer was
+that the floor named six axes and no rule: `explain --list` carries thirteen, `scan --scope repo` here runs seven,
+and two of the seven verify nothing (`package-manager-pin`, `quarantine`), so a loop built only on the six axes
+would have tested a majority of the product and reported on all of it. The floor gains a seventh axis: one
+`--only <id>` run per rule, with `skip` and off-by-policy reported as themselves. The cost is thirteen cheap runs;
+the thing it buys is that no rule can be counted as covered because it was never asked.
