@@ -16,6 +16,12 @@
  * - A floating range is pinned with `pnpm pkg set` and the version the lockfile records (S4):
  *   `pnpm add --save-exact <name>@<range>` is a measured no-op on pnpm 12.3.4, because pnpm keeps the
  *   specifier the package already has.
+ * - Except for an internal package, whose resolved version is a path: a `workspace:` range is pinned to
+ *   `workspace:*`, never to the `link:../lib` the lockfile records for it, because writing the path
+ *   over the protocol takes the package out of the workspace while the finding clears — the
+ *   remediation destroying something the author wrote (368, `docs/spec/rules.md` R5). Measured on
+ *   pnpm 12.3.4: `workspace:*` is written as given, the lockfile records `specifier: workspace:*`,
+ *   and the package keeps its symlink into the workspace.
  */
 
 import { LOCKFILE_ONLY_STEP } from '../lib/foreign-pin.js';
@@ -35,6 +41,9 @@ const DEPENDENCY_TYPES = [
 ];
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+/** A specifier that asks for a workspace member rather than a registry version; only its floating
+ * forms reach the remediation, because `workspace:*` and `workspace:<version>` are exact. */
+const WORKSPACE_PROTOCOL = /^workspace:/i;
 const URL_USERINFO = /^([a-z][a-z0-9+.-]*:\/\/)([^/@\s]+)@/i;
 const CATALOG_SPECIFIER = /^catalog:(.*)$/;
 
@@ -243,15 +252,24 @@ export function pinCommand({ type, dependency, version, dir }) {
 /**
  * The remediation of a floating range (S4, field round 4).
  *
+ * An internal package is the one case where the lockfile's resolved version must not be written: for a
+ * `workspace:` range it is a `link:../lib` path, and a path in place of the protocol takes the package
+ * out of the workspace while the finding clears (368). The exact form for an internal package is the
+ * one Detection names, `workspace:*`, and it needs no lockfile record at all — so this branch comes
+ * before the resolve step, which exists only for a version this rule cannot know.
+ *
  * With no recorded version the tool invents nothing (RFC 4.9): the remediation is the resolve step
  * plus the scan, which then prints the exact pin for that repository. That step writes the lockfile
  * rather than a manifest, so it stays workspace-wide — and it is `LOCKFILE_ONLY_STEP`, imported, so the
  * probe that follows it measures the command this finding prints.
  *
- * @param {{ type: string, dependency: string, version: string | null, dir?: string }} options
+ * @param {{ type: string, dependency: string, version: string | null, specifier?: unknown, dir?: string }} options
  * @returns {{ kind: string, command: string }}
  */
-function floatingRemediation({ type, dependency, version, dir }) {
+function floatingRemediation({ type, dependency, version, specifier, dir }) {
+  if (typeof specifier === 'string' && WORKSPACE_PROTOCOL.test(specifier.trim())) {
+    return { kind: 'manual', command: pinCommand({ type, dependency, version: 'workspace:*', dir }) };
+  }
   if (typeof version !== 'string' || version === '') {
     return {
       kind: 'manual',
@@ -314,7 +332,7 @@ export default {
   evidence:
     '{ specifier, dependency, type } for a floating range (plus catalog for a catalogue range; resolved is null when the lockfile has no record), { specifier, resolved } for a desync.',
   remediation:
-    "Manual: pnpm -C <importer dir> pkg set '<section>[\"<name>\"]=<version>' && pnpm -C <importer dir> install pins the version pnpm-lock.yaml records in the manifest that declares it (the root importer keeps the bare form), because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. A catalogue range is edited in pnpm-workspace.yaml, because the package.json line that refers to the catalogue cannot be made exact. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.",
+    "Manual: pnpm -C <importer dir> pkg set '<section>[\"<name>\"]=<version>' && pnpm -C <importer dir> install pins the version pnpm-lock.yaml records in the manifest that declares it (the root importer keeps the bare form), because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. A workspace: range is pinned to workspace:* instead, because the version the lockfile records for an internal package is a link: path and writing it takes the package out of the workspace. A catalogue range is edited in pnpm-workspace.yaml, because the package.json line that refers to the catalogue cannot be made exact. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.",
   limits:
     'The rule resolves nothing: the command names the current specifier and pnpm writes the exact version. A specifier shape this rule does not recognize is not reported. An unsupported lockfile shape (lockfileVersion other than 6.0 or 9.0, patchedDependencies, a catalogue entry that is not a {specifier, version} map) skips the comparison rather than guessing it. peerDependencies are compared only when the lockfile records that kind: an importer block records no peer dependency, so a peer specifier is not compared against another section record.',
   docs: DOC,
@@ -438,6 +456,9 @@ export default {
               dependency: entry.dependency,
               // A recorded resolution can be a URL too, so it is redacted like the specifier.
               version: redactedSpecifier(version),
+              // The raw specifier, not the redacted echo: this only decides whether the specifier is a
+              // `workspace:` range, and that prefix is never a secret.
+              specifier: entry.specifier,
               dir: importer.dir,
             }),
           });
