@@ -52,6 +52,28 @@ function fail(detail) {
 const BLOCK_SCALAR = /^[|>][+\-0-9]*$/;
 
 /**
+ * The indentation indicator a block scalar's header declares, or `null` when it declares none.
+ *
+ * YAML writes the digit with an optional chomping sign on either side — `|2`, `>2-`, `|-2`, `|2+` —
+ * and allows at most one sign, so `|+2-` declares nothing. A digit of `0` or a two-digit number is not
+ * a header either, which is why the class is `[1-9]` and not `\d`.
+ *
+ * This is narrower than `BLOCK_SCALAR` on purpose: that gate answers "is this a block scalar", and a
+ * header it accepts while this refuses still falls back to the indent the body's first line declares.
+ * Returning `null` and never `undefined` is part of the contract, because the reader compares with
+ * `=== null` and `undefined` would make the body start at `NaN`.
+ *
+ * @param {string} value the text after the `:` on the key's own line
+ * @returns {{ indicator: number | null }}
+ */
+export function parseBlockHeader(value) {
+  const header = /^[|>]([+-]?)([1-9])([+-]?)$/.exec(value);
+  // Two signs is not a header: `|+2-` and `|2+-` are read as an indicator nobody declared.
+  if (header === null || (header[1] !== '' && header[3] !== '')) return { indicator: null };
+  return { indicator: Number(header[2]) };
+}
+
+/**
  * Whether a trimmed line is a sequence item: a bare `-` or `- <value>`.
  * @param {string} text
  * @returns {boolean}
@@ -325,14 +347,13 @@ class Reader {
     const fold = value.startsWith('>');
     // An explicit indentation indicator (`|2`, `>2-`, `|-2`) decides where the body starts, counted from
     // the key's own column: without it, a first line written deeper than the indicator is read as the
-    // body's indent and the tail ends the scalar early (S1.1, #266). YAML puts the digit and the
-    // chomping sign in either order and allows one sign, so both spellings reach the same number here.
+    // body's indent and the tail ends the scalar early (S1.1, #266). Which spellings declare one, and
+    // which fall back to the first line, is `parseBlockHeader`'s decision and is tested there.
     // A scalar that carries no indicator keeps the indent its first non-empty line declares.
-    const header = /^[|>]([+-]?)([1-9])([+-]?)$/.exec(value);
-    const indicator = header !== null && !(header[1] !== '' && header[3] !== '') ? header[2] : null;
+    const { indicator } = parseBlockHeader(value);
     /** @type {string[]} */
     const body = [];
-    let bodyIndent = indicator === null ? null : indent + Number(indicator);
+    let bodyIndent = indicator === null ? null : indent + indicator;
     let i = start + 1;
     for (; i < this.lines.length; i += 1) {
       const raw = this.lines[i].raw;

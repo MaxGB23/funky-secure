@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseWorkflow } from '../src/lib/workflows.js';
+import { parseBlockHeader, parseWorkflow } from '../src/lib/workflows.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -251,6 +251,35 @@ test('refuses a uses value written as a block scalar instead of guessing a refer
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'unparseable-workflow');
   assert.match(result.detail, /line 4/);
+});
+
+test('reads the indentation indicator from the header, and refuses the spellings that declare none (#266)', () => {
+  // The suite reaches a few of these shapes through the parser; the rest are pinned here, because the
+  // one-sign rule lived only in a code comment and nothing exercised it. `|+2-`, `|0` and `|10` all pass
+  // the block scalar gate and declare no indicator, so they fall back to the indent the body's first
+  // line writes — the behaviour the field measured, now a decision instead of an accident of the regex.
+  const cases = [
+    ['|', null],
+    ['>-', null],
+    ['|2', 2],
+    ['>2-', 2],
+    ['|-2', 2],
+    ['|2-', 2],
+    ['|+2', 2],
+    ['|2+', 2],
+    ['|+2-', null],
+    ['|0', null],
+    ['|10', null],
+    ['|12', null],
+  ];
+
+  for (const [value, expected] of cases) {
+    assert.equal(
+      parseBlockHeader(value).indicator,
+      expected,
+      `${JSON.stringify(value)} declares ${expected === null ? 'no indicator' : expected}`,
+    );
+  }
 });
 
 test('reads a block scalar at its indentation indicator, not at its first line (#266)', () => {
