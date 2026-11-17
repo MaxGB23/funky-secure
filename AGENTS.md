@@ -14,6 +14,7 @@ settled; the present is edited freely, in its own pull request.
 | `rfcs/` | The record: `rfcs/README.md` is the registry, and a settled RFC is never rewritten. |
 | `odd/tasks/` | Feature records: specs, tasks and an append-only Log. |
 | `src/` | The code, with the suite in `tests/` and the golden generator in `scripts/`. |
+| `docs/testing.md` | When a test is required, when it is not, and what makes one admissible. |
 | `CONTRIBUTING.md` | The hard rules, the issue and pull request ritual, and the local checks. |
 
 ## Working rules
