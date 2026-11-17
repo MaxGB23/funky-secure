@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "funky-secure",
+    "version": "0.13.0"
+  },
+  "scope": "all",
+  "policy": {
+    "preset": "strict",
+    "quarantineMinutes": 4320,
+    "failOn": "error",
+    "requireVerified": false
+  },
+  "provenance": {
+    "preset": "strict",
+    "presetSource": "funky-secure.config.json",
+    "quarantine": "declared in pnpm-workspace.yaml",
+    "machine": "included"
+  },
+  "targets": [
+    {
+      "kind": "machine",
+      "detail": "pnpm 12.3.4 (C:\\Users\\cb147\\AppData\\Local\\pnpm\\bin\\..\\global\\v11\\557a16cc51f818d142da6cabdc92990972c46d60721da61794cda49f5c7e27d2\\node_modules\\@pnpm\\exe\\pnpm.exe)  ·  store M:\\.pnpm-store"
+    },
+    {
+      "kind": "repo-root",
+      "path": "."
+    },
+    {
+      "kind": "importer",
+      "path": "."
+    },
+    {
+      "kind": "ci",
+      "path": ".github/workflows"
+    }
+  ],
+  "summary": {
+    "error": 0,
+    "warn": 0,
+    "info": 0,
+    "pass": 13,
+    "skip": 0,
+    "verdict": "pass"
+  },
+  "findings": []
+}
