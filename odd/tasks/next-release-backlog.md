@@ -369,3 +369,24 @@ before it was written.
   already carries its two in its own row.
 
 Nothing else about those rows changes: their specs, judges and acceptance are as written.
+
+**2026-11-17 — the two rows that read as open and are not.** Found while planning `odd/tasks/open-task-ledger.md`
+(its `T1`). Both rows keep the `Commit: —` and the `Still open` they were written with, because this record is
+append-only; what they produced is here instead, and every hash was checked against `git log -1` before it was
+written.
+
+- **T11** — *"Debt (b) — the five one-sided rules are measured or declared"*. **Both branches were closed.** The
+  issue the row never named was **#320** (with its duplicate **#327**), closed by `ba5491e` (PR #321,
+  *docs(validation): the remaining rules are declared, not measured*), which wrote the residual declaration
+  `S15` allowed. The measurement branch then landed too: `abd6db3`, *docs(validation): the sweep ran, three rows
+  moved, and the table is a table again*, which is the "Either a clone sweep finds a repository where each
+  passes" half of the spec — `docs/validation.md:65-87` records both sides of all five rules. **Nothing is owed
+  on this row.**
+- **T16** — *"the verdict counts findings and calls them rules"*. Closed by `e9251d1` (PR #297, *fix(render): the
+  verdict counts the rules it names*), merged nineteen minutes after this row was written. It moved
+  `docs/spec/report.md` §10.3 (*"The verdict counts the rules it did not verify once each and names them"*),
+  `src/lib/render-human.js` (`verdictLine` now takes `unverifiedIds`), and `tests/report.test.js` (+40 lines
+  pinning both). The row's evidence line, `src/lib/render-human.js:397`, is a JSDoc sentence today: the defect it
+  describes is not there. **Nothing is owed on this row either.**
+
+What survives from that pair is `T17` alone, and it is `odd/tasks/open-task-ledger.md`'s subject.
