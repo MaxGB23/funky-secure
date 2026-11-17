@@ -53,6 +53,20 @@ exists. Never delete the only lockfile a repository has: on a repository with no
 printed command refuses (exit 3, nothing written) and names `pnpm import` as the step to run first;
 then the same command removes the foreign lockfile and the finding clears.
 
+A foreign lockfile that stands alone is a `warn`, so `scan` passes the run at the default threshold
+while the finding names the command above. The closing `next` block names that same command instead of
+`nothing to do`, because a run that lists an action cannot end by saying there is nothing to do (RFC
+10.3, #360):
+
+```text
+  ⚠  Foreign lockfile
+     package-lock.json is still present; another package manager still shapes this
+     repository
+     → funky-secure migrate --from npm --apply
+
+next     funky-secure migrate --from npm --apply
+```
+
 ## Limits
 
 The rule lists files; it does not read them, does not decide which tree wins and deletes nothing.

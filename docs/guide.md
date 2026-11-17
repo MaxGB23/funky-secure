@@ -105,7 +105,9 @@ how many were skipped. **`verdict`** compares those failures with the threshold 
 **`next`** is the last block, and it is an instruction rather than a count: the one command that
 moves the repository forward. When a finding can be fixed automatically it names `funky-secure init`
 and how many fixes it can plan — nothing is written until you add `--apply` — then one
-`funky-secure explain <rule>` for the finding to read first. A `PASS` says `nothing to do`; when the
+`funky-secure explain <rule>` for the finding to read first. When a finding below the threshold names
+a command, a `PASS` names that command, because a run that lists an action never closes by saying
+there is nothing to do. A `PASS` with nothing to act on says `nothing to do`; when the
 policy turns some rules off it says `nothing to do among the rules that ran` instead, because the
 sentence would otherwise speak for rules nobody measured. A `FAIL`
 where nothing is automatic says the work is manual, because each finding above already names its
