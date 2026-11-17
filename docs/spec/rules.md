@@ -87,7 +87,7 @@ pnpm is `not-pnpm` before the guard is read, because a guard does not make that 
 and a skip that said such a project manages its own pnpm would be false. **Absent** is unchanged:
 the pin alone is the declaration, and nothing about it is skipped.
 
-#### R2 — `lockfile-committed` · friction 0 · sev `error`/`error` · fix `none`
+#### R2 — `lockfile-committed` · friction 0 · sev `error`/`error` · fix `manual`
 
 - **Question:** is the lockfile present, tracked, and not ignored?
 - **Detection:** `pnpm-lock.yaml` exists at the repo root; `git ls-files --error-unmatch` succeeds;
@@ -96,7 +96,9 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Remediation:** `git add pnpm-lock.yaml` (manual), and `git add -f pnpm-lock.yaml` when an ignore
   rule also matches the untracked file: a plain `git add` exits 1 with "The following paths are ignored"
   in exactly the state this rule reports most often. Once the file is tracked, a matching ignore rule is
-  reported on its own with `git check-ignore -v pnpm-lock.yaml` to find its source.
+  reported on its own with `git check-ignore -v --no-index pnpm-lock.yaml` to find its source. `--no-index`
+  is required and not a preference: git skips a tracked path without it, so the bare form exits `1` with no
+  output in the very state this rule describes.
 - **Note:** the rule deliberately does not check the lockfile's `lockfileVersion` against the
   installed pnpm; that check belongs to pnpm itself on install, and duplicating it would create a
   second, staler source of truth (4.1).

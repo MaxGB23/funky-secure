@@ -191,7 +191,7 @@ the contract: commands, flags and rule ids, generated from the same table the pa
 | Rule (`explain <id>`) | It means | Do |
 |---|---|---|
 | `package-manager-pin` | `package.json` does not pin the pnpm that actually answers | `funky-secure init --apply` writes it; or `corepack use pnpm@<version>` |
-| `lockfile-committed` | no `pnpm-lock.yaml` in the repository, or it is ignored | `pnpm install`, then commit the lockfile |
+| `lockfile-committed` | no `pnpm-lock.yaml` in the repository, or it is present and not committed, or a git ignore rule matches it | `pnpm install` when it is missing, then `git add pnpm-lock.yaml` — `git add -f` where an ignore rule matches it |
 | `foreign-lockfile` | another manager's lockfile still resolves a second dependency tree | `funky-secure migrate --apply` |
 | `quarantine` | new releases are auto-approved instead of waiting the policy age | `funky-secure init --apply` writes the gate |
 | `exact-versions` | a dependency uses a range, so an install can pick a different version | `pnpm pkg set '<section>["<name>"]=<version>' && pnpm install` |
