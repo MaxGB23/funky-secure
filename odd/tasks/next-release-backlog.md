@@ -324,3 +324,48 @@ the fourth produced one owner decision and no code.
   by an audit nobody had asked for. Two escape hatches were also confirmed by measurement: the `not run`
   line prints the count that **ran** first, and a chained delivery command makes the RDD preflight refuse
   the whole chain rather than the command inside it.
+
+## Tasks opened after the release
+
+- **T17** A **testing policy**: which behaviour requires a test, which does not, and what makes a test
+  admissible. The owner asked on 2026-11-17 whether `AGENTS.md` already carried such a rule and whether the
+  suite's **765 `test(` declarations in 48 files** (the run reports 768) are all worth keeping. Today the
+  rules are scattered — `CONTRIBUTING.md:87-107` asks for a green suite with its counts, test-first for a
+  behaviour change, the drift and docs-contract gates, goldens, and determinism — and **no page states when
+  a test is required or when one is inadmissible**. Proposed, not yet judged: one `docs/testing.md` of
+  process (not spec: no behaviour moves) with five admission tests — the test pins an observable contract
+  (exit code, exact stdout/stderr, a report field, a tree state, a golden); it can fail for the right
+  reason, so deleting the line it pins turns it red; one rule carries all its observable effects, including
+  that a rejected input leaves data and counters untouched; it is deterministic, with no clock, network or
+  machine state; and it is named for the contract, never the implementation. Plus the two absences nobody
+  wrote: **what does not need a test**, and the test that duplicates another's contract. Two mechanical
+  debts ride with it — a list of tests that cannot fail, found by mutation and forbidden to grow, and the
+  `docs/field-loop.md` link that neither `AGENTS.md`'s Paths table nor `CONTRIBUTING.md`'s checklist
+  carries. Adopted from `M:/funky-ai/.agents/skills/vitest/SKILL.md:76`: behaviour-named tests, one unit
+  under test per file, shared helpers in one place, an empty debt map. Rejected, with the reason: the
+  blanket "never hardcode copy" (here the stdout **is** the product and `docs/spec/commands.md` fixes it
+  line by line, so the adapted rule is "assert the bytes the spec fixes, and none it does not"), the
+  500/800-line caps, and a meta-test policing names. Spec: the page itself. Judge: plan, STANDARD, before
+  any edit. Commit: —
+- **L17** The field loop was already the rule the owner remembered, and the gap is a **link, not a
+  document**: `docs/field-loop.md` says the suite custodies what we know while the loop discovers what
+  nobody imagined, and its step 3 (*"Pine it — or pay for it twice"*) already requires a field finding to
+  land as a case, taken from the agent's own files and named after the promise it broke. What no page does
+  is state the admission rule, and neither `AGENTS.md` nor `CONTRIBUTING.md` points at the loop at all. So
+  T17 adds one page and two cross-references; it reopens no measurement and claims none.
+
+## Errata
+
+**2026-11-17 — the rows whose commit was recorded in another document.** This record is append-only, so the four
+rows below keep the `Commit: —` they were written with; the commit each one produced is named here instead. Found
+while planning `odd/tasks/post-release-debt.md` (its T7), and every hash below was checked against `git log -1`
+before it was written.
+
+- **T2** — `745881b` (PR #284), *docs(spec): name the guard order where the unversioned pin row is read*.
+- **T5** — `6be24e7` (PR #290), *fix(workflows): a block scalar starts at its indentation indicator*.
+- **T6** — `62fa2cb` (PR #291), *chore(probe): the resolve fixture builds its section from the constant*.
+- **T8** — split before it landed, so its row names no commit and its halves name their own: **T15a** is
+  `3befd3f` (PR #296), *docs(spec): the summary counters count findings, and they are not coverage*, and **T15b**
+  already carries its two in its own row.
+
+Nothing else about those rows changes: their specs, judges and acceptance are as written.
