@@ -253,3 +253,18 @@ executed, and *inert* is not a word this record uses any more.
 files) exited `0`, and only then was the stash dropped: `1d7abf9` is gone and the stash list is empty. The
 patch carries the tree and not the staging split, and the third parent was the empty tree, so nothing
 untracked is lost (M2).
+
+**L12** — the delivery gate, diagnosed rather than worked around. The refusal is gentle-pi's `catch` at
+`lib/review-delivery-preflight.ts:81`, and what throws is `cli.assess` at `:68`: the delivery base this
+session retains is the branch tip, so the committed range is empty and `gentle-ai review assess
+--base-ref <HEAD>` exits `1` with *"the review assess candidate has no pending changes"* in stderr while
+printing a success-shaped body on stdout. The client reads a non-zero exit whose body is not a *failure*
+envelope as `NON_ZERO`, and `:81` erases the code into "Native preflight is unavailable". Reproduced by
+hand: exit `1`, that stderr line, that body. Three consequences worth keeping: the escalated lineage is
+**incidental** — with a real base, `targetStatus` answers `applicability: unrelated` and the due-review
+branch at `:71` is never entered; nothing in the store needs clearing, because the `LOCK` is zero bytes and
+blocks no read-only call (`inspect-authority` reads through it); and the ten-second bound is only reachable
+for a wide base — `assess --base-ref 3508f17` alone took 5.4 s. Two routes remain, neither of which turns
+the switch off: re-seat the retained base, which the registry keeps per session and which a workspace
+assessment does not erase, or open a session whose registry is empty, where the preflight asks for the base
+in its own words and the next assessment sets it.
