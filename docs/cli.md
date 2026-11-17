@@ -362,12 +362,11 @@ CI
      ·  ci-no-safety-overrides
 
   –  pull_request_target
-     skipped: there is no .github/workflows directory, so no workflow can declare a trigger
+     skipped: there is no workflow file, so no workflow can declare a trigger
      ·  pull-request-target
 
   –  Workflow permissions
-     skipped: there is no .github/workflows directory, so no workflow can declare
-     permissions
+     skipped: there is no workflow file, so no workflow can declare permissions
      ·  workflow-permissions
 
 passing  4 rules (foreign-lockfile, env-not-tracked, actions-pinned-sha, no-bot-auto-merge)

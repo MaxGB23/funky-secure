@@ -726,7 +726,10 @@ test('side three: every skip code names its fact, and no skip is ever counted as
   const config = 'skipped: the workflow_run trigger names no workflow in a form the reader can read, so the producer cannot be resolved';
 
   const cases = [
-    ['no-ci', null, 'no-ci', undefined, 'skipped: there is no .github/workflows directory, so no workflow can declare a trigger'],
+    ['no-ci', null, 'no-ci', undefined, 'skipped: there is no workflow file, so no workflow can declare a trigger'],
+    // Issue #390: the directory exists and holds no workflow file, and that is the same fact, so the
+    // skip is the same one — the sentence names the file, which is true in both shapes.
+    ['no-ci with an empty workflows directory', {}, 'no-ci', undefined, 'skipped: there is no workflow file, so no workflow can declare a trigger'],
     ['unparseable-workflow', { 'bad.yml': 'jobs: [oops\n' }, 'unparseable-workflow', '.github/workflows/bad.yml', 'skipped: unparseable workflow: "jobs" at line 1 is not a block map'],
     ['a listed name no workflow carries, beside one that resolves', { ...PAIR, 'pr-build.yml': push, 'label.yml': naming('["pr build", "ghost"]') }, 'producer-unresolved-name', '.github/workflows/label.yml', 'skipped: no workflow in the repository carries the name "ghost" the workflow_run trigger names, so the producer cannot be resolved'],
     ['a name two workflows carry', { ...under(naming('["build"]')), 'a-build.yml': named('push'), 'z-build.yml': named('pull_request') }, 'producer-unresolved-name', '.github/workflows/label.yml', 'skipped: the workflow_run trigger names "build", which more than one workflow carries (.github/workflows/a-build.yml, .github/workflows/z-build.yml), so the producer cannot be resolved'],

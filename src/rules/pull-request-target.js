@@ -194,7 +194,7 @@ export default {
 
     const workflows = repo.workflows ?? [];
     if (workflows.length === 0) {
-      return [skip('no-ci', 'there is no .github/workflows directory, so no workflow can declare a trigger')];
+      return [skip('no-ci', 'there is no workflow file, so no workflow can declare a trigger')];
     }
 
     const findings = [];

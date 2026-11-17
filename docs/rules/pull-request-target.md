@@ -54,9 +54,9 @@ Any other answer is one finding for the whole repository, never one per workflow
 - `no-pull-request-target` — no workflow declares the trigger. A head checkout under
   `pull_request`, where the head is the checked-out commit by definition, is this pass.
 - `no-ci` — no workflow file to read at all: `.github/workflows` is absent, or it exists and holds no
-  `.yml`/`.yaml` file. The skip message says the directory is missing, and it says that in both
+  `.yml`/`.yaml` file. The skip message says no workflow file exists, which is the fact in both
   cases — a repository whose `.github/workflows` is present but empty is skipped with the same
-  sentence.
+  sentence, because the directory is never claimed to be missing.
 - `unparseable-workflow` — a workflow the reader cannot attribute is skipped per file, and no pass is
   added on top of it: the rule never guesses from a line scan.
 - `no-repo` — the repository was excluded by `--scope machine`, or nothing resolved one.
