@@ -197,9 +197,14 @@ export default {
     findings.push({
       status: 'pass',
       code: 'least-privilege-permissions',
+      // Two shapes produce this pass and the sentence names both, because neither is a superset of the
+      // other: a workflow-level `permissions:` governs every job that does not declare its own, and a
+      // per-job declaration governs its own job. A repository whose only declarations are per job has
+      // no workflow-level `permissions:` at all, so "every workflow declares permissions:" was false
+      // about it — and no format prints a pass, so nothing could ever show that sentence (#395).
       message:
-        'every workflow declares permissions:, and none grants write-all at the workflow level or ' +
-        'in a job',
+        "every job's permissions come from a declaration, the workflow's or its own, and no " +
+        'declaration is write-all',
     });
 
     return findings;

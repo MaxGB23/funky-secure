@@ -46,11 +46,17 @@ Three answers:
   workflow still grants every scope to every job that does not narrow it — including the next job
   somebody adds. A job-level `write-all` is reported even when the workflow level is narrow, because
   that job overrides the narrow default with everything.
-- `least-privilege-permissions` — one `pass` for the repository: every job's permissions come from a
-  declaration and no declaration is `write-all`. `read-all`, `{}` and a map of narrow scopes are all
-  least privilege here. One pass covers however many workflows pass, and it is a count in the
-  summary rather than a row: a passing finding is never printed, so a repository whose every
-  workflow passes reads as `1 passing` in both formats.
+- `least-privilege-permissions` — one `pass` for the repository, and its message names both shapes
+  that produce it: "every job's permissions come from a declaration, the workflow's or its own, and
+  no declaration is write-all". Naming the shapes is what makes it true of a workflow whose only
+  declarations are per job — that workflow declares no workflow-level `permissions:`, so a sentence
+  beginning "every workflow declares permissions:" would be false about it. `read-all`, `{}` and a
+  map of narrow scopes are all least privilege here. The message is the same bytes whichever shape a
+  passing repository used, and no job id is in it. One pass covers however many workflows pass, and
+  it is a count in the summary rather than a row: a passing finding is never printed — the JSON
+  report drops it and the human report prints no row for it — so the message above is observable
+  only at the rule's own return value, and a repository whose every workflow passes reads as
+  `1 passing` in both formats.
 
 A repository with no workflow is `skip: no-ci`, not a pass. A workflow the reader cannot parse yields
 `skip: unparseable-workflow` for that file and no pass is added on top of it. No repository facts in this scope is
