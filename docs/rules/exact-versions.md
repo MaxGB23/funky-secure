@@ -176,6 +176,28 @@ Measured on pnpm 12.3.4: the value is written as given, the lockfile records
 workspace package. The branch needs no lookup — the range says where the exact form is — so a
 `workspace:` range prints this pin even when no lockfile records a version.
 
+**A repository that declares its own freeze loses the command, not the finding.** `pnpm-workspace.yaml`
+with `frozenLockfile: true` makes `pnpm install` refuse with `ERR_PNPM_OUTDATED_LOCKFILE`, and
+`pnpm install --lockfile-only` refuses too — measured on pnpm 12.3.4, with and without `CI`. The only
+flag that would record the pin is `--no-frozen-lockfile`, which `ci-no-safety-overrides` reports, so
+this rule never prints it. The finding keeps its `manual` kind and names the edit instead:
+
+```text
+edit package.json by hand: set 'dependencies["<name>"]=<version>' and move pnpm-lock.yaml in the
+same change — this repository declares frozenLockfile: true in pnpm-workspace.yaml, so the install
+refuses to move the lockfile itself (ERR_PNPM_OUTDATED_LOCKFILE)
+```
+
+Two spellings are **not** treated as a freeze, because pnpm ignores them: `frozen-lockfile=true` in
+`.npmrc` (`pnpm config get frozen-lockfile` answers `undefined`, the install exits 0) and the kebab
+`frozen-lockfile:` in `pnpm-workspace.yaml` (pnpm warns that it only reads camelCase and proceeds).
+Reading either would cost a repository that updates its lockfile fine the route that works.
+
+An environment that freezes without declaring it — `CI=true`, which pnpm reads as
+`--frozen-lockfile` — is invisible to a `--scope repo` run, and deliberately so: a report that
+depended on the caller's environment would not be deterministic. There the printed pin keeps the form
+above, and the refusal under `CI` is a stated limit rather than a defect.
+
 The `-C <importer dir>` is not decoration. `pnpm pkg set` acts on the manifest of the directory it
 runs in, so a command printed for a finding at `cli/package.json` and run at the repository root
 writes into the **root** `package.json` — measured on create-t3-app, where it is 80 of 96 findings.

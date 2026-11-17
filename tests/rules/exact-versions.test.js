@@ -17,7 +17,7 @@ import rule from '../../src/rules/exact-versions.js';
  * A plain context: package.json texts and a lockfile text are the only inputs, so no filesystem and
  * no probe are involved. Line numbers asserted below are the lines of these literals.
  */
-function ctx({ importers = [], lockfile = null } = {}) {
+function ctx({ importers = [], lockfile = null, workspaceYaml = null } = {}) {
   return {
     scope: 'repo',
     cwd: '/repo',
@@ -31,7 +31,8 @@ function ctx({ importers = [], lockfile = null } = {}) {
       branch: 'main',
       files: {
         packageJson: importers[0] ?? null,
-        workspaceYaml: null,
+        // The real shape: the collector hands the reader `{ path, text }`, never a bare string.
+        workspaceYaml: workspaceYaml === null ? null : { path: '/repo/pnpm-workspace.yaml', text: workspaceYaml },
         lockfile,
         npmrc: null,
         gitignore: null,
@@ -172,6 +173,78 @@ importers:
     [false, false],
     'the measured no-op command is never printed',
   );
+});
+
+test('a repository that declares its own lockfile freeze gets a route with no install, because no install clears it (373)', () => {
+  // Measured on pnpm 12.3.4 in a repository whose pnpm-workspace.yaml carries `frozenLockfile: true`:
+  // `pnpm pkg set` exits 0 and `pnpm install` exits 1 with ERR_PNPM_OUTDATED_LOCKFILE, and so does
+  // `pnpm install --lockfile-only`. Only `--no-frozen-lockfile` records the pin, and that is the flag
+  // R10 (`ci-no-safety-overrides`) reports, so this product never prints it. The finding keeps its
+  // kind and loses the command that cannot work.
+  const lockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      left-pad:
+        specifier: ^1.3.0
+        version: 1.3.0
+`;
+  const findings = rule.detect(
+    ctx({
+      importers: [importer('.', `{"dependencies":{"left-pad":"^1.3.0"}}`)],
+      lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile },
+      workspaceYaml: 'packages:\n  - .\nfrozenLockfile: true\n',
+    }),
+  );
+  const float = findings.find((finding) => finding.code === 'floating-range');
+
+  assert.equal(float.remediation.kind, 'manual');
+  for (const text of ['pnpm install', '--no-frozen-lockfile', '--lockfile-only', 'pnpm pkg set']) {
+    assert.equal(
+      float.remediation.command.includes(text),
+      false,
+      `the route names no command that refuses under the declared freeze: ${text}`,
+    );
+  }
+  assert.match(float.remediation.command, /frozenLockfile: true/);
+  assert.match(float.remediation.command, /left-pad/);
+  assert.match(float.remediation.command, /pnpm-lock\.yaml/);
+});
+
+test('the two freeze spellings pnpm ignores are not read, so the printed pin survives them (373)', () => {
+  // Measured on pnpm 12.3.4: `.npmrc` with `frozen-lockfile=true` leaves `pnpm config get
+  // frozen-lockfile` answering `undefined` and the install exits 0; the kebab `frozen-lockfile:` in
+  // pnpm-workspace.yaml is ignored with a warning and the install exits 0. Reading either would turn
+  // a lockfile that updates fine into a route that names no command — the defect, inverted.
+  const lockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      left-pad:
+        specifier: ^1.3.0
+        version: 1.3.0
+`;
+  const expected = `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install`;
+
+  for (const [label, workspaceYaml] of [
+    ['kebab in pnpm-workspace.yaml', 'packages:\n  - .\nfrozen-lockfile: true\n'],
+    ['no freeze declared', 'packages:\n  - .\n'],
+    ['the file not read at all', null],
+  ]) {
+    const findings = rule.detect(
+      ctx({
+        importers: [importer('.', `{"dependencies":{"left-pad":"^1.3.0"}}`)],
+        lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile },
+        workspaceYaml,
+      }),
+    );
+    const float = findings.find((finding) => finding.code === 'floating-range');
+    assert.equal(float.remediation.command, expected, label);
+  }
 });
 
 test('the pnpm pkg path is bracketed, because a dot path cannot carry a scoped name', () => {

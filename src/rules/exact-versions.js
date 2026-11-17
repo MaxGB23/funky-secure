@@ -250,6 +250,39 @@ export function pinCommand({ type, dependency, version, dir }) {
 }
 
 /**
+ * Whether this repository declares that it freezes its own lockfile. A line scan, top level only, and
+ * the camelCase spelling pnpm actually honours: `.npmrc`'s `frozen-lockfile` and the kebab
+ * `frozen-lockfile:` in `pnpm-workspace.yaml` are both ignored by pnpm 12.3.4 (measured), so reading
+ * either would make a repository that updates its lockfile fine lose the route that works.
+ * `false` when the file was not read, because an unread file is never an absence.
+ *
+ * @param {unknown} text the `pnpm-workspace.yaml` body, or null when it was not read
+ * @returns {boolean}
+ */
+function declaresFrozenLockfile(text) {
+  return typeof text === 'string' && /^frozenLockfile:[ \t]*true[ \t]*$/m.test(text);
+}
+
+/**
+ * The route where the repository declares its own freeze: the edit, in the file the reader owns, and the
+ * lockfile in the same change. It names no install, because none succeeds there, and it changes nothing
+ * else the author wrote — the obligation every remediation carries (L6).
+ *
+ * @param {{ type: string, dependency: string, version: string | null, specifier?: unknown, dir?: string }} options
+ * @returns {string}
+ */
+function frozenRoute({ type, dependency, version, specifier, dir }) {
+  const target =
+    typeof specifier === 'string' && WORKSPACE_PROTOCOL.test(specifier.trim())
+      ? 'workspace:*'
+      : typeof version === 'string' && version !== ''
+        ? version
+        : '<the version pnpm-lock.yaml records>';
+  const manifest = dir === undefined || dir === '.' ? 'package.json' : `${dir}/package.json`;
+  return `edit ${manifest} by hand: set '${type}["${dependency}"]=${target}' and move pnpm-lock.yaml in the same change — this repository declares frozenLockfile: true in pnpm-workspace.yaml, so the install refuses to move the lockfile itself (ERR_PNPM_OUTDATED_LOCKFILE)`;
+}
+
+/**
  * The remediation of a floating range (S4, field round 4).
  *
  * An internal package is the one case where the lockfile's resolved version must not be written: for a
@@ -263,10 +296,16 @@ export function pinCommand({ type, dependency, version, dir }) {
  * rather than a manifest, so it stays workspace-wide — and it is `LOCKFILE_ONLY_STEP`, imported, so the
  * probe that follows it measures the command this finding prints.
  *
- * @param {{ type: string, dependency: string, version: string | null, specifier?: unknown, dir?: string }} options
+ * @param {{ type: string, dependency: string, version: string | null, specifier?: unknown, dir?: string, frozen?: boolean }} options
  * @returns {{ kind: string, command: string }}
  */
-function floatingRemediation({ type, dependency, version, specifier, dir }) {
+function floatingRemediation({ type, dependency, version, specifier, dir, frozen = false }) {
+  // A declared freeze is the one configuration where no printed command clears the finding, so the
+  // finding says what to edit instead of naming a route that refuses: `pnpm install` and
+  // `pnpm install --lockfile-only` both exit 1 with ERR_PNPM_OUTDATED_LOCKFILE there, and the only
+  // flag that would record the pin is the one R10 (`ci-no-safety-overrides`) reports. Measured on
+  // pnpm 12.3.4 (373).
+  if (frozen) return { kind: 'manual', command: frozenRoute({ type, dependency, version, specifier, dir }) };
   if (typeof specifier === 'string' && WORKSPACE_PROTOCOL.test(specifier.trim())) {
     return { kind: 'manual', command: pinCommand({ type, dependency, version: 'workspace:*', dir }) };
   }
@@ -332,7 +371,7 @@ export default {
   evidence:
     '{ specifier, dependency, type } for a floating range (plus catalog for a catalogue range; resolved is null when the lockfile has no record), { specifier, resolved } for a desync.',
   remediation:
-    "Manual: pnpm -C <importer dir> pkg set '<section>[\"<name>\"]=<version>' && pnpm -C <importer dir> install pins the version pnpm-lock.yaml records in the manifest that declares it (the root importer keeps the bare form), because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. A workspace: range is pinned to workspace:* instead, because the version the lockfile records for an internal package is a link: path and writing it takes the package out of the workspace. A catalogue range is edited in pnpm-workspace.yaml, because the package.json line that refers to the catalogue cannot be made exact. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.",
+    "Manual: pnpm -C <importer dir> pkg set '<section>[\"<name>\"]=<version>' && pnpm -C <importer dir> install pins the version pnpm-lock.yaml records in the manifest that declares it (the root importer keeps the bare form), because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. A workspace: range is pinned to workspace:* instead, because the version the lockfile records for an internal package is a link: path and writing it takes the package out of the workspace. In a repository whose pnpm-workspace.yaml declares frozenLockfile: true the route is a hand edit instead — the manifest set and the lockfile moved in one change — because pnpm install and pnpm install --lockfile-only both refuse there with ERR_PNPM_OUTDATED_LOCKFILE, and the flag that would record it is the override R10 reports (373). A catalogue range is edited in pnpm-workspace.yaml, because the package.json line that refers to the catalogue cannot be made exact. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.",
   limits:
     'The rule resolves nothing: the command names the current specifier and pnpm writes the exact version. A specifier shape this rule does not recognize is not reported. An unsupported lockfile shape (lockfileVersion other than 6.0 or 9.0, patchedDependencies, a catalogue entry that is not a {specifier, version} map) skips the comparison rather than guessing it. peerDependencies are compared only when the lockfile records that kind: an importer block records no peer dependency, so a peer specifier is not compared against another section record.',
   docs: DOC,
@@ -365,6 +404,8 @@ export default {
     // floating range names the version it records (S4). No lockfile and an unsupported shape are
     // still skips of the comparison only (RFC 7.3).
     const lockfileText = ctx.repo.files?.lockfile?.text;
+    // Read once: the freeze belongs to the repository, not to an importer.
+    const frozen = declaresFrozenLockfile(ctx.repo.files?.workspaceYaml?.text);
     let parsed = null;
     let skip = null;
 
@@ -460,6 +501,7 @@ export default {
               // `workspace:` range, and that prefix is never a secret.
               specifier: entry.specifier,
               dir: importer.dir,
+              frozen,
             }),
           });
         }
