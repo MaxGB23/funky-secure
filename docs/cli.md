@@ -433,7 +433,7 @@ happens.
 | W1b | `pnpm-workspace.yaml` | `minimumReleaseAge: 1440`, or `4320` under `--preset strict`, in the same block: the age, always written (D-18, 0017) |
 | W1c | `pnpm-workspace.yaml` | `savePrefix: ''` in the same block: stops a later `pnpm add` from saving a caret (D-18) |
 | W2 | `.gitignore` | the managed block with the entries `sensitive-ignored` requires: `.env`, `.env.*`, `!.env*.example`, `*.pem`, `*.key`, `node_modules/`, and `.npmrc` unless the repository tracks a root `.npmrc` without a token |
-| W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing |
+| W3 | `package.json` | `packageManager: pnpm@<version pnpm --version reported>`; only when the pin is missing, and withheld from the plan when the manifest declares a `devEngines.packageManager` this plan will not match — then both items are `conflict` and no bytes are written, so the two declarations are never written disagreeing (#353) |
 | W3b | `package.json` | `devEngines.packageManager: { "name": "pnpm", "version": "<the version the pin establishes>" }`, and never `onFail`: npm treats the absent value as `error`, pnpm's default is its own version switch, and any explicit value is a regression for one of the two managers (0030). Written whenever a versioned pnpm pin is established and the manifest declares no guard — whether the pin is the one W3 writes in this plan or the one the manifest already declares — as its own plan item beside W3, so the plan reports it separately. Every other key of `devEngines` and of the manifest is preserved; a field whose `name` and `version` already match is already at policy (whatever its `onFail` says, which is never rewritten), and a field that differs or cannot be interpreted is a `conflict` |
 | W4 | `funky-secure.config.json` | `{ "preset": "strict" }` so CI agrees with the run; `--preset strict` only |
 
@@ -642,8 +642,8 @@ The exit code is the stable contract for CI and for agents (RFC 10.4).
 | Code | Meaning |
 |---|---|
 | `0` | No finding at or above `--fail-on`. Skips and infos do not fail. `--help`, no command, `start`, `skill`, and `init` without `--apply` also exit `0`. |
-| `1` | At least one policy violation at or above `--fail-on`. Never used for a tool failure. |
-| `2` | The tool could not answer: bad usage, unknown command or rule id, malformed config, unreadable input, or an unavailable required probe under `--strict-probes`. Fail closed. |
+| `1` | At least one policy violation at or above `--fail-on`, and an unavailable required probe under `--strict-probes`, which is one of them. Never used for a tool failure. |
+| `2` | The tool could not answer: bad usage, unknown command or rule id, malformed config, unreadable input. Fail closed. Never used for a probe that did not answer (#439). |
 | `3` | The tool understood the situation and refused to act: the branch is the default one, the target is dirty, the foreign lockfile is the only one, the skill destination is a symbolic link. Nothing was written. |
 
 There is one code per outcome and no code is reused: `0` is a report within the threshold, `1` is a
