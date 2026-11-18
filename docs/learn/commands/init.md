@@ -129,4 +129,4 @@ policy, conflicted, and dirty.
 
 ---
 
-Next: `pin`, the command that clears a floating version of its own, when this path reaches it.
+Next: [`pin`](pin.md), the command that clears a floating version of its own.
