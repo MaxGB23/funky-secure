@@ -102,3 +102,12 @@ that `off by policy` is "honestidad, no pereza" — the line is right to exist, 
 
 What survived: the diagnosis (`6 + 7 = 13` under a label that says otherwise), the spec's own words defining the
 number, and the round as evidence.
+
+- **L3** — the line shipped as S2 wrote it, and a diff judge refuted the continuation: `--preset strict runs all
+  thirteen` is false whenever the repository's own config turns a rule `off`, because that map wins under every
+  preset (I-30) — the run is strict and still prints `1 of 13`. **S2's last clause is superseded**: the
+  continuation now reads `--preset strict turns none off by itself`, which names the lever and its limit, and a
+  test covers config-off under strict. A second judge then found the evidence page contradicting itself (the
+  reproduction capture carried the corrected bytes under a sentence calling them false), `I-86`'s "never" too
+  strong for a rule declaring `strict: 'off'`, and two reflow stubs; all corrected. Recorded in `I-86` and the
+  dated errata in `rfcs/0003`.

@@ -159,8 +159,8 @@ run used — a policy decision, not a skipped check and not a rule missing from 
 `rules` map sets a rule `off` wins under every preset (I-30), so a strict run can still print this
 line, and a sentence promising that `--preset strict` runs all thirteen would hand the reader a cure
 they had already used. The sentence counts nothing, because the catalog size is the two numbers above
-it. That continuation stands on its own, because `start` prints the
-same block from the same helper and names the preset only in its last step. A rule at `off`
+it. That continuation stands on its own, because `start` prints the same block from the same helper and names the
+preset only in its last step. A rule at `off`
 does not run, is not counted and prints nothing (9.2), so the line states the coverage the verdict
 actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The verdict
 line adds nothing to it — its count and when it prints belong to 0008 — so this line is the one place
