@@ -16,39 +16,67 @@ Judged at `J1` before any page was written: `PAIR`, frozen at `84bfdb5` (93 line
   being told to (a judge's `Q8`: nothing in the first plan got the reader a terminal, Node or the tool); and the
   six GitHub-Actions rules are introduced through what an attacker does with a workflow, not through trigger
   syntax.
-- **S2** — each command answers six questions in one fixed order. Four are the owner's (questions 1 and 4 of the
-  owner's five collapse: *what it is* and *what it is for* are one answer); **two are added by this plan and
-  labelled as such**: *what you will see* (because a reference page shows a contract and a beginner needs a
-  picture) and *what you do next* (because the path has a destination, S8). Provenance is stated so no page has to
-  guess why the list has six.
+- **S2** — each command answers six questions in one fixed order, and the six are **written here as literal heading
+  strings**, because a gate that checks "the six headings in order" against prose cannot be written (a judge's
+  `C3`). Four are the owner's, with questions 1 and 4 of the owner's five collapsed into one; two are added by
+  this plan and labelled as such:
+
+  1. `## What it answers` — the owner's *what it is* and *what it is for*, one answer
+  2. `## What it does` — the owner's *su función*: what it reads, what it writes, what it refuses
+  3. `## When you use it` — the owner's *cuándo se usa*
+  4. `## When it is superfluous` — the owner's *cuándo no es necesario usarlo y está de más*
+  5. `## What you will see` — **added by this plan**: a reference page shows a contract, a beginner needs a picture
+  6. `## What you do next` — **added by this plan**: the path has a destination (S8)
+
+  Every page also ends with a line beginning `**Adds:**`, and that label is mechanical (S6 check 5).
 - **S3** — «lo manejamos en formato de docs con indices, secciones, etc». An index and sections, but the index
   reads as a **path**, not an A–Z reference: a reader who does not know that `pin` exists cannot look it up.
 - **S4** — English. `docs/cli.md`, `docs/guide.md` and the thirteen rule pages are English, and the repository's
   own gate compares text with text.
 - **S5** — every capture is pasted from a real run, never typed from memory.
-- **S6** — every command the CLI dispatches has exactly one page, and the gate checks **four** things, because
-  presence alone is vacuous (a judge's `Q3`): the page exists · its six headings appear **in order** · no heading
-  is empty · no page names a command the CLI does not dispatch. Today the CLI dispatches **seven**: `start`,
-  `scan`, `init`, `pin`, `migrate`, `explain`, `skill` (measured: `COMMANDS.length` → 7).
+- **S6** — every command the CLI dispatches has **exactly one** page, and the gate checks six things. Presence
+  alone is vacuous (both judges), and the sixth check exists because the first five can all pass on a page that
+  teaches nothing:
+
+  1. the page exists, **one per dispatched command and none extra** (`commands/<name>.md`, name ∈ `COMMANDS`);
+  2. the six literal headings of S2 appear **in order**;
+  3. each heading is followed by at least one paragraph of 40 characters or more — a proxy, and named as one;
+  4. no page mentions `funky-secure <token>` where `token` is not in `COMMANDS`;
+  5. every page carries the `**Adds:**` line of S9;
+  6. the rules page links **thirteen** rule ids, asserted against the catalog — `docs/guide.md` carries twelve of
+     thirteen today and no check notices, so the page most likely to reproduce that defect is the first to be
+     gated.
+
+  Today the CLI dispatches **seven**: `start`, `scan`, `init`, `pin`, `migrate`, `explain`, `skill` (measured:
+  `COMMANDS.length` → 7). What no check can do is decide that a paragraph is **true**; that is `J2`'s reading, and
+  the plan says so rather than pretending the gate covers it.
 - **S7** — "when not" is grounded in what the tool itself does, in four forms: it is read-only or writes · its exit
-  codes · its refusals · **what it duplicates** (the report already carries `doc: funky-secure explain <rule>`, so
-  `explain` is superfluous when you have the finding in front of you). Where the honest answer is a fact about
-  the reader's situation rather than about the tool — `skill` is the case, and a judge's `Q2` found it — the page
-  **says so and names the fact** instead of inventing tool data.
+  codes · its refusals · **what another artifact already prints**. The fourth form is `explain`: it reads no
+  repository and prints the catalog, which `docs/rules/<id>.md` already holds, and `explain` with no id prints the
+  table `--help` prints. The first draft grounded it on the report carrying `doc: funky-secure explain <rule>`, and
+  both judges refuted the inference: that field exists only in `--format json`, the human report hides even the rule
+  id, and the field points **at** `explain` rather than duplicating it. Where the honest answer is a fact about the
+  reader's situation rather than about the tool — `skill` is the case, and a judge's `Q2` found it — the page **says
+  so and names the fact** instead of inventing tool data.
 - **S8** — the path has a destination: a reader who reaches the end can run this tool on their own repository
   without reading anything else. `01-before-you-start.md` is what makes that true.
 - **S9** — no page restates **three** sources: `docs/cli.md` (the reference), `docs/guide.md` (ten minutes, and
   already a line-by-line walk of the report at `:23-129` plus a twelve-of-thirteen rule table at `:194-213`), and
   `docs/rules/` (1618 lines, the rules' own pages). The first plan named two and a judge found the third, the
-  largest. Each page states, in one line, **what it adds that those three do not have**, and non-duplication is
-  checked by `J2` on the diff — no mechanical gate can check a paraphrase.
-- **S10** — the thirteen rules are **independent**: none reads another's result, and no run remembers the previous
-  one. Two corrections the judges forced, both of which change the page's sentences: they are pure functions of
-  the **resolved context** — repository **and machine** **and policy** — because `quarantine` and
-  `package-manager-pin` read `ctx.machine`; and the report's order has **two** causes, independence **and** catalog
-  order, which is public contract (`src/rules/index.js:1-4`). And one fact that would have been wrong to teach:
-  the **write plan is not independent** — `src/lib/writers.js` chains on `sensitive-ignored`'s and
-  `package-manager-pin`'s findings. Independence is a property of the scan, not of the tool.
+  largest. Each page ends with a line beginning `**Adds:**` that names, in one sentence, what the page has that
+  those three do not — presence of the line is checked by the gate (S6 check 5), and its **truth** only by `J2` on
+  the diff. No mechanical gate can check a paraphrase, and two judges were right that the line is a slogan until a
+  judge reads it.
+- **S10** — the thirteen rules are **independent**: none reads another's answer, and no run remembers the previous
+  one. Three corrections the judges forced, each of which changes a sentence a page would have taught:
+  - They decide from the **resolved context** — repository facts, plus **machine** facts for the two rules that need
+    them (`quarantine`, `package-manager-pin`). The engine applies severity and activation **before** any rule runs;
+    the policy is a **separate argument**, and exactly one rule reads it inside `detect`. Calling the policy part of
+    the context was wrong, and a stale comment in `quarantine.js` says the engine does not pass it at all.
+  - The report's order has **two** causes: independence **and** catalog order, which is public contract
+    (`src/rules/index.js:1-4`). Independence alone does not explain a deliberately non-alphabetical list.
+  - The **write plan is not independent**: it chains on `sensitive-ignored`'s and `package-manager-pin`'s findings
+    (`src/lib/writers.js:904-926`). Independence is a property of the scan, not of the tool.
 - **S11** — the repository already fails `node --test` when a command has no section in `docs/cli.md`, no flow in
   `architecture.md`, or no row in the README (`docs/README.md`, *What already fails the build*). The new gate is
   the same class, extended to this tree, not a new mechanism.
@@ -63,16 +91,18 @@ Judged at `J1` before any page was written: `PAIR`, frozen at `84bfdb5` (93 line
 | T3 | `docs/learn/01-before-you-start.md` — terminal, Node ≥22, git, where pnpm comes from, and `command not found` | S1, S8 | inline | — |
 | T4 | `docs/learn/02-your-first-command.md` — run `start`, read what it says | S1, S5 | inline | — |
 | T5 | `docs/learn/03-reading-the-output.md` — **why** the report has that shape (independence + catalog order); the field anatomy stays in `guide.md` | S9, S10 | inline | — |
-| T6 | `docs/learn/04-why-the-rules-exist.md` — the attack each rule answers, per-rule **links**, no consequence table | S9, S10 | inline | — |
+| T6 | `docs/learn/04-why-the-rules-exist.md` — the attack each rule answers, thirteen **rule links**, no consequence table | S9, S10 | inline | — |
 | T7 | `docs/learn/commands/<name>.md` — seven pages, six questions | S2, S6, S7 | inline | — |
 | T8 | `docs/learn/05-when-not-to-use-it.md` — the whole decision in one table | S2, S7 | inline | — |
 | T9 | `docs/learn/05-glossary.md` — one term, one line | S1 | inline | — |
-| T10 | the gate (four checks, S6); `docs/README.md` and `AGENTS.md` rows; the `package.json` `files` decision — `docs/learn/` ships or it does not, and the plan decides **it ships** | S6, S11 | inline | — |
+| T10 | the gate (six checks, S6); `docs/README.md` and `AGENTS.md` rows; the `package.json` `files` decision — `docs/learn/` ships or it does not, and the plan decides **it ships** | S6, S11 | inline | — |
 | T11 | `J2` on every slice, `J3` before the close | S5, S9 | `PAIR`/`SINGLE` | — |
 
-**Slices** — five, ceiling ~450 authored lines each; a slice opens its own issue and closes it (`Refs #460`), and
-the umbrella closes with the last one. The first plan sliced four times at "~400" and a judge measured the seven
-command pages alone at 420–910 (`Q6`).
+**Slices** — five, ceiling ~450 authored lines each. Every slice's body carries `Closes #<its own issue>` **and**
+`Refs #460`; P5 adds `Closes #460`, because `CONTRIBUTING.md:41` requires every pull request to close an issue and
+the mechanical gate accepts a bare `Refs` (a judge's `C7`). Two figures from the first draft are gone: "~400" was
+understated — a judge measured the seven command pages alone at 420–910 — and the promised "arithmetic in the task
+table" was never written there (see `L7`). Measured since: P1 landed at 386 authored lines across four commits.
 
 - **P1** — T1, T2, T3: the beginning, which fixes voice and page shape.
 - **P2** — T4, T5.
@@ -154,3 +184,41 @@ and "no rule reads another rule's result".
 
 **Found outside the plan, filed separately**: `src/cli.js:2` says *"six commands"* and the CLI dispatches seven —
 a false sentence in the source, independent of this feature, with its own issue and its own pull request.
+
+**L7** — adjudication of the second round, on the corrections themselves. Both judges, eight questions each, and
+between them **three claims of mine lost**, all three inside `L6` — the entry written to record measurements.
+
+- **"38 for a real scan capture" (C2).** It does not reproduce, and both judges said so independently. The origin
+  is traceable and embarrassing: a first-round verdict described the capture by its **line range**, `guide.md:27-64`
+  — thirty-eight lines of *file*, not thirty-eight lines of output. I copied the span as if it were a length. Real
+  captures measure 3, 26, 2, 14, 48 and 6; this repository's own `scan --scope repo` prints 18. **A number whose
+  provenance is a line range is not a measurement.**
+- **"the arithmetic in the task table" (C2).** There is no arithmetic in the task table, and there never was. The
+  sentence described an intent as a fact about the artifact — the exact defect this project has now paid for six
+  times.
+- **"Refuted by neither judge, and kept as written: 'no rule reads another rule's result'" (C8).** The clause is
+  true; the record called it **verified** on evidence that proves something else. `L4`'s grep (`from './`) proves
+  rules do not *import* each other; a shared module or a report read through a helper would pass it. The wider sweep
+  is recorded here so the claim has evidence at last: `grep -rn "^import\|require(\|import(" src/rules/*.js` shows
+  no rule importing another, no `require(`, no dynamic `import(`; `detect` receives `ctx` and `{ policy, severity }`
+  and the accumulator is never passed into the next rule (`src/lib/engine.js:21-31`); and the per-run probe cache is
+  per run (`src/lib/probes.js:191`). True, now checked, and the difference between those two words is the whole
+  point of `L5`.
+
+What survived, at the line: `L5`'s self-correction (two rules read `ctx.machine`, inside `detect`, exhaustive) ·
+`346` for `tests/docs-contract.test.js` · `124` as a **mean** with a 75–262 spread, not a typical page · twelve of
+thirteen in `docs/guide.md` with `workflow-run-artifact` the hole · the `writers.js:904-926` chain · and
+`CONTRIBUTING.md:41` with the mechanical gate accepting a bare `Refs`.
+
+Fixed in the specs by this entry, not by rewriting `L6`: S2 writes the six headings **literally**, because a gate
+cannot check prose (both judges); S6 grows to six checks and loses its claim to cover truth; S7's fourth grounding
+form is replaced — the `doc:` inference was backwards and the field is JSON-only; S10 separates the resolved context
+from the policy argument, which one rule of thirteen reads; and T6's rule links become gated, because the page most
+likely to reproduce the twelve-of-thirteen defect was the only one no check would read.
+
+**Outside the plan, three things this round found.** Issue #460's body still carried the refuted sentence and the
+vacuous gate — every slice links it with `Refs`, so a reviewer would have read the old specification as the
+specification: edited. And two comments in the source describe a previous version of the program — `src/cli.js:2`
+says "six commands" where the CLI dispatches seven, and `src/rules/quarantine.js:12` says the engine does not pass
+the policy, which it has since `1e08692`, eleven minutes before that comment was added: one issue, one pull request,
+both lines.
