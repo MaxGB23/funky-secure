@@ -23,8 +23,8 @@ one of them is **when it is superfluous**. The pages before them are concepts an
 |---|---|---|
 | 00 | [The problem](00-the-problem.md) | always. It needs no terminal |
 | 01 | [Before you start](01-before-you-start.md) | you have not opened a terminal on this machine |
-| 02 | Your first command | you have a terminal and Node 22 or newer |
-| 03 | Reading the output | you have seen a report and want to know why it looks like that |
+| 02 | [Your first command](02-your-first-command.md) | you have a terminal and Node 22 or newer |
+| 03 | [Reading the output](03-reading-the-output.md) | you have run your first command and want to see what an audit answers |
 | 04 | Why the rules exist | a finding surprised you and you want the attack behind it |
 | 05 | When not to use it | before you put it in CI, or before you run it for the tenth time |
 | 06 | Glossary | a word in the report means nothing to you |

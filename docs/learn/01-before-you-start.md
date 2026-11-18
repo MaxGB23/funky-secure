@@ -61,16 +61,8 @@ one, whether it has a commit, whether there is a branch. Pointed at a directory 
 the three boot steps and says why in its own words - *the plan is derived from a repository: the ignore rule and
 the clean-tree question are answered only by git* - and asks you to come back.
 
-For a new project, that means:
-
-```
-mkdir my-project
-cd my-project
-git init
-```
-
-`cd` means "go into". `git init` makes the current directory a repository. Nothing is uploaded: a repository is
-a folder with a history, and it stays on your machine until you decide otherwise.
+For a new project this page stops here: it only wanted `git --version` to print something. Page 02 makes the
+first folder and runs `git init` in it, where you can watch what it leaves behind.
 
 ## pnpm, and why this page will not install it for you
 
