@@ -26,6 +26,7 @@ const PACKED_SET = [
   'docs/guide.md',
   'docs/concept.md',
   'docs/rules/',
+  'docs/learn/',
   'docs/images/diagram.jpg',
   './README.md',
   'LICENSE',
