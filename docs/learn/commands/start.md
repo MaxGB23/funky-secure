@@ -15,7 +15,8 @@ It reads the folder it stands in - whether this is a git repository, whether it 
 lockfile, another manager's lockfile, a version that floats, the block `init` manages - and prints the steps that
 are still missing. It writes nothing at all, installs nothing, and touches nothing on the machine. It accepts
 `--help` and no other flag: a flag that belongs to another command is a usage error, and the two lines it prints
-name the command that does take it. Where the list has more than one step it adds `why this order`, and it ends
+name the command that does take it. Where the list was derived from a repository it adds `why this order`; the three-step boot list does not get it,
+because there is no order to justify yet. It ends
 with the coverage line of the preset its last step recommends. Every flag, and what each step means, is in
 [`../../cli.md`](../../cli.md).
 
@@ -39,7 +40,8 @@ and three facts make it the second one.
 - **Past the start, the whole answer is one line.** It says `the repository is past the start; the next step is
   funky-secure scan --preset starter` and prints no list at all (the second capture below). At that point it has
   nothing the report's own `next` block does not already say.
-- **The last step of its own plan is a scan.** `funky-secure scan --preset starter` is always the final line, so
+- **The last step of the repository plan is a scan.** `funky-secure scan --preset starter` closes the plan built
+  from a repository - not the three-step boot list, which ends by asking you to run `start` again. So
   a reader who has just followed the plan and is now wondering whether to run `start` again is wondering whether
   to be told to scan a second time. And the failing report on [`scan.md`](scan.md) shows the `next` block naming
   `funky-secure init` for the fix it can make: the same advice, from the report itself.

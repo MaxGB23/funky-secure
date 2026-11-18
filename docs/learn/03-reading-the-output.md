@@ -109,4 +109,4 @@ rank of how bad it is.
 
 ---
 
-Next: 04 - Why the rules exist, when this path reaches it.
+Next: [04 - Why the rules exist](04-why-the-rules-exist.md).

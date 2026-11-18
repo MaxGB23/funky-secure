@@ -54,7 +54,7 @@ that already existed - and saw `0` (a plan, nothing to write, nothing to remove,
 refusal, from `init` and from `migrate`) and `2` (from `explain` with an id that is not in the catalog). Never
 `1`.
 
-That has a consequence worth stating plainly. A pipeline gated on `init`, `pin`, `migrate`, `explain` or `skill`
+That has a consequence worth stating plainly. A pipeline gated on `start`, `init`, `pin`, `migrate`, `explain` or `skill`
 is green in every state it can produce, including the states where nothing was done, so it is not a gate. `scan`
 is the command whose exit code means something about your repository, and `--fail-on` is where you say what
 counts.

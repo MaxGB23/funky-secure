@@ -28,7 +28,7 @@ one of them is **when it is superfluous**. The pages before them are concepts an
 | 04 | [Why the rules exist](04-why-the-rules-exist.md) | a finding surprised you and you want the attack behind it |
 | 05 | [When not to use it](05-when-not-to-use-it.md) | before you put it in CI, or before you run it for the tenth time |
 | 06 | [Glossary](06-glossary.md) | a word in the report means nothing to you |
-| — | [Commands](commands/start.md), one page each | you know what you are doing and want one command in detail |
+| — | Commands, one page each: [start](commands/start.md) · [scan](commands/scan.md) · [init](commands/init.md) · [pin](commands/pin.md) · [migrate](commands/migrate.md) · [explain](commands/explain.md) · [skill](commands/skill.md) | you know what you are doing and want one command in detail |
 
 The last row is seven pages - one per command, in the order the path meets them - and each answers the same six
 questions, the fourth of which is the one no other page in this repository answers.
