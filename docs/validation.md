@@ -264,27 +264,36 @@ first revision of that plan had got wrong: a fixture whose own `pnpm-workspace.y
 a test process that writes and commits a `.env` (the harness refuses the agent's command text, not the
 machine), and the fixtures that already existed in the tree.
 
-## The learn-path gate, and its four mutations
+## The learn-path gate, and its mutations
 
 `docs/learn/` is prose, and no test can call a paragraph true. Its gate therefore asserts relations that can be
-recomputed from the repository, and it says in its header what that leaves out. Four mutations, one per relation,
-each run against the real suite at `tests/didactic-guide.test.js`:
+recomputed from the repository, and it says in its header what that leaves out. Nine mutations, one per relation
+and per hole a judge found in the first version, each run against the real suite at `tests/didactic-guide.test.js`:
 
 | Mutation | The red it produced |
 |---|---|
-| a link retargeted at a page that does not exist (`01`: `../cli.md` -> `../nowhere.md`) | `01-before-you-start.md links ../nowhere.md, which resolves to docs
-owhere.md and does not exist` |
+| a link retargeted at a page that does not exist (`01`: `../cli.md` -> `../nowhere.md`) | `01-before-you-start.md links ../nowhere.md, which resolves beside the page and does not exist` |
+| a **directory** link retargeted (`README`: `../rules/` -> `../rulez/`) | `README.md links ../rulez/, which resolves beside the page and does not exist` |
 | the `skill` row deleted from the when-not table (`05`) | `05-when-not-to-use-it.md has no row linking commands/skill.md: the page promises the decision for every command` |
+| the `skill` row deleted **and** the command linked from prose elsewhere on the page | the same red: the scan reads the table, not the page |
 | a rule id invented in prose (`06`: `rules/no-such-rule.md`) | `06-glossary.md cites the rule id "no-such-rule", which the catalog does not contain` |
-| the last `Next:` turned back into plain text (`03`) | `03-reading-the-output.md ends with "Next: 04 - Why the rules exist.", which is not a link to the next page` |
+| the `Next:` of a numbered page turned back into plain text (`03`) | `03-reading-the-output.md ends with "Next: 04 - Why the rules exist.", which is not a link to the next page` |
+| the `Next:` of a **command** page deleted (`commands/scan.md`) | `commands/scan.md has no "Next:" line: the path promises an order, and a page that stops without naming the next one is the unlinked step that was already a defect once` |
+| a page added to `docs/learn/` and not to the index (`07-orphan.md`) | `07-orphan.md is not ordered by docs/learn/README.md, so nothing checks where it belongs in the path` |
+| **a broken link inside a fenced block** — the negative probe | stays green: an example inside a fence is not a link the reader follows |
 
-All four killed, all four restored, and the suite green again at `10 pass` for that file.
+The last four exist because a judge read the first version and reproduced two of them green: the table check
+matched a link anywhere on the page, the chain check never looked at the seven command pages, an orphan page was
+invisible, and a directory target was skipped by a regex that required `.md`. The negative probe is the other half:
+a check that goes red on an example is a check that forbids showing one.
 
 **What this round does not prove**, and the reason the gate is not called a truth gate: a page can still assert a
 falsehood about the program and pass all ten checks. The closing judge found seven such sentences, and the two that
 mattered were a claim contradicted by a capture two pages earlier and an arithmetic that could not happen - neither
-has a shape a test over the repository can see. What the four relations do catch is the class that silently breaks
-the path: a link to nowhere, a table short a row, an id that does not exist, an order that stops being one.
+has a shape a test over the repository can see. What the relations do catch is the class that silently breaks the
+path: a link to nowhere, a table short a row, an id that does not exist, an order that stops being one, and a page
+nobody ordered.
+
 ## How this page stays true
 
 The table is checked in CI through `tests/docs-contract.test.js`, which asserts the facts a document can

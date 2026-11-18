@@ -45,8 +45,9 @@ These are gated, so you do not have to remember them — `node --test` is the re
 - a spec section mapped to a record that is missing or still `draft`, or a mapped file that drifted
   from the record it was copied from
 - a golden report that no longer matches the collector
-- a learn page whose relative link does not resolve, whose rule id is not in the catalog, whose when-not row is
-  missing for a dispatched command, or whose `Next:` stops being a link to the page the path orders next
+- a learn page whose relative link or directory link does not resolve beside it, whose rule id is not in the
+  catalog, whose when-not table is missing a row for a dispatched command, whose `Next:` stops naming the page the
+  path orders next, or which the index does not order at all
 
 ## What no gate can check
 

@@ -182,14 +182,16 @@ function learnPages(directory = join(ROOT, 'docs', 'learn')) {
 test('every relative link under docs/learn resolves from the directory of its own page', () => {
   for (const page of learnPages()) {
     const relative = page.slice(ROOT.length).replace(/\\/g, '/');
-    const text = readFileSync(page, 'utf8');
+    const text = readFileSync(page, 'utf8').replace(/```[\s\S]*?```/g, '');
 
-    for (const [, target] of text.matchAll(/\]\(([^)#\s]+\.md)(?:#[^)]*)?\)/g)) {
-      if (target.startsWith('http')) continue;
-      const resolved = join(page, '..', target);
+    for (const [, target] of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+      if (/^[a-z]+:/.test(target)) continue;
+      const path = target.split('#')[0];
+      if (path === '') continue;
+
       assert.ok(
-        existsSync(resolved),
-        `${relative} links ${target}, which resolves to ${resolved.slice(ROOT.length)} and does not exist`,
+        existsSync(join(page, '..', path)),
+        `${relative} links ${target}, which resolves beside the page and does not exist`,
       );
     }
   }
@@ -197,9 +199,10 @@ test('every relative link under docs/learn resolves from the directory of its ow
 
 test('the when-not table is equal to the commands the CLI dispatches', () => {
   const text = readFileSync(join(ROOT, 'docs', 'learn', '05-when-not-to-use-it.md'), 'utf8');
-  const linked = new Set(
-    [...text.matchAll(/\]\(commands\/([a-z-]+)\.md\)/g)].map(([, name]) => name),
-  );
+  // The table only. A link anywhere else on the page is not a row, and a page whose row was
+  // deleted while its prose still links the command would pass a whole-page scan.
+  const table = text.split('\n').filter((line) => line.startsWith('|')).join('\n');
+  const linked = new Set([...table.matchAll(/\]\(commands\/([a-z-]+)\.md\)/g)].map(([, name]) => name));
   const dispatched = new Set(COMMANDS.map((command) => command.name));
 
   for (const name of dispatched) {
@@ -221,7 +224,7 @@ test('every rule id cited under docs/learn exists in the catalog', () => {
 
   for (const page of learnPages()) {
     const relative = page.slice(ROOT.length).replace(/\\/g, '/');
-    for (const [, id] of readFileSync(page, 'utf8').matchAll(/rules\/([a-z0-9-]+)\.md/g)) {
+    for (const [, id] of readFileSync(page, 'utf8').matchAll(/rules\/([a-z0-9_-]+)\.md/g)) {
       assert.ok(
         known.has(id),
         `${relative} cites the rule id "${id}", which the catalog does not contain`,
@@ -230,36 +233,73 @@ test('every rule id cited under docs/learn exists in the catalog', () => {
   }
 });
 
-test('every page but the last ends with a Next link to the page the path orders next', () => {
+test('the two chains of the path are complete: every page is ordered, and each names the next', () => {
   const index = readFileSync(join(ROOT, 'docs', 'learn', 'README.md'), 'utf8');
-  const order = [
-    ...new Set([...index.matchAll(/\]\(([0-9]{2}-[a-z-]+\.md)\)/g)].map(([, page]) => page)),
-  ];
-  assert.ok(order.length >= 2, 'docs/learn/README.md orders fewer than two pages');
-
   const path = join(ROOT, 'docs', 'learn');
-  for (const [at, page] of order.entries()) {
-    const text = readFileSync(join(path, page), 'utf8');
-    const next = text.split('\n').find((line) => line.startsWith('Next: '));
 
-    if (at === order.length - 1) {
-      assert.equal(next, undefined, `docs/learn/${page} is the last page of the path and still names a next one`);
-      continue;
-    }
+  const numbered = [...new Set([...index.matchAll(/\]\(([0-9]{2}-[a-z-]+\.md)\)/g)].map(([, page]) => page))];
+  const commands = [...new Set([...index.matchAll(/\]\(commands\/([a-z-]+)\.md\)/g)].map(([, name]) => name))];
 
+  // The path is two chains, not one: the numbered pages, then one page per command. Reading them as
+  // one chain would make the last numbered page the end of a path whose own closing line hands the
+  // reader to the command pages.
+  const chains = [
+    {
+      name: 'the numbered pages',
+      order: numbered,
+      read: (entry) => join(path, entry),
+      file: (entry) => entry,
+      next: (entry) => entry,
+    },
+    {
+      name: 'the command pages',
+      order: commands,
+      read: (entry) => join(path, 'commands', `${entry}.md`),
+      file: (entry) => `commands/${entry}.md`,
+      next: (entry) => `${entry}.md`,
+    },
+  ];
+
+  const ordered = new Set([...numbered, ...commands.map((name) => `commands/${name}.md`)]);
+  for (const page of learnPages()) {
+    const relative = page.slice(path.length + 1).replace(/\\/g, '/');
+    if (relative === 'README.md') continue;
     assert.ok(
-      next !== undefined,
-      `docs/learn/${page} has no "Next:" line: the path promises an order, and a page that stops without naming the next one is the unlinked step that was already a defect once`,
+      ordered.has(relative),
+      `docs/learn/${relative} is not ordered by docs/learn/README.md, so nothing checks where it belongs in the path`,
     );
-    assert.match(
-      next,
-      /^Next: \[[^\]]+\]\(([^)]+\.md)\)/,
-      `docs/learn/${page} ends with "${next}", which is not a link to the next page`,
-    );
-    assert.equal(
-      next.match(/\(([^)]+\.md)\)/)[1],
-      order[at + 1],
-      `docs/learn/${page} names a different next page than the one the path orders`,
-    );
+  }
+
+  for (const chain of chains) {
+    assert.ok(chain.order.length >= 2, `docs/learn/README.md orders fewer than two of ${chain.name}`);
+
+    for (const [at, entry] of chain.order.entries()) {
+      const text = readFileSync(chain.read(entry), 'utf8');
+      const next = text.split('\n').filter((line) => line.startsWith('Next: ')).at(-1);
+
+      if (at === chain.order.length - 1) {
+        assert.equal(
+          next,
+          undefined,
+          `docs/learn/${chain.file(entry)} is the last of ${chain.name} and still names a next one`,
+        );
+        continue;
+      }
+
+      assert.ok(
+        next !== undefined,
+        `docs/learn/${chain.file(entry)} has no "Next:" line: the path promises an order, and a page that stops without naming the next one is the unlinked step that was already a defect once`,
+      );
+      assert.match(
+        next,
+        /^Next: \[[^\]]+\]\(([^)]+\.md)\)/,
+        `docs/learn/${chain.file(entry)} ends with "${next}", which is not a link to the next page`,
+      );
+      assert.equal(
+        next.match(/\(([^)]+\.md)\)/)[1],
+        chain.next(chain.order[at + 1]),
+        `docs/learn/${chain.file(entry)} names a different next page than the one the path orders`,
+      );
+    }
   }
 });

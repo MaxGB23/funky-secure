@@ -92,3 +92,37 @@ than the instance.
 **L3** — what changed: the absence family is gone (S3 says why); the presence family is replaced by relations
 recomputable from the repository (S2); the mutation round moves out of the test and into the measured table the
 repository already publishes (S5); and the gate extends the existing file instead of adding a second one (S6).
+
+**L4** — `J2` on the merged diff, and the first version was not good enough. Eight questions; **two findings were
+refusal-grade**, and both are the failure this feature exists to prevent.
+
+- **The record quoted an output no run produces.** The first row of the mutation table carried a literal newline
+  where the test prints a path separator, splitting the GFM row in two. The evidence artifact for "a colour nobody
+  recorded is a claim" had a colour nobody could reproduce. Repaired, and the table now carries the message a run
+  prints.
+- **`docs/README.md` claimed more than the code did.** It promised that "a learn page whose relative link does not
+  resolve" fails the build; the regex required `.md`, so the directory link at `README.md:47` (`../rules/`) was never
+  checked, and the `Next:` chain covered 7 of the 15 pages.
+
+Four holes the judge **reproduced green**, each now a check:
+
+| Hole | Reproduced | Now |
+|---|---|---|
+| the when-not check scanned the whole page, so a deleted row passed while the command was linked in prose | green | reads the table only |
+| the `Next:` chain covered the numbered pages and never the seven command pages | green (a severed command chain) | two chains, each complete |
+| a page added to `docs/learn/` and to the index never | green | every page must be ordered |
+| a directory target was skipped by a `.md`-only regex | unchecked | any relative target, directories included |
+
+And the other half, which the plan's own `Risk` predicted a gate would get wrong: **a broken link inside a fenced
+block stays green**, because an example is not a link the reader follows. That is the negative probe, recorded with
+the eight kills.
+
+**Two corrections to `L2`/`L3`, appended rather than edited**: the `F2` numbering they use is not defined anywhere
+in the repository (the seven are listed unnumbered in `didactic-guide.md`), and `L3`'s fourth item says the gate
+"extends the existing file instead of adding a second one" as if that were a change — the refuted plan already said
+one file. What actually changed and was not recorded: `T4` (a row in `docs/testing.md`) was **dropped**, because
+that page has no table; `docs/README.md` took the sentence instead.
+
+**Closed.** The gate has ten checks; `docs/validation.md` records nine mutations with the red each produced; the
+suite is at 957 tests, 956 pass, 1 skip, 0 fail. What it cannot do is written in the test's header, in
+`docs/README.md` and in the plan's `Risk`, in the same words.
