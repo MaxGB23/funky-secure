@@ -223,3 +223,58 @@ specification: edited. And two comments in the source describe a previous versio
 says "six commands" where the CLI dispatches seven, and `src/rules/quarantine.js:12` says the engine does not pass
 the policy, which it has since `1e08692`, eleven minutes before that comment was added: one issue, one pull request,
 both lines.
+
+**L8** — the feature closed. What landed, and the four places the plan was wrong about its own delivery.
+
+| Slice | Issue | Pull request | Content |
+|---|---|---|---|
+| record | #465 | #466 | the plan, after two `J1` rounds |
+| pages 00-01 | #461 | #467 | the index, the problem, the prerequisites |
+| pages 02-03 | #468 | #469 | the first command, reading the output |
+| three commands | #470 | #471 | `start`, `scan`, `init`, and a contract test narrowed by one line |
+| four commands + gate | #475 | #476 | `pin`, `migrate`, `explain`, `skill`, and the five checks |
+| closing pages + check 6 | #477 | #478 | rules, when-not, glossary, and the two map rows |
+| spec | #479 | #480 | §14.1 names `docs/learn/`; decision I-84 |
+| packaging | #481 | #482 | `files` and `PACKED_SET`, 68 files in 10 entries → **83 in 11** |
+
+First, unrelated and found by a judge: `#463` / `#464`, the two source comments that described a previous version
+of the program.
+
+**Measured at the close**: fifteen pages (an index, seven of the path, seven of command), the gate at **6 pass**,
+and the suite at **953 tests · 952 pass · 1 skip · 0 fail**. Zero pull requests left open.
+
+**Four deviations, each with its reason.** They are the part of this entry worth reading, because the plan was
+confident about a delivery that did not survive contact with the delivery itself.
+
+- **The gate could not ship first.** The plan sliced P3 as "gate plus four pages". A gate that iterates `COMMANDS`
+  fails on the three missing pages, so it cannot land until all seven exist — and a suite that is red on half its
+  subject is a red suite waiting to be forgotten. The gate therefore shipped with the page that completed the set,
+  and its RED was captured when nothing existed: five tests, zero passing, the first failure naming
+  `docs/learn/commands/start.md`. Test-first was kept; the artifact order was not.
+- **A test file in the working tree breaks delivery even when it is not committed.** `node --test` discovers by
+  tree, not by git, so the gate made `open-pr` refuse a slice it had no business refusing. The cure was to move it
+  aside until the pages existed, which is also the honest reading: an uncommitted test is a test that runs.
+- **482 lines did not fit the delivery preflight.** It budgets **ten seconds** for the native assessment, and a
+  candidate that size exceeds it. The cure was to halve the candidate — the record in one pull request, the prose in
+  another — and never to raise the budget. A second consequence: a force-push would have rewritten the history the
+  findings lived in, so the branch was rebuilt and the old pull request closed with its thread intact.
+- **Shipping the directory was a spec change, not a chore.** Adding `docs/learn/` to `files` breaks a test that
+  asserts the packed set equals §14.1, and §14.1 is normative. The plan called it T10, one line in the closing
+  slice; it became two pull requests, the record first, because the repository's rule is that a behaviour change
+  starts in `docs/spec/`.
+
+**What the writing found, which the plan did not anticipate.** Two judges over the plan produced nothing like what
+one judge over the diff produced: **sixteen findings, five critical**, all measured — PowerShell's missing-program
+message is not `command not found`, `gi` is its alias for `Get-Item`, the pnpm paragraph duplicated `cli.md` clause
+by clause, no page carried the `Adds:` line the gate makes mechanical, and the index promised not to restate the
+page it shipped. The lesson belongs to the plan's own `Risk`: the gate can verify structure and never truth, and
+truth is what a page written for a beginner gets wrong.
+
+**And three product defects, filed rather than fixed here**: `#472` (the `pin` capture in `cli.md` is out of order),
+`#473` (`start` promises four pins where `pin` writes three and refuses the fourth), `#474` (`migrate --from` says
+"refusing" and exits `2`). A page must not be made true by a code fix, and a code fix must not hide in a docs pull
+request.
+
+**One instruction the pages carry that no judge could give them**: `05-when-not-to-use-it.md` closes the promise the
+owner made in `L1`, that every command says when it is superfluous — seven rows, each grounded in an observed exit
+code, a refusal, or what another command already prints.
