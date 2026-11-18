@@ -360,23 +360,23 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          off by itself
 ```
 
-A judge then reproduced the last clause false, from a run of the fixed build. `resolvePolicy` lets a
+A judge then reproduced the last clause false, from a run of the build before this correction. `resolvePolicy` lets a
 repository's own `rules` map win under every preset (I-30), so a repository carrying
-`{"rules":{"quarantine":"off"}}` answers `scan --scope repo --preset strict` with:
+`{"rules":{"quarantine":"off"}}` answered `scan --scope repo --preset strict` with:
 
 ```
 not run  1 of 13 rules; off by policy: Quarantine
-         a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 ```
 
 The run is strict and it still leaves one rule out, so `--preset strict runs all 13` — the sentence this
-section first shipped — offered the reader a cure they had already used. The continuation now ends
+section first shipped — offered the reader a cure they had already used. The same run of this build answers
 `--preset strict turns none off by itself`: it names the lever and its own limit, because the config is
-the other lever and no preset overrides it, and it counts nothing, so the catalog size is out of the
-sentence for good.
+the other lever and no preset overrides it, and it counts nothing, so a catalog that grows by a rule the
+preset does not turn off cannot make it wrong again.
 
-The capture above is the bytes the round printed and stays as it printed them, because a round is evidence; the
+The round's own capture — the `6 of 13` block this section opens with — is the bytes the round printed and stays as
+it printed them, because a round is evidence; the
 definition it read is now `docs/spec/report.md` §10.3, and the record it came from carries the correction as a
 dated errata (`rfcs/0003-first-ten-minutes/rfc.md`) rather than as an edit. The judgement stands unchanged: the
 defect was not cosmetic. A line that named the wrong set in a report whose verdict is a pass is exactly the line a
