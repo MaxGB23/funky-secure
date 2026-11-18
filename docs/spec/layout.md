@@ -56,7 +56,7 @@ is the whole list, and a path outside it does not reach a user:
 
 ```
 bin/  src/  skills/
-docs/cli.md  docs/guide.md  docs/concept.md  docs/rules/  docs/images/diagram.jpg
+docs/cli.md  docs/guide.md  docs/concept.md  docs/rules/  docs/learn/  docs/images/diagram.jpg
 ./README.md  LICENSE
 ```
 
@@ -66,10 +66,14 @@ Three rules decide membership.
   prints that path in its human output and carries it as `docs` in its JSON. `docs/rules/` therefore
   ships whole, and a release whose packed list is missing a catalogued page fails: a report that names
   a document the package does not contain is a broken promise with a valid exit code.
-- **User documentation ships; the development record does not.** `docs/spec/`, `docs/decisions.md`,
-  `docs/architecture.md`, `docs/validation.md`, `docs/field-loop.md` and `docs/delivery.md` record how
-  the tool was built and what it owes. They stay in the repository, which is public, and are not part
-  of the artifact.
+- **User documentation ships; the development record does not.** `docs/learn/`, `docs/cli.md`,
+  `docs/guide.md`, `docs/concept.md` and `docs/rules/` are written for the person using the tool, and they
+  ship together: the reference assumes a reader who already knows what a lockfile is, and the learning path
+  is the only page in the tarball that assumes nothing. A link from a shipped page to an unshipped one is the
+  same broken promise as a rule page left out — a reader who installs the package and follows the map finds a
+  404. `docs/spec/`, `docs/decisions.md`, `docs/architecture.md`, `docs/validation.md`, `docs/field-loop.md`
+  and `docs/delivery.md` record how the tool was built and what it owes. They stay in the repository, which is
+  public, and are not part of the artifact.
 - **What the README renders ships.** npm shows the README on the package page, so a relative path it
   references has to resolve inside the tarball. `docs/images/diagram.jpg` is published for that reason
   and is not recompressed to buy bytes.
