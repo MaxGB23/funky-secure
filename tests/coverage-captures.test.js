@@ -8,7 +8,7 @@
  *
  * The files are listed, never globbed:
  * - `docs/spec/report.md` is **excluded on purpose**. The repository's ritual is spec-first (AGENTS.md,
- *   docs/README.md:11), so a legitimate spec pull request carries a capture that is ahead of the renderer
+ *   docs/README.md:13), so a legitimate spec pull request carries a capture that is ahead of the renderer
  *   until the code follows — commit 5249d84 did exactly that. A gate that demanded equality would make
  *   that pull request red by construction, and open-pr refuses a red suite.
  * - `docs/validation.md` and `rfcs/**` are excluded as historical evidence: their bytes are different on
@@ -86,6 +86,9 @@ function namedIds(lines) {
     !rest.startsWith(', '),
     `the block names a rule this catalog does not carry, or the list is cut short; left over: ${JSON.stringify(rest.slice(0, 80))}`,
   );
+  // 10.3 requires the continuation whenever the block prints, so a block whose names consume the whole body
+  // is missing it. Without this, that block would fail on the line count with no word about the cause.
+  assert.ok(rest.trim().length > 0, `the block names its rules and then stops: no continuation follows`);
   return ids;
 }
 
