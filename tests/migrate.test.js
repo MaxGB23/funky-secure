@@ -648,7 +648,12 @@ test('--from a manager the repository does not hold is refused, not relabelled (
   const refused = await migrate(t, ['migrate', '--from', 'npm'], dir, { defaultRef: 'origin/main' });
 
   assert.equal(refused.code, 2, 'naming the wrong manager is a usage error, not a repository state');
-  assert.match(refused.stderr, /refusing --from npm/);
+  assert.match(refused.stderr, /--from npm names a manager this repository does not hold/);
+  assert.doesNotMatch(
+    refused.stderr,
+    /refusing/,
+    'a usage error is not a refusal: exit 3 is the code the tool reserves for "understood and refused"',
+  );
   assert.match(refused.stderr, /yarn.lock/, 'the refusal names what the repository actually holds');
 });
 
