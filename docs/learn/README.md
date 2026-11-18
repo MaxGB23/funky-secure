@@ -25,13 +25,13 @@ one of them is **when it is superfluous**. The pages before them are concepts an
 | 01 | [Before you start](01-before-you-start.md) | you have not opened a terminal on this machine |
 | 02 | [Your first command](02-your-first-command.md) | you have a terminal and Node 22 or newer |
 | 03 | [Reading the output](03-reading-the-output.md) | you have run your first command and want to see what an audit answers |
-| 04 | Why the rules exist | a finding surprised you and you want the attack behind it |
-| 05 | When not to use it | before you put it in CI, or before you run it for the tenth time |
-| 06 | Glossary | a word in the report means nothing to you |
-| — | Commands, one page each | you know what you are doing and want one command in detail |
+| 04 | [Why the rules exist](04-why-the-rules-exist.md) | a finding surprised you and you want the attack behind it |
+| 05 | [When not to use it](05-when-not-to-use-it.md) | before you put it in CI, or before you run it for the tenth time |
+| 06 | [Glossary](06-glossary.md) | a word in the report means nothing to you |
+| — | [Commands](commands/start.md), one page each | you know what you are doing and want one command in detail |
 
-A row with no link is a page this path has not written yet. It is named here so the order stays visible, and the
-index is honest about being ahead of its own pages rather than linking to a file that does not exist.
+The last row is seven pages - one per command, in the order the path meets them - and each answers the same six
+questions, the fourth of which is the one no other page in this repository answers.
 
 ## What this is not
 

@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { COMMANDS } from '../src/cli.js';
+import { catalog } from '../src/rules/index.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PAGES = join(ROOT, 'docs', 'learn', 'commands');
@@ -142,6 +143,22 @@ test('every command page says what it adds that the existing docs do not', () =>
     assert.ok(
       line.trim().length > '**Adds:** '.length + 20,
       `docs/learn/commands/${command.name}.md has an "**Adds:**" line too short to name anything`,
+    );
+  }
+});
+
+test('the rules page links every rule in the catalog, each one once', () => {
+  const path = join(ROOT, 'docs', 'learn', '04-why-the-rules-exist.md');
+  assert.ok(existsSync(path), 'docs/learn/04-why-the-rules-exist.md does not exist: the path never explains the rules');
+  const text = readFileSync(path, 'utf8');
+
+  for (const rule of catalog) {
+    const link = `../rules/${rule.id}.md`;
+    const at = text.split(link).length - 1;
+    assert.equal(
+      at,
+      1,
+      `docs/learn/04-why-the-rules-exist.md links ${link} ${at} times: the page must name every rule exactly once, because docs/guide.md already carries twelve of thirteen and nothing noticed`,
     );
   }
 });

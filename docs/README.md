@@ -13,6 +13,7 @@ Where a change goes. This page is a map, not a contract: the contract is
 | a behaviour the spec already states differently | [`spec/`](spec/README.md) **first**. A behaviour the record never decided starts the next numbered [`rfc`](../rfcs/README.md) |
 | a decision I made while implementing | a row in [`decisions.md`](decisions.md). If it changes behaviour, the record too |
 | the layout, a file's role, or a data path | [`architecture.md`](architecture.md) |
+| a reader who has never opened a terminal, or one command explained for a beginner | [`learn/`](learn/README.md), the page that answers their question |
 | the first ten minutes of a new project | [`guide.md`](guide.md) |
 | what an agent must know before touching a repository | [`../skills/funky-secure/SKILL.md`](../skills/funky-secure/SKILL.md), including its `version` |
 | the merge ritual, or what it refuses before creating anything | [`../AGENTS.md`](../AGENTS.md), the ritual's paragraph, and a row in [`decisions.md`](decisions.md); the arc they came from is [`../odd/tasks/open-pr-gate.md`](../odd/tasks/open-pr-gate.md) |

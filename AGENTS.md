@@ -10,6 +10,7 @@ settled; the present is edited freely, in its own pull request.
 |---|---|
 | `docs/spec/` | **The normative contract.** Where it and the record disagree, the spec wins. |
 | `docs/README.md` | The map from a change to the page that must move with it. Start here. |
+| `docs/learn/` | **The learning path**: seven concept pages and a page per command, for a reader who has never opened a terminal. Starts at `docs/learn/README.md`. |
 | `docs/decisions.md` | The decision log, `D-n` product and `I-n` implementation, with the measurements. |
 | `rfcs/` | The record: `rfcs/README.md` is the registry, and a settled RFC is never rewritten. |
 | `odd/tasks/` | Feature records: specs, tasks and an append-only Log. |
