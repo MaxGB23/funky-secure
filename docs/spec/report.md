@@ -148,13 +148,18 @@ between `verdict` and the separator, in the same nine-character gutter:
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 ```
 
 The two numbers are how many catalog rules the policy turned off and how many the catalog has. The
 line closes with one continuation that names the lever: the rules were turned off by the policy this
 run used — a policy decision, not a skipped check and not a rule missing from the catalog — and
-`--preset strict` runs all thirteen. That continuation stands on its own, because `start` prints the
+`--preset strict` turns none off by itself. `by itself` is the whole claim: a repository whose config
+`rules` map sets a rule `off` wins under every preset (I-30), so a strict run can still print this
+line, and a sentence promising that `--preset strict` runs all thirteen would hand the reader a cure
+they had already used. The sentence counts nothing, because the catalog size is the two numbers above
+it. That continuation stands on its own, because `start` prints the
 same block from the same helper and names the preset only in its last step. A rule at `off`
 does not run, is not counted and prints nothing (9.2), so the line states the coverage the verdict
 actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The verdict

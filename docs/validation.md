@@ -356,8 +356,25 @@ reads:
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 ```
+
+A judge then reproduced the last clause false, from a run of the fixed build. `resolvePolicy` lets a
+repository's own `rules` map win under every preset (I-30), so a repository carrying
+`{"rules":{"quarantine":"off"}}` answers `scan --scope repo --preset strict` with:
+
+```
+not run  1 of 13 rules; off by policy: Quarantine
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
+```
+
+The run is strict and it still leaves one rule out, so `--preset strict runs all 13` — the sentence this
+section first shipped — offered the reader a cure they had already used. The continuation now ends
+`--preset strict turns none off by itself`: it names the lever and its own limit, because the config is
+the other lever and no preset overrides it, and it counts nothing, so the catalog size is out of the
+sentence for good.
 
 The capture above is the bytes the round printed and stays as it printed them, because a round is evidence; the
 definition it read is now `docs/spec/report.md` §10.3, and the record it came from carries the correction as a

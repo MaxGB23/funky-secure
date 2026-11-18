@@ -63,6 +63,7 @@ number keeps resolving.
 | 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | the human report: three-line findings, header order, labels instead of ids, `--verbose`, the 96-column bound |
 | 10 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the `not run` line, so a reduced preset states the coverage it does not have |
 | 10 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the numbers state how many rules the policy turned `off` — not how many ran — and the line ends with one continuation naming `--preset strict` (dated errata in the record) |
+| 10 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: that continuation is `--preset strict turns none off by itself` — the flag and its limit, because a config `rules` map that sets a rule `off` wins under every preset (dated errata in the record) |
 | 10 | [`0006`](../../rfcs/0006-human-defaults/rfc.md) | 10.3: the four shapes — document, narration, numbered plan, table — the question each answers, what they share, and what a narration line may borrow from a finding |
 | 11 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | `scan --verbose` in the synopsis, and its contract as human presentation that changes no JSON byte |
 | 11 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 11.1 and 11.2: `--preset starter` in both synopses; 11.7: the `start` command |

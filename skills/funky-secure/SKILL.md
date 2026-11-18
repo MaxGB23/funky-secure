@@ -95,7 +95,9 @@ its configuration). Use `--scope repo` in CI, `--scope all` when diagnosing loca
 
 A reduced preset prints a `not run` line naming the rules it did not run, and it closes with one
 continuation saying those rules were turned off by a policy decision - not skipped, not missing from
-the catalog - and that `--preset strict` runs all thirteen. **Report the whole line verbatim,
+the catalog - and that `--preset strict` turns none off by itself. The last clause is bounded on
+purpose: the preset is one lever, and a repository whose own config sets a rule `off` keeps it off
+under every preset. **Report the whole line verbatim,
 continuation included.** A `PASS` under a reduced preset is not a full audit, and saying so is the
 point of it.
 

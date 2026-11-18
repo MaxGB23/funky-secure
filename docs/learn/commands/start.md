@@ -76,7 +76,8 @@ why this order
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -95,12 +96,15 @@ the repository is past the start; the next step is funky-secure scan --preset st
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 ```
 
-Also exit `0`. One line of answer, then the coverage block, which describes the preset and not your repository.
-The block's last line is the lever: those seven were switched off by a policy decision, not skipped and
-not missing, and `--preset strict` runs all thirteen.
+Also exit `0`. One line of answer, then the coverage block, which describes the preset and not your
+repository. The block's last line is the lever: those seven were switched off by a policy decision, not
+skipped and not missing, and `--preset strict` turns none off by itself. `by itself` is the whole
+claim: the flag turns nothing off on its own, and a repository whose own settings switch a rule off
+keeps it off even under `strict`.
 
 `start` takes no other flag, and the refusal is short:
 
