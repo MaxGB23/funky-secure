@@ -162,3 +162,104 @@ test('the rules page links every rule in the catalog, each one once', () => {
     );
   }
 });
+
+/// The relations (`odd/tasks/learn-truth-gate.md`, S2). Each one is recomputable from the repository
+/// and none of them bans a sentence: the four defects this feature found that were not prose - a link
+/// to nowhere, a table short a row, a rule id that does not exist, a `Next:` that stopped being one -
+/// are exactly these shapes. A page can still assert a falsehood and pass; that is in the header.
+
+/** Every markdown page under docs/learn, with the directory its links resolve against. */
+function learnPages(directory = join(ROOT, 'docs', 'learn')) {
+  const pages = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) pages.push(...learnPages(path));
+    else if (entry.name.endsWith('.md')) pages.push(path);
+  }
+  return pages;
+}
+
+test('every relative link under docs/learn resolves from the directory of its own page', () => {
+  for (const page of learnPages()) {
+    const relative = page.slice(ROOT.length).replace(/\\/g, '/');
+    const text = readFileSync(page, 'utf8');
+
+    for (const [, target] of text.matchAll(/\]\(([^)#\s]+\.md)(?:#[^)]*)?\)/g)) {
+      if (target.startsWith('http')) continue;
+      const resolved = join(page, '..', target);
+      assert.ok(
+        existsSync(resolved),
+        `${relative} links ${target}, which resolves to ${resolved.slice(ROOT.length)} and does not exist`,
+      );
+    }
+  }
+});
+
+test('the when-not table is equal to the commands the CLI dispatches', () => {
+  const text = readFileSync(join(ROOT, 'docs', 'learn', '05-when-not-to-use-it.md'), 'utf8');
+  const linked = new Set(
+    [...text.matchAll(/\]\(commands\/([a-z-]+)\.md\)/g)].map(([, name]) => name),
+  );
+  const dispatched = new Set(COMMANDS.map((command) => command.name));
+
+  for (const name of dispatched) {
+    assert.ok(
+      linked.has(name),
+      `docs/learn/05-when-not-to-use-it.md has no row linking commands/${name}.md: the page promises the decision for every command`,
+    );
+  }
+  for (const name of linked) {
+    assert.ok(
+      dispatched.has(name),
+      `docs/learn/05-when-not-to-use-it.md links commands/${name}.md, which the CLI does not dispatch`,
+    );
+  }
+});
+
+test('every rule id cited under docs/learn exists in the catalog', () => {
+  const known = new Set(catalog.map((rule) => rule.id));
+
+  for (const page of learnPages()) {
+    const relative = page.slice(ROOT.length).replace(/\\/g, '/');
+    for (const [, id] of readFileSync(page, 'utf8').matchAll(/rules\/([a-z0-9-]+)\.md/g)) {
+      assert.ok(
+        known.has(id),
+        `${relative} cites the rule id "${id}", which the catalog does not contain`,
+      );
+    }
+  }
+});
+
+test('every page but the last ends with a Next link to the page the path orders next', () => {
+  const index = readFileSync(join(ROOT, 'docs', 'learn', 'README.md'), 'utf8');
+  const order = [
+    ...new Set([...index.matchAll(/\]\(([0-9]{2}-[a-z-]+\.md)\)/g)].map(([, page]) => page)),
+  ];
+  assert.ok(order.length >= 2, 'docs/learn/README.md orders fewer than two pages');
+
+  const path = join(ROOT, 'docs', 'learn');
+  for (const [at, page] of order.entries()) {
+    const text = readFileSync(join(path, page), 'utf8');
+    const next = text.split('\n').find((line) => line.startsWith('Next: '));
+
+    if (at === order.length - 1) {
+      assert.equal(next, undefined, `docs/learn/${page} is the last page of the path and still names a next one`);
+      continue;
+    }
+
+    assert.ok(
+      next !== undefined,
+      `docs/learn/${page} has no "Next:" line: the path promises an order, and a page that stops without naming the next one is the unlinked step that was already a defect once`,
+    );
+    assert.match(
+      next,
+      /^Next: \[[^\]]+\]\(([^)]+\.md)\)/,
+      `docs/learn/${page} ends with "${next}", which is not a link to the next page`,
+    );
+    assert.equal(
+      next.match(/\(([^)]+\.md)\)/)[1],
+      order[at + 1],
+      `docs/learn/${page} names a different next page than the one the path orders`,
+    );
+  }
+});
