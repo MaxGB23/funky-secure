@@ -9,7 +9,7 @@
  * non-strict value — never as "disabled" and never as 0.
  *
  * `detect` is pure: the machine configuration arrives in `ctx.machine.config`. The preset floor
- * arrives in the optional second argument, because the engine does not pass the policy yet; without
+ * arrives in the optional second argument, which the engine passes as `{ policy, severity }`; without
  * it the baseline floor of the active major is used, and that fallback is reported in the evidence.
  *
  * A skip caused by the scope contract names what was not verified and the command that verifies it
