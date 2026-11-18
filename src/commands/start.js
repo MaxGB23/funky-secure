@@ -287,10 +287,11 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.
+  // The step names the command and no count: how many ranges `pin` can write is a fact of the
+  // lockfile, and `start` reads the manifest and the lockfile's presence and nothing inside it. A
+  // count here announced four pins over a manifest whose fourth range no lockfile resolved (#473).
   if (pins > 0) {
-    push(
-      `funky-secure pin --apply  pin the ${plural(pins, 'range', 'ranges')} package.json declares`,
-    );
+    push('funky-secure pin --apply  pin the ranges package.json declares');
   }
   if (pins > 0) {
     push(resolveLockfileStep(repo));

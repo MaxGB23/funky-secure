@@ -27,7 +27,7 @@ deliberately leaves alone, are in [`../../cli.md`](../../cli.md).
 ## When you use it
 
 - When `start` prints it. In a folder with four floating ranges, step 4 of `start`'s plan was
-  `funky-secure pin --apply  pin the 4 ranges package.json declares`.
+  `funky-secure pin --apply  pin the ranges package.json declares`.
 - After a report shows `⚠  Dependency ranges`. The report prints one `→ pnpm pkg set ...` line per finding, and
   this is that change once, for all of them.
 - Before the commit, not after. The plan is the diff, so the moment to read it is before `--apply`, and the commit
