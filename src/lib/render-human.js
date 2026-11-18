@@ -444,10 +444,13 @@ function passingIds(passing) {
 }
 
 /**
- * The honesty line (record 0003, S6, 10.3). A policy that leaves catalog rules unrun says how many
- * rules it does run and names the ones it does not, in catalog order and by the label a human reads.
- * `off` prints nothing at all (9.2), so a `PASS` under a reduced preset would otherwise claim a
- * coverage it does not have.
+ * The honesty line (record 0003, S6, 10.3). A policy that turns catalog rules `off` says how many it
+ * turned off and names them, in catalog order and by the label a human reads. `off` prints nothing at
+ * all (9.2), so a `PASS` under a reduced preset would otherwise claim a coverage it does not have.
+ *
+ * The number counts the rules the policy turned off, not the rules that still run: the label says
+ * `not run`, and a count of what did run under that label is a sentence a reader has to reconcile by
+ * arithmetic (7 + 6 = 13 was the reading a field round arrived at unaided).
  *
  * It is one helper because two commands print it — the report and `start` — and a second copy of the
  * sentence would drift from the first. It is human output only: the JSON document of 10.2 is
@@ -468,6 +471,15 @@ export function offByPolicy(policy) {
     .map(([id]) => id);
 }
 
+/**
+ * The one continuation the honesty line closes with (10.3): the cause, and the flag that undoes it. It
+ * says `a policy decision` because `off` reaches this line from a preset and from the config `rules`
+ * map alike (I-30), and naming either alone would be false for the other. It says what the rules are
+ * not — skipped, or missing from the catalog — because those are the two readings a count of what did
+ * not run invites. `--preset strict` turns no rule off, so it runs the whole catalog.
+ */
+const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict runs all 13';
+
 export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
   const disabled = new Set(off);
   const missing = catalog.filter((rule) => disabled.has(rule.id));
@@ -475,14 +487,17 @@ export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
 
   // The labels come from the same catalog the renderer already builds its label map from (S3, S4), so
   // the line names a rule exactly as a finding does.
-  const names = missing.map((rule) => rule.label ?? rule.id).join(", ");
-  const running = catalog.length - missing.length;
-  const text = `${running} of ${catalog.length} rules; off by policy: ${names}`;
-  const { head, indent } = gutter("not run");
+  const names = missing.map((rule) => rule.label ?? rule.id).join(', ');
+  const text = `${missing.length} of ${catalog.length} rules; off by policy: ${names}`;
+  const { head, indent } = gutter('not run');
 
-  return wrap(text, HONESTY_WIDTH - head.length).map((line, index) =>
+  // The continuation is its own line under the gutter, never appended to the list: it is a sentence
+  // about the policy, and the labels above it are a set to scan.
+  const lines = wrap(text, HONESTY_WIDTH - head.length).map((line, index) =>
     index === 0 ? head + line : indent + line,
   );
+  lines.push(...wrap(LEVER, HONESTY_WIDTH - head.length).map((line) => indent + line));
+  return lines;
 }
 
 

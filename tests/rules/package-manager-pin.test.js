@@ -1034,8 +1034,9 @@ test('--ignore leaves the rule with neither a finding nor a count, exactly as tu
   assert.equal(ignored.report.summary.error, 2);
 
   // The honesty line belongs to the config, not the flag: 10.3 keeps `not run` for a policy that
-  // disables a rule, and a run narrowed by `--only`/`--ignore` never prints it.
-  assert.match(configuredHuman.stdout, /^not run {2}12 of 13 rules; off by policy: Package manager$/m);
+  // disables a rule, and a run narrowed by `--only`/`--ignore` never prints it. The number is the one
+  // rule the config turned off, not the twelve that still run.
+  assert.match(configuredHuman.stdout, /^not run {2}1 of 13 rules; off by policy: Package manager$/m);
   assert.doesNotMatch(narrowed.stdout, /^not run /m);
 });
 

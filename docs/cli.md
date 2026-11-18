@@ -83,9 +83,10 @@ funky-secure start  ·  guidance, nothing is written
 
   the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git
 
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 ```
 
 A repository a generator left behind turns the order on, in both of its shapes. With a foreign lockfile
@@ -117,9 +118,10 @@ why this order
   the workspace block governs the dependencies added next, and pin is what clears the ranges already in the manifest
   migrate comes after the install, because the install is what writes the lockfile it keeps
 
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -271,14 +273,17 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
 - **The target kind is the heading of its block**: `REPO-ROOT`, `IMPORTER <path>`, `CI`, `MACHINE`.
 - **A reduced preset states its own coverage.** When the effective policy turns at least one rule
   `off`, one `not run` line sits between `verdict` and the separator, in the gutter, naming how many
-  rules still run and which ones do not, in catalog order. `--only` and `--ignore` never produce it,
+  rules the policy turned off and which ones they are, in catalog order. It closes with one
+  continuation saying the rules were turned off by a policy decision, not skipped and not missing, and
+  that `--preset strict` runs all thirteen. `--only` and `--ignore` never produce it,
   because narrowing one run is not a policy change, and the JSON document gains nothing (RFC 10.3).
   The same line for the `starter` preset:
 
 ```text
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 ```
 
 - **A clean target is two lines.** The heading, then `all 6 rules pass` at the same five columns a
@@ -307,8 +312,8 @@ next     nothing to do: everything at or above the policy passes
   says four passing findings and six that answered `skip`; a rule at `off` moves none of them, and so
   does a rule dropped by `--only` or `--ignore`. What a run covered is the `not run` line and nothing
   else, and that line speaks for the policy, never for a flag. A clean
-  `scan --scope repo --preset starter` reads `PASS` beside `3 passing · 3 skipped` and `6 of 13 rules`
-  and is telling the truth: six rules ran, seven never ran, and three of the six verified nothing.
+  `scan --scope repo --preset starter` reads `PASS` beside `3 passing · 3 skipped` and `7 of 13 rules`
+  and is telling the truth: seven rules never ran, and three of the six that did verified nothing.
 - **Skips collapse by target.** Two or more skipped rules print one `–` line naming the labels that
   were not verified and the command that expands them; the JSON is untouched. Exactly one skipped
   rule keeps its own block — symbol `–`, the reason, and the command that verifies it — because a

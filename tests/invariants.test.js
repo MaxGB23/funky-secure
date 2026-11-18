@@ -277,8 +277,9 @@ test('the presets: only starter disables anything, and it disables exactly seven
     assert.equal(ran.baseline.includes(id), true, `${id} must run under baseline, or its silence proves nothing`);
   }
 
-  // The human report states the coverage the preset leaves out, and only then.
-  assert.match((await scan(dir, ['--preset', 'starter'])).stdout, /^not run {2}6 of 13 rules; off by policy: /m);
+  // The human report states the coverage the preset leaves out, and only then: the number is the rules
+  // the preset turned off, and the names after the colon are the same seven (10.3).
+  assert.match((await scan(dir, ['--preset', 'starter'])).stdout, /^not run {2}7 of 13 rules; off by policy: /m);
   for (const preset of ['baseline', 'strict']) {
     assert.doesNotMatch((await scan(dir, ['--preset', preset])).stdout, /^not run {2}/m, `${preset} disables nothing`);
   }

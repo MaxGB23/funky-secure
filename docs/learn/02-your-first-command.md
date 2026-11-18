@@ -44,9 +44,10 @@ funky-secure start  ·  guidance, nothing is written
 
   the plan is derived from a repository: the ignore rule and the clean-tree question are answered only by git
 
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 ```
 
 I made that capture with a copy of this repository, `node bin/funky-secure.js start`, rather than through
@@ -76,9 +77,10 @@ rule and the clean-tree question are answered only by git*. That is the tool say
 steps: there is no repository to ask yet. It is also why step 3 exists, and why the list will be longer the next
 time.
 
-**Then the coverage block.** `not run  6 of 13 rules; off by policy: ...`. The number counts the rules that do
-run: six of the thirteen. The names after the colon are the seven that do not, because `starter` - the preset
-`start` recommends - switches them off. Read it as a warning about a green report later: that pass will be a
+**Then the coverage block.** `not run  7 of 13 rules; off by policy: ...`. The number counts the rules that do
+**not** run: seven of the thirteen. The names after the colon are those seven, because `starter` - the preset
+`start` recommends - switches them off, and the block's last line says so in words and names the way out:
+`--preset strict` runs all thirteen. Read it as a warning about a green report later: that pass will be a
 pass over six rules, not thirteen. [`../guide.md`](../guide.md) goes through this block properly.
 
 ## It exits 0 and writes nothing

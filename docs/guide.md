@@ -84,19 +84,22 @@ pnpm's own configuration, which is not in the repository and does not travel wit
 
 **The `not run` line** appears only when the policy you are running turns rules off, which is what
 `--preset starter` does. It sits between `verdict` and the separator, so you read it before the
-evidence, and it counts what you actually got:
+evidence, and it counts what the policy took away:
 
 ```text
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 ```
 
-Six of thirteen rules ran and the seven named ones did not, so a `PASS` here means "passed the six that
-ran", not "this repository is fully checked". A rule that is off prints nothing and is not counted in
-`summary`, so without the line a run would look clean while it measured almost nothing. `--only` and
-`--ignore` never print it: picking rules for one run does not change the policy, and the line is a
-claim about the policy. The list is in catalog order, so it is the same list in every report.
+Seven of thirteen rules did not run, and the names after the colon are those seven, so a `PASS` here
+means "passed the six that ran", not "this repository is fully checked". The last line of the block
+names the cause and the way out: those rules were switched off by a policy decision, not skipped and not
+missing from the catalog, and `--preset strict` runs all thirteen. A rule that is off prints nothing and
+is not counted in `summary`, so without the line a run would look clean while it measured almost nothing.
+`--only` and `--ignore` never print it: picking rules for one run does not change the policy, and the
+line is a claim about the policy. The list is in catalog order, so it is the same list in every report.
 
 **`summary`** counts each rule verdict once: how many rules failed at each severity, how many passed,
 how many were skipped. **`verdict`** compares those failures with the threshold (`--fail-on`, default

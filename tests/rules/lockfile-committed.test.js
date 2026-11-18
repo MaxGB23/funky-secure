@@ -521,7 +521,7 @@ test('a repository that turns the rule off gets no finding, no count, and the no
   assert.deepEqual(off.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
 
   const human = await scanOn(dir, ['--scope', 'repo', '--only', 'lockfile-committed']);
-  assert.match(human.stdout, /^not run {2}12 of 13 rules; off by policy: Lockfile$/m, 'the run states the coverage it does not have (10.3)');
+  assert.match(human.stdout, /^not run {2}1 of 13 rules; off by policy: Lockfile$/m, 'the run states the coverage it does not have (10.3): one rule off, one rule named');
 });
 
 /// S4, the remediation: each printed command, run on a disposable copy of the state that printed it.

@@ -347,6 +347,25 @@ repository that line is written for — one with no CI yet — because it is the
 looked at, and the small number suggests a smaller hole than there is. Filed as #498; a label change is a report-format change and starts in the spec. Nothing in this section says the
 flow is wrong: the flow was clean on both paths, and the labelling defect lives in the line that reports coverage.
 
+**Fixed in #498, and the fix kept the label.** The number was the surface that was wrong, not the word: seven of
+the thirteen catalog rules are `off` under `starter`, so the line now prints `7 of 13`, and it closes with one
+continuation that says what happened and names the way out. Measured on this repository, a `scan --preset starter`
+reads:
+
+```
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+```
+
+The capture above is the bytes the round printed and stays as it printed them, because a round is evidence; the
+definition it read is now `docs/spec/report.md` §10.3, and the record it came from carries the correction as a
+dated errata (`rfcs/0003-first-ten-minutes/rfc.md`) rather than as an edit. The judgement stands unchanged: the
+defect was not cosmetic. A line that named the wrong set in a report whose verdict is a pass is exactly the line a
+reader trusts when there is nothing else to read, and the round's own path — npm out, pnpm in, every step exiting
+`0` — is where it mattered.
+
 ## How this page stays true
 
 The table is checked in CI through `tests/docs-contract.test.js`, which asserts the facts a document can

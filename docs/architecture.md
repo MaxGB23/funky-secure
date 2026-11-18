@@ -56,7 +56,7 @@ flowchart TD
   e -->|"at least one step"| g["number them in cause order"]
   f --> h["why this order"]
   g --> h
-  h --> i["the not run line of the starter preset"]
+  h --> i["the not run line of the starter preset, and the lever it names"]
   i --> j["exit 0"]
 ```
 

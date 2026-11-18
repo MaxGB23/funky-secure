@@ -73,9 +73,10 @@ why this order
   only exist after the first add
   a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run
 
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -91,12 +92,15 @@ funky-secure start  ·  guidance, nothing is written
 
 the repository is past the start; the next step is funky-secure scan --preset starter
 
-not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
 ```
 
 Also exit `0`. One line of answer, then the coverage block, which describes the preset and not your repository.
+The block's last line is the lever: those seven were switched off by a policy decision, not skipped and
+not missing, and `--preset strict` runs all thirteen.
 
 `start` takes no other flag, and the refusal is short:
 

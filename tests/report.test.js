@@ -834,16 +834,17 @@ test('renders the same bytes on every run over the same state', () => {
   assert.equal(renderHuman(report, { verbose: true }), renderHuman(report, { verbose: true }));
 });
 
-/// The honesty line (record 0003, S6, 10.3): when the effective policy leaves catalog rules unrun,
-/// the human report says how many rules it does run and names the ones it does not, between `verdict`
-/// and the separator, in the same nine-character gutter. A run that disables nothing is unchanged,
-/// and the JSON document never learns about any of it.
+/// The honesty line (record 0003, S6, 10.3): when the effective policy turns catalog rules `off`, the
+/// human report says how many it turned off and names them, between `verdict` and the separator, in
+/// the same nine-character gutter, and closes with the continuation that names the lever. A run that
+/// disables nothing is unchanged, and the JSON document never learns about any of it.
 
 const NOT_RUN = 'not run  '; // nine characters, exactly like `summary  ` and `verdict  `
 const NOT_RUN_INDENT = ' '.repeat(NOT_RUN.length);
+/** The one continuation the line closes with: the cause, and the flag that runs the whole catalog. */
+const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict runs all 13';
 
-/** The five `starter` runs, in catalog order. */
-/** The five the starter preset runs. */
+/** The same seven labels, by the id the policy carries, in catalog order. */
 const STARTER_ACTIVE = [
   'package-manager-pin',
   'foreign-lockfile',
@@ -852,12 +853,12 @@ const STARTER_ACTIVE = [
   'exact-versions',
   'sensitive-ignored',
 ];
-/** The six the starter preset turns off, by the id the policy carries. */
+/** The seven the starter preset turns off, by the id the policy carries. */
 const STARTER_OFF = ruleCatalog
   .map((rule) => rule.id)
   .filter((id) => !STARTER_ACTIVE.includes(id));
 
-/** The same six, by the label a human reads, in catalog order. */
+/** The same seven, by the label a human reads, in catalog order. */
 const DISABLED_LABELS = [
   'Environment files',
   'Pinned actions',
@@ -892,7 +893,7 @@ function withoutHonesty(text) {
   return [...lines.slice(0, start), ...lines.slice(end)].join('\n');
 }
 
-test('states how many rules a reduced policy runs and names the ones it does not', () => {
+test('states how many rules a reduced policy turned off and names them, with the lever', () => {
   const block = honestyBlock(reportWith([AUTO_QUARANTINE]), STARTER_OFF);
 
   assert.ok(block.length > 0, 'a policy that disables rules prints the line');
@@ -901,8 +902,21 @@ test('states how many rules a reduced policy runs and names the ones it does not
   const sentence = block.map((line) => line.slice(NOT_RUN.length)).join(' ');
   assert.equal(
     sentence,
-    `6 of 13 rules; off by policy: ${DISABLED_LABELS.join(', ')}`,
-    'the count is the active rules against the catalog, and the names are the labels in catalog order',
+    `7 of 13 rules; off by policy: ${DISABLED_LABELS.join(', ')} ${LEVER}`,
+    'the count is the rules the policy turned off, and the names are the labels in catalog order',
+  );
+
+  // The defect this test now pins: the first number and the names after the colon describe one set,
+  // so a count of the rules that ran beside a list of the rules that did not is red here (10.3).
+  assert.equal(
+    block[0].match(new RegExp(`^${NOT_RUN}(\\d+) of`))[1],
+    String(DISABLED_LABELS.length),
+    'the number counts the rules the line names',
+  );
+  assert.equal(
+    block.at(-1),
+    NOT_RUN_INDENT + LEVER,
+    'the line closes with one continuation in the gutter, naming the cause and `--preset strict`',
   );
 
   for (const line of block) {
@@ -927,7 +941,10 @@ test('prints the honesty line after the verdict and before the separator', () =>
 test('prints no honesty line when the policy disables nothing, so baseline bytes do not move', () => {
   const report = reportWith([AUTO_QUARANTINE]);
   assert.deepEqual(honestyBlock(report, []), [], 'nothing is disabled, nothing is claimed');
-  assert.equal(renderHuman(report).includes('not run'), false, 'a caller that passes no active list renders as before');
+  assert.equal(renderHuman(report).includes('not run'), false, 'a caller that passes no off list renders as before');
+  // The lever is part of the same line, so a run with nothing to state cannot carry it either: without
+  // this the guard above would still pass if the continuation leaked into every report.
+  assert.equal(renderHuman(report).includes(LEVER), false, 'and no report names the lever on its own');
   assert.equal(
     withoutHonesty(renderHuman(report, { off: STARTER_OFF })),
     renderHuman(report),
@@ -940,9 +957,17 @@ test('adds nothing to the json document, whatever the policy disables', () => {
   const reduced = reportWith([AUTO_QUARANTINE, AUTO_SENSITIVE]);
   const json = renderJson(full);
 
+  // The human form of this same report does print the line, so a byte of it in the JSON would be a
+  // leak rather than a sentence that was never rendered: the assertion has something to forbid.
+  assert.ok(
+    renderHuman(reduced, { off: STARTER_OFF }).includes(`off by policy`),
+    'the human report of this report does carry the line',
+  );
+
   assert.equal(renderJson(reduced), json, 'the same findings render the same bytes');
   assert.equal(json.includes('not run'), false, 'the machine contract carries no coverage prose');
   assert.equal(json.includes('off by policy'), false);
+  assert.equal(json.includes(LEVER), false, 'and no byte of the continuation');
   assert.deepEqual(Object.keys(JSON.parse(json)), [
     'schemaVersion',
     'tool',

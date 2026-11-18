@@ -93,8 +93,11 @@ the ones already there.
 `--scope repo` is what a CI gate reads; `--scope all` adds the machine (the pnpm that answers here and
 its configuration). Use `--scope repo` in CI, `--scope all` when diagnosing locally.
 
-A reduced preset prints a `not run` line naming the rules it did not run. **Report that line
-verbatim.** A `PASS` under a reduced preset is not a full audit, and saying so is the point of it.
+A reduced preset prints a `not run` line naming the rules it did not run, and it closes with one
+continuation saying those rules were turned off by a policy decision - not skipped, not missing from
+the catalog - and that `--preset strict` runs all thirteen. **Report the whole line verbatim,
+continuation included.** A `PASS` under a reduced preset is not a full audit, and saying so is the
+point of it.
 
 ## What you must not do
 

@@ -79,7 +79,7 @@ is an `error` and exits `1`.
 promotes it, so the only way it contributes neither a finding nor a count is a policy decision:
 `--ignore quarantine`, an `--only` list that names other rules, or `"rules": { "quarantine": "off" }`
 in `funky-secure.config.json`. The flag forms drop it from the run without a trace in the report; the
-config form also prints the `not run  12 of 13 rules; off by policy: Quarantine` line.
+config form also prints the `not run  1 of 13 rules; off by policy: Quarantine` line.
 
 ## Evidence
 
