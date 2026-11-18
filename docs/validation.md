@@ -294,6 +294,58 @@ has a shape a test over the repository can see. What the relations do catch is t
 path: a link to nowhere, a table short a row, an id that does not exist, an order that stops being one, and a page
 nobody ordered.
 
+## The round at `0.13.0`, on both migration paths
+
+A real round, not a fixture: the owner's agent ran `start` on two generated projects — one leaving npm, one leaving
+pnpm — followed every step it printed, and reported the result. Recorded here because the field loop's rule is that
+a round the suite could not see is evidence, and because the two paths are the ones the tool is for.
+
+| | npm | pnpm |
+|---|---|---|
+| steps printed | 11 | 9 |
+| every printed step, exit | `0` | `0` |
+| `scan --preset starter` | PASS · 6 passing · 0 warnings | PASS · 6 passing · 0 warnings |
+| `scan --scope all` | PASS · 9 passing · 4 skipped | PASS · 9 passing · 4 skipped |
+| `pnpm build` | passes | passes |
+| carets left in the manifest | 0 | 0 |
+| `packageManager` and `devEngines` | both present | both present |
+| `git status` after the path | 0 lines | 0 lines |
+| commits | 4 | 4 |
+
+The two step lists, in order, as printed:
+
+```
+npm   1 baseline commit · 2 init (4 writes) · 3 commit · 4 pnpm import
+      5 pin (5 pins) · 6 install · 7 commit pin · 8 branch
+      9 migrate (removed package-lock.json) · 10 commit lockfile · 11 scan
+pnpm  1 baseline commit · 2 init (3 writes) · 3 commit · 4 install
+      5 pin (5 pins) · 6 install · 7 commit pin · 8 commit lockfile · 9 scan
+```
+
+**What the round found**: no false sentence, no broken command, no dirty tree. The only noise was git's CRLF
+warning, which is inert. It also confirms three changes from `0.10.2` reach a reader unchanged — the catalog at
+thirteen rules, the `IMPORTER` section in the report, and the `next` line that now says *nothing to do among the
+rules that ran* instead of claiming everything passes.
+
+**What the round did not cover**, stated so the next one knows: a repository with CI workflows (all seven
+`off by policy` rules are CI rules, and no generated project has a workflow), a monorepo, `migrate --from yarn`,
+`catalogs`/`overrides`/`patchedDependencies`, and any platform other than Windows.
+
+**One defect the round found, and it is not cosmetic.** The coverage line reads:
+
+```
+not run  6 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
+```
+
+Six, with seven names. The arithmetic is consistent only one way: 6 + 7 = 13, so the number counts the rules that
+**ran** while the label says they did not. §10.3 defines the number as "how many catalog rules still run", so the
+renderer matches the specification and the **label** is the surface that lies. It matters most in exactly the
+repository that line is written for — one with no CI yet — because it is the line that says how much was not
+looked at, and the small number suggests a smaller hole than there is. Filed as its own issue; a label change is a
+report-format change and starts in the spec.
+
 ## How this page stays true
 
 The table is checked in CI through `tests/docs-contract.test.js`, which asserts the facts a document can
