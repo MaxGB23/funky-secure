@@ -327,8 +327,9 @@ warning, which is inert. It also confirms three changes from `0.10.2` reach a re
 thirteen rules, the `IMPORTER` section in the report, and the `next` line that now says *nothing to do among the
 rules that ran* instead of claiming everything passes.
 
-**What the round did not cover**, stated so the next one knows: a repository with CI workflows (all seven
-`off by policy` rules are CI rules, and no generated project has a workflow), a monorepo, `migrate --from yarn`,
+**What the round did not cover**, stated so the next one knows: a repository with CI workflows — six of the seven rules `starter` turns off are CI rules, so a repository with no
+workflow cannot have them judged at all, and the seventh, `Environment files`, is a repository rule the same preset
+turns off by design — plus a monorepo, `migrate --from yarn`,
 `catalogs`/`overrides`/`patchedDependencies`, and any platform other than Windows.
 
 **One defect the round found, and it is not cosmetic.** The coverage line reads:
@@ -343,8 +344,8 @@ Six, with seven names. The arithmetic is consistent only one way: 6 + 7 = 13, so
 **ran** while the label says they did not. §10.3 defines the number as "how many catalog rules still run", so the
 renderer matches the specification and the **label** is the surface that lies. It matters most in exactly the
 repository that line is written for — one with no CI yet — because it is the line that says how much was not
-looked at, and the small number suggests a smaller hole than there is. Filed as its own issue; a label change is a
-report-format change and starts in the spec.
+looked at, and the small number suggests a smaller hole than there is. Filed as #498; a label change is a report-format change and starts in the spec. Nothing in this section says the
+flow is wrong: the flow was clean on both paths, and the labelling defect lives in the line that reports coverage.
 
 ## How this page stays true
 

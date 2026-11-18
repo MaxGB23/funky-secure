@@ -141,3 +141,28 @@ that shapes a framework-generated repository, which is the opposite of what a da
 (`migrate` before `init --apply`, no `pnpm add`, exit `0`, continuous numbering) and the pnpm-shaped
 path (neither step, continuous numbering). The suite passes and
 `node bin/funky-secure.js scan --scope repo --fail-on warn` exits `0` on this repository.
+
+## Errata — 2026-11-18
+
+Two corrections to the line this record introduced, and neither edits the text above: a settled record
+is corrected here, never rewritten.
+
+**The number named the wrong set.** The Decision says the header "states how many rules run, out of
+how many", and the Amendment of 2026-10-28 exemplifies the line as `not run  6 of 12 rules` and names
+six rules. With a twelve-rule catalog the two readings coincided — six `off`, six on — so the defect was
+invisible: the number counted the rules that ran under a label that says they did not. At thirteen
+rules it stopped coinciding, and the line printed `6 of 13` beside seven names, which is the arithmetic
+a field round read unaided. `docs/spec/report.md` §10.3 now defines the two numbers as how many catalog
+rules the policy turned `off` and how many the catalog has, so the same run reads `7 of 13` and
+7 + 6 = 13. The label stays `not run`: it was describing the right set all along.
+
+**The line now names the lever.** It closes with one continuation — `a policy decision, not a skip or a
+missing rule; --preset strict runs all 13` — because a count of what was not run, with no cause named,
+invites the two readings that are false: that a rule was skipped, or that the catalog is shorter than
+it is. The continuation names a policy decision and the one flag that runs the whole catalog. `start`
+prints the same block from the same helper and names the preset only in its last step, so the
+continuation stands on its own rather than pointing at a line above it.
+
+**What did not change.** The label, the nine-character gutter, the 86-column bound, the single helper
+shared by `scan` and `start`, and the rule that `--only` and `--ignore` never produce the line. The JSON
+document of 10.2 gains no field (10.3), so no machine contract moves.
