@@ -62,8 +62,9 @@ If you are learning to program and your project is an exercise on your own lapto
 worst outcome is a reinstall - then reading this path costs more than the risk it prevents. Keep the three
 files in mind, and come back when someone else depends on your code.
 
-The tool itself is honest about the same limit: one of its rules exists only to tell you that a decision was
-made by your machine rather than by your repository, and it reports that as a gap instead of a pass.
+The tool itself is honest about the same limit: two of its rules need a fact about your machine as well as
+about your repository, so when it is asked to look at the repository alone it reports them as not verified
+rather than guessing.
 
 ---
 
