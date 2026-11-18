@@ -97,7 +97,7 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
 ```
 
 Exit `1`. Two findings, one warning, and seven rules that did not run - the last of those is not a pass, and the
-`not verified` block says so in words. [`../guide.md`](../guide.md) walks these fields one by one, and
+`not verified` block says so in words. [`../../guide.md`](../../guide.md) walks these fields one by one, and
 [`03-reading-the-output.md`](../03-reading-the-output.md) explains why the answers come in this order.
 
 A value outside the list refuses before it reads anything:

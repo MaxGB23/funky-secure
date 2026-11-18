@@ -101,8 +101,8 @@ funky-secure skill: .agents/skills/funky-secure/SKILL.md in this project, ~/.age
 Put it in the repository with `--install` and commit the file, so the instructions an agent reads are the ones your
 project carries. Then re-run it after each upgrade of `funky-secure`: `–  Current` is what you want, and a refusal is
 the command telling you a newer copy is already there. After that this path is done: the sixth question every
-command page ends on is what to do next, and the fourth - when the command is superfluous - is collected into one
-table on a page this path still owes.
+command page ends on is what to do next, and the fourth - when the command is superfluous - is collected for all
+seven in [05 - When not to use it](../05-when-not-to-use-it.md).
 
 **Adds:** who the command is for - a reader who hands work to an agent that reads skills - and what it does when
 nobody needs it: a second `--install` printing `–  Current`, a newer copy refused with exit `3` instead of replaced,
