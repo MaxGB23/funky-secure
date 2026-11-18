@@ -398,7 +398,7 @@ block describes `starter` (9.1), the preset step 6 runs, and it is produced by t
 report's, so the two cannot disagree about what the recommended preset leaves unrun. It carries the
 same continuation too, the one that names `--preset strict`, and `start` needs it more than the report
 does: this command names the preset only in its last step, so the block is where a reader learns why
-those rules are off and which flag runs the whole catalog.
+those rules are off and which flag turns none of them off by itself.
 
 Exit: `0` in every state, including a repository already past the start; `2` for a usage error only.
 

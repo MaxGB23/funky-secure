@@ -16,8 +16,8 @@ lockfile, another manager's lockfile, a version that floats, the block `init` ma
 are still missing. It writes nothing at all, installs nothing, and touches nothing on the machine. It accepts
 `--help` and no other flag: a flag that belongs to another command is a usage error, and the two lines it prints
 name the command that does take it. Where the list was derived from a repository it adds `why this order`; the three-step boot list does not get it,
-because there is no order to justify yet. It ends
-with the coverage line of the preset its last step recommends. Every flag, and what each step means, is in
+because there is no order to justify yet. Then comes the coverage block of the preset its last step recommends,
+and the closing line is what to read if a writer refuses a step. Every flag, and what each step means, is in
 [`../../cli.md`](../../cli.md).
 
 ## When you use it
