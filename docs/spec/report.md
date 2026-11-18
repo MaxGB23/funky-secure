@@ -54,7 +54,7 @@ read, never that the rule did not run.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "funky-secure", "version": "0.13.0" },
+  "tool": { "name": "funky-secure", "version": "0.14.0" },
   "scope": "all",
   "policy": {
     "preset": "baseline",
