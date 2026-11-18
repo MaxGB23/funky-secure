@@ -46,7 +46,9 @@ What each exit code means, and which of them I saw: `0` is a report within the t
 `1` is at least one finding at or above `--fail-on` - seen, in the capture below; `2` is the tool unable to
 answer, a usage error - seen, in the second capture. [`../../cli.md`](../../cli.md) gives the same three meanings
 and adds the fourth, `3`, which `scan` never uses. Read `1` as a threshold and not as a judgement on your
-project: I re-ran the same failing folder with `--fail-on none`, got the identical report, and exited `0`.
+project: I re-ran the same failing folder with `--fail-on none` and exited `0`. The findings were identical; the
+verdict line was not, because it names the threshold - `PASS (threshold: none ...)` instead of
+`FAIL (threshold: error ...)`. The threshold decides the verdict, never the findings.
 
 ## What you will see
 

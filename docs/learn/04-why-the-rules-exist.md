@@ -1,6 +1,6 @@
 # 04 - Why the rules exist
 
-A report line names a rule, and a rule names an attacker's move. `✖  Lockfile  ·  pnpm-lock.yaml` is not a
+A report line names a rule, and a rule names an attacker's move. `✖  Lockfile  ·  pnpm-lock.yaml` - a failing answer, marked with the symbol the report puts in its gutter - is not a
 matter of taste: it says the bytes you review and the bytes a machine installs are two different sets, and that
 whoever resolved the second one - not you - chose them.
 

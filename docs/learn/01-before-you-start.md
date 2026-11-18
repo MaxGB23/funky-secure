@@ -67,8 +67,8 @@ first folder and runs `git init` in it, where you can watch what it leaves behin
 ## pnpm, and why this page will not install it for you
 
 Some of the steps the tool prints begin with `pnpm`. It is a package manager: the program that reads your manifest
-and your lockfile and decides what to put on disk. It does not come with Node, and of the eight steps `start` can
-print, three begin with `pnpm` and four with `funky-secure`.
+and your lockfile and decides what to put on disk. It does not come with Node, and the steps `start` prints do not all exist at once: an empty folder gets three, a
+folder with a manifest gets more, and at most two of them begin with `pnpm`.
 
 When a printed step needs it, the tool adds one unnumbered line naming <https://pnpm.io/installation>. That line is
 a reference and not a command, and [`../cli.md`](../cli.md) gives the reason in its own paragraph: the only command

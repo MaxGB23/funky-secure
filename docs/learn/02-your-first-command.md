@@ -91,8 +91,8 @@ Two claims, and you can check both.
   behind. In PowerShell the same number is `echo $LASTEXITCODE`. Both print `0` after this run.
 
 Read the `0` as "I answered", not as "your project is fine". `start` exits `0` whatever state the folder is in,
-because it is advice and advice cannot fail; the only nonzero code it can produce is a usage error, `2`, from a
-mistyped flag. A verdict is what `scan` is for, on page 03.
+because it is advice and advice cannot fail. Its one nonzero code is `2`, and it means the tool could not read
+its input: a mistyped flag, or a `funky-secure.config.json` it cannot parse. Neither is a verdict. A verdict is what `scan` is for, on page 03.
 
 ## Now git init
 
