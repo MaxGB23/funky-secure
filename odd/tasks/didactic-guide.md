@@ -28,7 +28,8 @@ Judged at `J1` before any page was written: `PAIR`, frozen at `84bfdb5` (93 line
   5. `## What you will see` — **added by this plan**: a reference page shows a contract, a beginner needs a picture
   6. `## What you do next` — **added by this plan**: the path has a destination (S8)
 
-  Every page also ends with a line beginning `**Adds:**`, and that label is mechanical (S6 check 5).
+  Every page also carries a line beginning `**Adds:**` - defined once, in S9 - and that label is mechanical
+  (S6 check 5).
 - **S3** — «lo manejamos en formato de docs con indices, secciones, etc». An index and sections, but the index
   reads as a **path**, not an A–Z reference: a reader who does not know that `pin` exists cannot look it up.
 - **S4** — English. `docs/cli.md`, `docs/guide.md` and the thirteen rule pages are English, and the repository's
@@ -41,7 +42,8 @@ Judged at `J1` before any page was written: `PAIR`, frozen at `84bfdb5` (93 line
   1. the page exists, **one per dispatched command and none extra** (`commands/<name>.md`, name ∈ `COMMANDS`);
   2. the six literal headings of S2 appear **in order**;
   3. each heading is followed by at least one paragraph of 40 characters or more — a proxy, and named as one;
-  4. no page mentions `funky-secure <token>` where `token` is not in `COMMANDS`;
+  4. no page mentions `funky-secure <token>` where `token` is neither a command in `COMMANDS` nor a global flag
+     (`--help`, `--version`, which `docs/cli.md` documents for every command — a judge's `JD-A-012`);
   5. every page carries the `**Adds:**` line of S9;
   6. the rules page links **thirteen** rule ids, asserted against the catalog — `docs/guide.md` carries twelve of
      thirteen today and no check notices, so the page most likely to reproduce that defect is the first to be
@@ -52,12 +54,11 @@ Judged at `J1` before any page was written: `PAIR`, frozen at `84bfdb5` (93 line
   the plan says so rather than pretending the gate covers it.
 - **S7** — "when not" is grounded in what the tool itself does, in four forms: it is read-only or writes · its exit
   codes · its refusals · **what another artifact already prints**. The fourth form is `explain`: it reads no
-  repository and prints the catalog, which `docs/rules/<id>.md` already holds, and `explain` with no id prints the
-  table `--help` prints. The first draft grounded it on the report carrying `doc: funky-secure explain <rule>`, and
-  both judges refuted the inference: that field exists only in `--format json`, the human report hides even the rule
-  id, and the field points **at** `explain` rather than duplicating it. Where the honest answer is a fact about the
-  reader's situation rather than about the tool — `skill` is the case, and a judge's `Q2` found it — the page **says
-  so and names the fact** instead of inventing tool data.
+  repository and prints the same catalog `--help` prints, in a different layout, and the same content `docs/rules/<id>.md` already holds. The first draft grounded it on the report carrying
+  `doc: funky-secure explain <rule>`, and both judges refuted the inference: that field exists only in `--format json`,
+  the human report hides even the rule id, and the field points **at** `explain` rather than duplicating it. Where
+  the honest answer is a fact about the reader's situation rather than about the tool — `skill` is the case, and a
+  judge's `Q2` found it — the page **says so and names the fact** instead of inventing tool data.
 - **S8** — the path has a destination: a reader who reaches the end can run this tool on their own repository
   without reading anything else. `01-before-you-start.md` is what makes that true.
 - **S9** — no page restates **three** sources: `docs/cli.md` (the reference), `docs/guide.md` (ten minutes, and
@@ -94,7 +95,7 @@ Judged at `J1` before any page was written: `PAIR`, frozen at `84bfdb5` (93 line
 | T6 | `docs/learn/04-why-the-rules-exist.md` — the attack each rule answers, thirteen **rule links**, no consequence table | S9, S10 | inline | — |
 | T7 | `docs/learn/commands/<name>.md` — seven pages, six questions | S2, S6, S7 | inline | — |
 | T8 | `docs/learn/05-when-not-to-use-it.md` — the whole decision in one table | S2, S7 | inline | — |
-| T9 | `docs/learn/05-glossary.md` — one term, one line | S1 | inline | — |
+| T9 | `docs/learn/06-glossary.md` — one term, one line | S1 | inline | — |
 | T10 | the gate (six checks, S6); `docs/README.md` and `AGENTS.md` rows; the `package.json` `files` decision — `docs/learn/` ships or it does not, and the plan decides **it ships** | S6, S11 | inline | — |
 | T11 | `J2` on every slice, `J3` before the close | S5, S9 | `PAIR`/`SINGLE` | — |
 

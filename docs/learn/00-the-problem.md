@@ -49,9 +49,11 @@ years.
 A tool can read those files and answer one question the same way every time: **does this repository install
 what it says it installs, from where it says, under rules you chose?**
 
-That is all `funky-secure` does. It prints what it read, the line where it read it, and a verdict. It does not
-scan the source of the packages - that is a different tool and a different question. It does not fix anything
-until you ask it to.
+That is all `funky-secure` does. It prints what it read, where it read it, and a verdict. Where the evidence is a
+single line it names the line - `package.json:4` - and where it is a whole file it names the file, because a
+finding that invented a line number would be worse than one that admits it has none. It does not scan the source
+of the packages - that is a different tool and a different question. It does not fix anything until you ask it
+to.
 
 The refusal to do more is deliberate: a tool that quietly rewrote your project would be a second stranger in
 your kitchen.
@@ -65,6 +67,9 @@ files in mind, and come back when someone else depends on your code.
 The tool itself is honest about the same limit: two of its rules need a fact about your machine as well as
 about your repository, so when it is asked to look at the repository alone it reports them as not verified
 rather than guessing.
+
+**Adds:** the problem itself, before any command: what installing software actually does, why three files decide
+it, and the case in which none of this is your problem.
 
 ---
 
