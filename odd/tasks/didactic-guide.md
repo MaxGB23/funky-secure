@@ -278,3 +278,39 @@ request.
 **One instruction the pages carry that no judge could give them**: `05-when-not-to-use-it.md` closes the promise the
 owner made in `L1`, that every command says when it is superfluous — seven rows, each grounded in an observed exit
 code, a refusal, or what another command already prints.
+
+**L9** — the closing judge, and what it found over a feature the record had already called closed. `J3` ran once,
+read all fifteen pages in order as the declared reader, and answered eight questions. **Its numbers held**: eight
+slices, the guest pull request, fifteen pages, six gate checks, `83` packed files in `11` entries, zero open pull
+requests — each recomputed, none failed. The suite total it could not run and did not certify, which is the right
+answer to a number nobody executed.
+
+**Seven sentences were false, and all seven were mine.** One pull request, `#485`, and the two shapes worth keeping:
+
+- **Two of them contradicted a capture pasted two pages earlier in the same path.** `commands/start.md` claimed the
+  boot list prints `why this order` and ends on a scan; `02`'s own capture shows three steps, no such line, and a
+  last step of `funky-secure start`. The path refuted itself without needing the program — the clearest evidence
+  this feature produced that a page written from memory is not a page written from a run.
+- **One was arithmetically impossible.** "Of the eight steps `start` can print, three begin with `pnpm` and four
+  with `funky-secure`": `pnpm init` needs no manifest while the four `funky-secure` steps need one, so the two sets
+  cannot both be full. Measured 8, 10 and 11 steps depending on the folder; at most two are `pnpm`.
+
+The rest: an unlinked `Next:` (the path's promise is *read it in order*, and it broke at its one non-mechanical
+step), a report symbol used before any page introduced it, `start`'s exit `2` described as flags-only when a
+malformed `funky-secure.config.json` also produces it, `--fail-on none` called an identical report when the verdict
+line names the threshold, a glossary with no link in the whole file repeating four facts from `cli.md` and
+`rules/`, and a Commands row promising seven pages while linking one.
+
+**What this puts on the record, and it is the feature's own conclusion**: the gate verifies structure and cannot
+verify truth — `S6` said so before any page existed, and the closing round confirmed it from the other side. Truth
+was found by running the program, every time: two judge rounds over the plan produced no false claim of this kind,
+and one round over the pages produced seven.
+
+**Closed.** Fifteen pages, six gate checks, suite `953 / 952 / 1 / 0`, `83` packed files in `11` entries, zero open
+pull requests, and four product defects filed rather than absorbed (`#472`, `#473`, `#474`, and the two source
+comments fixed in `#464`).
+
+**Still open, and deliberately not in this feature** — `J3`'s three destinations, each a new feature when the owner
+wants it: a **CI recipe** page (`05` sells itself with "before you put it in CI" and no page shows a workflow
+file), a **truth gate** (fixed-string assertions over the claims this feature got wrong, so the sixth cannot ship
+silently), and a **`--format json` / scripting** page (mentioned in three pages, never shown).
