@@ -1,5 +1,5 @@
 /**
- * The command line: one argv parser, six commands, one exit-code contract (RFC 10.4, 11, 13).
+ * The command line: one argv parser, seven commands, one exit-code contract (RFC 10.4, 11, 13).
  *
  * Nothing here reads the repository or runs a probe. `--help` renders the static contract from
  * `COMMANDS`, `FLAGS` and the catalog, so two machines always see the same text (13.3).
