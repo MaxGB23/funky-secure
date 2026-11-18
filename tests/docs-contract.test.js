@@ -245,7 +245,12 @@ test('the published version appears where a reader copies it, and nowhere older'
     // object carrying another version is the evidence for a fix, not a claim about this package. The
     // whole document is still checked for an install line, which cannot be anything but this package.
     if (relative === 'docs/decisions.md') continue;
+    // `init` prints the writes it would make, and one of them sets `devEngines.packageManager` to a
+    // descriptor naming pnpm and its version. That version is pnpm's - the line says so - and it is
+    // the only shape here that is not a claim about this package.
+    const lineAt = (at) => text.slice(text.lastIndexOf('\n', at) + 1, text.indexOf('\n', at) === -1 ? text.length : text.indexOf('\n', at));
     for (const match of text.matchAll(/"version":\s*"(\d+\.\d+\.\d+)"/g)) {
+      if (/"name"\s*:\s*"pnpm"/.test(lineAt(match.index))) continue;
       assert.equal(match[1], version, `${relative} shows a tool version of ${match[1]}, not ${version}`);
     }
   }
