@@ -86,7 +86,8 @@ funky-secure start  ·  guidance, nothing is written
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 ```
 
 A repository a generator left behind turns the order on, in both of its shapes. With a foreign lockfile
@@ -121,7 +122,8 @@ why this order
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -275,7 +277,9 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
   `off`, one `not run` line sits between `verdict` and the separator, in the gutter, naming how many
   rules the policy turned off and which ones they are, in catalog order. It closes with one
   continuation saying the rules were turned off by a policy decision, not skipped and not missing, and
-  that `--preset strict` runs all thirteen. `--only` and `--ignore` never produce it,
+  that `--preset strict` turns none off by itself: the flag is one lever, and a repository whose config
+  `rules` map sets a rule `off` wins under every preset, so `by itself` is the claim. `--only` and
+  `--ignore` never produce it,
   because narrowing one run is not a policy change, and the JSON document gains nothing (RFC 10.3).
   The same line for the `starter` preset:
 
@@ -283,7 +287,8 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
 not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
-         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself
 ```
 
 - **A clean target is two lines.** The heading, then `all 6 rules pass` at the same five columns a

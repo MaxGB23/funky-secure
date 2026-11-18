@@ -841,8 +841,11 @@ test('renders the same bytes on every run over the same state', () => {
 
 const NOT_RUN = 'not run  '; // nine characters, exactly like `summary  ` and `verdict  `
 const NOT_RUN_INDENT = ' '.repeat(NOT_RUN.length);
-/** The one continuation the line closes with: the cause, and the flag that runs the whole catalog. */
-const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict runs all 13';
+/**
+ * The one continuation the line closes with: the cause, and what the preset can and cannot undo. The
+ * preset turns nothing off by itself; a config `rules` map that does wins under every preset (I-30).
+ */
+const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself';
 
 /** The same seven labels, by the id the policy carries, in catalog order. */
 const STARTER_ACTIVE = [
@@ -906,17 +909,16 @@ test('states how many rules a reduced policy turned off and names them, with the
     'the count is the rules the policy turned off, and the names are the labels in catalog order',
   );
 
-  // The defect this test now pins: the first number and the names after the colon describe one set,
-  // so a count of the rules that ran beside a list of the rules that did not is red here (10.3).
+  // The number used to be re-extracted here, from the same constants the equality above already pins:
+  // it could only fail when that assertion did, so it asserted nothing of its own and is gone (R4).
+  //
+  // What the equality cannot see is the wrapping: it joins the lines back with spaces wherever they
+  // broke. The continuation is 89 columns, longer than the 77 the nine-character gutter leaves, so it
+  // is exactly two gutter lines that rejoin to the sentence — never one line, and never a third.
   assert.equal(
-    block[0].match(new RegExp(`^${NOT_RUN}(\\d+) of`))[1],
-    String(DISABLED_LABELS.length),
-    'the number counts the rules the line names',
-  );
-  assert.equal(
-    block.at(-1),
-    NOT_RUN_INDENT + LEVER,
-    'the line closes with one continuation in the gutter, naming the cause and `--preset strict`',
+    `${block.at(-2).slice(NOT_RUN.length)} ${block.at(-1).slice(NOT_RUN.length)}`,
+    LEVER,
+    'the line closes with one continuation in the gutter, wrapped over two lines that rejoin to it',
   );
 
   for (const line of block) {

@@ -515,7 +515,7 @@ test('both closing blocks always print: why this order, and what the starter doe
     sentence.map((line) => line.slice(9)).join(' '),
     '7 of 13 rules; off by policy: Environment files, Pinned actions, Bot auto-merge, ' +
       'CI install flags, pull_request_target, Workflow permissions, Workflow run artifact ' +
-      'a policy decision, not a skip or a missing rule; --preset strict runs all 13',
+      'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself',
     'the same honesty content the report renders, lever included: this command names the preset only in its last step',
   );
 });

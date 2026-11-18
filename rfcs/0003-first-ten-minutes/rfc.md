@@ -166,3 +166,19 @@ continuation stands on its own rather than pointing at a line above it.
 **What did not change.** The label, the nine-character gutter, the 86-column bound, the single helper
 shared by `scan` and `start`, and the rule that `--only` and `--ignore` never produce the line. The JSON
 document of 10.2 gains no field (10.3), so no machine contract moves.
+
+**The lever named a cure the reader may have used.** The continuation ended `--preset strict runs all
+13`, and it is false whenever the repository's own config turns a rule `off`: `resolvePolicy` lets the
+config `rules` map win under every preset (I-30), so that repository's `scan --scope repo --preset
+strict` printed
+
+```
+not run  1 of 13 rules; off by policy: Quarantine
+         a policy decision, not a skip or a missing rule; --preset strict runs all 13
+```
+
+— a strict run, one rule left out, and a sentence offering a cure it had already used. §10.3 now ends
+the line `--preset strict turns none off by itself`: it still names the lever a reader can type, and
+`by itself` states its own limit, because the config is the other lever and the preset cannot undo it.
+The sentence counts nothing now: the catalog size is the two numbers above it. The label, the numbers,
+the gutter and the 86-column bound are unchanged.

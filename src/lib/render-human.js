@@ -476,9 +476,13 @@ export function offByPolicy(policy) {
  * says `a policy decision` because `off` reaches this line from a preset and from the config `rules`
  * map alike (I-30), and naming either alone would be false for the other. It says what the rules are
  * not — skipped, or missing from the catalog — because those are the two readings a count of what did
- * not run invites. `--preset strict` turns no rule off, so it runs the whole catalog.
+ * not run invites. What it claims of `--preset strict` is bounded by `by itself`: the preset turns no
+ * rule off, but it cannot undo a `rules` map that does, because the config wins under every preset
+ * (I-30). `--preset strict runs all 13` was false exactly there — a strict run printing this line had
+ * already used the cure it offered — so the sentence names the lever and its own limit, and counts
+ * nothing, since the catalog size is the line's business above it.
  */
-const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict runs all 13';
+const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself';
 
 export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
   const disabled = new Set(off);

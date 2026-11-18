@@ -1040,6 +1040,48 @@ test('--ignore leaves the rule with neither a finding nor a count, exactly as tu
   assert.doesNotMatch(narrowed.stdout, /^not run /m);
 });
 
+test('a config that turns the rule off keeps the line under --preset strict, and the continuation states its own limit (R2)', async () => {
+  // `resolvePolicy` lets the repository's `rules` map win under every preset (I-30), so a strict run
+  // can still leave a rule out. The continuation used to end `--preset strict runs all 13`, which is
+  // false here: it hands the reader a cure they have already used. The sentence now names the lever
+  // and its limit — the preset turns none off by itself, the config is the other lever.
+  const strict = JSON.parse((await scanFixture('off-by-policy', ['--preset', 'strict', '--format', 'json'])).stdout);
+  assert.equal(strict.policy.preset, 'strict', 'the run whose line is asserted below is a strict run');
+
+  const human = await scanFixture('off-by-policy', ['--preset', 'strict']);
+  const lines = human.stdout.split('\n').filter((line) => line !== '');
+  const start = lines.findIndex((line) => line.startsWith('not run'));
+  assert.notEqual(start, -1, 'a strict run whose config turns a rule off still states the coverage it lacks');
+
+  const block = [lines[start]];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.startsWith(' '.repeat(9))) break;
+    block.push(line);
+  }
+
+  assert.equal(
+    block[0],
+    'not run  1 of 13 rules; off by policy: Package manager',
+    'the line counts and names the one rule the config turned off, not the twelve that ran',
+  );
+
+  const sentence = block.map((line) => line.slice(9)).join(' ');
+  assert.equal(
+    sentence,
+    '1 of 13 rules; off by policy: Package manager a policy decision, not a skip or a missing rule; --preset strict turns none off by itself',
+    'the continuation ends with the lever and its limit, and never claims this run ran the catalog',
+  );
+  assert.match(block.at(-1), /^ {9}\S/, 'the sentence ends on a gutter line, not at column zero');
+  assert.equal(
+    block.slice(-2).map((line) => line.slice(9)).join(' '),
+    'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself',
+    'the continuation is two gutter lines that rejoin to the sentence, never the claim that strict ran all 13',
+  );
+  for (const line of block) {
+    assert.ok(line.length <= 86, `the honesty line is ${line.length} columns: ${line}`);
+  }
+});
+
 test('--only another rule leaves this rule with neither a finding nor a count (S3)', async () => {
   const full = JSON.parse((await scanFixture('fail-pin-missing', ['--format', 'json'])).stdout);
   const narrowed = JSON.parse(
