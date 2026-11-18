@@ -325,8 +325,8 @@ export async function run({
     const expected = LOCKFILE_FOR[from];
     if (expected !== undefined && !foreign.some((name) => expected.test(name))) {
       throw unanswered(
+        `--from ${from} names a manager this repository does not hold: it holds ${foreign.length === 0 ? 'no foreign lockfile' : foreign.join(', ')}, not ${expected.source}`,
         `run migrate --apply without --from, so the detected manager decides`,
-        `refusing --from ${from}: the repository holds ${foreign.length === 0 ? 'no foreign lockfile' : foreign.join(', ')}, not ${expected.source}`,
       );
     }
   }
