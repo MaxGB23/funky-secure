@@ -395,3 +395,21 @@ What survives from that pair is `T17` alone, and it is `odd/tasks/open-task-ledg
 > **Corrected the same day, in this entry's own voice.** The `T16` bullet above says *"nineteen minutes"*; the
 > measured interval is `19:17:21 -> 19:26:33`, which is **nine minutes and twelve seconds**. The word is left as
 > written because this record is append-only, and the number is corrected here rather than overwritten.
+
+## After `0.14.0`: a fixture with workflows, owned by the owner's agent
+
+Recorded 2026-11-18, during the `0.14.0` release, so it is not lost between batches.
+
+The real round on `0.14.0` (npm 11 steps, pnpm 9 steps, every step exit `0`, both scans `PASS`) found no defect and
+named its own gap: **no fixture repository carries a workflow**, so six of the seven rules the `starter` preset turns
+`off` have never been measured against the thing they read. (`env-not-tracked` is the seventh and its target is
+`repo-root`, not CI — the sentence *"all seven off-by-policy rules are CI rules"* is false and was corrected once
+already.)
+
+**Owner's decision**: the owner runs it, with the same agent that has now used the flow twice, in a repository chosen
+for the purpose. The work is not this repository's to do — only the fixture is.
+
+What the fixture must carry to close the gap: a `.github/workflows/` file with an unpinned action, a bot auto-merge,
+a `pull_request_target`, no `permissions:` block, a CI install that passes a safety override, and an artifact upload —
+one trigger per rule, so a finding can be traced to a line. Plus the three shapes the round still has not seen:
+a monorepo, `migrate --from yarn`, and a non-Windows host.
