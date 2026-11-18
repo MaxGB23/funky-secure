@@ -486,6 +486,7 @@ Default is a plan: it names `package.json`, the number of specifiers and the lin
 
 ```text
 $ funky-secure pin
+funky-secure pin  ·  preset baseline  ·  plan only (nothing has been written)
 
 would write
   /repo/package.json
@@ -493,13 +494,13 @@ would write
 
 summary  1 write · 0 already at policy · 0 conflicts
 
+next steps
+  pnpm install --lockfile-only
+
 pins
   dependencies.left-pad  ^1.3.0 → 1.3.0
   dependencies.is-odd  ^3.0.1 → 3.0.1
   devDependencies.typescript  ~5.9.2 → 5.9.2
-
-next steps
-  pnpm install --lockfile-only
 ```
 
 Under a `packageManager` that names another manager — the `npm@11.13.0` a `create-t3-app` project
