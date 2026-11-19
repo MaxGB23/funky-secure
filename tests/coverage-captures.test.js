@@ -16,6 +16,12 @@
  *
  * The comparison is of **line arrays**, never of rejoined text: a block wrapped at the wrong column, or
  * hard-wrapped inside a label, passes a rejoin.
+ *
+ * The expected bytes are asked for `preset: 'starter'` and no `overridden`, because every page in this
+ * list pastes a starter block — `start`'s own, or a `scan --preset starter`'s. That is **narrower** than
+ * the renderer: a page that one day pastes a config-caused or mixed block cannot satisfy this gate until
+ * it is given the cause, and the plan that promised three shapes shipped one. Narrower is the safe
+ * direction — the gate can only ever bless the shape it was taught — but it is a limit, not a feature.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -479,7 +479,7 @@ test('says nothing is left to do when the verdict passes', () => {
 test('names the set it speaks for when the policy turned a rule off (#134)', () => {
   // The unscoped sentence is a claim about the whole catalog. Under a reduced policy the report ran
   // six of thirteen rules, so it may only speak for the ones it ran (10.3).
-  const text = renderHuman(reportWith([]), { off: ['lockfile-committed'] });
+  const text = renderHuman(reportWith([]), { off: ['lockfile-committed'], preset: 'starter' });
   assert.ok(
     text.includes(`${NEXT}nothing to do among the rules that ran`),
     `expected the scoped sentence, got:\n${text}`,
