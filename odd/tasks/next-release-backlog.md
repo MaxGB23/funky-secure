@@ -413,3 +413,20 @@ What the fixture must carry to close the gap: a `.github/workflows/` file with a
 a `pull_request_target`, no `permissions:` block, a CI install that passes a safety override, and an artifact upload —
 one trigger per rule, so a finding can be traced to a line. Plus the three shapes the round still has not seen:
 a monorepo, `migrate --from yarn`, and a non-Windows host.
+
+## After the next release: the portfolio's data file
+
+Recorded 2026-11-18, while the owner runs the field round with their agent.
+
+The owner keeps a markdown file that serves as the **data source for their portfolio**, and it is out of date. The work
+is to bring it to the current state of `funky-secure`: what shipped, what was measured, and what the tool does now.
+
+Two things are the owner's to name when it starts, because neither is in this repository:
+
+- **the file's path** — it lives outside, and nothing here should guess it;
+- **what counts as current** — a version number, the rule count, the learn path, or the measurements in
+  `docs/validation.md` are all defensible, and only the owner knows which the page presents.
+
+The repository's part is the evidence: `docs/decisions.md` (I-84 to I-87), `docs/validation.md`'s two rounds, and the
+release notes of `0.14.0` are the material a portfolio entry would draw from, so the work starts by reading them rather
+than by rewriting from memory.
