@@ -1068,13 +1068,13 @@ test('a config that turns the rule off keeps the line under --preset strict, and
   const sentence = block.map((line) => line.slice(9)).join(' ');
   assert.equal(
     sentence,
-    '1 of 13 rules; off by policy: Package manager a policy decision, not a skip or a missing rule; --preset strict turns none off by itself',
-    'the continuation ends with the lever and its limit, and never claims this run ran the catalog',
+    '1 of 13 rules; off by policy: Package manager a policy decision, not a skip or a missing rule; --preset strict turns none off by itself; your config turns them off, and no preset overrides it',
+    'the continuation ends with the lever and its limit, then the cause that actually produced this set: the config, not the preset',
   );
   assert.match(block.at(-1), /^ {9}\S/, 'the sentence ends on a gutter line, not at column zero');
   assert.equal(
     block.slice(-2).map((line) => line.slice(9)).join(' '),
-    'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself',
+    'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself; your config turns them off, and no preset overrides it',
     'the continuation is two gutter lines that rejoin to the sentence, never the claim that strict ran all 13',
   );
   for (const line of block) {

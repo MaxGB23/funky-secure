@@ -107,7 +107,7 @@ test('every pasted coverage block is the bytes the renderer emits', () => {
   assert.ok(found.length >= 7, `expected at least 7 pasted coverage blocks across ${FILES.length} pages, found ${found.length}`);
 
   for (const { file, lines } of found) {
-    const expected = notRunLines({ off: namedIds(lines), catalog });
+    const expected = notRunLines({ off: namedIds(lines), catalog, preset: 'starter' });
     assert.deepEqual(lines, expected, `${file}: the pasted block is not what the renderer emits for the rules it names`);
   }
 });

@@ -48,7 +48,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 ```
 
 I made that capture with a copy of this repository, `node bin/funky-secure.js start`, rather than through

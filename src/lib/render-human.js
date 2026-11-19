@@ -484,7 +484,30 @@ export function offByPolicy(policy) {
  */
 const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself';
 
-export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
+/**
+ * Why those rules are off (10.3), and the clause names the cause that produced the set this line
+ * printed. The cause is per rule, not per run: `resolvePolicy` takes each severity from the config
+ * first and the preset second (I-30), so one run can carry both, and a clause that named either alone
+ * would be false for the other half. A rule is the config's when its id is in `policy.overridden`.
+ *
+ * The preset clause names no file class on purpose. An earlier draft said the preset does not read
+ * "CI, bot or environment files", and a judge refuted it: `ci-no-safety-overrides` reads the root
+ * `.npmrc`, which this catalog classes as a `repo-root` target, not a CI file. A sentence about the
+ * preset's own scope cannot go stale when a rule reads one more file.
+ * @param {{ byPreset: string[], byConfig: string[], preset?: string }} cause
+ * @returns {string}
+ */
+function whyClause({ byPreset, byConfig, preset }) {
+  if (byConfig.length === 0) {
+    return preset === 'starter'
+      ? 'the starter preset asks only the day-zero questions'
+      : `the ${preset ?? 'active'} preset does not ask those questions`;
+  }
+  if (byPreset.length === 0) return 'your config turns them off, and no preset overrides it';
+  return `${byPreset.length} by the preset, ${byConfig.length} by your config`;
+}
+
+export function notRunLines({ off = [], catalog = defaultCatalog, overridden = [], preset } = {}) {
   const disabled = new Set(off);
   const missing = catalog.filter((rule) => disabled.has(rule.id));
   if (missing.length === 0) return [];
@@ -495,12 +518,19 @@ export function notRunLines({ off = [], catalog = defaultCatalog } = {}) {
   const text = `${missing.length} of ${catalog.length} rules; off by policy: ${names}`;
   const { head, indent } = gutter('not run');
 
+  // The cause is per rule: a config `rules` map wins under every preset, so the same block can carry
+  // rules the preset turned off and rules the config did.
+  const fromConfig = new Set(overridden);
+  const byConfig = missing.filter((rule) => fromConfig.has(rule.id)).map((rule) => rule.id);
+  const byPreset = missing.filter((rule) => !fromConfig.has(rule.id)).map((rule) => rule.id);
+
   // The continuation is its own line under the gutter, never appended to the list: it is a sentence
   // about the policy, and the labels above it are a set to scan.
   const lines = wrap(text, HONESTY_WIDTH - head.length).map((line, index) =>
     index === 0 ? head + line : indent + line,
   );
-  lines.push(...wrap(LEVER, HONESTY_WIDTH - head.length).map((line) => indent + line));
+  const continuation = `${LEVER}; ${whyClause({ byPreset, byConfig, preset })}`;
+  lines.push(...wrap(continuation, HONESTY_WIDTH - head.length).map((line) => indent + line));
   return lines;
 }
 
@@ -593,7 +623,7 @@ function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
  *   and the rendering is exactly what it was before the honesty line existed
  * @returns {string}
  */
-export function renderHuman(report, { color = false, verbose = false, off } = {}) {
+export function renderHuman(report, { color = false, verbose = false, off, overridden = [], preset } = {}) {
   const targets = report.targets ?? [];
   const findings = report.findings ?? [];
   // A passing finding is never printed as a finding: the header counted it, and a repository that is
@@ -614,7 +644,7 @@ export function renderHuman(report, { color = false, verbose = false, off } = {}
     ),
   ];
   lines.push(verdictLine(report.summary, report.policy.failOn, color, unverifiedIds));
-  if (off !== undefined) lines.push(...notRunLines({ off, catalog: defaultCatalog }));
+  if (off !== undefined) lines.push(...notRunLines({ off, catalog: defaultCatalog, overridden, preset: preset ?? report.policy.preset }));
   lines.push(SEPARATOR, '');
 
   /** @type {Set<object>} */
