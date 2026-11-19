@@ -391,8 +391,9 @@ function renderStart({ off, catalog, pending, migrate, foreignPin = null, boot =
   }
 
   // The same sentence the report prints (S6), from the same helper, so the two cannot disagree about
-  // what the starter preset left unrun.
-  const notRun = notRunLines({ off, catalog });
+  // what the starter preset left unrun. `start` re-resolves the policy with no config, so every rule in
+  // this set is the preset's and the block always names that cause.
+  const notRun = notRunLines({ off, catalog, preset: START_PRESET });
   if (notRun.length > 0) lines.push('', ...notRun);
 
   // A refusal is the one thing the path cannot demonstrate, so it names what to read instead. It is

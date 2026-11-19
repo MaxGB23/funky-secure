@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildReport, severityRank } from '../src/lib/report.js';
-import { renderHuman } from '../src/lib/render-human.js';
+import { renderHuman, notRunLines } from '../src/lib/render-human.js';
 import { renderJson } from '../src/lib/render-json.js';
 import { catalog as ruleCatalog } from '../src/rules/index.js';
 
@@ -479,7 +479,7 @@ test('says nothing is left to do when the verdict passes', () => {
 test('names the set it speaks for when the policy turned a rule off (#134)', () => {
   // The unscoped sentence is a claim about the whole catalog. Under a reduced policy the report ran
   // six of thirteen rules, so it may only speak for the ones it ran (10.3).
-  const text = renderHuman(reportWith([]), { off: ['lockfile-committed'] });
+  const text = renderHuman(reportWith([]), { off: ['lockfile-committed'], preset: 'starter' });
   assert.ok(
     text.includes(`${NEXT}nothing to do among the rules that ran`),
     `expected the scoped sentence, got:\n${text}`,
@@ -845,7 +845,7 @@ const NOT_RUN_INDENT = ' '.repeat(NOT_RUN.length);
  * The one continuation the line closes with: the cause, and what the preset can and cannot undo. The
  * preset turns nothing off by itself; a config `rules` map that does wins under every preset (I-30).
  */
-const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself';
+const LEVER = 'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself; the starter preset asks only the day-zero questions';
 
 /** The same seven labels, by the id the policy carries, in catalog order. */
 const STARTER_ACTIVE = [
@@ -874,7 +874,9 @@ const DISABLED_LABELS = [
 
 /** The honesty block of one rendering, or `[]` when it prints none. */
 function honestyBlock(report, off) {
-  const text = off === undefined ? renderHuman(report) : renderHuman(report, { off });
+  // The fixture's off set is the starter preset's, so the block is asked for that cause: a report whose
+  // policy says `baseline` would otherwise name a preset that turned nothing off (10.3).
+  const text = off === undefined ? renderHuman(report) : renderHuman(report, { off, preset: 'starter' });
   const lines = text.split('\n').filter((line) => line !== '');
   const start = lines.findIndex((line) => line.startsWith(NOT_RUN));
   if (start === -1) return [];
@@ -895,6 +897,33 @@ function withoutHonesty(text) {
   while (end < lines.length && lines[end].startsWith(NOT_RUN_INDENT)) end += 1;
   return [...lines.slice(0, start), ...lines.slice(end)].join('\n');
 }
+
+test('a block with two causes says both counts, because one clause cannot be true of both halves', () => {
+  // The cause is per rule (I-30): the config wins under every preset, so a starter run whose config also
+  // turns a rule off carries rules from two causes. Naming either alone would be false for the other.
+  const off = [...STARTER_OFF, 'quarantine'];
+  const block = notRunLines({ off, catalog: ruleCatalog, overridden: ['quarantine'], preset: 'starter' });
+
+  assert.equal(
+    block.map((line) => line.slice(9)).join(' '),
+    `8 of 13 rules; off by policy: Quarantine, ${DISABLED_LABELS.join(', ')} ` +
+      'a policy decision, not a skip or a missing rule; --preset strict turns none off by itself; ' +
+      '7 by the preset, 1 by your config',
+    'the two counts are the two causes, and neither single clause appears',
+  );
+  for (const line of block) assert.ok(line.length <= 86, `line exceeds 86 columns: ${line.length}`);
+});
+
+test('a block whose off rules are all the config\'s names the config, never the preset', () => {
+  const block = notRunLines({ off: ['quarantine'], catalog: ruleCatalog, overridden: ['quarantine'], preset: 'starter' });
+
+  assert.equal(
+    block.map((line) => line.slice(9)).join(' '),
+    '1 of 13 rules; off by policy: Quarantine a policy decision, not a skip or a missing rule; ' +
+      '--preset strict turns none off by itself; your config turns them off, and no preset overrides it',
+    'the preset did not turn this rule off, so the preset clause would be false here',
+  );
+});
 
 test('states how many rules a reduced policy turned off and names them, with the lever', () => {
   const block = honestyBlock(reportWith([AUTO_QUARANTINE]), STARTER_OFF);
@@ -930,7 +959,7 @@ test('states how many rules a reduced policy turned off and names them, with the
 });
 
 test('prints the honesty line after the verdict and before the separator', () => {
-  const lines = renderHuman(reportWith([]), { off: STARTER_OFF })
+  const lines = renderHuman(reportWith([]), { off: STARTER_OFF, preset: 'starter' })
     .split('\n')
     .filter((line) => line !== '');
   const verdictAt = lines.findIndex((line) => line.startsWith('verdict'));
@@ -948,7 +977,7 @@ test('prints no honesty line when the policy disables nothing, so baseline bytes
   // this the guard above would still pass if the continuation leaked into every report.
   assert.equal(renderHuman(report).includes(LEVER), false, 'and no report names the lever on its own');
   assert.equal(
-    withoutHonesty(renderHuman(report, { off: STARTER_OFF })),
+    withoutHonesty(renderHuman(report, { off: STARTER_OFF, preset: 'starter' })),
     renderHuman(report),
     'the honesty block is the only difference between a reduced policy and a full one',
   );
@@ -962,7 +991,7 @@ test('adds nothing to the json document, whatever the policy disables', () => {
   // The human form of this same report does print the line, so a byte of it in the JSON would be a
   // leak rather than a sentence that was never rendered: the assertion has something to forbid.
   assert.ok(
-    renderHuman(reduced, { off: STARTER_OFF }).includes(`off by policy`),
+    renderHuman(reduced, { off: STARTER_OFF, preset: 'starter' }).includes(`off by policy`),
     'the human report of this report does carry the line',
   );
 

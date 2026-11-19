@@ -77,7 +77,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -97,7 +97,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 ```
 
 Also exit `0`. One line of answer, then the coverage block, which describes the preset and not your

@@ -44,7 +44,7 @@ export async function run({
   const text =
     format === 'json'
       ? renderJson(report, withTimestamp ? { timestamp: new Date().toISOString() } : {})
-      : renderHuman(report, { color, verbose, off: offByPolicy(policy) });
+      : renderHuman(report, { color, verbose, off: offByPolicy(policy), overridden: policy.overridden, preset: policy.preset });
 
   stdout.write(text);
   return report.summary.verdict === 'fail' ? 1 : 0;

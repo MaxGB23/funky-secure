@@ -113,6 +113,7 @@ number keeps resolving.
 | 11.7 | [`0033`](../../rfcs/0033-start-points-at-pnpm/rfc.md) | 11.7: the reference line naming where pnpm's installation is documented, printed when the path carries a step that runs pnpm, and the one place 0018 is narrowed — a reference where the tool cannot name a command safely |
 | 11.7 | [`0033`](../../rfcs/0033-start-points-at-pnpm/rfc.md) | 11.7: the reference line names the condition it answers — pnpm not being on the `PATH` — instead of stating the fact alone, which read as an unmet prerequisite at the foot of a plan |
 | 11.7 | [`0034`](../../rfcs/0034-the-resolve-comes-before-the-pin/rfc.md) | 11.7: `pnpm install --lockfile-only` prints before `pin --apply` when no foreign lockfile produced one, because `pin` copies the version from `pnpm-lock.yaml` and a lockfile that records none gives it nothing to copy; the table gains that row and renumbers from 7 up, and the pin's label names the ranges `package.json` declares instead of an outcome the write may not reach |
+| 10.3 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the continuation also names **why** the rules are off — the preset's day-zero scope, the config, or both counts — because the cause is per rule and one clause cannot be true of a set with two causes |
 
 ## Changing the contract
 
@@ -124,4 +125,3 @@ number keeps resolving.
 4. Run the suite: `tests/drift.test.js` fails when this table stops covering the record, when an
    amendment names a record that is missing or still a `draft`, when a rule page disappears, or when a
    flag loses its documentation.
-| 10.3 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the continuation also names **why** the rules are off — the preset's day-zero scope, the config, or both counts — because the cause is per rule and one clause cannot be true of a set with two causes |

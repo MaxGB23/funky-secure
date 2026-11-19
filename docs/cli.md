@@ -87,7 +87,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 ```
 
 A repository a generator left behind turns the order on, in both of its shapes. With a foreign lockfile
@@ -123,7 +123,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 
   if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
 ```
@@ -288,7 +288,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 ```
 
 - **A clean target is two lines.** The heading, then `all 6 rules pass` at the same five columns a

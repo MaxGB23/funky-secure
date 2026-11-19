@@ -16,6 +16,12 @@
  *
  * The comparison is of **line arrays**, never of rejoined text: a block wrapped at the wrong column, or
  * hard-wrapped inside a label, passes a rejoin.
+ *
+ * The expected bytes are asked for `preset: 'starter'` and no `overridden`, because every page in this
+ * list pastes a starter block — `start`'s own, or a `scan --preset starter`'s. That is **narrower** than
+ * the renderer: a page that one day pastes a config-caused or mixed block cannot satisfy this gate until
+ * it is given the cause, and the plan that promised three shapes shipped one. Narrower is the safe
+ * direction — the gate can only ever bless the shape it was taught — but it is a limit, not a feature.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -107,7 +113,7 @@ test('every pasted coverage block is the bytes the renderer emits', () => {
   assert.ok(found.length >= 7, `expected at least 7 pasted coverage blocks across ${FILES.length} pages, found ${found.length}`);
 
   for (const { file, lines } of found) {
-    const expected = notRunLines({ off: namedIds(lines), catalog });
+    const expected = notRunLines({ off: namedIds(lines), catalog, preset: 'starter' });
     assert.deepEqual(lines, expected, `${file}: the pasted block is not what the renderer emits for the rules it names`);
   }
 });

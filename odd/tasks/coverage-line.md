@@ -111,3 +111,10 @@ number, and the round as evidence.
   reproduction capture carried the corrected bytes under a sentence calling them false), `I-86`'s "never" too
   strong for a rule declaring `strict: 'off'`, and two reflow stubs; all corrected. Recorded in `I-86` and the
   dated errata in `rfcs/0003`.
+
+- **L4** — the continuation gained its **why** (issue #514). Two judges refuted the two designs before it: deriving the
+  cause from the preset name is false because a config can turn a rule off *under* `starter`, and enumerating what the
+  rules read ("CI, bot or environment files") is false for `ci-no-safety-overrides`, which reads the root `.npmrc` — a
+  `repo-root` target, not a CI file. What shipped classifies **per rule** (`off ∩ policy.overridden` is the config's,
+  the rest the preset's) and prints one of three clauses. `start` re-resolves with no config, so its block is always
+  the preset's, which is the caller the owner needed it for.

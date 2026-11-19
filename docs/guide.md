@@ -91,7 +91,7 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 ```
 
 Seven of thirteen rules did not run, and the names after the colon are those seven, so a `PASS` here
