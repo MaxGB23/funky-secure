@@ -149,18 +149,36 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
          auto-merge, CI install flags, pull_request_target, Workflow permissions,
          Workflow run artifact
          a policy decision, not a skip or a missing rule; --preset strict turns none
-         off by itself
+         off by itself; the starter preset asks only the day-zero questions
 ```
 
 The two numbers are how many catalog rules the policy turned off and how many the catalog has. The
-line closes with one continuation that names the lever: the rules were turned off by the policy this
-run used — a policy decision, not a skipped check and not a rule missing from the catalog — and
-`--preset strict` turns none off by itself. `by itself` is the whole claim: a repository whose config
-`rules` map sets a rule `off` wins under every preset (I-30), so a strict run can still print this
-line, and a sentence promising that `--preset strict` runs all thirteen would hand the reader a cure
-they had already used. The sentence counts nothing, because the catalog size is the two numbers above
-it. That continuation stands on its own, because `start` prints the same block from the same helper and names the
-preset only in its last step. A rule at `off`
+line closes with one continuation that names the lever **and the reason**: the rules were turned off by
+the policy this run used — a policy decision, not a skipped check and not a rule missing from the
+catalog — and `--preset strict` turns none off by itself. `by itself` is the whole claim: a repository
+whose config `rules` map sets a rule `off` wins under every preset (I-30), so a strict run can still
+print this line, and a sentence promising that `--preset strict` runs all thirteen would hand the
+reader a cure they had already used.
+
+The continuation's last clause says **why** those rules are off, and it names the cause that actually
+produced the set the line printed. The cause is per rule, not per run: `resolvePolicy` composes each
+rule's severity from the config first and the preset second (I-30), so one run can carry both causes.
+A rule is off *by the config* when its id is in `policy.overridden`, and off *by the preset* otherwise.
+Three shapes cover every block, and no run prints two of them:
+
+- **every off rule is the preset's** → `the starter preset asks only the day-zero questions`. True of
+the preset by definition (9.1), and it is the reason: those rules are not day-zero questions, so the
+preset does not ask them. It names no file class, because a sentence that enumerated what the seven
+read would be wrong for `ci-no-safety-overrides`, which reads the root `.npmrc` as well as the
+workflows, and `.npmrc` is a `repo-root` target and not a CI file.
+- **every off rule is the config's** → `your config turns them off, and no preset overrides it`.
+- **both** → `N by the preset, M by your config`, with the two counts, because one clause cannot be
+true of a set with two causes.
+
+The sentence counts nothing beyond those two counts, because the catalog size is the two numbers above
+it. That continuation stands on its own, because `start` prints the same block from the same helper and
+names the preset only in its last step; `start` re-resolves the policy with no config, so its block is
+always the preset's and it always prints the first shape. A rule at `off`
 does not run, is not counted and prints nothing (9.2), so the line states the coverage the verdict
 actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The verdict
 line adds nothing to it — its count and when it prints belong to 0008 — so this line is the one place
