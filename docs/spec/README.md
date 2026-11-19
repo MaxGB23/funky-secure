@@ -124,3 +124,4 @@ number keeps resolving.
 4. Run the suite: `tests/drift.test.js` fails when this table stops covering the record, when an
    amendment names a record that is missing or still a `draft`, when a rule page disappears, or when a
    flag loses its documentation.
+| 10.3 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the continuation also names **why** the rules are off — the preset's day-zero scope, the config, or both counts — because the cause is per rule and one clause cannot be true of a set with two causes |

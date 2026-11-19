@@ -182,3 +182,19 @@ the line `--preset strict turns none off by itself`: it still names the lever a 
 `by itself` states its own limit, because the config is the other lever and the preset cannot undo it.
 The sentence counts nothing now: the catalog size is the two numbers above it. The label, the numbers,
 the gutter and the 86-column bound are unchanged.
+
+**The continuation also says why, and the cause is per rule.** It read `a policy decision, not a skip or a
+missing rule; --preset strict turns none off by itself`, which says what the line is, what it is not and
+which lever undoes it, and never why a preset turns rules off at all. A reader could not tell a decision
+from an accident. The clause now names the cause that produced the set the line printed, and the cause is
+computed per rule, not per run: `resolvePolicy` takes each severity from the config first and the preset
+second (I-30), so one run can carry both causes. A rule is off *by the config* when its id is in
+`policy.overridden`, and off *by the preset* otherwise. Three shapes cover every block — the preset's
+(`the starter preset asks only the day-zero questions`), the config's (`your config turns them off, and
+no preset overrides it`), or both counts.
+
+The preset clause names no file class, and that is deliberate: an earlier draft said the preset "does not
+read CI, bot or environment files", and it is false for `ci-no-safety-overrides`, which reads the root
+`.npmrc` as well as the workflows — `.npmrc` is a `repo-root` target, not a CI file. A sentence that
+enumerates a taxonomy has to be re-measured every time a rule reads one more file; a sentence about the
+preset's own scope does not.
