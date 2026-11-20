@@ -36,14 +36,21 @@ two rounds, both refuted v1 and v2; v3 carries every finding and is the artefact
 
 | id | what | specs | route |
 | --- | --- | --- | --- |
-| T1 | `docs/spec/rules.md` R9 and R11, plus the registry if a row moves | S1,S2,S3 | inline, spec PR |
-| T2 | `pull-request-target.js` widening per axis; `no-bot-auto-merge.js` clause and dead code out | S1,S2 | inline, code PR |
-| T3 | both rule tests, the invariant comment, `node scripts/gen-golden.js` | S2,S5,S6 | inline, code PR |
-| T4 | `docs/spec/rules.md` R9's signal | S4 | inline, spec PR |
-| T5 | R9's `severityWhen`, the `botConfig` key on every finding, `README.md:143`, `tests/policy.test.js` | S4 | inline, code PR |
-| T6 | the presence-signal and mechanism fixtures, `--fail-on` both ends | S4,S6 | inline, code PR |
+| T1 | `docs/spec/rules.md` R9 and R11, plus the registry if a row moves | S1,S2,S3 | inline, spec PR #520 |
+| T2 | `pull-request-target.js` widening per axis; `no-bot-auto-merge.js` clause and dead code out | S1,S2 | inline, code PR #521 |
+| T3 | both rule tests, the invariant comment, `node scripts/gen-golden.js` | S2,S5,S6 | inline, code PR #521 |
+| T4 | `docs/spec/rules.md` R9's signal | S4 | inline, spec PR #522 |
+| T5 | R9's `severityWhen`, the `botConfig` key on every finding, `README.md:143`, `tests/policy.test.js` | S4 | inline, code PR #523 |
+| T6 | the presence-signal and mechanism fixtures, `--fail-on` both ends | S4,S6 | inline, code PR #523 |
 | T7 | pages (`docs/rules/*`, `docs/learn/04`), decisions rows, RFC errata, `funky-secure-v0.1.md` Log | S3,S4,S8 | inline, with its slice |
 
 ## Log
 
 - **L1** — the owner's request, verbatim: *"pasemos a implementar, el plan ya fue refutado por jueces"*.
+- **L2** — T1–T3 shipped: #520 (spec D1) and #521 (code D1). R11 owns the head-checkout combination and
+  reads both kinds of step per axis; R9 lost the clause, the `pr-target-head-checkout` code and the
+  helpers it carried, and the golden moved with the report.
+- **L3** — T4–T6 shipped: #522 (spec D2) and #523 (code D2). R9's configuration signal is the `fail`
+  carrying `bot-config-present` at `info` in both presets, selected by the `botConfig` key every finding
+  of the rule carries; `--fail-on error` exits `0` and `--fail-on info` exits `1`. Suite at that slice:
+  967 tests, 966 pass, 1 skip, 0 fail.
