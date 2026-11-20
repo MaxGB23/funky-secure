@@ -271,13 +271,18 @@ A human `scan` ends by naming the next command, not only the verdict. After `sum
 of them is never ambiguous: when at least one failing finding carries an `auto` remediation,
 `funky-secure init` together with the number of fixes it can make and the fact that nothing is written
 yet; when the verdict is `pass` and a finding names a command the reader can run, that command — a run
-that lists an action never closes by saying there is nothing to do; when the verdict is `pass` and the
-effective policy sets a rule `off`, exactly
+that lists an action never closes by saying there is nothing to do; when the run emitted no finding at
+all, which five zero counters state and which both causes produce — a policy that sets every rule
+`off`, and an `--ignore` that names all of them — exactly
+`nothing ran, so there is nothing to do: turn a rule back on to measure something`: the fact the
+`verdict` line states after its threshold, restated in the block a reader sees last, which names the
+act rather than the coverage because there is no coverage to name; when the verdict is `pass`, the run
+measured something, and the effective policy sets a rule `off`, exactly
 `nothing to do among the rules that ran`, because the unscoped sentence would be a claim about rules
-nobody measured and this one names the set it speaks for; when the verdict is `pass` and no rule is off,
-`nothing to do: everything at or above the policy passes`, in the bytes it has always had; when the
-verdict is `fail` and no finding is automatic, that the work is manual and each finding already names its
-file, line and action. When the block names `init`, a second line names one rule through
+nobody measured and this one names the set it speaks for; when the verdict is `pass`, the run measured
+something, and no rule is off, `nothing to do: everything at or above the policy passes`, in the bytes
+it has always had; when the verdict is `fail` and no finding is automatic, that the work is manual and
+each finding already names its file, line and action. When the block names `init`, a second line names one rule through
 `funky-secure explain <rule>`, chosen as the highest-severity failing finding with ties broken by catalog
 order, so the two runs over the same state produce the same bytes. The block is human output only: the
 JSON document of 10.2 does not gain a field for it, because a reader that wants the plan asks for the
