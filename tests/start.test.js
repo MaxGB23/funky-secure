@@ -1041,3 +1041,196 @@ test('the pin commit leaves the lockfile to the step that first records it', asy
     'the step that records the lockfile is still printed, and it is the one that owns it',
   );
 });
+
+/**
+ * The one numbered step whose text matches, and the unnumbered lines printed under it.
+ *
+ * `stepLines` filters the numbered lines, so it cannot see a note at all: a line printed under the
+ * wrong step passes every step assertion in this file. This reads the note the way the renderer prints
+ * it — the line immediately after the step, until the next numbered step or the blank line that closes
+ * the list.
+ *
+ * @param {string} text
+ * @param {RegExp} pattern
+ * @returns {{ step: string, under: string[] }}
+ */
+function stepAndNote(text, pattern) {
+  const lines = text.split('\n');
+  const at = lines.findIndex((line) => /^ {2}\d+ {2}\S/.test(line) && pattern.test(line));
+  assert.notEqual(at, -1, `no printed step matches ${pattern}`);
+  const under = [];
+  for (const line of lines.slice(at + 1)) {
+    if (!line.startsWith('  ') || line.trim() === '' || /^ {2}\d+ {2}\S/.test(line)) break;
+    under.push(line);
+  }
+  return { step: lines[at], under };
+}
+
+/**
+ * The judge's shape for issue 519, by default: three importers beside the root, one of them not a
+ * workspace member, and one member the lockfile never records.
+ *
+ * `cli/template/base` is an importer and not a member; `packages/c` is a member and not an importer. A
+ * note that named membership would be wrong in both directions, which is the defect #331 removed from
+ * `pin`'s own sentence.
+ *
+ * @param {string} dir
+ * @param {string[]} [importers] the lockfile's importers beside the root, in the order it records them
+ */
+function workspaceImporters(dir, importers = ['packages/a', 'packages/b', 'cli/template/base']) {
+  writeManifest(dir, true);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+  writeFileSync(
+    join(dir, 'pnpm-workspace.yaml'),
+    'packages:\n  - packages/a\n  - packages/b\n  - packages/c\n',
+  );
+  const importer = (name) =>
+    `  ${name}:\n    dependencies:\n      left-pad:\n        specifier: ^1.3.0\n        version: 1.3.0\n`;
+  writeFileSync(
+    join(dir, 'pnpm-lock.yaml'),
+    `lockfileVersion: '9.0'
+
+importers:
+  .:
+    dependencies:
+      next:
+        specifier: ^15.5.4
+        version: 15.5.4
+      react:
+        specifier: ^19.2.0
+        version: 19.2.0
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.0
+${importers.map(importer).join('')}
+packages:
+  left-pad@1.3.0:
+    resolution: {integrity: sha512-abc}
+`,
+  );
+  for (const member of ['packages/a', 'packages/b', 'packages/c', 'cli/template/base']) {
+    mkdirSync(join(dir, member), { recursive: true });
+    writeFileSync(join(dir, member, 'package.json'), `${JSON.stringify({ name: member }, null, 2)}\n`);
+  }
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  commitAll(dir, 'workspace');
+}
+
+/** The importers one `pin` run names as not pinned, in the order it prints them. @param {string} text */
+function importersNamedByPin(text) {
+  const line = text.split('\n').find((candidate) => candidate.includes('not pinned ('));
+  assert.ok(line, 'pin names the importers it does not write');
+  return /not pinned \((.+)\): pin writes the root importer only/.exec(line)[1].split(', ');
+}
+
+test('a lockfile with importers beyond the root names them under the pin step (issue 519)', async (t) => {
+  // The plan read the lockfile's presence and nothing inside it, so a workspace got the single-package
+  // plan and met `pin`'s own `not pinned` sentence at the end: told the path was complete when it was
+  // not. The note names the same set `pin` names, because both read the lockfile's importer keys — the
+  // workspace's members are a different set, and `cli/template/base` is the case that separates them.
+  const dir = scratch(t);
+  workspaceImporters(dir);
+
+  const { code, stdout } = await start(dir);
+  assert.equal(code, 0);
+
+  const pin = stepAndNote(stdout, /pin --apply/);
+  assert.equal(
+    pin.step,
+    '  4  funky-secure pin --apply  pin the ranges package.json declares, at the root importer',
+    'the step description carries its scope',
+  );
+  assert.deepEqual(
+    pin.under,
+    [
+      '     pin writes the root importer only: the lockfile importers packages/a, packages/b and cli/template/base are not written by it',
+    ],
+    'and exactly one unnumbered line under it, the line `pin` would print at the end',
+  );
+  assert.doesNotMatch(
+    pin.under[0],
+    /\d/,
+    'the note names importers and counts nothing: how many ranges the write finds is the lockfile\'s fact (#473)',
+  );
+  assert.equal(
+    pin.under[0].includes('packages/c'),
+    false,
+    'a workspace member the lockfile does not record is not named: the note reads importers, never members',
+  );
+  assert.equal(
+    pin.under[0].includes('cli/template/base'),
+    true,
+    'and an importer that is not a member is named, because that is the fact the note reads',
+  );
+
+  const pinned = await start(dir, { argv: ['pin'] });
+  assert.equal(pinned.code, 0, 'pin answers the same repository');
+  const named = /the lockfile importers? (.+?) (?:are|is) not written by it$/.exec(pin.under[0]);
+  assert.ok(named, 'the note names the importers it leaves alone');
+  assert.deepEqual(
+    named[1].split(/, | and /),
+    importersNamedByPin(pinned.stdout),
+    'the names agree by measurement: both sentences read the lockfile\'s importer keys',
+  );
+});
+
+test('a single-package repository prints the pin step exactly as before', async (t) => {
+  // No lockfile at all, so there is nothing beyond the root to name (11.7 row 8's condition). The
+  // eight `stepLines` assertions this file already carries pin the string; this reads the line under
+  // the step, which they cannot see.
+  const dir = scratch(t);
+  writeManifest(dir, true);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  commitAll(dir, 'scaffold');
+
+  const { code, stdout } = await start(dir);
+  assert.equal(code, 0);
+
+  const pin = stepAndNote(stdout, /pin --apply/);
+  assert.equal(
+    pin.step,
+    '  5  funky-secure pin --apply  pin the ranges package.json declares',
+    'the description gains no scope where there is no importer beyond the root',
+  );
+  assert.deepEqual(pin.under, [], 'and no note is printed under it');
+  assert.equal(stdout.includes('at the root importer'), false);
+  assert.equal(stdout.includes('not written by it'), false);
+});
+
+test('a lockfile that records only the root importer prints no note', async (t) => {
+  // The other half of the condition: a lockfile that is present and readable, with one importer. The
+  // note would be false here, and a reader would be told about a limit this repository never meets.
+  const dir = scratch(t);
+  writeManifest(dir, true);
+  writePnpmLock(dir);
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  commitAll(dir, 'scaffold');
+
+  const { code, stdout } = await start(dir);
+  assert.equal(code, 0);
+
+  const pin = stepAndNote(stdout, /pin --apply/);
+  assert.equal(pin.step, '  4  funky-secure pin --apply  pin the ranges package.json declares');
+  assert.deepEqual(pin.under, [], 'one importer, the root, is what `pin` writes');
+  assert.equal(stdout.includes('not written by it'), false);
+});
+
+test('one importer beyond the root is named in the singular', async (t) => {
+  // The condition has a boundary: the smallest set that satisfies it is one importer, and a sentence
+  // built for a list would print `importer ... are` there. The set is still the lockfile's keys, so the
+  // three members the workspace declares and this lockfile never records are not named.
+  const dir = scratch(t);
+  workspaceImporters(dir, ['cli/template/base']);
+
+  const { code, stdout } = await start(dir);
+  assert.equal(code, 0);
+
+  const pin = stepAndNote(stdout, /pin --apply/);
+  assert.deepEqual(
+    pin.under,
+    ['     pin writes the root importer only: the lockfile importer cli/template/base is not written by it'],
+  );
+  assert.equal(stdout.includes('importers cli/template/base are'), false, 'one importer is not a list');
+});

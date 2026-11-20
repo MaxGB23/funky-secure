@@ -26,6 +26,7 @@ import {
   resolveLockfileStep,
 } from '../lib/foreign-pin.js';
 import { statusPorcelain } from '../lib/git.js';
+import { parseLockfile } from '../lib/lockfile.js';
 import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { createCollector } from '../lib/probes.js';
@@ -97,6 +98,11 @@ const TRACK_MESSAGE = 'chore: track the lockfile';
  * nothing else, for the reason 0016 gives: a generated repository's untracked tool cache stays out.
  */
 const PIN_MESSAGE = 'chore: pin the ranges';
+/** The importer `pnpm-lock.yaml` records for the repository root: the one `pin` writes. */
+const ROOT_IMPORTER = '.';
+const PIN_STEP = 'funky-secure pin --apply  pin the ranges package.json declares';
+/** The scope the pin step's description gains where the lockfile records importers beyond the root. */
+const PIN_STEP_SCOPE = ', at the root importer';
 /**
  * The pin's own commit (0028).
  *
@@ -147,6 +153,48 @@ const FEATURE_BRANCH = 'chore/supply-chain-bootstrap';
  */
 const WHY_COMMIT_AFTER =
   'a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run';
+/**
+ * The lockfile importers `pin` leaves alone, read from the same fact it reads (#519).
+ *
+ * `pin` derives its own sentence from `Object.keys(parsed.importers)` (`src/lib/pins.js`), so this
+ * reads the lockfile's importer keys and not the workspace's members: the two sets differ in both
+ * directions — `cli/template/base` is an importer and not a member — and naming membership is the
+ * defect #331 removed from `pin`'s sentence. The keys keep the parser's order, so the two sentences
+ * name the same importers in the same order.
+ *
+ * @param {object | null} repo
+ * @returns {string[]}
+ */
+function unwrittenImporters(repo) {
+  const text = repo?.files?.lockfile?.text;
+  const parsed = typeof text === 'string' ? parseLockfile(text) : null;
+  return Object.keys(parsed?.importers ?? {}).filter((key) => key !== ROOT_IMPORTER);
+}
+
+/**
+ * The one line the pin step carries where the lockfile records importers beyond the root (11.7 row 8).
+ *
+ * `pin` prints the same set when it runs, and a reader who meets that sentence at the end of the path
+ * instead of in its plan has been told the plan was complete when it was not. It names the importers
+ * and never what they hold: whether a named importer carries a range is `exact-versions`' question. It
+ * carries no count, for the reason the step names none — the number that matters is what the write
+ * finds, which is a fact of the lockfile's contents and not of its keys (#473).
+ *
+ * @param {string[]} importers
+ * @returns {string}
+ */
+function pinNote(importers) {
+  const noun = importers.length === 1 ? 'importer' : 'importers';
+  const verb = importers.length === 1 ? 'is' : 'are';
+  return `pin writes the root importer only: the lockfile ${noun} ${joinNames(importers)} ${verb} not written by it`;
+}
+
+/** `a`, `a and b`, `a, b and c`: the shape a sentence about a set of names is built from. */
+function joinNames(names) {
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
 /** The one line `pin` adds: the block governs the next add, and something has to govern the ranges already here. */
 const WHY_PIN =
   'the workspace block governs the dependencies added next, and pin is what clears the ranges already in the manifest';
@@ -287,11 +335,16 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.
-  // The step names the command and no count: how many ranges `pin` can write is a fact of the
-  // lockfile, and `start` reads the manifest and the lockfile's presence and nothing inside it. A
-  // count here announced four pins over a manifest whose fourth range no lockfile resolved (#473).
+  // The step names the command and no count: how many ranges `pin` can write is a fact of what the
+  // lockfile records, and `start` reads its presence and its importer keys and nothing those importers
+  // hold. A count here announced four pins over a manifest whose fourth range no lockfile resolved
+  // (#473). The keys are what the scope and the note below are built from, and nothing else (#519).
   if (pins > 0) {
-    push('funky-secure pin --apply  pin the ranges package.json declares');
+    const unwritten = unwrittenImporters(repo);
+    push(
+      unwritten.length > 0 ? `${PIN_STEP}${PIN_STEP_SCOPE}` : PIN_STEP,
+      unwritten.length > 0 ? pinNote(unwritten) : undefined,
+    );
   }
   if (pins > 0) {
     push(resolveLockfileStep(repo));
