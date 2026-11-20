@@ -325,9 +325,16 @@ the pin alone is the declaration, and nothing about it is skipped.
 
 - **Question:** can a dependency update reach the default branch without a human reading it?
 - **Detection:** two independent signals.
-  1. **Configuration:** `.github/dependabot.yml` or `.github/renovate.json` present is one `fail`
-     finding, `code: bot-config-present`, whose severity is `info`: automated updates exist and must
-     be reviewed manually; v0.1 does not judge the tool, only the merge path. It is one finding for
+  1. **Configuration:** a bot configuration present is one `fail` finding,
+     `code: bot-config-present`, whose severity is `info`: automated updates exist
+     and must be reviewed manually; v0.1 does not judge the tool, only the merge path. The
+     configurations are the ones the tools read (7.1): `renovate.json`, `renovate.jsonc` and
+     `renovate.json5` at the root, the same three under `.github/` and under `.gitlab/`,
+     `.renovaterc`, `.renovaterc.json`, `.renovaterc.jsonc` and `.renovaterc.json5`,
+     `.github/dependabot.yml` and `.github/dependabot.yaml`, and the `renovate` key inside the root
+     `package.json`, which the finding names `package.json#renovate`. Presence is the whole signal
+     and the content is not read: a file that says `"automerge": true`, one that says
+     `"enabled": false` and one that says nothing else are the same `info`. It is one finding for
      the configuration as a whole, never one per file. Because the severity follows the state of the
      finding and the state table selects **per rule**, every finding this rule emits carries the
      selecting key — `botConfig: true` on this one and `botConfig: false` on every other, the skips
