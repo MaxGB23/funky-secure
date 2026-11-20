@@ -474,16 +474,22 @@ test('ends with init, the number of automatic fixes, and one rule to read next',
   ]);
 });
 
+// A run that measured something and passed: one rule answered and is counted. An empty `findings`
+// list is not a passing run since RFC 0038 — five zero counters are a run that measured nothing, and
+// the block says so in its own bytes (#531). Each fixture below carries the finding it means.
+const MEASURED = finding({ rule: 'alpha', status: 'pass', path: null, message: 'at policy' });
+
 test('says nothing is left to do when the verdict passes', () => {
-  assert.deepEqual(nextBlock(reportWith([])), [
+  assert.deepEqual(nextBlock(reportWith([MEASURED])), [
     `${NEXT}nothing to do: everything at or above the policy passes`,
   ]);
 });
 
 test('names the set it speaks for when the policy turned a rule off (#134)', () => {
   // The unscoped sentence is a claim about the whole catalog. Under a reduced policy the report ran
-  // six of thirteen rules, so it may only speak for the ones it ran (10.3).
-  const text = renderHuman(reportWith([]), { off: ['lockfile-committed'], preset: 'starter' });
+  // six of thirteen rules, so it may only speak for the ones it ran (10.3). A rule at `off` beside a
+  // measured run is what this shape is for; five zero counters have a sentence of their own (#531).
+  const text = renderHuman(reportWith([MEASURED]), { off: ['lockfile-committed'], preset: 'starter' });
   assert.ok(
     text.includes(`${NEXT}nothing to do among the rules that ran`),
     `expected the scoped sentence, got:\n${text}`,
@@ -491,11 +497,40 @@ test('names the set it speaks for when the policy turned a rule off (#134)', () 
 });
 
 test('keeps the bytes it always had when no rule is off', () => {
-  const text = renderHuman(reportWith([]), { off: [] });
+  const text = renderHuman(reportWith([MEASURED]), { off: [] });
   assert.ok(
     text.includes(`${NEXT}nothing to do: everything at or above the policy passes`),
     `expected the original sentence, got:\n${text}`,
   );
+});
+
+/// A `next` block over a run that emitted no finding at all (#531). The block is the last thing a
+/// reader sees, so it stands alone: it restates the verdict's `nothing ran` and names the act that
+/// ends it, instead of speaking for rules that never ran.
+
+const NO_RULE_RAN_NEXT =
+  'next     nothing ran, so there is nothing to do: turn a rule back on to measure something';
+
+test('a run whose config turns every rule off names the act, not the rules that ran (#531)', async (t) => {
+  const dir = configOff(t, ruleCatalog.map((rule) => rule.id));
+  const { code, stdout, stderr } = await scan(dir, ['--scope', 'repo']);
+  const next = stdout.split('\n').find((entry) => entry.startsWith('next'));
+
+  assert.equal(stderr, '');
+  assert.equal(code, 0, 'the exit code is the machine contract, and it does not move');
+  assert.equal(next, NO_RULE_RAN_NEXT);
+});
+
+test('--ignore of every rule prints the same next line, with no not-run line above it (#531)', async (t) => {
+  const all = ruleCatalog.map((rule) => rule.id);
+  const dir = configOff(t, []);
+  const { code, stdout, stderr } = await scan(dir, ['--scope', 'repo', '--ignore', all.join(',')]);
+  const lines = stdout.split('\n');
+
+  assert.equal(stderr, '');
+  assert.equal(code, 0);
+  assert.deepEqual(lines.filter((entry) => entry.startsWith('not run')), [], 'this cause prints no not-run line');
+  assert.equal(lines.find((entry) => entry.startsWith('next')), NO_RULE_RAN_NEXT);
 });
 
 test('says the work is manual when the verdict fails and nothing is automatic', () => {

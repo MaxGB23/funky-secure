@@ -408,7 +408,7 @@ next     funky-secure init  plan the 1 fix it can make (nothing is written)
          funky-secure explain lockfile-committed   what this rule wants, and why
 ```
 
-**The `next` block** names exactly one command, and it has one of five shapes, decided by the report
+**The `next` block** names exactly one command, and it has one of six shapes, decided by the report
 and by the effective policy, and read in this order:
 
 - at least one failing finding carries an `auto` remediation: `funky-secure init`, the number of
@@ -420,9 +420,16 @@ and by the effective policy, and read in this order:
   above this block, so the block repeats the command rather than closing with `nothing to do`. When
   more than one finding names a command, the highest-severity one wins, ties broken by catalog order,
   exactly as the `explain` line above chooses its rule.
-- the verdict is `pass` and the effective policy sets a rule `off`: `nothing to do among the rules that
-  ran`. The unscoped sentence would be a claim about rules the policy did not run.
-- the verdict is `pass` and no rule is off: `nothing to do: everything at or above the policy passes`.
+- the run emitted no finding at all — five zero counters, whether a policy set every rule `off` or
+  `--ignore` named every rule: `nothing ran, so there is nothing to do: turn a rule back on to measure
+  something`. It restates what the `verdict` line already says beside its threshold, and it names the
+  act rather than the coverage, because the block is the last thing a reader sees and must stand alone
+  over a run that measured nothing.
+- the verdict is `pass`, the run measured something, and the effective policy sets a rule `off`:
+  `nothing to do among the rules that ran`. The unscoped sentence would be a claim about rules the
+  policy did not run.
+- the verdict is `pass`, the run measured something, and no rule is off: `nothing to do: everything at
+  or above the policy passes`.
 - the verdict is `fail` and no finding is automatic: `manual: each finding names the file, its line,
   and the action`.
 
