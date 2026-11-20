@@ -331,9 +331,9 @@ the pin alone is the declaration, and nothing about it is skipped.
   2. **Merge path:** a minimal workflow reader (`src/lib/workflows.js`, section 14) maps each job to
      its `if:`/`name:` and to its steps, so a step can be attributed to the job that runs it. Flag
      `gh pr merge` with `--auto` or `--merge`, and any `uses:` of a known automerge action, in a job
-     whose condition names `dependabot[bot]`/`renovate[bot]`. Flag `pull_request_target` in a job that
-     also checks out the PR head (`github.event.pull_request.head.sha` or `refs/pull/`), because that
-     combination hands repository secrets to untrusted code. A workflow the reader cannot parse
+     whose condition names `dependabot[bot]`/`renovate[bot]`. The `pull_request_target` hazard is
+     **R11's**, not this rule's: this rule asks whether an update can merge unread, and a head
+     checkout under that trigger is neither an update nor a merge. A workflow the reader cannot parse
      (anchors, includes, unexpected nesting) yields `skip: unparseable-workflow` for that file: the
      rule never guesses from a line scan.
 - **Reader scope note:** this is the structural read that section 8.3 has in mind. The reader ships in
@@ -388,9 +388,17 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Detection:** every workflow through the structural reader. The trigger is read only from the
   top-level `on:` key — as a value, a flow collection or a block key — so a token in a `run:` body, a
   comment or a job `if:` is not a declaration. In a workflow that declares `pull_request_target`, each
-  step is checked for a checkout of the head: an `actions/checkout` step whose `with.ref` names the
-  head (`pull-request-target-checkout`), or a `run:` command that checks it out. The head is named in
-  one of two ways, and both count. It is named by an **expression** —
+  step is checked for a checkout of the head (`pull-request-target-checkout`), and the two kinds of
+  step are read by different rules, because what makes the combination dangerous is the ref that
+  reaches the working tree, not the name of the thing that put it there. An **action** is any `uses:`
+  whose **any** `with` value names the head, whatever the action is: `actions/checkout`, a
+  third-party checkout, or a local composite action. A **`run:` command** is one that both names the
+  head and checks it out: `git checkout`, `git switch`, `git worktree add`, a hard reset onto it,
+  `git restore --source`, `git merge … FETCH_HEAD`, or `gh pr checkout`. A command that names the head
+  and checks nothing out — `run: echo "${{ github.event.pull_request.head.sha }}"`, the ordinary way
+  to report which commit is under review — is **not** a checkout, and the step passes: naming a ref is
+  not reading it. The head is named in one of two ways, and both count. It is named by an
+  **expression** —
   `github.event.pull_request.head.sha`, `github.event.pull_request.head.ref` or `github.head_ref` — or
   by the **reference a pull request number addresses**: `refs/pull/<number>/head` and
   `refs/pull/<number>/merge`, and `gh pr checkout <number>`, and a `pull/<number>/head` fetch followed
@@ -413,7 +421,10 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Limits:** proves that a declared workflow event and a declared step name the combination. It does
   not read whether the job has secrets, does not evaluate `permissions:`, does not resolve an
   expression — whether that ref is the fork head at run time is not decided here — and does not decide
-  whether the checked-out code is built or executed. A number-addressed head is the exception that
+  whether the checked-out code is built or executed. A `with` value that names the head is read as a
+  checkout reference, which is an inference: an action that receives the head and never reads it is
+  indistinguishable here, and the rule reports it rather than guessing which actions consume their
+  input. A number-addressed head is the exception that
   proves the rule: `refs/pull/7/head` is a literal, so it is recognized without resolving anything. A
   workflow the reader cannot attribute is skipped per file; the rule never guesses from a line scan.
 
