@@ -17,7 +17,7 @@ stripped first, so a commented-out trigger is not a declaration, and the trigger
 scanning the file for the token: an `on: pull_request` workflow whose `run:` body says
 `echo "we do not use pull_request_target here"` does not declare it. The reader in
 `src/lib/workflows.js` exposes this as `declaresTrigger(text, name)`, shared with
-`no-bot-auto-merge`.
+`workflow-run-artifact`.
 
 **The steps** of every job in a workflow that declares the trigger are checked for a checkout of the
 pull request head. Code the base repository did not review is what the fork brings. The head is
@@ -33,16 +33,26 @@ named in one of two ways, and both count:
 
 A head is reported when:
 
-- an `actions/checkout` step's `with.ref` names it, whether the `with:` map is written as a block
-  map (`with:` and then `ref:` on its own line) or as a flow map on one line
-  (`with: { ref: refs/pull/7/head }`), which YAML defines and GitHub accepts. Both spellings answer
-  the same finding at the same step line, and the flow one was unread before I-82 — so a workflow
-  written that way can now hold a `pull-request-target-checkout` it did not have, which is a true
-  finding on a spelling that was valid all along;
-- a `run:` command names it and checks it out with `git checkout` or `gh pr checkout`, or fetches
-  `pull/<number>/head` and then checks out `FETCH_HEAD`. A backslash continuation joins the lines of
-  one command, so a `git checkout` and the ref it checks out are read as one command and two
-  unrelated lines are not.
+- **any action** receives it in a `with:` value — not only `actions/checkout`. A third-party
+  checkout and a local composite action (`uses: ./.github/actions/checkout-head`) put the same tree
+  in the same working directory, and the name of the action is not what makes the combination
+  dangerous. Every value of the map is read, and the map may be written as a block map (`with:` and
+  then the key on its own line) or as a flow map on one line (`with: { ref: refs/pull/7/head }`),
+  which YAML defines and GitHub accepts. Both spellings answer the same finding at the same step
+  line, and the flow one was unread before I-82 — so a workflow written that way can now hold a
+  `pull-request-target-checkout` it did not have, which is a true finding on a spelling that was
+  valid all along;
+- a `run:` command names it **and checks it out**: `git checkout`, `git switch`, `git worktree add`,
+  a hard reset onto it, `git restore --source`, `git merge` onto `FETCH_HEAD`, `gh pr checkout`, or a
+  `pull/<number>/head` fetch followed by a `FETCH_HEAD` checkout. A backslash continuation joins the
+  lines of one command, so a `git checkout` and the ref it checks out are read as one command and
+  two unrelated lines are not.
+
+A command that **names** the head and checks nothing out is **not** a finding:
+`run: echo "${{ github.event.pull_request.head.sha }}"` is the ordinary way to report which commit
+is under review, and naming a ref is not reading it. That sentence is the rule's own limit as much
+as its behaviour: the `run:` half is read by command, and a checkout performed by a script the
+workflow calls is outside it.
 
 Each offending step is one `fail`:
 
@@ -116,8 +126,16 @@ workflow is exploitable, and it does not prove it is safe:
   step that runs it is reported the same way as one followed by `pnpm install && pnpm test`, because
   the rule reads the workflow's declared steps, not the behavior of a script they call.
 
-A workflow the reader cannot parse is skipped per file; a skipped file is not a pass, and a
-composite action or a reusable workflow that checks the head out is outside the step set read here.
+A workflow the reader cannot parse is skipped per file; a skipped file is not a pass. A reusable
+workflow that checks the head out is outside the step set read here, and so is a script a step
+calls: the `run:` half reads the commands the workflow itself writes.
+
+A `with:` value that names the head is read as a checkout reference, which is an inference: an
+action that receives the head and never reads it is indistinguishable here, and the rule reports it
+rather than guessing which actions consume their input. The widening to every action and every
+`with:` key was measured against the shapes it could newly flag — `run: echo "…head.sha"` is the
+one that must stay a pass, and it does — and it is the reason the `run:` half keeps its command
+requirement instead of matching a bare mention.
 
 A `with:` map may be written in **flow style** as well: `with: { ref: refs/pull/7/head }` is valid
 YAML, GitHub accepts it, and the shared reader models it (`src/lib/workflows.js`, I-82 of

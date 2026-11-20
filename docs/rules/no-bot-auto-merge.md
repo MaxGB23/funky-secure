@@ -19,17 +19,18 @@ pass instead of inventing a per-finding severity override. It is one finding for
 as a whole, not one per file.
 
 **Merge path.** Each workflow is read by the structural reader (`src/lib/workflows.js`), so every
-step is attributed to the job that runs it. Two failures are possible, both reported as `fail`:
+step is attributed to the job that runs it. One failure is possible, reported as `fail`:
 
 - `automerge-for-bot` — a job whose `if`/`name` mentions `dependabot[bot]` or `renovate[bot]` and a
   step in it either runs `gh pr merge` with `--auto` or `--merge`, or uses one of the known
   automerge actions: `peter-evans/enable-pull-request-automerge`, `pascalgn/automerge-action`,
   `alexwilson/enable-github-automerge-action`, `reitermarkus/automerge`.
-- `pr-target-head-checkout` — a job that runs on `pull_request_target` and checks out the PR head
-  (`github.event.pull_request.head.sha` or `refs/pull/`, in that job's steps' `uses`, `run` or
-  `with` values). The combination hands repository secrets to untrusted code. The trigger is read
-  from the workflow's top-level `on:` declaration and from a job `if`/`name` that names it; the head
-  checkout is attributed through the reader.
+
+The `pull_request_target` hazard is not read here. A job that runs on that trigger and checks the
+pull request head out is `pull-request-target`'s finding, because that rule asks the question the
+combination answers; this rule asks whether an update can merge unread, and a head checkout is
+neither an update nor a merge. Reporting it here as well produced two findings on one line, which
+is what issue 518 was filed for.
 
 Neither signal firing is a pass whose message states the rule: an update is merged by a person
 after reading the diff and running the gate. A workflow the reader cannot parse yields one
