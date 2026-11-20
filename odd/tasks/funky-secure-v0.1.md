@@ -295,3 +295,14 @@ them survived review, and none of them changed a decision the RFC had not alread
 advisory finding above is a v0.2 candidate, never a reason to re-review these candidates (the native
 policy says so explicitly). 271 tests green on `feat/v0.1`, drift, self-scan and the golden byte gate
 green, `0.1.0` packable at 50 files.
+
+L15 — 2026-11-19, the R9 decision recorded under L11 is corrected by issue **#518**. L11 records that
+R9 rides its configuration signal on a `pass` because `info` is a severity, not a status, and v0.1 has
+no per-finding severity override. The second reason died when record `0029` gave a rule a state table
+that selects a severity per finding, so R9 now emits the `fail` carrying `bot-config-present` at `info`
+in both presets — the finding `docs/spec/rules.md` §8.2 R9 has asked for since v0.1 — and every finding
+of the rule carries the selecting key `botConfig`, because the table selects per rule and fails closed
+on a finding that omits it. The same issue moved R9's `pull_request_target` clause to R11, where the
+head-checkout question belongs. Spec #522 and code #523 for that half, #520 and #521 for the ownership;
+recorded as **I-88**, with **I-6** superseded. Measured on the fixture: `--fail-on error` exits `0`,
+`--fail-on info` exits `1`.

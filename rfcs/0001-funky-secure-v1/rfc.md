@@ -2177,3 +2177,33 @@ Section 14 described the repository layout and left the package contents to `pac
 the development record ship to every user. [`docs/spec/layout.md`](../../docs/spec/layout.md) §14.1
 now names the packed set and the three rules that decide membership. Recorded as
 [`0032`](../0032-stage-only-release/rfc.md).
+
+### 2026-11-19 — 8.2 R9 and R11: the head-checkout clause moved to R11, and R9's signal is `info`
+
+Two corrections to §8.2, both shipped after 0.14.0, and neither edits the text above.
+
+**The `pull_request_target` clause is R11's.** R9's merge-path signal ended with the sentence that
+flags `pull_request_target` in a job that also checks out the pull request head, and that combination
+is exactly R11's question: does a workflow combine the trigger with a checkout of the head? R11 asks
+it alone now, on two axes that each have their own rule — an **action** is any `uses:` whose any
+`with:` value names the head, and a `run:` command must name the head **and** check it out, through
+`git checkout`, `gh pr checkout`, `git switch`, `git worktree add`, a hard reset onto the ref,
+`git restore --source`, a `git merge … FETCH_HEAD`, or a fetch followed by a `FETCH_HEAD` checkout. A
+command that only names the head stays a pass. R9 asks whether a dependency update can merge unread,
+and a head checkout is neither an update nor a merge, so it no longer reads the trigger: it loses the
+clause, the code `pr-target-head-checkout` and the helpers the clause needed. The spec moved in #520
+and the code in #521.
+
+**The configuration signal is the finding the record already asked for.** The Detection above says
+`present → info finding`, and the product emitted a `pass` instead, because `info` is a severity in
+the report contract and not a status, and the report had no per-finding severity override. Record
+[`0029`](../0029-two-trees-are-not-a-warning/rfc.md) gives a rule a state table that selects a
+severity per finding, so the signal is now `status: 'fail'`, `code: 'bot-config-present'`, at `info`
+in both presets, and every other finding of the rule carries the selecting key as `false` because the
+table selects per rule. Nothing else about the signal changes: it is one finding for the configuration
+as a whole, and it never fails a run at the default threshold. The spec moved in #522 and the code in
+#523.
+
+The contract lives in [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R9 and R11. The decisions
+are I-88, and I-6, I-14 and I-82 are superseded where they said otherwise; the work is tracked in
+[`odd/tasks/bot-rule-ownership.md`](../../odd/tasks/bot-rule-ownership.md).
