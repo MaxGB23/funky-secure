@@ -750,3 +750,105 @@ test('obligation: both formats count, locate and word every finding the same way
     }
   }
 });
+
+/// The measured set (8.2 R9, 0039): the configuration is read where the tool that owns it reads it,
+/// and presence is the whole signal. Every case below drives the binary, because the rule test builds
+/// its facts by hand and can see neither whether `repoFacts` finds a spelling nor whether it throws
+/// over a manifest it could not parse.
+
+/** The sentence every configuration finding ends with, so a message is compared whole. */
+const RULE_SENTENCE = 'an update is merged by a person after reading the diff and running the gate';
+
+test('side two: a root renovate.json is the info finding the .github spelling gives (0039)', async (t) => {
+  const dir = checkout(t, {
+    'package.json': JSON.stringify({ name: 'root' }),
+    'renovate.json': '{ "automerge": true }\n',
+  });
+
+  const { code, stdout, stderr } = await scan(dir, ['--format', 'json']);
+  assert.equal(stderr, '');
+  assert.equal(code, 0, 'an info finding never fails the default threshold');
+  const report = JSON.parse(stdout);
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 1, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(report.findings.map((finding) => [finding.code, finding.severity]), [
+    ['bot-config-present', 'info'],
+  ]);
+  assert.equal(
+    report.findings[0].message,
+    `automated updates configured (renovate.json); ${RULE_SENTENCE}`,
+    'the message names the file that was found',
+  );
+});
+
+test('side two: the manifest key is named package.json#renovate, not package.json (0039)', async (t) => {
+  const dir = checkout(t, {
+    'package.json': JSON.stringify({ name: 'root', renovate: { extends: ['config:recommended'] } }),
+  });
+
+  const { code, stdout } = await scan(dir, ['--format', 'json']);
+  assert.equal(code, 0);
+  const [finding] = JSON.parse(stdout).findings;
+  assert.equal(finding.code, 'bot-config-present');
+  assert.deepEqual(finding.evidence.files, ['package.json#renovate']);
+  assert.equal(
+    finding.message,
+    `automated updates configured (package.json#renovate); ${RULE_SENTENCE}`,
+    'the manifest alone is not a configuration, so the message names the key that fired',
+  );
+});
+
+test('side two: what the configuration file says never moves the finding (0039)', async (t) => {
+  // The spec's sentence: v0.1 does not judge the tool, only the merge path. So a bare file, a file
+  // that enables automerge and a file that disables the tool are one `info`, worded the same way.
+  for (const text of ['', '{ "automerge": true }\n', '{ "enabled": false }\n']) {
+    const dir = checkout(t, {
+      'package.json': JSON.stringify({ name: 'root' }),
+      'renovate.json': text,
+    });
+
+    const report = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
+
+    assert.deepEqual(
+      report.findings.map((finding) => [finding.code, finding.severity, finding.message]),
+      [['bot-config-present', 'info', `automated updates configured (renovate.json); ${RULE_SENTENCE}`]],
+      `a file reading ${JSON.stringify(text)} is the same finding`,
+    );
+  }
+});
+
+test('side two: three configurations at once are one finding naming all three (0039)', async (t) => {
+  const dir = checkout(t, {
+    'package.json': JSON.stringify({ name: 'root', renovate: {} }),
+    'renovate.json': '{}\n',
+    '.gitlab/renovate.json5': '{}\n',
+  });
+
+  const { code, stdout } = await scan(dir, ['--format', 'json']);
+  assert.equal(code, 0);
+  const report = JSON.parse(stdout);
+  assert.equal(report.findings.length, 1, 'one finding for the configuration as a whole, never one per file');
+  const [finding] = report.findings;
+  assert.equal(finding.code, 'bot-config-present');
+  assert.deepEqual(finding.evidence.files, ['renovate.json', '.gitlab/renovate.json5', 'package.json#renovate']);
+  assert.equal(
+    finding.message,
+    'automated updates configured (renovate.json, .gitlab/renovate.json5, package.json#renovate); ' +
+      RULE_SENTENCE,
+  );
+});
+
+test('side two: a repository with none of them carries an empty botFiles and passes (0039)', async (t) => {
+  const dir = checkout(t, { 'package.json': JSON.stringify({ name: 'root' }), 'README.md': '# root\n' });
+
+  const { code, stdout } = await scan(dir, ['--format', 'json']);
+  const report = JSON.parse(stdout);
+  assert.equal(code, 0);
+  assert.deepEqual(
+    report.summary,
+    { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' },
+    'the empty botFiles leaves one pass, so the rule ran and found nothing configured',
+  );
+  // The JSON document carries no passing finding (10.2), so the count is where the pass is read.
+  assert.deepEqual(report.findings, []);
+  assert.match((await scan(dir)).stdout, /^summary {2}0 errors · 0 warnings · 0 info · 1 passing · 0 skipped$/m);
+});

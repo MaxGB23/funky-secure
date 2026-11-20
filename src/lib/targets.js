@@ -35,7 +35,40 @@ export const IGNORE_CANDIDATES = [
 export const PROBED_IGNORE_PATHS = [...IGNORE_CANDIDATES, 'pnpm-lock.yaml'];
 
 export const FOREIGN_LOCKFILES = ['package-lock.json', 'yarn.lock', 'bun.lock', 'bun.lockb'];
-export const BOT_CONFIGS = ['.github/dependabot.yml', '.github/renovate.json'];
+
+/**
+ * The bot configurations the tools themselves read (RFC 8.2 R9, 0039).
+ *
+ * Renovate merges server-side, so in a repository with no workflow at all the configuration file is
+ * the only evidence that an update can reach the default branch unread. Its File Matching page
+ * expresses the family as the glob `renovate.json{,c,5}`, and that glob is what this list is: the
+ * three root spellings it matches, the same three under `.github/` and under `.gitlab/` (read on any
+ * host), and the four `.renovaterc` dotfiles. Dependabot's file is read under both extensions for the
+ * reason `ACTION_METADATA` gives below — GitHub reads either one for the same file, and supporting
+ * only `.yml` would make a configuration written as `.yaml` invisible for no reason a user could see.
+ *
+ * Two live assertions compare the resolved list positionally for the two entries that have always
+ * been here, so the list only ever grows by appending. Nothing in it is parsed: presence is the whole
+ * signal, and the message names the file that was found.
+ */
+export const BOT_CONFIGS = [
+  '.github/dependabot.yml',
+  '.github/renovate.json',
+  'renovate.json',
+  'renovate.jsonc',
+  'renovate.json5',
+  '.github/renovate.jsonc',
+  '.github/renovate.json5',
+  '.gitlab/renovate.json',
+  '.gitlab/renovate.jsonc',
+  '.gitlab/renovate.json5',
+  '.renovaterc',
+  '.renovaterc.json',
+  '.renovaterc.jsonc',
+  '.renovaterc.json5',
+  '.github/dependabot.yaml',
+];
+
 export const EDITOR_FILES = ['.vscode/tasks.json', '.claude/settings.json'];
 
 /**
@@ -383,6 +416,21 @@ export async function repoFacts({ collector, cwd, root = null }) {
   const botFiles = [];
   for (const path of BOT_CONFIGS) {
     if (await exists(join(at, path))) botFiles.push(path);
+  }
+  // The `renovate` key of the root manifest is a configuration and not a path: the file proves
+  // nothing, the key proves everything, so it cannot live in `BOT_CONFIGS` — `package.json` there
+  // would make every repository with a manifest report `bot-config-present` (0039). It is read from
+  // the root manifest `repoFacts` already parsed and never from a workspace importer, whose key would
+  // be reported as a repository-root finding. `manifestProblem` is the guard: `parseJson` answers
+  // `json: null` for a byte-order mark or a truncated file, and an unguarded read of `.json` throws
+  // here rather than in the manifest's own rule (S4). The entry names the key, so the message says
+  // which fact fired instead of reading as a repository that merely has a manifest.
+  if (
+    packageJson !== null &&
+    manifestProblem(packageJson) === null &&
+    Object.hasOwn(packageJson.json, 'renovate')
+  ) {
+    botFiles.push('package.json#renovate');
   }
   const editorFiles = [];
   for (const path of EDITOR_FILES) {

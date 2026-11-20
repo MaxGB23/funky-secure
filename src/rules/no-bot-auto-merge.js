@@ -108,10 +108,15 @@ export default {
   ],
   question: 'Can a dependency update reach the default branch without a human reading it?',
   detection:
-    'Two independent signals. Configuration: .github/dependabot.yml or .github/renovate.json ' +
-    'present is one fail carrying bot-config-present, one finding for the configuration as a whole, ' +
-    'whose severity the state table lowers to info in both presets; every finding of the rule ' +
-    'carries the selecting key, botConfig. Merge path, through the ' +
+    'Two independent signals. Configuration: a bot configuration present is one fail carrying ' +
+    'bot-config-present, one finding for the configuration as a whole, whose severity the state ' +
+    'table lowers to info in both presets; every finding of the rule carries the selecting key, ' +
+    'botConfig. The configurations are the files the tools read: renovate.json, renovate.jsonc and ' +
+    'renovate.json5 at the root, the same three under .github/ and under .gitlab/, .renovaterc, ' +
+    '.renovaterc.json, .renovaterc.jsonc and .renovaterc.json5, .github/dependabot.yml and ' +
+    '.github/dependabot.yaml, and the renovate key inside the root package.json, which the finding ' +
+    'names package.json#renovate. Presence is the whole signal and the file is never parsed, so a ' +
+    'configuration reading "enabled": false is reported as configured. Merge path, through the ' +
     'structural reader: gh pr merge with --auto or --merge, or a known automerge action, in a job ' +
     'whose if/name names dependabot[bot] or renovate[bot] (automerge-for-bot). The ' +
     'pull_request_target hazard is R11\'s, not this rule\'s: this rule asks whether an update can ' +
@@ -127,8 +132,10 @@ export default {
   limits:
     'Only the four listed automerge actions are recognized, and the bot condition is matched ' +
     'textually in the job if/name. Whether a human actually read the diff is not observable: the ' +
-    'rule proves no automation path is declared. A workflow the reader cannot attribute is skipped ' +
-    'per file; the rule never guesses from a line scan.',
+    'rule proves no automation path is declared. The configuration signal is presence only — the ' +
+    'rule proves a bot is configured, not that it merges by itself, and what the file says about ' +
+    'automerge is not read. A workflow the reader cannot attribute is skipped per file; the rule ' +
+    'never guesses from a line scan.',
   docs: 'docs/rules/no-bot-auto-merge.md',
 
   /**
