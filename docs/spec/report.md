@@ -181,17 +181,32 @@ names the preset only in its last step; `start` re-resolves the policy with no c
 always the preset's and it always prints the first shape. A rule at `off`
 does not run, is not counted and prints nothing (9.2), so the line states the coverage the verdict
 actually has: a `PASS` under a reduced preset would otherwise claim rules nobody measured. The verdict
-line adds nothing to it — its count and when it prints belong to 0008 — so this line is the one place
-the coverage is stated. The labels
-are in catalog order (8.2, 13.1) and are the same labels a finding heading carries, so the line names
-the rules exactly as the rest of the report would. The text wraps at 86 columns with every
-continuation indented to the gutter — ten columns narrower than the rest of the report, because this
-is a set the reader scans against the catalog rather than a sentence to be read. A policy that
+line states one fact of its own, and it is not a coverage: its count of unverified rules and when it
+prints belong to 0008, and the condition of 0038 is the five counters. When every one of them is
+zero — no finding was emitted at all — the verdict carries a second decoration, inside the
+parenthesis and after the threshold, so the `(threshold: <value>` field every parser reads is
+untouched:
+
+```text
+verdict  PASS (threshold: error · nothing ran)
+```
+
+The condition is the counters and never the catalog: each counter counts findings, so five zeros are
+a run that emitted no finding, whatever its rules happen to do — a rule whose `detect` returns an
+empty list would print the same. A run with a single counted outcome, a pass or a skip or a finding,
+prints the line it always did, and a skip cannot stand beside the decoration because a skip is a
+finding. Nothing else moves with it: the exit code stays `0` (10.4), `summary.verdict` stays `pass`,
+and the JSON document of 10.2 keeps every key it has. This line remains the one place the coverage
+is stated, and the decoration is not a second one — it says a run measured nothing, never how much it
+covered. The labels are in catalog order (8.2, 13.1) and are the same labels a finding heading carries,
+so the line names the rules exactly as the rest of the report would. The text wraps at 86 columns with
+every continuation indented to the gutter — ten columns narrower than the rest of the report, because
+this is a set the reader scans against the catalog rather than a sentence to be read. A policy that
 disables nothing prints no such line, and its header is exactly what it was. Narrowing one run with
-`--only` or `--ignore` never prints it: those flags choose what to look at in this run and do not
-claim the policy checks less, so a coverage a flag made shorter is not a policy statement. The line is
-human output only; the JSON document of 10.2 gains no field for it, because a machine reader already
-has `policy.preset` and the counts that preset produced.
+`--only` or `--ignore` never prints it: those flags choose what to look at in this run and do not claim
+the policy checks less, so a coverage a flag made shorter is not a policy statement. The line is human
+output only; the JSON document of 10.2 gains no field for it, because a machine reader already has
+`policy.preset` and the counts that preset produced.
 
 A finding is at most three lines, and no finding shares a line with another finding or with a rule
 id:
@@ -227,7 +242,10 @@ instead of one block per skip. A target with exactly one skipped rule prints tha
 symbol `–`: one reason and its verifying command fit in three lines, and a human should not have to
 pass a flag to read them. Neither shape changes the JSON document. The verdict counts the rules it
 did not verify once each and names them, so its count and its names agree even when a rule could not
-verify several files: a rule counted twice would be a name the reader cannot find.
+verify several files: a rule counted twice would be a name the reader cannot find. A run that emitted no
+finding is the one state where that count has nothing to count, and the verdict says `nothing ran`
+there instead (0038): the two decorations never share the line, because a skip is a finding and an
+unverified rule is a skip.
 
 No rendered line exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
 86. Messages and actions wrap, never truncate. The single exception is a machine path — the store and
