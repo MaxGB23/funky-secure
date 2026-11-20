@@ -386,6 +386,31 @@ function unverifiedLines(report, catalog, options, renderedSkips = new Set()) {
 }
 
 /**
+ * Whether the run emitted no finding at all (RFC 0038).
+ *
+ * The condition is "no finding was emitted", never a property of the catalog: every counter is the
+ * count of findings, so five zeros are a run that measured nothing whatever its rules did. One rule
+ * with an `off` severity produces no finding and five zeros; a policy that ignores every rule does
+ * the same, and so does a catalogue whose every rule is `off` by preset.
+ *
+ * The `verdict` line says so after its threshold, and the `next` block opens with the same fact,
+ * because the block is the last thing a reader sees and must stand alone (#531). Both ask this
+ * function, so the two lines cannot disagree.
+ *
+ * @param {{ error: number, warn: number, info: number, pass: number, skip: number }} summary
+ * @returns {boolean}
+ */
+export function measuredNothing(summary) {
+  return (
+    summary.error === 0 &&
+    summary.warn === 0 &&
+    summary.info === 0 &&
+    summary.pass === 0 &&
+    summary.skip === 0
+  );
+}
+
+/**
  * The verdict, with the number of rules it did not verify (RFC 10.3, S12) and, when it measured
  * nothing at all, the fact that it did not (RFC 0038).
  *
@@ -411,16 +436,8 @@ function verdictLine(summary, failOn, color, unverifiedIds = []) {
   const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
   const { head: label, indent } = gutter('verdict');
   const head = `${label}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${failOn}`;
-  // The condition is "no finding was emitted", never a property of the catalog: every counter is the
-  // count of findings, so five zeros are a run that measured nothing whatever its rules did.
-  const measuredNothing =
-    summary.error === 0 &&
-    summary.warn === 0 &&
-    summary.info === 0 &&
-    summary.pass === 0 &&
-    summary.skip === 0;
   // A skip is a finding, so `measuredNothing` and an unverified rule cannot both hold.
-  if (unverifiedIds.length === 0) return `${head}${measuredNothing ? ' · nothing ran' : ''})`;
+  if (unverifiedIds.length === 0) return `${head}${measuredNothing(summary) ? ' · nothing ran' : ''})`;
 
   // The verdict names rules, so it counts rules: `summary.skip` counts skip findings, and one rule that
   // emits a skip per unreadable file made this line say "16 rules not verified" over 10 names (0008,
@@ -585,11 +602,12 @@ function ruleToRead(failing, catalog) {
 
 /**
  * The block a human `scan` ends with (S1-S5): the one command that moves the repository forward.
- * One of five shapes, read in this order, decided by the report and by the effective policy. An
+ * One of six shapes, read in this order, decided by the report and by the effective policy. An
  * automatic fix wins even when the verdict is a pass, because the fixes are still available; the
  * action a passing run already printed comes next, so a run that lists an action never closes by
- * saying there is nothing to do (#360).
- * @param {{ summary: { verdict: string }, findings: Array<object> }} report
+ * saying there is nothing to do (#360); a run that emitted no finding at all says so before any
+ * sentence about what it ran, because it ran nothing (#531).
+ * @param {{ summary: { verdict: string, error: number, warn: number, info: number, pass: number, skip: number }, findings: Array<object> }} report
  * @param {Array<{ id: string }>} catalog
  * @param {{ off?: string[] }} [policy] the rules the effective policy turned off; pass it and a
  *   passing run speaks only for the rules that ran, leave it out and the bytes are what they were
@@ -621,6 +639,14 @@ function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
       return wrap(command, WIDTH - head.length).map((line, index) =>
         index === 0 ? head + line : indent + line,
       );
+    }
+    // A run with five zero counters emitted no finding at all, so every sentence below would speak
+    // for rules that never ran: `among the rules that ran` over none of them, and `everything at or
+    // above the policy passes` over a run that measured nothing. It restates the verdict's own fact
+    // and names the act that ends it, and it asks `measuredNothing`, the function the verdict line
+    // asks, so the two lines cannot disagree (#531).
+    if (measuredNothing(summary)) {
+      return [`${head}nothing ran, so there is nothing to do: turn a rule back on to measure something`];
     }
     // A rule at `off` never ran (9.2). The unscoped sentence would be a claim about it, so the block
     // names the set it speaks for, and says the original sentence byte for byte when nothing is off.

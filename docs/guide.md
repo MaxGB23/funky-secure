@@ -117,7 +117,10 @@ and how many fixes it can plan — nothing is written until you add `--apply` �
 a command, a `PASS` names that command, because a run that lists an action never closes by saying
 there is nothing to do. A `PASS` with nothing to act on says `nothing to do`; when the
 policy turns some rules off it says `nothing to do among the rules that ran` instead, because the
-sentence would otherwise speak for rules nobody measured. A `FAIL`
+sentence would otherwise speak for rules nobody measured. A run that emitted no finding at all — every
+rule off by policy, or every rule ignored — names neither: it says
+`nothing ran, so there is nothing to do: turn a rule back on to measure something`, and a run that
+measured nothing has no rules to speak for. A `FAIL`
 where nothing is automatic says the work is manual, because each finding above already names its
 file, its line and the action. The block is human output only — `--format json` gains no field for it.
 
