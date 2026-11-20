@@ -306,7 +306,7 @@ test('a rule that states no state severities reads exactly as it did before', ()
 
   assert.deepEqual(
     ruleCatalog.filter((rule) => rule.severityWhen !== undefined).map((rule) => rule.id),
-    ['foreign-lockfile'],
+    ['foreign-lockfile', 'no-bot-auto-merge'],
     '0029 changes one severity in one rule, and nothing else in the preset table',
   );
 });
