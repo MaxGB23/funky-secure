@@ -45,6 +45,7 @@ document that changes without a new record.
 | [0036](0036-the-negation-is-named/rfc.md) | The negation is named | `draft` | — | — | `pending`: becomes [`docs/spec/rules.md`](../docs/spec/rules.md) §8.1 R1 when the change merges |
 | [0037](0037-a-refused-plan-says-so/rfc.md) | A refused plan says so | `draft` | — | — | `pending`: becomes [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2 when the change merges |
 | [0038](0038-nothing-ran-says-so/rfc.md) | Nothing ran says so | `accepted` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3 |
+| [0039](0039-the-bot-config-is-read-where-the-tool-reads-it/rfc.md) | The bot config is read where the tool reads it | `accepted` | — | — | [`docs/spec/scope.md`](../docs/spec/scope.md) §7.1, [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R9 |
 
 ## Layout
 

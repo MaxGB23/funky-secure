@@ -16,12 +16,23 @@ kinds it applies to.
 | `machine` | `pnpm --version`, `pnpm config list --json`, `where`/`which pnpm`, `~/.npmrc` | `quarantine` |
 | `repo-root` | `git rev-parse --show-toplevel`, else `cwd` | `package-manager-pin`, `lockfile-committed`, `foreign-lockfile`, `quarantine`, `env-not-tracked`, `sensitive-ignored` |
 | `importer` | `pnpm-workspace.yaml` `packages:` globs → each `package.json`; plus the root `package.json` | `exact-versions` |
-| `ci` | `.github/workflows/*.yml`, `.github/workflows/*.yaml`, `.github/dependabot.yml`, `.github/renovate.json` | `actions-pinned-sha`, `no-bot-auto-merge`, `ci-no-safety-overrides`, `pull-request-target`, `workflow-permissions`, `workflow-run-artifact` |
+| `ci` | `.github/workflows/*.yml`, `.github/workflows/*.yaml`, and the bot configurations named below | `actions-pinned-sha`, `no-bot-auto-merge`, `ci-no-safety-overrides`, `pull-request-target`, `workflow-permissions`, `workflow-run-artifact` |
 | `editor` | `.vscode/tasks.json`, `.claude/settings.json` (existence only in v0.1) | none in v0.1 |
 
 Rules that apply to a target kind that does not exist return `skip` with `reason: "no target"`, and a
 skipped rule is **not** a pass. The summary counts them separately, because "I did not look" and "I
 looked and it was fine" must never print the same.
+
+The `ci` target names the bot configurations the tools themselves read, because Renovate merges
+server-side and in a repository with no workflow the configuration file is the only evidence such a
+repository leaves: `renovate.json`, `renovate.jsonc` and `renovate.json5` at the root, the same three
+under `.github/` and under `.gitlab/` (read on any host), the dotfiles `.renovaterc`,
+`.renovaterc.json`, `.renovaterc.jsonc` and `.renovaterc.json5`, and Dependabot's
+`.github/dependabot.yml` and `.github/dependabot.yaml` — both extensions, because GitHub reads either
+one for the same file. The `renovate` key inside the root `package.json` is a configuration too and
+is read from the manifest this target already parses, under the name `package.json#renovate`; a
+workspace member's key is not read, because a member's configuration is not a repository-root
+finding. Presence is all that is resolved here: 8.2 R9 does not read what these files say.
 
 Importer resolution in v0.1 is intentionally narrow: `pnpm-workspace.yaml` `packages:` entries that
 contain `*` are expanded with a single-level glob, and nested globs are reported as

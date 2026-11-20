@@ -115,6 +115,8 @@ number keeps resolving.
 | 11.7 | [`0033`](../../rfcs/0033-start-points-at-pnpm/rfc.md) | 11.7: the reference line names the condition it answers — pnpm not being on the `PATH` — instead of stating the fact alone, which read as an unmet prerequisite at the foot of a plan |
 | 11.7 | [`0034`](../../rfcs/0034-the-resolve-comes-before-the-pin/rfc.md) | 11.7: `pnpm install --lockfile-only` prints before `pin --apply` when no foreign lockfile produced one, because `pin` copies the version from `pnpm-lock.yaml` and a lockfile that records none gives it nothing to copy; the table gains that row and renumbers from 7 up, and the pin's label names the ranges `package.json` declares instead of an outcome the write may not reach |
 | 10.3 | [`0003`](../../rfcs/0003-first-ten-minutes/rfc.md) | 10.3: the continuation also names **why** the rules are off — the preset's day-zero scope, the config, or both counts — because the cause is per rule and one clause cannot be true of a set with two causes |
+| 7 | [`0039`](../../rfcs/0039-the-bot-config-is-read-where-the-tool-reads-it/rfc.md) | 7.1: the `ci` target names every bot configuration Renovate and Dependabot read — the three `renovate.json{,c,5}` spellings at the root and under `.github/` and `.gitlab/`, the four `.renovaterc` dotfiles, both Dependabot extensions — and the `renovate` key of the root `package.json` under the name `package.json#renovate` |
+| 8 | [`0039`](../../rfcs/0039-the-bot-config-is-read-where-the-tool-reads-it/rfc.md) | 8.2 R9: the configuration signal is read from the paths the tools themselves use, and presence stays the whole signal — `"automerge": true`, `"enabled": false` and a bare file are the same `info` |
 
 ## Changing the contract
 
