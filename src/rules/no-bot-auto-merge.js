@@ -13,7 +13,7 @@
  */
 
 import { repoSkipMessage } from '../lib/scope.js';
-import { declaresTrigger, parseWorkflow } from '../lib/workflows.js';
+import { parseWorkflow } from '../lib/workflows.js';
 
 const BOT_ACTOR = /dependabot\[bot\]|renovate\[bot\]/i;
 
@@ -55,11 +55,6 @@ function mentionsBot(job) {
   return BOT_ACTOR.test(job.name ?? '') || BOT_ACTOR.test(job.condition ?? '');
 }
 
-/** @param {object} job a job from the structural reader */
-function mentionsPullRequestTarget(job) {
-  return /pull_request_target/.test(job.name ?? '') || /pull_request_target/.test(job.condition ?? '');
-}
-
 /**
  * `gh pr merge` with `--auto` or `--merge`, anywhere in a run body.
  * @param {string | null} run
@@ -83,28 +78,6 @@ function automergeAction(uses) {
   return AUTOMERGE_ACTIONS.has(name);
 }
 
-/**
- * Every value of a step that can carry a checkout reference.
- * @param {object} step a step from the structural reader
- * @returns {string[]}
- */
-function stepTexts(step) {
-  return [step.uses ?? '', step.run ?? '', ...Object.values(step.with ?? {})];
-}
-
-/**
- * Whether the step checks out the pull request head, the other half of the
- * `pull_request_target` hazard.
- * @param {object} step a step from the structural reader
- * @returns {boolean}
- */
-function checksOutHead(step) {
-  return stepTexts(step).some(
-    (text) =>
-      text.includes('github.event.pull_request.head.sha') || text.includes('refs/pull/'),
-  );
-}
-
 export default {
   id: 'no-bot-auto-merge',
   title: 'No dependency update is merged automatically',
@@ -118,13 +91,13 @@ export default {
     'Two independent signals. Configuration: .github/dependabot.yml or .github/renovate.json ' +
     'present is one pass carrying the file list, never a failure. Merge path, through the ' +
     'structural reader: gh pr merge with --auto or --merge, or a known automerge action, in a job ' +
-    'whose if/name names dependabot[bot] or renovate[bot] (automerge-for-bot); and ' +
-    'pull_request_target in a job that also checks out the PR head (pr-target-head-checkout). ' +
+    'whose if/name names dependabot[bot] or renovate[bot] (automerge-for-bot). The ' +
+    'pull_request_target hazard is R11\'s, not this rule\'s: this rule asks whether an update can ' +
+    'merge unread, and a head checkout under that trigger is neither an update nor a merge. ' +
     'An unparseable workflow skips.',
   evidence:
-    'For automerge-for-bot: the job, the step index and the offending run or uses. For ' +
-    'pr-target-head-checkout: the job and the line of the checkout step. For the configuration ' +
-    'signal: the bot files found.',
+    'For automerge-for-bot: the job, the step index and the offending run or uses. For the ' +
+    'configuration signal: the bot files found.',
   remediation:
     'None. There is nothing to write: removing an automation is a review decision. The message ' +
     'states the rule — an update is merged by a person after reading the diff and running the gate.',
@@ -163,8 +136,6 @@ export default {
         continue;
       }
 
-      const trigger = declaresTrigger(file.text, 'pull_request_target');
-
       for (const job of parsed.jobs) {
         if (mentionsBot(job)) {
           for (const step of job.steps) {
@@ -193,19 +164,6 @@ export default {
             }
           }
         }
-
-        if (!trigger && !mentionsPullRequestTarget(job)) continue;
-        const checkout = job.steps.find(checksOutHead);
-        if (checkout === undefined) continue;
-        findings.push({
-          status: 'fail',
-          code: 'pr-target-head-checkout',
-          path: file.path,
-          line: checkout.line,
-          message: `job "${job.id}" runs on pull_request_target and checks out the pull request head; repository secrets are exposed to untrusted code`,
-          evidence: { job: job.id, line: checkout.line },
-          remediation: editStep(file.path, checkout.line, 'drop the checkout of the pull request head'),
-        });
       }
     }
 

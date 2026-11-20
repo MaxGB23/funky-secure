@@ -295,6 +295,77 @@ test('does not flag the trigger alone, or a head checkout without it', () => {
   assert.equal(other[0].code, 'no-pull-request-target');
 });
 
+test('flags an action that is not actions/checkout when a with: value names the head', () => {
+  // The danger is the ref that reaches the working tree, not the name of the action that put it
+  // there: a local composite action and a third-party checkout read the head exactly as the first
+  // party one does (issue 518).
+  const local = `name: ci
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/checkout-head
+        with:
+          ref: ${HEAD_EXPR}
+`;
+  const findings = rule.detect(context({ workflows: [workflow(local)] }));
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].status, 'fail');
+  assert.equal(findings[0].code, 'pull-request-target-checkout');
+  assert.equal(findings[0].evidence.kind, 'uses');
+  assert.equal(findings[0].line, 9);
+});
+
+test('flags the commands a checkout uses when they are not git checkout', () => {
+  // `git switch`, `git worktree add` and a hard reset onto the ref read the head as much as
+  // `git checkout` does; leaving them out turned a real finding into a pass (issue 518).
+  const bodies = [
+    `git switch --detach ${HEAD_EXPR}`,
+    `git worktree add /tmp/head ${HEAD_EXPR}`,
+    `git reset --hard ${HEAD_EXPR}`,
+    `git restore --source=${HEAD_EXPR} .`,
+  ];
+
+  for (const body of bodies) {
+    const text = `name: ci
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ${body}
+`;
+    const findings = rule.detect(context({ workflows: [workflow(text)] }));
+    assert.equal(findings[0].status, 'fail', `${body} checks the head out`);
+    assert.equal(findings[0].code, 'pull-request-target-checkout');
+    assert.equal(findings[0].evidence.kind, 'run');
+  }
+});
+
+test('does not flag a command that names the head and checks nothing out', () => {
+  // The negative control for the widening: reporting the commit under review is not reading it.
+  const text = `name: ci
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "reviewing ${HEAD_EXPR}"
+`;
+  const findings = rule.detect(context({ workflows: [workflow(text)] }));
+
+  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].code, 'pull-request-target-without-head-checkout');
+});
+
 test('reads the trigger only from the top-level on key, never from a mention', () => {
   const mentioned = `name: ci
 on:

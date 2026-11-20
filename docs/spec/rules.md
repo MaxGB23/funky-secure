@@ -389,7 +389,7 @@ the pin alone is the declaration, and nothing about it is skipped.
   top-level `on:` key — as a value, a flow collection or a block key — so a token in a `run:` body, a
   comment or a job `if:` is not a declaration. In a workflow that declares `pull_request_target`, each
   step is checked for a checkout of the head (`pull-request-target-checkout`), and the two kinds of
-  step are read by different rules, because what makes the combination dangerous is the ref that
+  step are read by different criteria, because what makes the combination dangerous is the ref that
   reaches the working tree, not the name of the thing that put it there. An **action** is any `uses:`
   whose **any** `with` value names the head, whatever the action is: `actions/checkout`, a
   third-party checkout, or a local composite action. A **`run:` command** is one that both names the

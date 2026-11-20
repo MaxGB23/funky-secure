@@ -52,11 +52,29 @@ const PR_NUMBER_CHECKOUT = new RegExp(String.raw`\bgh\s+pr\s+checkout\s+${PR_NUM
 /** A `git fetch` that brings a pull request head into `FETCH_HEAD`. */
 const PULL_HEAD_FETCH = new RegExp(String.raw`\bgit\s+fetch\b.*\bpull/${PR_NUMBER}\/(?:head|merge)\b`);
 
-/** The checkout that reads what that fetch left in `FETCH_HEAD`. */
-const FETCH_HEAD_CHECKOUT = /\bgit\s+checkout\b.*\bFETCH_HEAD\b/;
+/**
+ * The checkout that reads what that fetch left in `FETCH_HEAD`: the commands that turn a fetched ref
+ * into a working tree. `git merge` is here because merging `FETCH_HEAD` runs the fetched commit's own
+ * hooks and merges, which is as much a read of untrusted code as a checkout is.
+ */
+const FETCH_HEAD_CHECKOUT =
+  /\bgit\s+(?:checkout|switch|merge|restore)\b.*\bFETCH_HEAD\b|\bgit\s+reset\s+--hard\b.*\bFETCH_HEAD\b/;
 
-/** The commands that check a ref out, matched against one shell command of a `run:` body. */
-const CHECKOUT_COMMANDS = [/\bgit\s+checkout\b/, /\bgh\s+pr\s+checkout\b/];
+/**
+ * The commands that check a ref out, matched against one shell command of a `run:` body. The list is
+ * the verbs a workflow actually uses: `git checkout`, `git switch`, `git worktree add`, a hard reset
+ * onto the ref, `git restore --source` and `gh pr checkout`. Naming the head without one of these is
+ * not a checkout — `run: echo "${{ github.event.pull_request.head.sha }}"` reports the commit under
+ * review and reads nothing.
+ */
+const CHECKOUT_COMMANDS = [
+  /\bgit\s+checkout\b/,
+  /\bgh\s+pr\s+checkout\b/,
+  /\bgit\s+switch\b/,
+  /\bgit\s+worktree\s+add\b/,
+  /\bgit\s+reset\s+--hard\b/,
+  /\bgit\s+restore\b.*--source/,
+];
 
 /**
  * @param {string} code
@@ -99,17 +117,20 @@ function commandsOf(run) {
 }
 
 /**
- * The checkout of the pull request head inside one step, or null when the step is neither an
- * `actions/checkout` of the head nor a `run:` command that checks it out.
+ * The checkout of the pull request head inside one step, or null when the step neither receives the
+ * head in a `with:` value nor runs a command that checks it out.
  * @param {object} step a step from the structural reader
  * @returns {{ kind: 'uses' | 'run', expression: string } | null}
  */
 function headCheckout(step) {
+  // Any action, not only `actions/checkout`: a third-party or local composite action that receives
+  // the head in a `with:` value puts the same untrusted tree in the same working directory, and the
+  // name of the action is not what makes the combination dangerous.
   if (typeof step.uses === 'string') {
-    if (!step.uses.toLowerCase().startsWith('actions/checkout@')) return null;
-    const ref = step.with?.ref;
-    if (typeof ref !== 'string' || !namesHead(ref)) return null;
-    return { kind: 'uses', expression: ref };
+    const values = Object.values(step.with ?? {}).filter((value) => typeof value === 'string');
+    const head = values.find((value) => namesHead(value));
+    if (head === undefined) return null;
+    return { kind: 'uses', expression: head };
   }
 
   if (typeof step.run === 'string') {
@@ -148,10 +169,13 @@ export default {
     'Every workflow through the structural reader. The trigger is read only from the top-level on: ' +
     'key, as a value, a flow collection or a block key, so a token in a run: body, a comment or a ' +
     "job if: is not a declaration. In a workflow that declares pull_request_target, each step is " +
-    'checked for a checkout of the head: an actions/checkout step whose with.ref names the head ' +
-    '(pull-request-target-checkout), whichever spelling that map uses — a block map under with:, or ' +
-    'the flow form with: { ref: ... } on the key line — or a run: command that checks it out. The ' +
-    'head is named by an ' +
+    'checked for a checkout of the head (pull-request-target-checkout), and the two kinds of step ' +
+    'are read by different criteria. An action is any uses: whose any with: value names the head, ' +
+    'whatever the action is: actions/checkout, a third-party checkout or a local composite action. ' +
+    'A run: command is one that both names the head and checks it out: git checkout, git switch, ' +
+    'git worktree add, a hard reset onto it, git restore --source, git merge onto FETCH_HEAD, or ' +
+    'gh pr checkout. A command that names the head and checks nothing out is not a checkout and the ' +
+    'step passes. The head is named by an ' +
     'expression (github.event.pull_request.head.sha, github.event.pull_request.head.ref or ' +
     'github.head_ref) or by the reference a pull request number addresses ' +
     '(refs/pull/<number>/head, refs/pull/<number>/merge, gh pr checkout <number>, or a ' +
@@ -163,8 +187,8 @@ export default {
     'skips (unparseable-workflow) without a pass on top.',
   evidence:
     'The job, the step index, the kind (uses or run) and the raw expression or reference that checks ' +
-    'the head out, at the step line. A run: step reports the command that carries the expression or ' +
-    'reference.',
+    'the head out, at the step line. For an action, the with: value that carries the head; for a ' +
+    'run: step, the command that carries the expression or reference.',
   remediation:
     'Manual, printed as the choice to make: remove the pull_request_target trigger, or remove the ' +
     'step that checks the pull request head out, so the workflow never runs fork code with this ' +
@@ -173,7 +197,10 @@ export default {
     'Proves that a declared workflow event and a declared step name the combination; it does not ' +
     'read whether the job has secrets, does not evaluate permissions:, does not resolve an ' +
     'expression (whether that ref is the fork head at run time is not decided here), and does not ' +
-    'decide whether the checked-out code is built or executed. A head reached by pull request number ' +
+    'decide whether the checked-out code is built or executed. A with: value that names the head is ' +
+    'read as a checkout reference, which is an inference: an action that receives the head and never ' +
+    'reads it is indistinguishable here, and the rule reports it rather than guessing which actions ' +
+    'consume their input. A head reached by pull request number ' +
     'is the exception: refs/pull/<number>/head, refs/pull/<number>/merge, gh pr checkout <number> ' +
     'and a pull/<number>/head fetch followed by a FETCH_HEAD checkout are literal references, ' +
     'recognized without resolving anything, so the expression limit does not reach them. A workflow ' +

@@ -146,7 +146,7 @@ test('passes the same merge command when the job is not restricted to a bot', ()
   assert.match(findings[0].message, /merged by a person/);
 });
 
-test('fails pull_request_target with a PR-head checkout in the same job', () => {
+test('does not answer the pull_request_target question: that hazard is R11, not this rule', () => {
   const findings = rule.detect(
     context({
       workflows: [
@@ -166,16 +166,13 @@ test('fails pull_request_target with a PR-head checkout in the same job', () => 
     }),
   );
 
+  assert.ok(
+    findings.every((finding) => finding.code !== 'pr-target-head-checkout'),
+    'the head checkout under pull_request_target belongs to pull-request-target, and reporting it ' +
+      'here was the duplicate issue 518 was filed for',
+  );
   assert.equal(findings.length, 1);
-  assert.equal(findings[0].status, 'fail');
-  assert.equal(findings[0].code, 'pr-target-head-checkout');
-  assert.equal(findings[0].path, '.github/workflows/pr-target.yml');
-  assert.equal(findings[0].evidence.job, 'build');
-  assert.equal(findings[0].line, 8);
-  assert.deepEqual(findings[0].remediation, {
-    kind: 'manual',
-    command: 'edit .github/workflows/pr-target.yml:8 and drop the checkout of the pull request head',
-  });
+  assert.equal(findings[0].code, 'no-automerge-path');
 });
 
 test('passes pull_request_target when no job checks out the PR head', () => {
@@ -414,20 +411,19 @@ function deleteStepAt(dir, path, line) {
 
 /// Side one: it fails, with its own codes, at the path and the line each finding names.
 
-test('side one: a bot merge, a bot automerge action and a head checkout fail at their own lines', async (t) => {
+test('side one: a bot merge and a bot automerge action fail at their own lines', async (t) => {
   const dir = checkout(t, FAILING);
 
   const { code, stdout, stderr } = await scan(dir, ['--format', 'json']);
   assert.equal(stderr, '');
   assert.equal(code, 1, 'an error finding fails the default threshold');
   const report = JSON.parse(stdout);
-  assert.deepEqual(report.summary, { error: 3, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'fail' });
+  assert.deepEqual(report.summary, { error: 2, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'fail' });
   assert.deepEqual(
     report.findings.map((finding) => [finding.status, finding.code, finding.path, finding.line]),
     [
       ['fail', 'automerge-for-bot', '.github/workflows/automerge.yml', 8],
       ['fail', 'automerge-for-bot', '.github/workflows/automerge.yml', 14],
-      ['fail', 'pr-target-head-checkout', '.github/workflows/pr-target.yml', 8],
     ],
   );
   assert.deepEqual(
@@ -435,7 +431,6 @@ test('side one: a bot merge, a bot automerge action and a head checkout fail at 
     [
       'job "dependabot" runs gh pr merge for a bot actor; an update is merged by a person after reading the diff and running the gate',
       'job "enable" runs an automerge action for a bot actor; an update is merged by a person after reading the diff and running the gate',
-      'job "build" runs on pull_request_target and checks out the pull request head; repository secrets are exposed to untrusted code',
     ],
   );
 
@@ -541,7 +536,7 @@ test('side four: starter is the off switch, and a veto leaves neither a finding 
 
   for (const preset of ['baseline', 'strict']) {
     const report = JSON.parse((await scan(dir, ['--preset', preset, '--format', 'json'])).stdout);
-    assert.equal(report.summary.error, 3, `${preset}: the rule runs and its three findings survive`);
+    assert.equal(report.summary.error, 2, `${preset}: the rule runs and its two findings survive`);
   }
 
   const off = await scan(dir, ['--preset', 'starter', '--format', 'json']);
@@ -569,15 +564,13 @@ test('obligation: the printed edit, applied at the printed line, clears every fi
   const dir = checkout(t, FAILING);
 
   const before = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
-  assert.equal(before.summary.error, 3);
+  assert.equal(before.summary.error, 2);
 
   for (const finding of [...before.findings].sort((a, b) => b.line - a.line)) {
     assert.equal(finding.remediation.kind, 'manual', 'no command deletes a step from a workflow');
-    const action =
-      finding.code === 'automerge-for-bot'
-        ? ' and delete the (?:automatic merge|automerge action) step$'
-        : ' and drop the checkout of the pull request head$';
-    const named = new RegExp(`^edit (.+):(\\d+)${action}`).exec(finding.remediation.command);
+    const named = new RegExp(
+      '^edit (.+):(\\d+) and delete the (?:automatic merge|automerge action) step$',
+    ).exec(finding.remediation.command);
     assert.ok(named, `${finding.remediation.command} names no file and line to edit`);
     assert.equal(named[1], finding.path, 'the command names the file the finding names');
     assert.equal(Number(named[2]), finding.line, 'and the line the finding names');
