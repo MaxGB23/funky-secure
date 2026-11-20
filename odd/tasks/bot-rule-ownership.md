@@ -42,7 +42,7 @@ two rounds, both refuted v1 and v2; v3 carries every finding and is the artefact
 | T4 | `docs/spec/rules.md` R9's signal | S4 | inline, spec PR #522 |
 | T5 | R9's `severityWhen`, the `botConfig` key on every finding, `README.md:143`, `tests/policy.test.js` | S4 | inline, code PR #523 |
 | T6 | the presence-signal and mechanism fixtures, `--fail-on` both ends | S4,S6 | inline, code PR #523 |
-| T7 | pages (`docs/rules/*`, `docs/learn/04`), decisions rows, RFC errata, `funky-secure-v0.1.md` Log | S3,S4,S8 | inline, with its slice |
+| T7 | pages (`docs/rules/*`, `docs/learn/04`), decisions rows, RFC errata, `funky-secure-v0.1.md` Log | S3,S4,S8 | inline, #521, #523, #524 |
 
 ## Log
 
@@ -54,3 +54,11 @@ two rounds, both refuted v1 and v2; v3 carries every finding and is the artefact
   carrying `bot-config-present` at `info` in both presets, selected by the `botConfig` key every finding
   of the rule carries; `--fail-on error` exits `0` and `--fail-on info` exits `1`. Suite at that slice:
   967 tests, 966 pass, 1 skip, 0 fail.
+
+- **L4** — closed. Four pull requests: #520 and #521 for D1, #522 and #523 for D2, #524 for the records. Suite at
+  close: 967 tests, 966 pass, 1 skip, 0 fail. Measured on the repository that produced the field defect:
+  `yarnpkg/berry` `.github/workflows/pr-smart-merge.yml` declares `pull_request_target` and checks the head out in
+  two jobs. Before the fix that file produced one `pull-request-target-checkout` and one `pr-target-head-checkout`
+  on line 33; now it produces two `pull-request-target-checkout`, at lines 33 and 95, one per job. `action-gh-release`
+  carries a `.github/dependabot.yml` and no head checkout: its signal moved from the rolled-up passing line to one
+  `info` finding, and the run still exits 0.
