@@ -9,10 +9,29 @@ Can a dependency update reach the default branch without a human reading it?
 
 Two independent signals.
 
-**Configuration.** A `.github/dependabot.yml` or `.github/renovate.json` means automated updates
-exist and must be reviewed by a person. The RFC calls this an `info` finding, and it is one: a
-single `fail` carrying `code: bot-config-present` and `evidence: { files, botConfig }`, whose
-severity the rule's state table lowers to `info` in `baseline` and in `strict`. It is reported,
+**Configuration.** A bot configuration means automated updates exist and must be reviewed by a
+person. The rule reads it where the tool that owns it reads it:
+
+| tool | configurations |
+|---|---|
+| Renovate | `renovate.json`, `renovate.jsonc` and `renovate.json5` at the root, the same three under `.github/` and under `.gitlab/`, and the dotfiles `.renovaterc`, `.renovaterc.json`, `.renovaterc.jsonc` and `.renovaterc.json5` |
+| Dependabot | `.github/dependabot.yml` and `.github/dependabot.yaml` |
+| both | the `renovate` key inside the root `package.json`, which the finding names `package.json#renovate` |
+
+Dependabot's two extensions are read because GitHub reads either one for the same file: supporting
+only `.yml` would make a configuration written as `.yaml` invisible for no reason a reader could see.
+The `.gitlab/` spellings are read on any host, because that is one of the locations Renovate
+documents. A workspace member's `renovate` key is not read: a member's configuration is not a
+repository-root finding.
+
+Presence is the whole signal and the file is never parsed. A file that says `"automerge": true`, one
+that says `"enabled": false` and one that says nothing else are the same `info`: the rule proves a bot
+is configured and never that the configuration merges by itself, so `"enabled": false` is reported as
+configured. Whether a repository automerges is a question this rule does not answer.
+
+The finding itself is a single `fail` carrying `code: bot-config-present` and
+`evidence: { files, botConfig }`, whose severity the rule's state table lowers to `info` in
+`baseline` and in `strict`. It is reported,
 counted and printed — under `REPO-ROOT`, with an `ℹ` and the action that replaces it — and it never
 fails a run at the default threshold. `--fail-on info` is what makes it fail one, and that is the
 reader's decision, not the rule's. It is one finding for the configuration as a whole, not one per
@@ -84,4 +103,10 @@ that replaces it — an update is merged by a person after reading the diff and 
   attribution.
 - Whether a human actually read the diff is not observable. The rule proves that no automation path
   is declared, and stops there.
+- The configuration signal is presence only. What the file says about automerge is not read, so a
+  repository that automerges and one that does not are the same `info`, and the finding is not
+  evidence that an automatic merge is switched on.
+- Only the locations Renovate and Dependabot document are read. A configuration held in a shared
+  preset repository, or a Renovate file under a directory other than the root, `.github/` or
+  `.gitlab/`, is not one of them.
 - A workflow the reader cannot parse is skipped per file; the rule never guesses from a line scan.

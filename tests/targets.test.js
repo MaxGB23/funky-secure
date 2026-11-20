@@ -377,6 +377,114 @@ test('lists workflows and bot configs as ci targets', async (t) => {
   );
 });
 
+/**
+ * The measured set of 8.2 R9 (0039): the spellings Renovate's File Matching page names, which that
+ * page expresses as the glob `renovate.json{,c,5}`, plus Dependabot's two. A spelling missing here is
+ * a repository that scans clean while the tool is configured, and the rule emits one finding for the
+ * set, so the list is what the finding can ever be built from.
+ */
+const BOT_SPELLINGS = [
+  'renovate.json',
+  'renovate.jsonc',
+  'renovate.json5',
+  '.github/renovate.json',
+  '.github/renovate.jsonc',
+  '.github/renovate.json5',
+  '.gitlab/renovate.json',
+  '.gitlab/renovate.jsonc',
+  '.gitlab/renovate.json5',
+  '.renovaterc',
+  '.renovaterc.json',
+  '.renovaterc.jsonc',
+  '.renovaterc.json5',
+  '.github/dependabot.yml',
+  '.github/dependabot.yaml',
+];
+
+test('resolves every bot configuration spelling into its own botFiles entry (8.2 R9, 0039)', async (t) => {
+  for (const spelling of BOT_SPELLINGS) {
+    const dir = scratch(t);
+    write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+    write(dir, spelling, '{}\n');
+
+    const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+    assert.deepEqual(facts.botFiles, [spelling], `${spelling} is a file Renovate or Dependabot reads`);
+  }
+});
+
+test('reads the renovate key of the root manifest, and names it package.json#renovate (8.2 R9, 0039)', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root', renovate: { extends: ['config:recommended'] } }));
+
+  const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(
+    facts.botFiles,
+    ['package.json#renovate'],
+    'the key is the configuration and the manifest alone is not, so the entry names the key',
+  );
+});
+
+test('keeps the two original entries ahead of every appended spelling (0039)', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, '.github/dependabot.yml', 'version: 2\n');
+  write(dir, '.github/renovate.json', '{}\n');
+  write(dir, 'renovate.json', '{}\n');
+
+  const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(
+    facts.botFiles,
+    ['.github/dependabot.yml', '.github/renovate.json', 'renovate.json'],
+    'the two paths the rule has always read keep their positions; a spelling is only ever appended',
+  );
+});
+
+test('answers no manifest configuration for a manifest it could not read (S4, 0039)', async (t) => {
+  const cases = [
+    ['a byte-order mark', '\uFEFF{"name":"root","renovate":{}}'],
+    ['a truncated file', '{"name":"root","renovate":{'],
+    ['an array', '[]'],
+    ['no renovate key', '{"name":"root"}'],
+  ];
+
+  for (const [name, text] of cases) {
+    const dir = scratch(t);
+    write(dir, 'package.json', text);
+
+    const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+    assert.deepEqual(facts.botFiles, [], `${name} is presence=false, and reading it must not throw`);
+  }
+});
+
+test('never reads a workspace importer for a repository-root configuration (0039)', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, 'pnpm-workspace.yaml', "packages:\n  - 'packages/*'\n");
+  write(dir, 'packages/a/package.json', JSON.stringify({ name: 'a', renovate: {} }));
+
+  const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(
+    facts.botFiles,
+    [],
+    "a member's key is not a repository-root finding, so the importer is not read for it",
+  );
+});
+
+test('answers no bot configuration for a repository that carries none (8.2 R9, 0039)', async (t) => {
+  const dir = scratch(t);
+  write(dir, 'package.json', JSON.stringify({ name: 'root' }));
+  write(dir, 'README.md', '# root\n');
+
+  const { facts } = await repoFacts({ collector: collectorOver(), cwd: dir, root: dir });
+
+  assert.deepEqual(facts.botFiles, []);
+});
+
 test('collects composite action metadata at any depth as a ci target', async (t) => {
   const dir = scratch(t);
   write(dir, 'package.json', JSON.stringify({ name: 'root' }));
