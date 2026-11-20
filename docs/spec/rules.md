@@ -321,13 +321,18 @@ the pin alone is the declaration, and nothing about it is skipped.
   explains how to (`git ls-remote`, keeping the tag as the comment — 0021, 0024).
 - **Evidence:** `file:line`, the raw reference, the offending form.
 
-#### R9 — `no-bot-auto-merge` · friction 0 · sev `error`/`error` · fix `none`
+#### R9 — `no-bot-auto-merge` · friction 0 · sev `error`/`error`, `info`/`info` on the configuration signal · fix `none`
 
 - **Question:** can a dependency update reach the default branch without a human reading it?
 - **Detection:** two independent signals.
-  1. **Configuration:** `.github/dependabot.yml` or `.github/renovate.json` present → `info`
-     finding: automated updates exist and must be reviewed manually; v0.1 does not judge the tool,
-     only the merge path.
+  1. **Configuration:** `.github/dependabot.yml` or `.github/renovate.json` present is one `fail`
+     finding, `code: bot-config-present`, whose severity is `info`: automated updates exist and must
+     be reviewed manually; v0.1 does not judge the tool, only the merge path. It is one finding for
+     the configuration as a whole, never one per file. Because the severity follows the state of the
+     finding and the state table selects **per rule**, every finding this rule emits carries the
+     selecting key — `botConfig: true` on this one and `botConfig: false` on every other, the skips
+     included. A finding that omitted the key would make the table throw rather than silently keep
+     the lenient pair (9.2), and a state that selects nothing is a miss, not a default.
   2. **Merge path:** a minimal workflow reader (`src/lib/workflows.js`, section 14) maps each job to
      its `if:`/`name:` and to its steps, so a step can be attributed to the job that runs it. Flag
      `gh pr merge` with `--auto` or `--merge`, and any `uses:` of a known automerge action, in a job
@@ -336,6 +341,12 @@ the pin alone is the declaration, and nothing about it is skipped.
      checkout under that trigger is neither an update nor a merge. A workflow the reader cannot parse
      (anchors, includes, unexpected nesting) yields `skip: unparseable-workflow` for that file: the
      rule never guesses from a line scan.
+- **Severity:** `error` in `baseline` and in `strict` for the merge path, and `info` in both presets
+  for the configuration signal — the one state this rule declares, `config-present`. The rule's own
+  pair is what the merge path answers with; the configuration signal is information about the
+  repository, so it is reported, counted and printed, and it never fails a run at the default
+  threshold. A repository that overrides this rule's severity in its own config keeps that override:
+  the policy's decision about the rule wins over the state, exactly as it does for R6.
 - **Reader scope note:** this is the structural read that section 8.3 has in mind. The reader ships in
   v0.1 because R8 and R9 both need it; the deferred workflow rules reuse it instead of growing a
   second parser. It reads a sequence at its key's own indentation as well as indented under it, so a
