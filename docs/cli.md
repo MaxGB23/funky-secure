@@ -131,8 +131,23 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
 Two details in that list are deliberate. The commit appears **twice** in a repository whose tree already
 carries work: once before the writer, which refuses to land on someone else's uncommitted state, and once
 after, because the writer has just produced that state and the next one refuses it too. And `pin` is
-printed only when the report carries a floating range, with the count, so a repository already at exact
-versions is never told to run a step that would change nothing.
+printed only when the report carries a floating range, so a repository already at exact versions is
+never told to run a step that would change nothing.
+
+A repository whose lockfile records importers beyond the root gets one line more, under the pin step,
+because `pin` writes the root importer and nothing else:
+
+```text
+  4  funky-secure pin --apply  pin the ranges package.json declares, at the root importer
+     pin writes the root importer only: the lockfile importers packages/a, packages/b and cli/template/base are not written by it
+```
+
+The names are the lockfile's importer keys, the same set `pin` prints under `not pinned` when it runs,
+so the plan and the command cannot disagree about what is left; `packages/c` is absent because it is a
+workspace member the lockfile never recorded, and `cli/template/base` is named because it is an
+importer that no workspace member covers. The line names importers and not what they hold — whether one
+of them carries a range is a question for `scan`'s range rule. A lockfile with no importer beyond the
+root, or none at all, prints the step exactly as the sample above does.
 
 Three more exist because following the list as printed is the whole point. `pnpm install --lockfile-only`
 comes right after `pin`, because exact specifiers over a lockfile that recorded a range are a desync by
@@ -536,7 +551,9 @@ Three properties are the whole contract:
 - **Root `package.json` only.** The lockfile importers it does not write are named under `not pinned`
   with their count and their paths, because `pin` resolves and writes the root importer alone; a
   workspace package and an importer that is not one — a template's `cli/template/base` — are listed
-  alike, since the limit is the root importer and not membership of the workspace.
+  alike, since the limit is the root importer and not membership of the workspace. `start` reads those
+  same keys, so its pin step names the identical set under one unnumbered line rather than leaving the
+  reader to meet this one at the end of the path.
 
 A `catalog:` or `catalog:<name>` reference is left alone and counted apart. It is not floating, because
 it resolves to the one version the catalogue in `pnpm-workspace.yaml` holds, and it is not exact either:
