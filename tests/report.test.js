@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { run } from '../src/cli.js';
 import { buildReport, severityRank } from '../src/lib/report.js';
 import { renderHuman, notRunLines } from '../src/lib/render-human.js';
 import { renderJson } from '../src/lib/render-json.js';
@@ -787,6 +791,108 @@ test('the verdict says nothing extra when every rule was verified', () => {
     reportWith([finding({ rule: 'quarantine', status: 'pass', path: null, message: 'strict and mature' })]),
   ).find((entry) => entry.startsWith('verdict'));
   assert.equal(line, 'verdict  PASS (threshold: error)');
+});
+
+/// A verdict over zero counters (#506, RFC 0038). A configuration that turns every rule off makes the
+/// run measure nothing at all, and `PASS` beside five zeros read as "checked". The decoration says
+/// which fact it is, inside the parenthesis and after the threshold, so the `(threshold: <value>` a
+/// parser reads is untouched.
+
+/** A scratch repository whose config turns `off` off, and nothing else. */
+function configOff(t, off) {
+  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-nothing-ran-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify({ name: 'fixture', version: '1.0.0' }, null, 2)}\n`);
+  const rules = Object.fromEntries(off.map((id) => [id, 'off']));
+  writeFileSync(join(dir, 'funky-secure.config.json'), `${JSON.stringify({ rules }, null, 2)}\n`);
+  return dir;
+}
+
+/** One stream the CLI writes into. */
+function stream() {
+  return {
+    text: '',
+    write(chunk) {
+      this.text += chunk;
+      return true;
+    },
+    isTTY: false,
+  };
+}
+
+/** One real scan of a repository, as the CLI prints it. */
+async function scan(dir, argv) {
+  const stdout = stream();
+  const stderr = stream();
+  const code = await run(['scan', ...argv], { cwd: dir, env: process.env, stdout, stderr });
+  return { code, stdout: stdout.text, stderr: stderr.text };
+}
+
+const NOTHING_RAN = 'verdict  PASS (threshold: error · nothing ran)';
+
+test('a run that turned every rule off says nothing ran, and still exits 0 (#506)', async (t) => {
+  const dir = configOff(t, ruleCatalog.map((rule) => rule.id));
+  const { code, stdout, stderr } = await scan(dir, ['--scope', 'repo']);
+  const line = stdout.split('\n').find((entry) => entry.startsWith('verdict'));
+
+  assert.equal(stderr, '');
+  assert.equal(code, 0, 'the exit code is the machine contract, and it does not move');
+  assert.equal(line, NOTHING_RAN);
+});
+
+test('one rule off and twelve running carries no "nothing ran" (#506)', async (t) => {
+  // The decoration is about a run that counted nothing, never about a run whose policy is narrow:
+  // twelve rules answered, so the counters state the coverage and the verdict states the threshold.
+  const dir = configOff(t, ['workflow-run-artifact']);
+  const { stdout } = await scan(dir, ['--scope', 'repo']);
+
+  assert.equal(stdout.includes('nothing ran'), false, `the run measured twelve rules:\n${stdout}`);
+
+  // The two rules whose severity depends on a state the finding must carry (9.2).
+  const EVIDENCE = { 'foreign-lockfile': { pnpmLockfile: true }, 'no-bot-auto-merge': { botConfig: true } };
+  const passing = ruleCatalog
+    .filter((rule) => rule.id !== 'workflow-run-artifact')
+    .map((rule) =>
+      finding({
+        rule: rule.id,
+        status: 'pass',
+        path: null,
+        message: 'at policy',
+        evidence: EVIDENCE[rule.id] ?? {},
+      }),
+    );
+  const rendered = renderHuman(reportWith(passing), {
+    off: ['workflow-run-artifact'],
+    overridden: ['workflow-run-artifact'],
+    preset: 'baseline',
+  });
+  const line = rendered.split('\n').find((entry) => entry.startsWith('verdict'));
+
+  assert.equal(line, 'verdict  PASS (threshold: error)', 'twelve counted outcomes render the line they always did');
+});
+
+test('a run whose only outcome is a skip carries no "nothing ran" (#506)', async (t) => {
+  // A skip is an outcome: the rule answered, and the verdict says which rule it did not verify. The
+  // decoration would contradict the count standing beside it.
+  const { code, stdout } = await scan(configOff(t, []), ['--scope', 'machine', '--only', 'workflow-run-artifact']);
+  const line = stdout.split('\n').find((entry) => entry.startsWith('verdict'));
+
+  assert.equal(code, 0);
+  assert.equal(line, 'verdict  PASS (threshold: error · 1 rule not verified: workflow-run-artifact)');
+});
+
+test('the json document of a run that measured nothing keeps its counters and verdict (#506)', async (t) => {
+  const dir = configOff(t, ruleCatalog.map((rule) => rule.id));
+  const report = JSON.parse((await scan(dir, ['--scope', 'repo', '--format', 'json'])).stdout);
+
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(
+    Object.keys(report.summary),
+    ['error', 'warn', 'info', 'pass', 'skip', 'verdict'],
+    'the decoration is presentation: no key is added and no counter is dropped',
+  );
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 0, skip: 0, verdict: 'pass' });
+  assert.equal(report.schemaVersion, 1);
 });
 
 test('a single unverified rule is singular in the verdict', () => {

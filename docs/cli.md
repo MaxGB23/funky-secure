@@ -319,6 +319,14 @@ next     nothing to do: everything at or above the policy passes
   else, and that line speaks for the policy, never for a flag. A clean
   `scan --scope repo --preset starter` reads `PASS` beside `3 passing · 3 skipped` and `7 of 13 rules`
   and is telling the truth: seven rules never ran, and three of the six that did verified nothing.
+- **A verdict over zero counters says so.** A configuration that turns every rule `off` leaves all
+  five counters at zero, and `PASS` alone there would claim a measurement nobody made. The verdict
+  then carries a second decoration inside the parenthesis, after the threshold, in the grammar the
+  unverified count already uses: `PASS (threshold: error · nothing ran)`. It is the five counters that
+  decide it, never the catalog, and `nothing ran` says a run measured nothing, not how much it
+  covered — that stays the `not run` line and nothing else. A run with a single counted outcome, a
+  pass or a skip or a finding, prints the verdict it always did, and the exit code does not move: a
+  run that measured nothing is still `0` (RFC 0038).
 - **Skips collapse by target.** Two or more skipped rules print one `–` line naming the labels that
   were not verified and the command that expands them; the JSON is untouched. Exactly one skipped
   rule keeps its own block — symbol `–`, the reason, and the command that verifies it — because a

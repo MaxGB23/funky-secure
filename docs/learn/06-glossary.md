@@ -20,7 +20,7 @@ read in a report to the word you did not know.
 | rule | One question the tool asks of your repository. Each run answers it `pass`, `fail` or `skip`. |
 | scope | How much of the world a run may read: `auto`, `repo`, `machine` or `all`, chosen with [`--scope`](../cli.md). `repo` never reads this computer. |
 | threshold | The severity at which the verdict turns red: [`--fail-on`](../cli.md) takes `error`, `warn`, `info` or `none`, and `error` is the default. |
-| verdict | The report's `PASS` or `FAIL` line, with the threshold it used and how many rules could not be verified. |
+| verdict | The report's `PASS` or `FAIL` line, with the threshold it used, how many rules could not be verified, and whether anything ran at all. |
 | workspace | A pnpm repository that can hold more than one package, marked by `pnpm-workspace.yaml`. `init` creating that file makes this repository a workspace root. |
 
 **Adds:** the words the rest of the path uses, in one alphabetical page, each in the tool's own spelling - so a
