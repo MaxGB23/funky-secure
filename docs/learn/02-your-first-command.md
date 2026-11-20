@@ -82,9 +82,10 @@ time.
 **not** run: seven of the thirteen. The names after the colon are those seven, because `starter` - the preset
 `start` recommends - switches them off, and the block's last line says so in words and names the way out:
 `--preset strict` turns none off by itself. Read `by itself` as the limit of that flag: it is the preset
-that turned nothing off on its own, and a repository whose own settings switch a rule off keeps it off
-under every preset. Read it as a warning about a green report later: that pass will be a
-pass over six rules, not thirteen. [`../guide.md`](../guide.md) goes through this block properly.
+that turned nothing off on its own, and a repository whose config `rules` map switches a rule off keeps
+it off under every preset, so the way out of that cause is that entry in the config and not the flag.
+Read it as a warning about a green report later: that pass will be a pass over six rules, not thirteen.
+[`../guide.md`](../guide.md) goes through this block properly.
 
 ## It exits 0 and writes nothing
 

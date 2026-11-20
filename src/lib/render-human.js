@@ -386,17 +386,23 @@ function unverifiedLines(report, catalog, options, renderedSkips = new Set()) {
 }
 
 /**
- * The verdict, with the number of rules it did not verify (RFC 10.3, S12).
+ * The verdict, with the number of rules it did not verify (RFC 10.3, S12) and, when it measured
+ * nothing at all, the fact that it did not (RFC 0038).
  *
  * `PASS` alone was read as "checked": a repository scanned with `--scope repo` printed a pass while
  * two rules were unverified, and the skip lines that say so sit below the verdict, where a reader or
  * a CI log that greps this line never looks. The count moves into the word; the listing stays where it
  * is, so the header states the coverage and the body states the reason.
  *
- * A verdict with nothing unverified is byte-identical to what it always was: the count appears only
- * when it is not zero, and a scan that verified everything is not asked to say so twice.
+ * A configuration that turns every rule `off` leaves five zero counters, and `PASS` over them claimed
+ * a measurement that did not happen. The decoration says which fact it is, and it sits inside the
+ * parenthesis after the threshold so the `(threshold: <value>` field every parser and every capture
+ * reads is unchanged — the same grammar 0008 established.
  *
- * @param {{ verdict: string, skip: number }} summary
+ * A verdict with nothing unverified is byte-identical to what it always was: each decoration appears
+ * only under its own condition, and a scan that verified everything is not asked to say so twice.
+ *
+ * @param {{ verdict: string, error: number, warn: number, info: number, pass: number, skip: number }} summary
  * @param {string} failOn the threshold the verdict was decided against
  * @param {boolean} color
  * @returns {string}
@@ -405,7 +411,16 @@ function verdictLine(summary, failOn, color, unverifiedIds = []) {
   const word = summary.verdict === 'fail' ? 'FAIL' : 'PASS';
   const { head: label, indent } = gutter('verdict');
   const head = `${label}${paint(word, word === 'FAIL' ? 'error' : 'pass', color)} (threshold: ${failOn}`;
-  if (unverifiedIds.length === 0) return `${head})`;
+  // The condition is "no finding was emitted", never a property of the catalog: every counter is the
+  // count of findings, so five zeros are a run that measured nothing whatever its rules did.
+  const measuredNothing =
+    summary.error === 0 &&
+    summary.warn === 0 &&
+    summary.info === 0 &&
+    summary.pass === 0 &&
+    summary.skip === 0;
+  // A skip is a finding, so `measuredNothing` and an unverified rule cannot both hold.
+  if (unverifiedIds.length === 0) return `${head}${measuredNothing ? ' · nothing ran' : ''})`;
 
   // The verdict names rules, so it counts rules: `summary.skip` counts skip findings, and one rule that
   // emits a skip per unreadable file made this line say "16 rules not verified" over 10 names (0008,

@@ -98,9 +98,11 @@ Seven of thirteen rules did not run, and the names after the colon are those sev
 means "passed the six that ran", not "this repository is fully checked". The last line of the block
 names the cause and the way out: those rules were switched off by a policy decision, not skipped and not
 missing from the catalog, and `--preset strict` turns none off by itself. `by itself` is the limit of
-that flag: a repository whose config sets a rule `off` keeps it off under every preset, strict
-included. A rule that is off prints nothing and is not counted in `summary`, so without the line a run would look
-clean while it measured almost nothing.
+that flag: a repository whose config `rules` map sets a rule `off` keeps it off under every preset,
+strict included, so the way out depends on the cause the line named — the flag for a rule the preset
+turned `off`, and that entry in the config `rules` map for a rule the config turned `off`. A rule that
+is off prints nothing and is not counted in `summary`, so without the line a run would look clean while
+it measured almost nothing.
 `--only` and `--ignore` never print it: picking rules for one run does not change the policy, and the
 line is a claim about the policy. The list is in catalog order, so it is the same list in every report.
 
