@@ -106,8 +106,8 @@ forty-character commit SHA is the only spelling that cannot move under you.
 
 Automated updates are the point of a bot, and merging one without a person is where a compromised or simply
 broken release reaches the default branch unread. The rule answers in two halves and the halves differ: a bot
-configuration is information, carried on a pass whose message says an update exists, while a workflow that merges
-a bot's pull request is a finding.
+configuration is information, reported as an `info` finding that says an update exists and never fails a run by
+itself, while a workflow that merges a bot's pull request is an error.
 
 → [the rule's page](../rules/no-bot-auto-merge.md)
 

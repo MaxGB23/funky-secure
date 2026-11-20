@@ -103,7 +103,8 @@
       "evidence": {
         "job": "merge",
         "step": 0,
-        "run": "gh pr merge --auto --squash"
+        "run": "gh pr merge --auto --squash",
+        "botConfig": false
       },
       "remediation": {
         "kind": "manual",

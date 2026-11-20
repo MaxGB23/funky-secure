@@ -50,14 +50,66 @@ function workflow(path, lines) {
   return { path, text: lines.join('\n') };
 }
 
-test('reports a dependabot configuration as one pass carrying the signal, never a fail', () => {
+test('reports a dependabot configuration as the info finding the spec asks for', () => {
   const findings = rule.detect(context({ botFiles: ['.github/dependabot.yml'] }));
 
   assert.equal(findings.length, 1);
-  assert.equal(findings[0].status, 'pass');
+  assert.equal(findings[0].status, 'fail');
   assert.equal(findings[0].code, 'bot-config-present');
-  assert.deepEqual(findings[0].evidence, { files: ['.github/dependabot.yml'] });
+  assert.deepEqual(findings[0].evidence, {
+    files: ['.github/dependabot.yml'],
+    botConfig: true,
+  });
   assert.match(findings[0].message, /automated updates configured/);
+
+  // The finding is a `fail` whose severity the state table lowers: the state is what makes it
+  // information rather than a failure, and the rule declares exactly one.
+  assert.deepEqual(rule.severityWhen, [
+    {
+      state: 'config-present',
+      evidence: 'botConfig',
+      is: true,
+      severity: { baseline: 'info', strict: 'info' },
+    },
+  ]);
+});
+
+test('every other finding carries the selecting key, or the table would throw', () => {
+  // `findingSeverity` fails closed when a finding omits the key its rule's table selects on, so the
+  // merge-path findings and both skips carry `botConfig: false` (issue 518, judges JD-A-002 and
+  // JD-B-002).
+  const withMerge = rule.detect(
+    context({
+      botFiles: ['.github/dependabot.yml'],
+      workflows: [
+        workflow('.github/workflows/automerge.yml', [
+          'name: automerge',
+          'on: pull_request',
+          'jobs:',
+          '  dependabot:',
+          '    runs-on: ubuntu-latest',
+          "    if: github.actor == 'dependabot[bot]'",
+          '    steps:',
+          '      - run: gh pr merge --auto --squash',
+        ]),
+      ],
+    }),
+  );
+
+  for (const finding of withMerge) {
+    assert.equal(
+      finding.evidence.botConfig,
+      finding.code === 'bot-config-present',
+      `${finding.code} carries botConfig: ${String(finding.evidence.botConfig)}`,
+    );
+  }
+
+  for (const finding of rule.detect(context({}))) {
+    assert.equal(finding.evidence.botConfig, false, `${finding.code} carries the key`);
+  }
+  for (const finding of rule.detect({ policy: {}, severity: () => 'error' })) {
+    assert.equal(finding.evidence.botConfig, false, 'no-repo carries the key');
+  }
 });
 
 test('fails gh pr merge --auto in a job that only runs for dependabot', () => {
@@ -418,10 +470,11 @@ test('side one: a bot merge and a bot automerge action fail at their own lines',
   assert.equal(stderr, '');
   assert.equal(code, 1, 'an error finding fails the default threshold');
   const report = JSON.parse(stdout);
-  assert.deepEqual(report.summary, { error: 2, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'fail' });
+  assert.deepEqual(report.summary, { error: 2, warn: 0, info: 1, pass: 0, skip: 0, verdict: 'fail' });
   assert.deepEqual(
     report.findings.map((finding) => [finding.status, finding.code, finding.path, finding.line]),
     [
+      ['fail', 'bot-config-present', undefined, undefined],
       ['fail', 'automerge-for-bot', '.github/workflows/automerge.yml', 8],
       ['fail', 'automerge-for-bot', '.github/workflows/automerge.yml', 14],
     ],
@@ -429,6 +482,7 @@ test('side one: a bot merge and a bot automerge action fail at their own lines',
   assert.deepEqual(
     report.findings.map((finding) => finding.message),
     [
+      'automated updates configured (.github/dependabot.yml); an update is merged by a person after reading the diff and running the gate',
       'job "dependabot" runs gh pr merge for a bot actor; an update is merged by a person after reading the diff and running the gate',
       'job "enable" runs an automerge action for a bot actor; an update is merged by a person after reading the diff and running the gate',
     ],
@@ -453,22 +507,27 @@ test('side two: the clean shape passes, and both bot config files are one counte
 
   const { code, stdout } = await scan(dir, ['--format', 'json']);
   const report = JSON.parse(stdout);
-  assert.equal(code, 0);
-  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
-  assert.deepEqual(report.findings, [], 'the pass is counted and never listed as a finding');
+  assert.equal(code, 0, 'an info finding never fails the default threshold');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 1, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.status, finding.code, finding.severity]),
+    [['fail', 'bot-config-present', 'info']],
+    'the signal is the info finding the spec asks for, and it is listed',
+  );
 
   const human = await scan(dir);
-  assert.match(human.stdout, /^summary {2}0 errors · 0 warnings · 0 info · 1 passing · 0 skipped$/m);
-  assert.match(human.stdout, /all 1 rule pass/);
+  assert.match(human.stdout, /^summary {2}0 errors · 0 warnings · 1 info · 0 passing · 0 skipped$/m);
+  assert.match(human.stdout, /ℹ {2}Bot auto-merge/);
 
-  // The page's sentence: the configuration signal is one pass for the set, never one per file.
+  // The page's sentence: the configuration signal is one finding for the set, never one per file.
   const [configuration] = rule.detect(
     context({ botFiles: ['.github/dependabot.yml', '.github/renovate.json'] }),
   );
-  assert.equal(configuration.status, 'pass');
+  assert.equal(configuration.status, 'fail');
   assert.equal(configuration.code, 'bot-config-present');
   assert.deepEqual(configuration.evidence, {
     files: ['.github/dependabot.yml', '.github/renovate.json'],
+    botConfig: true,
   });
 
   // The limit the page states: a checkout whose ref is computed from an environment variable is
@@ -493,6 +552,53 @@ test('side two: the clean shape passes, and both bot config files are one counte
   );
   assert.equal(computed.status, 'pass');
   assert.equal(computed.code, 'no-automerge-path');
+});
+
+test('one report carries the info signal and an error, which is what the state table would have thrown on', async (t) => {
+  // The mechanism, not only the signal: `findingSeverity` selects per rule, so a repo with both a
+  // bot configuration and a bot merge path makes the rule emit one finding of each severity in the
+  // same report. A missing selecting key would throw here rather than in a reader's scan.
+  const dir = checkout(t, {
+    '.github/dependabot.yml': 'version: 2\nupdates: []\n',
+    '.github/workflows/automerge.yml': [
+      'name: automerge',
+      'on: pull_request',
+      'jobs:',
+      '  dependabot:',
+      '    runs-on: ubuntu-latest',
+      "    if: github.actor == 'dependabot[bot]'",
+      '    steps:',
+      '      - run: gh pr merge --auto --squash',
+    ].join('\n'),
+  });
+
+  const { code, stdout, stderr } = await scan(dir, ['--format', 'json']);
+  assert.equal(stderr, '', 'the state table did not throw');
+  assert.equal(code, 1, 'the error finding decides the exit code');
+  const report = JSON.parse(stdout);
+  assert.deepEqual(report.summary, { error: 1, warn: 0, info: 1, pass: 0, skip: 0, verdict: 'fail' });
+  assert.deepEqual(
+    report.findings.map((finding) => [finding.code, finding.severity]),
+    [
+      ['bot-config-present', 'info'],
+      ['automerge-for-bot', 'error'],
+    ],
+  );
+});
+
+test('the threshold is the only thing between the info signal and the exit code', async (t) => {
+  const dir = checkout(t, { '.github/dependabot.yml': 'version: 2\nupdates: []\n' });
+
+  const byDefault = await scan(dir, ['--format', 'json']);
+  assert.equal(byDefault.code, 0, 'info is under the default threshold');
+  assert.equal(JSON.parse(byDefault.stdout).summary.info, 1);
+
+  const atInfo = await scan(dir, ['--fail-on', 'info', '--format', 'json']);
+  assert.equal(atInfo.code, 1, '--fail-on info makes the signal fail the run');
+  assert.equal(JSON.parse(atInfo.stdout).summary.verdict, 'fail');
+
+  const atError = await scan(dir, ['--fail-on', 'error', '--format', 'json']);
+  assert.equal(atError.code, 0);
 });
 
 /// Side three: it skips for want of a fact, with every code it can emit reached by a run.
@@ -566,7 +672,11 @@ test('obligation: the printed edit, applied at the printed line, clears every fi
   const before = JSON.parse((await scan(dir, ['--format', 'json'])).stdout);
   assert.equal(before.summary.error, 2);
 
-  for (const finding of [...before.findings].sort((a, b) => b.line - a.line)) {
+  // The configuration finding names no line: there is nothing to delete, so the loop walks the two
+  // merge-path findings that do.
+  const edits = before.findings.filter((finding) => finding.line !== undefined);
+  assert.equal(edits.length, 2, 'the fixture has two editable findings');
+  for (const finding of [...edits].sort((a, b) => b.line - a.line)) {
     assert.equal(finding.remediation.kind, 'manual', 'no command deletes a step from a workflow');
     const named = new RegExp(
       '^edit (.+):(\\d+) and delete the (?:automatic merge|automerge action) step$',
@@ -580,8 +690,12 @@ test('obligation: the printed edit, applied at the printed line, clears every fi
   const after = await scan(dir, ['--format', 'json']);
   const report = JSON.parse(after.stdout);
   assert.equal(after.code, 0, 'the edit the finding printed clears the finding');
-  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 0, pass: 1, skip: 0, verdict: 'pass' });
-  assert.deepEqual(report.findings, [], 'and the cleared state is a counted pass');
+  assert.deepEqual(report.summary, { error: 0, warn: 0, info: 1, pass: 0, skip: 0, verdict: 'pass' });
+  assert.deepEqual(
+    report.findings.map((finding) => finding.code),
+    ['bot-config-present'],
+    'deleting the merge steps leaves the configuration signal, which was never an error',
+  );
 });
 
 /// Obligation two of `S4`: the two formats agree on count, path, line and message. The human
@@ -613,7 +727,9 @@ test('obligation: both formats count, locate and word every finding the same way
 
     const flat = human.stdout.replace(/\s+/g, ' ');
     for (const finding of report.findings) {
-      assert.ok(flat.includes(finding.path), `${shape}: the human report does not name ${finding.path}`);
+      if (finding.path !== undefined) {
+        assert.ok(flat.includes(finding.path), `${shape}: the human report does not name ${finding.path}`);
+      }
       if (finding.line !== undefined) {
         assert.ok(
           flat.includes(`${finding.path}:${finding.line}`),

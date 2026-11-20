@@ -140,7 +140,7 @@ line says what to do and the second says why it refused.
 | `env-not-tracked` | error / error | is any environment file committed? |
 | `sensitive-ignored` | error / error | would this repository ignore the files that must never be committed? |
 | `actions-pinned-sha` | error / error | can a CI workflow change under you without a commit? |
-| `no-bot-auto-merge` | error / error | can a dependency update reach the default branch unread? |
+| `no-bot-auto-merge` | error / error · info / info in the config-present state | can a dependency update reach the default branch unread? |
 | `ci-no-safety-overrides` | warn / error | does CI disable the frozen lockfile or re-enable lifecycle scripts? |
 | `pull-request-target` | error / error | does a workflow combine `pull_request_target` with a checkout of the pull request head? |
 | `workflow-permissions` | warn / error | does each workflow declare least-privilege `permissions:`? |

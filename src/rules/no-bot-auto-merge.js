@@ -2,10 +2,16 @@
  * R9 — `no-bot-auto-merge`: can a dependency update reach the default branch without a human
  * reading it? (RFC 8.2 R9, E6, 4.6)
  *
- * Two independent signals. The configuration signal is evidence, never a failure: `info` is a
- * severity in the report contract, not a status, and v0.1 cannot lower one finding's severity
- * without changing the policy model, so it rides on a pass. The merge path is attributed through
- * the structural reader, so a step belongs to the job that runs it.
+ * Two independent signals. The configuration signal is the `info` finding the spec asks for: one
+ * `fail` carrying `bot-config-present`, whose severity the rule's state table lowers to `info` in
+ * both presets, so it is reported, counted and printed and never fails a run at the default
+ * threshold. The merge path is attributed through the structural reader, so a step belongs to the
+ * job that runs it.
+ *
+ * Every finding carries the state table's selecting key, because the table selects per rule: a
+ * finding that omitted it would make `findingSeverity` throw instead of silently keeping the lenient
+ * pair (9.2). The configuration finding carries `botConfig: true`; every other one, skips included,
+ * carries `false`.
  *
  * Every failure carries the edit that removes the path (S4). No shell command deletes a step from a
  * workflow, so the remediation is the `manual` edit itself, naming the file and the line, and it is
@@ -33,7 +39,13 @@ const MERGE_RULE = 'an update is merged by a person after reading the diff and r
  * @param {string} reason
  */
 function skip(code, reason) {
-  return { status: 'skip', code, message: `skipped: ${reason}`, probeUnavailable: true };
+  return {
+    status: 'skip',
+    code,
+    message: `skipped: ${reason}`,
+    probeUnavailable: true,
+    evidence: { botConfig: false },
+  };
 }
 
 /**
@@ -86,10 +98,20 @@ export default {
   targets: ['ci'],
   friction: 0,
   severity: { baseline: 'error', strict: 'error' },
+  severityWhen: [
+    {
+      state: 'config-present',
+      evidence: 'botConfig',
+      is: true,
+      severity: { baseline: 'info', strict: 'info' },
+    },
+  ],
   question: 'Can a dependency update reach the default branch without a human reading it?',
   detection:
     'Two independent signals. Configuration: .github/dependabot.yml or .github/renovate.json ' +
-    'present is one pass carrying the file list, never a failure. Merge path, through the ' +
+    'present is one fail carrying bot-config-present, one finding for the configuration as a whole, ' +
+    'whose severity the state table lowers to info in both presets; every finding of the rule ' +
+    'carries the selecting key, botConfig. Merge path, through the ' +
     'structural reader: gh pr merge with --auto or --merge, or a known automerge action, in a job ' +
     'whose if/name names dependabot[bot] or renovate[bot] (automerge-for-bot). The ' +
     'pull_request_target hazard is R11\'s, not this rule\'s: this rule asks whether an update can ' +
@@ -97,7 +119,8 @@ export default {
     'An unparseable workflow skips.',
   evidence:
     'For automerge-for-bot: the job, the step index and the offending run or uses. For the ' +
-    'configuration signal: the bot files found.',
+    'configuration signal: the bot files found. Every finding carries botConfig, which is the key ' +
+    'the state table selects on.',
   remediation:
     'None. There is nothing to write: removing an automation is a review decision. The message ' +
     'states the rule — an update is merged by a person after reading the diff and running the gate.',
@@ -116,7 +139,13 @@ export default {
     const repo = ctx.repo;
     if (!repo) {
       return [
-        { status: 'skip', code: 'no-repo', message: repoSkipMessage(ctx), probeUnavailable: true },
+        {
+          status: 'skip',
+          code: 'no-repo',
+          message: repoSkipMessage(ctx),
+          probeUnavailable: true,
+          evidence: { botConfig: false },
+        },
       ];
     }
 
@@ -131,7 +160,7 @@ export default {
           code: 'unparseable-workflow',
           path: file.path,
           message: `skipped: unparseable workflow — ${parsed.detail}`,
-          evidence: { reason: parsed.reason },
+          evidence: { reason: parsed.reason, botConfig: false },
         });
         continue;
       }
@@ -146,7 +175,7 @@ export default {
                 path: file.path,
                 line: step.line,
                 message: `job "${job.id}" runs gh pr merge for a bot actor; ${MERGE_RULE}`,
-                evidence: { job: job.id, step: step.index, run: step.run },
+                evidence: { job: job.id, step: step.index, run: step.run, botConfig: false },
                 remediation: editStep(file.path, step.line, 'delete the automatic merge step'),
               });
               continue;
@@ -158,7 +187,7 @@ export default {
                 path: file.path,
                 line: step.line,
                 message: `job "${job.id}" runs an automerge action for a bot actor; ${MERGE_RULE}`,
-                evidence: { job: job.id, step: step.index, uses: step.uses },
+                evidence: { job: job.id, step: step.index, uses: step.uses, botConfig: false },
                 remediation: editStep(file.path, step.line, 'delete the automerge action step'),
               });
             }
@@ -173,18 +202,22 @@ export default {
 
     if (botFiles.length > 0 && !workflowUnreadable) {
       findings.push({
-        status: 'pass',
+        status: 'fail',
         code: 'bot-config-present',
         target: 'repo-root',
-        message: `automated updates configured (${botFiles.join(', ')}); the merge path is checked below`,
-        evidence: { files: [...botFiles] },
-        remediation: { kind: 'none' },
+        message:
+          `automated updates configured (${botFiles.join(', ')}); ${MERGE_RULE}`,
+        evidence: { files: [...botFiles], botConfig: true },
+        // Nothing to write: the action is the rule itself, which the report prints so an `info`
+        // finding still tells a reader what to do about it.
+        remediation: { kind: 'manual', command: MERGE_RULE },
       });
     } else if (findings.length === 0) {
       findings.push({
         status: 'pass',
         code: 'no-automerge-path',
         message: `no automated update config and no bot merge path; ${MERGE_RULE}`,
+        evidence: { botConfig: false },
       });
     }
 
