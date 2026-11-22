@@ -95,7 +95,7 @@ export async function run({
           apply,
           // The steps a human must run (RFC 11.2.2). The human rendering only: the JSON document is a
           // pure plan and carries no prose.
-          nextSteps: deriveNextSteps({ plan, repo: ctx.repo }),
+          nextSteps: deriveNextSteps({ plan, repo: ctx.repo, cwd }),
         });
   stdout.write(text);
 

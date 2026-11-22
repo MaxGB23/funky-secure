@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -1019,6 +1020,34 @@ test('next steps name the commit and funky-secure start, never an install it can
     preview.stdout.text,
   );
   assert.equal(preview.stdout.text.includes('pnpm install'), false, preview.stdout.text);
+});
+
+test('next steps spells the plan\'s paths where the command was run (issue 535)', async (t) => {
+  // Issue 535: `init` reads the repository root, and its next-step commit printed root-relative names
+  // whatever directory it was asked from. Run from `apps/web`, `git add package.json` exits `0` and
+  // commits the member's manifest while the root manifest — the one the plan wrote — stays modified, so
+  // the block handed the reader to `start` in a tree the next writer refuses.
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'package.json'), '{\n  "name": "no-lockfile",\n  "packageManager": "pnpm@12.3.4"\n}\n');
+  mkdirSync(join(dir, 'apps', 'web'), { recursive: true });
+  writeFileSync(join(dir, 'apps', 'web', 'package.json'), '{\n  "name": "web"\n}\n');
+
+  const stdout = capture();
+  const code = await run(['init'], {
+    cwd: join(dir, 'apps', 'web'),
+    env: {},
+    stdout,
+    stderr: capture(),
+    collector: collectorFor({ root: dir, tracked: ['package.json'] }),
+  });
+
+  assert.equal(code, 0);
+  assert.ok(
+    stdout.text.endsWith(
+      'next steps\n  git add ../../package.json ../../pnpm-workspace.yaml ../../.gitignore && git commit -m "chore: apply funky-secure"\n  funky-secure start\n',
+    ),
+    stdout.text,
+  );
 });
 
 test('the next steps commit exactly the paths the plan wrote, from the constant the path prints (11.2.2, issue 145)', async (t) => {

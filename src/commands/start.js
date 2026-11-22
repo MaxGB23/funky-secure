@@ -22,6 +22,7 @@ import {
   FOREIGN_PIN_FLAG,
   declaredForeignManager,
   declaredPackageManager,
+  pnpmDirFlag,
   pnpmFlag,
   resolveLockfileStep,
 } from '../lib/foreign-pin.js';
@@ -30,7 +31,7 @@ import { parseLockfile } from '../lib/lockfile.js';
 import { notRunLines, offByPolicy } from '../lib/render-human.js';
 import { resolvePolicy } from '../lib/policy.js';
 import { createCollector } from '../lib/probes.js';
-import { sameDirectory } from '../lib/paths.js';
+import { pathsAtCwd, sameDirectory } from '../lib/paths.js';
 import { collectScan } from '../lib/scan.js';
 import { FOREIGN_LOCKFILES } from '../lib/targets.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
@@ -114,12 +115,15 @@ const PIN_STEP_SCOPE = ', at the root importer';
  * lockfile is absent or untracked it is first recorded by the step that tracks it, so this commit
  * stages the manifest alone and does not claim a file that step owns.
  *
+ * Both names are the repository's own, so they are spelled where the reader pastes them (#535).
+ *
  * @param {boolean} trackedLockfile
+ * @param {(names: string[]) => string[]} spell the same list, spelled where the reader pastes it
  * @returns {string}
  */
-function pinStep(trackedLockfile) {
-  const stage = trackedLockfile ? 'package.json pnpm-lock.yaml' : 'package.json';
-  return `git add ${stage} && git commit -m "${PIN_MESSAGE}"`;
+function pinStep(trackedLockfile, spell) {
+  const stage = trackedLockfile ? ['package.json', 'pnpm-lock.yaml'] : ['package.json'];
+  return `git add ${spell(stage).join(' ')} && git commit -m "${PIN_MESSAGE}"`;
 }
 /**
  * The commit that records the first dependency, immediately after the add that wrote it (11.7 row 13).
@@ -129,9 +133,19 @@ function pinStep(trackedLockfile) {
  * package.json` under a closing commit that stages only the lockfile. It stages the manifest and
  * nothing else, because the lockfile the add also writes is carried by the closing commit, which
  * already names it (0016).
+ *
+ * The path it stages is the repository's manifest and not the reader's: `pnpm add` acts on the nearest
+ * project manifest at or above the directory it runs in, and the step above names the repository root
+ * with `-C`, so a bare name here would commit a member's manifest while the one the add wrote stays
+ * modified (#535).
+ *
+ * @param {(names: string[]) => string[]} spell the same list, spelled where the reader pastes it
+ * @returns {string}
  */
 export const ADD_MESSAGE = 'chore: add the first dependency';
-const ADD_STEP = `git add package.json && git commit -m "${ADD_MESSAGE}"`;
+function addStep(spell) {
+  return `git add ${spell(['package.json']).join(' ')} && git commit -m "${ADD_MESSAGE}"`;
+}
 /**
  * The one line the plan prints for a step whose outcome depends on a choice it cannot see (11.7). The
  * dependency is a placeholder, so whether the add rewrote the manifest is the reader's pick, and a
@@ -268,12 +282,22 @@ function foreignLockfiles(repo) {
  * collector already resolved — the repository facts and the plan — so `start` measures nothing of its
  * own and cannot contradict the report about the same repository (S3).
  *
- * @param {{ repo: object | null, writes: number }} state
+ * Every command in the path is read twice: the fact it acts on is the repository's, which is where
+ * `init --apply` and `pin --apply` write, and the directory it acts from is the reader's. A path that
+ * does not say so is one a reader below the root cannot paste (issue 535).
+ *
+ * @param {{ repo: object | null, writes: number, cwd?: string | null }} state
  * @returns {PlanStep[]}
  */
-function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [], trackLockfile = false }) {
+function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [], trackLockfile = false, cwd = null }) {
   const present = Array.isArray(repo?.present) ? repo.present : [];
   const foreign = foreignLockfiles(repo);
+  // A commit stages what git resolves from where the reader stands, so a name the repository declared
+  // is rebased; a pnpm command acts on the nearest manifest at or above that directory, so the project
+  // the plan is about is named with `-C`. At the repository root both are no-ops, by construction: the
+  // guard in `pathsAtCwd` is what keeps a Windows volume's second spelling out of a root plan (#210).
+  const spell = (names) => pathsAtCwd(names, repo?.root ?? null, cwd);
+  const dir = pnpmDirFlag(repo, cwd);
   /** @type {PlanStep[]} */
   const steps = [];
   // A step and the one line it may carry are created together, so no later reader has to match the
@@ -291,11 +315,11 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // a commit that stages nothing is not a step (0016, 0028).
   const lockfileAtEnd = foreign.length > 0 || trackLockfile;
   const trackFiles = ['pnpm-lock.yaml', ...foreign];
-  const trackStep = `git add ${trackFiles.join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
+  const trackStep = `git add ${spell(trackFiles).join(' ')} && git commit -m "${TRACK_MESSAGE}"`;
 
   if (repo?.inGit !== true) push('git init');
   if (repo?.files?.packageJson === null || repo?.files?.packageJson === undefined) {
-    push('pnpm init');
+    push(`pnpm${dir} init`);
   }
   // The block can only be written over a committed tree, so the commit is a step and not a footnote.
   if (writes > 0 && uncommitted) push(COMMIT_STEP);
@@ -314,15 +338,15 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     // `pnpm import` reads the foreign lockfile and writes `pnpm-lock.yaml` with the versions it
     // recorded. `pnpm install` never reads it: it resolves from the manifest, so the pins the user
     // migrated from are gone before `migrate` deletes the file that held them (0021).
-    push(`pnpm import${flag}`);
+    push(`pnpm${dir} import${flag}`);
   }
   // Never asked for while another manager's lockfile is present: the add would write a second one.
   if (foreign.length === 0 && !present.includes('pnpm-lock.yaml')) {
-    push(`pnpm add${flag} <your first dependency>`);
+    push(`pnpm${dir} add${flag} <your first dependency>`);
     // The add records the dependency in the manifest and the next writer refuses that state, so the
     // commit that produces the clean tree follows it (0018). It prints only where the add printed, and
     // the note is the one line 11.7 defines for a step whose outcome the plan cannot see.
-    push(ADD_STEP, ADD_STEP_NOTE);
+    push(addStep(spell), ADD_STEP_NOTE);
   }
   // `pin` copies the version it writes from `pnpm-lock.yaml`, so a lockfile that records none gives it
   // nothing to copy and the path would announce the ranges and write none of them (0034). The resolve
@@ -331,7 +355,7 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
   // resolve, and a foreign lockfile was resolved by `pnpm import` — so the step answers the state the
   // field measured, a lockfile whose only entries are the managed pnpm and its platform packages.
   if (pins > 0 && foreign.length === 0 && present.includes('pnpm-lock.yaml')) {
-    push(resolveLockfileStep(repo));
+    push(resolveLockfileStep(repo, cwd));
   }
   // The ranges already in the manifest are the second debt: the workspace block governs the next
   // `pnpm add`, and only `pin` touches what is in `package.json` today.
@@ -347,14 +371,14 @@ function pendingSteps({ repo, writes, uncommitted = false, pins = 0, paths = [],
     );
   }
   if (pins > 0) {
-    push(resolveLockfileStep(repo));
+    push(resolveLockfileStep(repo, cwd));
     // The pin has a commit of its own, immediately after the resolve it requires: it leaves the
     // manifest dirty and the next writer refuses that state (0028). It prints only where `pin`
     // printed, because a commit that stages nothing is never printed.
     // The step that tracks a lockfile prints for one that is not committed; a repository that
     // already tracks its own has no such step, so this commit is the only one that can carry the
     // resolve's rewrite of it.
-    push(pinStep(present.includes('pnpm-lock.yaml') && !trackLockfile));
+    push(pinStep(present.includes('pnpm-lock.yaml') && !trackLockfile, spell));
   }
   if (foreign.length > 0) {
     push(`git switch -c ${FEATURE_BRANCH}`);
@@ -518,6 +542,9 @@ export async function run({ cwd, env, stdout, preset, catalog = defaultCatalog, 
     writes,
     uncommitted,
     pins: floating,
+    // The directory every printed step is pasted in: the plan describes the repository's project, and
+    // the commands are read where the reader stands (issue 535).
+    cwd: ctx.cwd ?? ctx.repo.root,
     trackLockfile: (report.findings ?? []).some(
       (finding) => finding.rule === 'lockfile-committed' && finding.status !== 'pass',
     ),
