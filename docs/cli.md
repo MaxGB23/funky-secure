@@ -67,6 +67,19 @@ not merely unused (issues 144, 148); a lockfile missing from disk is
 `scan`'s finding to report from the bytes it read, not something an install is predicted to do
 (issue 144).
 
+The plan describes the repository's project from wherever it is read. `start` reads every fact at the
+repository root, and `init --apply` and `pin --apply` write the root whatever directory they are asked
+from, so a step that names a path or a project says which directory it is read in: every `git add` is
+spelled against the directory the step is pasted in — from `apps/web`, the manifest's commit prints
+`git add ../../package.json && git commit -m "chore: add the first dependency"` — and every pnpm command
+names the root with `-C <the repository root, from here>`, so the add prints `pnpm -C ../.. add <your
+first dependency>`. The flag is not decoration: a pnpm command acts on the nearest project manifest at
+or above the directory it runs in, so without it the add writes `apps/web/package.json` while the plan's
+own writes land in the root's. At the repository root nothing is added and no step is rebased, and the
+block printed there is byte-identical to the one above. The commands inside the report body keep their
+repo-relative spelling, because a report that changed with the directory `scan` ran in would not be the
+same report about the same repository (10.1).
+
 A directory that is not a repository yet is the exception, and it is deliberate: the write plan is
 derived from facts only a repository can answer — the ignore rule asks `git check-ignore` and skips
 outside one, and the clean-tree question has no git to ask — so the first run prints only the steps that

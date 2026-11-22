@@ -38,6 +38,37 @@ export function sameDirectory(one, other) {
 }
 
 /**
+ * A literal list of repository-relative names, spelled against the directory a step is pasted in.
+ *
+ * `writtenPaths` spells plan items and nothing else, and the steps this serves print literals: the
+ * manifest, `pnpm-lock.yaml` and a foreign lockfile are named by commits that never planned them, and a
+ * `package.json` is a plan item only while a writer still has something to change in it. So this takes
+ * the names and rebases them, which is the whole of what a `git add` needs: git resolves a pathspec
+ * against the directory it runs in, so a file above that directory earns the `../` prefix that works.
+ *
+ * The guard is the reason this is its own function. At the repository root the names are returned
+ * unchanged, because a Windows volume can spell one directory two ways and a subtraction between two
+ * spellings answers `../../../../../runneradmin/...` — a path nobody can paste, which is the defect
+ * `writtenPaths` has no guard against and the call site that uses it supplies (issue 210). A rebase
+ * applied unguarded at the root reintroduces exactly that string.
+ *
+ * @param {string[]} names repository-relative names, in the order a step prints them
+ * @param {string | null} root the repository root the names are relative to
+ * @param {string | null} cwd the directory the step is pasted in
+ * @returns {string[]}
+ */
+export function pathsAtCwd(names, root, cwd) {
+  if (!Array.isArray(names)) return [];
+  if (typeof root !== 'string' || root === '') return names;
+  if (typeof cwd !== 'string' || cwd === '') return names;
+  if (sameDirectory(root, cwd)) return names;
+  return names.map((name) => {
+    if (typeof name !== 'string' || name === '') return name;
+    return relativePath(cwd, resolve(root, name)).split('\\').join('/');
+  });
+}
+
+/**
  * @param {string} root
  * @param {string} target
  * @returns {boolean}

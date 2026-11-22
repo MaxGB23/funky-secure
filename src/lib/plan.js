@@ -13,6 +13,7 @@ import { dirname, relative } from 'node:path';
 import { ConfigError, RefusalError } from './errors.js';
 import { resolveLockfileStep } from './foreign-pin.js';
 import { statusPorcelain } from './git.js';
+import { pathsAtCwd } from './paths.js';
 import { FOREIGN_LOCKFILES } from './targets.js';
 
 export const PLAN_STATES = ['would-write', 'would-skip', 'conflict'];
@@ -159,9 +160,9 @@ export const APPLY_MESSAGE = 'chore: apply funky-secure';
  * It is one command and not two steps. `git add` alone is the staging half of a commit, and a reader
  * who follows a block that stops there leaves the tree in exactly the state `applyPlan` refuses — so
  * the writer reached next refuses the writes the block just told the reader to leave behind (issue 145).
- * The paths are the plan's own (`writtenPaths`), one entry per file and in plan order, so an untracked
- * tool cache beside them stays out of the commit and every file the plan wrote is staged, including a
- * `package.json` that two items touch.
+ * The paths are the plan's own (the catalog's declared names), one entry per file and in plan order, so
+ * an untracked tool cache beside them stays out of the commit and every file the plan wrote is staged,
+ * including a `package.json` that two items touch.
  *
  * @param {string[]} paths
  * @returns {string}
@@ -185,10 +186,10 @@ export function commitWritesStep(paths) {
  * names the manager it actually finds. A `yarn.lock` needs `pnpm import`, not `pnpm install`, so
  * pinning `--from npm` here would force the wrong step on a yarn repository (RFC 11.2.2, 11.3).
  *
- * @param {{ plan?: Array<object>, repo?: object | null }} [options]
+ * @param {{ plan?: Array<object>, repo?: object | null, cwd?: string | null }} [options]
  * @returns {string[]}
  */
-export function deriveNextSteps({ plan = [], repo = null } = {}) {
+export function deriveNextSteps({ plan = [], repo = null, cwd = null } = {}) {
   if (repo === null || repo === undefined) return [];
   const present = Array.isArray(repo.present) ? repo.present : [];
   const hasLockfile = present.includes('pnpm-lock.yaml');
@@ -197,7 +198,11 @@ export function deriveNextSteps({ plan = [], repo = null } = {}) {
   const steps = [];
   if (hasLockfile && foreign.length > 0) steps.push('funky-secure migrate --apply');
 
-  const written = writtenPaths(plan, repo.root ?? null);
+  // The commit stages what the plan wrote, and `init` reads the repository root whatever directory it
+  // was asked from: the names are the catalog's own, spelled against the directory the reader pastes
+  // the commit in, so a member's manifest is never committed in the root's place (issue 535). At the
+  // root the guard inside `pathsAtCwd` returns them unchanged (#210).
+  const written = pathsAtCwd(declaredPaths(plan), repo.root ?? null, cwd);
   if (written.length > 0) steps.push(commitWritesStep(written));
 
   // The install this repository needs is derived from the facts above, so the block names the command
@@ -213,12 +218,12 @@ export function deriveNextSteps({ plan = [], repo = null } = {}) {
  * (11.7 step 8), read from the same module, because two spellings of one step ten lines apart is the
  * defect issue 132 reports.
  *
- * @param {{ repo?: object | null }} [options]
+ * @param {{ repo?: object | null, cwd?: string | null }} [options]
  * @returns {string[]}
  */
-export function derivePinNextSteps({ repo = null } = {}) {
+export function derivePinNextSteps({ repo = null, cwd = null } = {}) {
   if (repo === null || repo === undefined) return [];
-  return [resolveLockfileStep(repo)];
+  return [resolveLockfileStep(repo, cwd)];
 }
 
 /**

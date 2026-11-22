@@ -85,6 +85,48 @@ not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
 It exited `0`, and a `git status --porcelain` in that folder printed nothing afterwards: the title line promised
 "nothing is written", and the folder agrees.
 
+If you are standing in a subdirectory, the plan is the same plan and its paths are written for the folder you
+are in. This is a repository with a manifest at its root and one member under `apps/web`, both committed, asked
+from `apps/web`:
+
+```
+funky-secure start  ·  guidance, nothing is written
+
+  1  funky-secure init --apply  plan the 3 writes
+  2  git add ../../package.json ../../pnpm-workspace.yaml ../../.gitignore && git commit -m "chore: apply funky-secure"
+  3  pnpm -C ../.. add <your first dependency>
+  4  git add ../../package.json && git commit -m "chore: add the first dependency"
+     if the manifest already declares the package, this commit has nothing to do and exits 1
+  5  funky-secure pin --apply  pin the ranges package.json declares
+  6  pnpm -C ../.. install --lockfile-only
+  7  git add ../../package.json && git commit -m "chore: pin the ranges"
+  8  git add ../../pnpm-lock.yaml && git commit -m "chore: track the lockfile"
+  9  funky-secure scan --preset starter
+
+  pnpm does not come with Node; if it is not on your PATH, see https://pnpm.io/installation
+
+why this order
+  the workspace block has to exist before the install that reads it, and a lockfile can
+  only exist after the first add
+  a writer refuses a tree with uncommitted work, so the commit after the writes is what lets the next one run
+  the workspace block governs the dependencies added next, and pin is what clears the ranges already in the manifest
+
+not run  7 of 13 rules; off by policy: Environment files, Pinned actions, Bot
+         auto-merge, CI install flags, pull_request_target, Workflow permissions,
+         Workflow run artifact
+         a policy decision, not a skip or a missing rule; --preset strict turns none
+         off by itself; the starter preset asks only the day-zero questions
+
+  if a writer refuses, funky-secure explain <rule> names the reason; pass --allow-dirty only when you understand it
+```
+
+Two things in that list are worth knowing, and neither is a mistake. `../../` names a file two folders up,
+because `git add` reads its paths from the folder you are standing in — and the files this plan writes are the
+repository's, not the member's. And `-C ../..` is what makes `pnpm add` and `pnpm install` act on the root
+manifest: pnpm takes the nearest manifest at or above your folder, which would be `apps/web/package.json`, and
+the plan's own writes land at the root. At the repository root itself the list carries neither, and reads
+exactly like the first one.
+
 The same command in a folder where everything has been done - manifest, workspace block, ignore block, lockfile,
 all committed:
 

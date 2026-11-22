@@ -70,7 +70,7 @@ export async function run({
           // Writing an exact specifier is half the change: the lockfile still records the range it
           // replaced, so the next scan reports a desync until the lockfile is rewritten. The tool never
           // runs an install (RFC 11.6), so it names the step instead.
-          nextSteps: writes.length > 0 ? derivePinNextSteps({ repo: ctx.repo }) : [],
+          nextSteps: writes.length > 0 ? derivePinNextSteps({ repo: ctx.repo, cwd: ctx.cwd }) : [],
         });
   stdout.write(text);
 

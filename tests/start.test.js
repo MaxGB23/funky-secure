@@ -144,14 +144,20 @@ function capture() {
   };
 }
 
-/** Runs the real CLI over one directory, with every probe injected. */
-async function start(dir, { inGit = true, version = null, argv = ['start'] } = {}) {
+/**
+ * Runs the real CLI over one directory, with every probe injected.
+ *
+ * `root` is the repository the collector answers git for, which is the directory `start` itself is run
+ * in unless a test stands below it: the command reads every fact at the repository root and prints the
+ * steps for the directory it was asked from (issue 535).
+ */
+async function start(dir, { root = dir, inGit = true, version = null, argv = ['start'] } = {}) {
   const streams = {
     cwd: dir,
     env: {},
     stdout: capture(),
     stderr: capture(),
-    collector: fakeCollector({ dir, inGit, version }),
+    collector: fakeCollector({ dir: root, inGit, version }),
   };
   const code = await run(argv, streams);
   return { code, stdout: streams.stdout.text, stderr: streams.stderr.text };
@@ -214,14 +220,19 @@ function writeManifest(dir, ranges) {
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
+// The identity the suite's other commits use: this machine carries a global hook that refuses any
+// other author, and a test that fails on the developer's git config is a test nobody keeps running.
+const IDENTITY = [
+  '-c',
+  'user.email=82458865+MaxGB23@users.noreply.github.com',
+  '-c',
+  'user.name=MaxGB23',
+];
+
 /** Records the working tree, so the next writer lands on a clean one. @param {string} dir */
 function commitAll(dir, message) {
   execFileSync('git', ['add', '-A'], { cwd: dir });
-  execFileSync(
-    'git',
-    ['-c', 'user.email=82458865+MaxGB23@users.noreply.github.com', '-c', 'user.name=MaxGB23', 'commit', '-qm', message],
-    { cwd: dir },
-  );
+  execFileSync('git', [...IDENTITY, 'commit', '-qm', message], { cwd: dir });
 }
 
 const SCAN_STEP = 'funky-secure scan --preset starter';
@@ -1233,4 +1244,125 @@ test('one importer beyond the root is named in the singular', async (t) => {
     ['     pin writes the root importer only: the lockfile importer cli/template/base is not written by it'],
   );
   assert.equal(stdout.includes('importers cli/template/base are'), false, 'one importer is not a list');
+});
+
+/**
+ * A repository whose plan is derived at its root and printed from a member of it — the shape issue 535
+ * is about. `start` reads the root, so the plan describes the root's project, and the reader stands in
+ * `apps/web`.
+ *
+ * The member carries a tracked, committed manifest of its own, which is what makes it its own pnpm
+ * project for the nearest-manifest-at-or-above rule: a step that stages a bare `package.json` from there
+ * stages the member, and one that runs `pnpm add` there writes the member's manifest.
+ *
+ * @param {import('node:test').TestContext} t
+ * @returns {{ root: string, member: string }}
+ */
+function workspacePrintedFromMember(t) {
+  const root = scratch(t);
+  const member = join(root, 'apps', 'web');
+  mkdirSync(member, { recursive: true });
+  writeFileSync(
+    join(root, 'package.json'),
+    `${JSON.stringify(
+      {
+        name: 'app',
+        private: true,
+        packageManager: 'pnpm@12.3.4',
+        dependencies: { next: '^15.5.4', react: '^19.2.0' },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writeFileSync(join(member, 'package.json'), `${JSON.stringify({ name: 'web', private: true }, null, 2)}\n`);
+  writeFileSync(join(root, 'tracked.txt'), 'package.json\napps/web/package.json\n');
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
+  commitAll(root, 'scaffold');
+  return { root, member };
+}
+
+/** The one file a printed commit stages, relative to the directory it is pasted in. */
+const PINNED_FILES = {
+  [APPLY_COMMIT]: ['.gitignore', 'package.json', 'pnpm-workspace.yaml'],
+  [ADD_MESSAGE]: ['package.json'],
+  [PIN_COMMIT]: ['package.json'],
+  [TRACK_COMMIT]: ['pnpm-lock.yaml'],
+};
+
+test('a plan printed below the root is pasted there: git resolves every path and pnpm writes the root (issue 535)', async (t) => {
+  // Issue 535: `start` reads the repository root, and steps 3, 5 and 8 of the plan printed bare paths
+  // and bare pnpm commands. Run from `apps/web`, `git add package.json` exits `0` and commits the
+  // member while the root manifest stays modified, and `pnpm add` writes the member's manifest — so the
+  // path handed the reader a tree the next writer refuses. Every path is now spelled against the
+  // directory the step is pasted in, and every pnpm step names the project the plan is about.
+  const { root, member } = workspacePrintedFromMember(t);
+
+  const atRoot = await start(root, { version: '12.3.4' });
+  assert.equal(atRoot.code, 0);
+  assert.deepEqual(
+    stepLines(atRoot.stdout).filter((line) => line.includes('..')),
+    [],
+    'at the root no step names a path outside the repository (issue 210)',
+  );
+  assert.equal(atRoot.stdout.includes(' -C '), false, 'and no pnpm step names a project it already acts on');
+
+  const below = await start(member, { root, version: '12.3.4' });
+  assert.equal(below.code, 0);
+  assert.deepEqual(stepLines(below.stdout), [
+    '  1  funky-secure init --apply  plan the 3 writes',
+    `  2  git add ../../package.json ../../pnpm-workspace.yaml ../../.gitignore && git commit -m "${APPLY_COMMIT}"`,
+    '  3  pnpm -C ../.. add <your first dependency>',
+    `  4  git add ../../package.json && git commit -m "${ADD_MESSAGE}"`,
+    '  5  funky-secure pin --apply  pin the ranges package.json declares',
+    '  6  pnpm -C ../.. install --lockfile-only',
+    `  7  git add ../../package.json && git commit -m "${PIN_COMMIT}"`,
+    `  8  git add ../../pnpm-lock.yaml && git commit -m "${TRACK_COMMIT}"`,
+    `  9  ${SCAN_STEP}`,
+  ]);
+
+  // The effect, not the exit code: each printed commit is run from the member, and the commit it
+  // creates at the root has to name the file the step before it wrote. A bare `package.json` here
+  // stages the member and leaves the root manifest modified, which the last assertion sees.
+  const written = (message) => {
+    if (message === APPLY_COMMIT) {
+      writeFileSync(join(root, 'pnpm-workspace.yaml'), 'minimumReleaseAge: 1440\n');
+      writeFileSync(join(root, '.gitignore'), 'node_modules\n');
+    }
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    if (message === APPLY_COMMIT) manifest.devEngines = { packageManager: { name: 'pnpm', version: '12.3.4', onFail: 'error' } };
+    if (message === ADD_MESSAGE) manifest.dependencies['is-odd'] = '3.0.1';
+    if (message === PIN_COMMIT) {
+      for (const name of Object.keys(manifest.dependencies)) {
+        manifest.dependencies[name] = manifest.dependencies[name].replace(/^\^/, '');
+      }
+    }
+    if (message !== TRACK_COMMIT) writeFileSync(join(root, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    if (message === TRACK_COMMIT) writeFileSync(join(root, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+  };
+
+  const printed = stepLines(below.stdout).filter((line) => line.includes('git add '));
+  assert.equal(printed.length, 4, 'the path has four commits to check');
+
+  for (const line of printed) {
+    const [, names, message] = /^ {2}\d+ {2}git add (.+) && git commit -m "(.+)"$/.exec(line);
+    written(message);
+    execFileSync('git', ['add', ...names.split(' ')], { cwd: member });
+    execFileSync('git', [...IDENTITY, 'commit', '-qm', message], { cwd: member });
+
+    const named = execFileSync('git', ['show', '--name-only', '--pretty=format:', '-1'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter((path) => path !== '')
+      .sort();
+    assert.deepEqual(named, PINNED_FILES[message], `the commit "${message}" records what the step before it wrote`);
+  }
+
+  assert.equal(
+    execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }),
+    '',
+    'the tree the path calls closed is clean at the root, where every step wrote',
+  );
 });
