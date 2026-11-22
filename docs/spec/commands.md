@@ -296,6 +296,27 @@ The steps are ordered by cause and only the ones that still apply are printed, n
 | 15 | `git add pnpm-lock.yaml [<the removed lockfile>] && git commit -m "<message>"` | the install above is about to write a lockfile, or the report carries a `lockfile-committed` finding whose status is not `pass`, present or missing: the last step reads a tracked lockfile, and a commit that would stage nothing is never printed. When step 11 removed a foreign lockfile, the commit stages that removal too, because a commit that closes a migration and leaves the deletion in the index has left the tree dirty (0018). It stages no manifest: the pin's own commit and the add's own commit are what record the manifest's rewrites on this path (0016, 0028) |
 | 16 | `funky-secure scan --preset starter` | always, and last |
 
+The table states each command as it is printed at the repository root, which is where the plan derived
+there is pasted. Asked from a directory below the root, the plan describes the same project — every fact
+is read at the repository root, and `init --apply` and `pin --apply` write it whatever directory they are
+asked from — and the commands are spelled so that they act on that project from where the reader stands.
+Two halves move, and only these rows do. Rows 5, 10, 14 and 15 rebase every `git add` path against the
+directory the step is pasted in, because git resolves a pathspec from the directory it runs in: from
+`apps/web`, row 14 of a root plan prints `git add ../../package.json && git commit -m "<message>"`, and
+the same commit with a bare name exits `0` having recorded the member's manifest while the root manifest
+the add wrote stays modified. Rows 2, 6, 7, 9 and 13 name the project with `-C <the repository root, from
+here>`, because a pnpm command acts on the nearest project manifest at or above the directory it runs
+in: from `apps/web`, row 13 prints `pnpm -C ../.. add <your first dependency>`, and the same command
+without the flag writes `apps/web/package.json`. The flag is not a relabelling of a base the command
+already had — it changes which project the command writes, and the project it writes after this is the one
+`init --apply`, `pin --apply` and the rest of the plan write. Rows 1, 3, 4, 8, 11, 12 and 16 name no
+repository path and no project — row 3 stages the whole tree, rows 4, 8 and 12 are commands of this tool,
+and rows 11 and 16 name a branch and a preset — so they print the same bytes wherever they are asked
+from. At the repository root every row is printed exactly as the table states it, with no `../` and no
+`-C`; that root form is the one a Windows volume's second spelling cannot change either, because the
+directory is compared rather than subtracted and the names the catalog declared are printed unchanged
+(issue 210).
+
 A directory that is not a repository is the one state where this derivation does not exist to be made.
 R7 `sensitive-ignored` answers through `git check-ignore` and declares `outside git, skip` (§8.2), so its
 write is not planned until a repository exists, and the question in row 3 — whether the tree already
