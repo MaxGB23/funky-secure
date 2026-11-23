@@ -1629,7 +1629,11 @@ test('obligation: the page names every command the run prints, and describes the
     assert.equal(command.startsWith('pnpm add'), false);
   }
   assert.ok(page.includes('pnpm -C <importer dir> pkg set'), 'the page documents the pin the run prints');
-  assert.match(page, /pkg set '\.?\w*Dependencies\["<name>"\]/u, 'the page uses the bracket property path');
+  assert.match(
+    page,
+    /pkg set "\.?\w*Dependencies\[\\"<name>\\"\]/u,
+    'the page uses the bracket property path, double-quoted with its inner quotes escaped',
+  );
   assert.match(page, /pnpm add --save-exact <name>@<range>\` is a measured no-op/, 'the page keeps the measurement');
 
   // The corrected sentence: with no lockfile and no importer, the run reports `no-lockfile` alone.

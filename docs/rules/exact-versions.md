@@ -152,13 +152,25 @@ keeps the specifier the package already declares and exits 0, so the range survi
 comes back. The command that works is
 
 ```sh
-pnpm -C <importer dir> pkg set 'devDependencies["<name>"]=<version>' && pnpm -C <importer dir> install
+pnpm -C <importer dir> pkg set "devDependencies[\"<name>\"]=<version>" && pnpm -C <importer dir> install
 ```
 
 with the section of the entry (`dependencies`, `devDependencies`, `optionalDependencies` or
 `peerDependencies`), the package name as written — a scoped name keeps its `@scope/` prefix — and the
 version `pnpm-lock.yaml` records in that importer's dependency block. `pnpm install` then refreshes
 the lockfile and `node_modules` from the new specifier.
+
+**The spelling follows the name, and the shells it serves are named.** `cmd`, `bash` and `sh` read
+both spellings identically. A name that is unscoped, carries no dot and does not start with a digit
+takes the quote-free dotted path — `pnpm pkg set dependencies.typescript=5.9.2 && pnpm install` — and
+every other name takes the bracketed form above, the whole argument in double quotes with its inner
+ones escaped. Two shells lose one form each, and neither loss is hidden: `pwsh` 7 splits the escaped
+argument into two, which pnpm answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and writes nothing, and
+Windows PowerShell 5.1 rejects `&&` before it reads any quoting. The dotted path is not a repair for
+either, and it is not a free choice of style: through a name that carries a dot it corrupts the
+manifest — `dependencies.lodash.merge=…` writes a nested `lodash` object beside the untouched entry and
+exits `0` — and a digit-leading name is refused with `Numeric suffix "z" is not supported`. Both are
+published names that a real `package.json` carries (0042).
 
 **Inside the workspace the pin is `workspace:*`, not the recorded version.** For an internal package
 the resolved version the lockfile records is a path — `version: link:../lib` for a `workspace:^`
@@ -168,7 +180,7 @@ range is therefore pinned to `workspace:*`, the exact form Detection already nam
 package, whatever kind of range it was (`workspace:^`, `workspace:~`, `workspace:^1.3.0`):
 
 ```sh
-pnpm -C <importer dir> pkg set 'devDependencies["<name>"]=workspace:*' && pnpm -C <importer dir> install
+pnpm -C <importer dir> pkg set "devDependencies[\"<name>\"]=workspace:*" && pnpm -C <importer dir> install
 ```
 
 Measured on pnpm 12.3.4: the value is written as given, the lockfile records

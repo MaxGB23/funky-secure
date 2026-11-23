@@ -220,14 +220,21 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Severity:** `warn` in `baseline`, `error` in `strict` — the user's decision (Appendix A). A
   repository can also split it: `"exact-versions": { "dependencies": "error", "devDependencies": "warn" }`
   is **not** supported in v0.1; it is a v2 extension.
-- **Remediation:** `pnpm pkg set '<section>["<name>"]=<resolved version>' && pnpm install`, written one
-  command per finding, with the version the lockfile records (S4) — **except for an internal package,
-  whose resolved version is a path.** For a `workspace:` range the pin is `workspace:*`, the exact form
-  Detection already names, and never the `link:../lib` the lockfile records as that range's resolved
-  version: replacing the protocol with a path takes the package out of the workspace while clearing the
-  finding, which is the remediation destroying something the author wrote. Measured on pnpm 12.3.4: with
-  `workspace:*` the lockfile records `specifier: workspace:*` and the package keeps its symlink into the
-  workspace. **Except where the repository declares that it freezes its own lockfile** —
+- **Remediation:** one command per finding, with the version the lockfile records (S4), in one of two
+  spellings chosen by the name: `pnpm pkg set dependencies.is-odd=3.0.1 && pnpm install` — the
+  quote-free dotted path — for a name that is unscoped, carries no dot and does not start with a digit,
+  and `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install` for every other name, the
+  whole argument double-quoted with its inner quotes escaped. Both are read identically by `cmd`, `bash`
+  and `sh`, and the two shells that lose one are named rather than hidden: `pwsh` 7 splits the escaped
+  form into two arguments, which pnpm answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and a write of
+  nothing, and Windows PowerShell 5.1 rejects `&&` before it reads any quoting (0042). **Except for an
+  internal package, whose resolved version is a path.** For a `workspace:` range the pin is
+  `workspace:*`, the exact form Detection already names, and never the `link:../lib` the lockfile
+  records as that range's resolved version: replacing the protocol with a path takes the package out
+  of the workspace while clearing the finding, which is the remediation destroying something the
+  author wrote. Measured on pnpm 12.3.4: with `workspace:*` the lockfile records
+  `specifier: workspace:*` and the package keeps its symlink into the workspace. **Except where the
+  repository declares that it freezes its own lockfile** —
   `frozenLockfile: true` in `pnpm-workspace.yaml`, which is where pnpm 12 keeps project configuration —
   **where the finding is `manual`**: it names the manifest edit and says the lockfile has to move, and
   prints no command, because no command clears the finding there. `pnpm pkg set` still succeeds; it is
@@ -243,13 +250,19 @@ the pin alone is the declaration, and nothing about it is skipped.
   them: `frozen-lockfile=true` in `.npmrc` and the kebab `frozen-lockfile:` in `pnpm-workspace.yaml`
   (`pnpm config get frozen-lockfile` answers `undefined` for the first, and pnpm warns that it ignores
   the second, while the install exits 0 in both — measured). Reading either would turn a lockfile that
-  updates fine into a `manual` finding and print no route for it. The property path is **bracketed**:
-  `pnpm pkg set 'devDependencies.@types/node=1'` fails on pnpm 12.3.4 with
-  `ERR_PNPM_PKG_INVALID_PROPERTY_PATH`, because a dot path cannot carry an `@`, and scoped names are
-  most of a modern dependency set; the bracket form works unchanged for an unscoped name. `pnpm add
-  --save-exact <pkg>@<version>` is not the remediation: it exits 0 and keeps the declared range on
-  pnpm 12.3.4 (measured, I-20). The configuration surface is `pnpm config set save-exact true
-  --location=project`, which writes `saveExact: true` into `pnpm-workspace.yaml` — project config in
+  updates fine into a `manual` finding and print no route for it. The property path is **bracketed**
+  wherever the dotted path cannot be used: `pnpm pkg set 'devDependencies.@types/node=1'` fails on pnpm
+  12.3.4 with `ERR_PNPM_PKG_INVALID_PROPERTY_PATH`, because a dot path cannot carry an `@`, and scoped
+  names are most of a modern dependency set. The dotted path is not a second spelling of the same
+  write, usable at will: it is the one form `cmd` reads with no quoting at all, and it is usable only
+  on a name that is unscoped, carries no dot and does not start with a digit. Both exclusions are
+  measured on real published names, and both are losses a reader must not discover alone —
+  `dependencies.lodash.merge=…` writes a nested `lodash` object beside the untouched entry and exits
+  `0`, corrupting the manifest, and `dependencies.7zip-bin=…` is refused with
+  `Numeric suffix "z" is not supported` (0042). `pnpm add --save-exact <pkg>@<version>` is not the
+  remediation: it exits 0 and keeps the declared range on pnpm 12.3.4 (measured, I-20). The
+  configuration surface is `pnpm config set save-exact true --location=project`, which writes
+  `saveExact: true` into `pnpm-workspace.yaml` — project config in
   pnpm 12 — and not into a project `.npmrc`, which pnpm ignores for this class of setting (E8), and
   it governs only the packages added after it. No auto fix in v0.1: rewriting a `package.json` range
   without re-resolving is how you desync a lockfile.
