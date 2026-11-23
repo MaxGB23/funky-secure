@@ -195,9 +195,9 @@ function renderFinding(finding, options) {
 
   const command = finding.remediation?.command;
   if (command) {
-    const pieces = wrap(spellAtRoot(command, options), WIDTH - ACTION.length);
-    lines.push(ACTION + pieces[0]);
-    for (const piece of pieces.slice(1)) lines.push(' '.repeat(ACTION.length) + piece);
+    // A command is never wrapped (10.3): a group split across lines is not a command on `cmd` or on
+    // `bash`, and the one line whose purpose is to be pasted outranks the reading bound.
+    lines.push(ACTION + spellAtRoot(command, options));
   }
 
   if (verbose) lines.push(`${INDENT}·  ${finding.rule}`);
@@ -665,11 +665,9 @@ function nextBlock({ summary, findings }, catalog, { off = [], root, cwd } = {})
     const actionable = failing.filter((finding) => finding.remediation?.command);
     if (actionable.length > 0) {
       const command = spellAtRoot(findingToActOn(actionable, catalog).remediation.command, { root, cwd });
-      // A command may be a path long enough to pass the 96-column bound (10.3), so it wraps on the
-      // gutter like every other action instead of running past the edge of the report.
-      return wrap(command, WIDTH - head.length).map((line, index) =>
-        index === 0 ? head + line : indent + line,
-      );
+      // A command is never wrapped (10.3): the prefix can make it pass the 96-column bound, and a
+      // group split across lines is a parse error on `cmd` and an unclosed quote on `bash`.
+      return [head + command];
     }
     // A run with five zero counters emitted no finding at all, so every sentence below would speak
     // for rules that never ran: `among the rules that ran` over none of them, and `everything at or

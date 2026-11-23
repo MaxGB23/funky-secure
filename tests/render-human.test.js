@@ -140,7 +140,7 @@ test('a severity tie is broken by catalog order, never by report order', () => {
   assert.deepEqual(nextLines(report), [`${NEXT}funky-secure migrate --from npm --apply`]);
 });
 
-test('a long command wraps on the gutter rather than breaking the 96-column bound (10.3)', () => {
+test('a long command stays on one line, past the 96-column bound (10.3)', () => {
   const command = `git rm --cached ${'nested/'.repeat(12)}production.env`;
   const report = reportWith(
     [finding({ rule: 'alpha', severity: 'warn', remediation: { kind: 'manual', command } })],
@@ -148,16 +148,15 @@ test('a long command wraps on the gutter rather than breaking the 96-column boun
   );
 
   const lines = nextLines(report);
-  assert.ok(lines.length > 1, 'a 100-column command cannot fit on one next line');
+  assert.deepEqual(lines, [NEXT + command], 'the command is one line, however long');
+  assert.deepEqual(actionLines(renderHuman(report)), [ACTION + command], 'at the finding too');
+  assert.ok(command.length + NEXT.length > 96, 'this command is long enough that wrapping was the old answer');
+  const others = renderHuman(report)
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith(NEXT) && !line.startsWith(ACTION));
   assert.ok(
-    lines.every((line) => line.length <= 96),
-    `a next line exceeded 96 columns:\n${lines.join('\n')}`,
-  );
-  const rewritten = lines.map((line) => line.slice(NEXT.length)).join('');
-  assert.equal(
-    rewritten.replace(/\s+/g, ''),
-    command.replace(/\s+/g, ''),
-    'wrapping loses no character of the command',
+    others.every((line) => line.length <= 96),
+    `a line that is not the command exceeded 96 columns:\n${others.join('\n')}`,
   );
 });
 
@@ -218,23 +217,21 @@ test('a command this tool does not print for the root is unchanged from a member
   }
 });
 
-test('a prefixed command wraps on the same rule, and no line exceeds 96 columns', () => {
+test('a prefixed command that passes 96 columns is one pasteable line at both sites', () => {
   const command = `git rm --cached ${'nested/'.repeat(12)}production.env`;
   const report = commandReport(command);
   const text = renderHuman(report, { root: ROOT, cwd: DEEP });
   const spelling = `(cd "${ROOT}" && ${command})`;
 
-  assert.ok(text.includes('(cd "'), 'the prefix is present, so the bound is measured with it');
-  assert.ok(
-    text.split('\n').every((line) => line.length <= 96),
-    `a rendered line exceeded 96 columns:\n${text}`,
-  );
-  const next = nextLines(report, { root: ROOT, cwd: DEEP });
-  assert.ok(next.length > 1, 'the widened command wraps on the gutter');
-  const rewritten = next.map((line) => line.slice(NEXT.length)).join('');
+  // A field round found the old answer here: `wrap` split the group after `(cd`, so the printed block
+  // was a parse error on `cmd` (255) and an unclosed quote on `bash` (2). The line that exists to be
+  // pasted outranks the reading bound (10.3).
+  assert.ok(spelling.length + ACTION.length > 96, 'the prefix takes this spelling past the reading bound');
+  assert.deepEqual(actionLines(text), [ACTION + spelling], 'the action line is the whole group, unbroken');
+  assert.deepEqual(nextLines(report, { root: ROOT, cwd: DEEP }), [NEXT + spelling], 'and so is the next line');
   assert.equal(
-    rewritten.replace(/\s+/g, ''),
-    spelling.replace(/\s+/g, ''),
-    'wrapping loses no character of the prefixed command',
+    text.split('\n').some((line) => line.trimEnd().endsWith('&&')),
+    false,
+    'no line ends with the operator, which is what made the block unpasteable',
   );
 });

@@ -359,14 +359,17 @@ test('a scan from a member states the root on both lines that print a command (1
   // The renderer is pure and knows no repository, so only the command's own `cwd` and the root the
   // context carries can make the report say where its commands run (issue #540).
   const dir = scratch(t);
-  const member = join(dir, 'packages', 'a');
+  // A root long enough that the prefix takes the command past 96 columns: the reading bound must
+  // yield to a line that can be pasted, which is what a field round found broken (#540).
+  const root = join(dir, 'the-root-of-a-repository-with-a-long-name', 'nested/'.repeat(4), 'repo');
+  const member = join(root, 'packages', 'a');
   mkdirSync(member, { recursive: true });
-  writeFileSync(join(dir, 'package-lock.json'), '{}\n');
-  const streams = io(member, { root: dir });
+  writeFileSync(join(root, 'package-lock.json'), '{}\n');
+  const streams = io(member, { root });
   const code = await run(['scan', '--scope', 'repo', '--only', 'foreign-lockfile'], streams);
 
   assert.equal(code, 0, 'a warn at the default threshold exits 0');
-  const prefix = `(cd "${dir}" &&`;
+  const prefix = `(cd "${root}" &&`;
   assert.ok(
     streams.stdout.text.includes(`     → ${prefix}`),
     `the finding's action line states the root:\n${streams.stdout.text}`,
@@ -380,6 +383,15 @@ test('a scan from a member states the root on both lines that print a command (1
     2,
     'one spelling per print site, and no other command carries one',
   );
+  // The whole group on one line: a split group is not a command on either shell (10.3).
+  for (const line of streams.stdout.text.split('\n').filter((row) => row.includes('(cd "'))) {
+    assert.ok(
+      line.startsWith(`     → ${prefix} `) || line.startsWith(`next     ${prefix} `),
+      `the prefix opens and closes on one line:\n${line}`,
+    );
+    assert.ok(line.endsWith(')'), `the group closes on the line that opens it:\n${line}`);
+    assert.ok(line.length > 96, `this root is long enough that the bound would have split it:\n${line}`);
+  }
 });
 
 test('explain prints the same bytes from a member as from the root (S4)', async (t) => {

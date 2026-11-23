@@ -126,7 +126,7 @@ steps can be read out of order is not a plan. A table is not a document: it list
 reporting.
 
 **Shared across all four:** the symbols \`✖ ⚠ ℹ ✓ –\` and no others, \`·\` as the field separator, a
-96-column ceiling, colour only on a TTY, and no emoji. A narration line borrows the symbols and the
+96-column ceiling on every line but a command (10.3), colour only on a TTY, and no emoji. A narration line borrows the symbols and the
 five-space indent of a finding and nothing else — \`✓\` marks something done, \`–\` something with nothing
 to do, \`ℹ\` a decision that changed nothing, and a document never uses \`✓\`, because a document states
 facts rather than accomplishments.
@@ -250,8 +250,8 @@ finding is the one state where that count has nothing to count, and the verdict 
 there instead (0038): the two decorations never share the line, because a skip is a finding and an
 unverified rule is a skip.
 
-No rendered line exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
-86. Messages and actions wrap, never truncate. The single exception is a machine path — the store and
+No rendered line but a command exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
+86. Messages wrap, never truncate; a command does not wrap at all (10.3). The single exception is a machine path — the store and
 the executable of the `MACHINE` block, whose absolute form is the fact (10.1) — shortened in the middle
 with `…`, because its length is not ours to bound and a fixed cut point keeps the rendering
 deterministic. `--verbose` prints it whole and the JSON keeps it whole.
@@ -301,7 +301,12 @@ action line and the `next` block, so one command has one spelling in one report;
 root nothing is added; and a line that is not a command of a tool this tool prints commands for
 (`pnpm`, `git`, `corepack`) is printed unchanged. The directory is absolute because on `cmd` a grouped
 `cd` is not a subshell: the first line would leave the reader at the root, and a relative spelling in
-the second would resolve one level above it and never run.
+the second would resolve one level above it and never run. A command is never wrapped, however long
+it is. The 96-column ceiling exists so a reader can follow a line, and it yields to the one line whose
+purpose is to be pasted: a group split across lines is not a command — on `cmd` the `&&` that opens a
+line is a parse error, and on `bash` the quote the prefix opened is never closed — so the ceiling
+governs every other line and this one governs itself. That was already true of a deep path; stating
+the directory made it routine.
 
 ### 10.4 Exit codes
 
