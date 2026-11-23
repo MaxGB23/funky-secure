@@ -362,8 +362,11 @@ next     nothing to do: everything at or above the policy passes
   were not verified and the command that expands them; the JSON is untouched. Exactly one skipped
   rule keeps its own block — symbol `–`, the reason, and the command that verifies it — because a
   single reason costs three lines and no flag.
-- **No rendered line exceeds 96 columns.** Messages and actions wrap, never truncate. The one value
-  shortened is a machine path — the executable in the `MACHINE` block, and the store when it does not
+- **No rendered line exceeds 96 columns, except a command.** Messages wrap, never truncate; a command
+  that states the directory it runs in is printed on one line however long it is, because a group
+  split across lines is not a command on `cmd` or on `bash` (the spec's 10.3 states the rule). The
+  one value shortened is a machine path — the executable in the `MACHINE` block, and the store when it
+  does not
   fit — cut in the middle with `…` as in `C:\Users\…\pnpm.exe`, because its length is not ours to
   bound and a fixed cut point stays deterministic. `--verbose` prints it whole, and the JSON keeps
   it whole.

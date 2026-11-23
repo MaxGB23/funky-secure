@@ -6,8 +6,10 @@
  * before anything else (S2), because the first thing a reader wants is the answer, not the evidence.
  *
  * The rule id is not printed: it is a name for tooling, and it stays in the JSON document, in
- * `--help`, in `explain` and behind `--verbose` (S4). Nothing here prints more than 96 columns (S5);
- * the only shortened value is a machine path, whose length is not ours to bound.
+ * `--help`, in `explain` and behind `--verbose` (S4). Nothing here prints more than 96 columns (S5)
+ * except a command, which is never wrapped: a group split across lines is not a command on either
+ * shell, so the one line whose purpose is to be pasted outranks the reading bound (10.3, #540). The
+ * only shortened value is a machine path, whose length is not ours to bound.
  *
  * The provenance line (S7) states the preset, the source it came from, what was measured about the
  * quarantine and whether the machine scope was excluded — never a value attributed to a source that
