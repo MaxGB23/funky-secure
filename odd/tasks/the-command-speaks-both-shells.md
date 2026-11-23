@@ -51,3 +51,12 @@ Issue #548. Four blind judgements measured every cell of the shell matrix. The d
   abandoned. The code needs a fail-closed redesign — a command printed only when the name and the
   directory are provably safe, and the prose route otherwise — which is a new candidate and a new
   lineage, never a continuation of this one.
+
+## Amendment — what the first review round changed (2026-11-23)
+
+The review stopped on its own mechanism (`L10`) and its refuter corroborated three findings. Two clauses change, and neither is style: double quotes stop `cmd` splitting, and they do **not** stop bash's `$(…)` and backtick expansion, so an escaped value is only safe when it cannot carry one.
+
+- **S2, amended.** The name takes one of the two spellings only when it matches npm's own grammar. Outside it — `$`, a backtick, a quote, a backslash, a space — the rule prints **no command at all** and falls back to its prose route. This is what `R1-SHELL-INJECTION-PIN` found: the single-quoted form suppressed expansion, the escaped form does not, and a manifest can carry any string. Failing closed is the only spelling that is safe on both shells.
+- **S3, amended.** The same for the directory: `-C` is printed only when the directory matches `^[A-Za-z0-9._/-]+$`; outside it the rule prints no command rather than a quoted one that bash would expand (`R1-SHELL-INJECTION-DIR`, `R4-DIR-QUOTING`, and the comment omission `R2-003`).
+- **S5, amended.** The invariant asserts three things, because "no `'`" was proved neither necessary nor sufficient (`R2-002`, `R3-GOLDEN-SHELL-GUARD-WEAK`): no command carries `'`; every value interpolated into a command matches its safe grammar; and a name or directory outside that grammar produces no command.
+- **L11 (review, verbatim):** "The single-quoted form suppressed `$` and backticks; the new `-C \"...$pkg...\"` expands it in bash/sh, so pnpm acts on the wrong directory or fails."
