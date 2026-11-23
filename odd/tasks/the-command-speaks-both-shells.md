@@ -60,3 +60,9 @@ The review stopped on its own mechanism (`L10`) and its refuter corroborated thr
 - **S3, amended.** The same for the directory: `-C` is printed only when the directory matches `^[A-Za-z0-9._/-]+$`; outside it the rule prints no command rather than a quoted one that bash would expand (`R1-SHELL-INJECTION-DIR`, `R4-DIR-QUOTING`, and the comment omission `R2-003`).
 - **S5, amended.** The invariant asserts three things, because "no `'`" was proved neither necessary nor sufficient (`R2-002`, `R3-GOLDEN-SHELL-GUARD-WEAK`): no command carries `'`; every value interpolated into a command matches its safe grammar; and a name or directory outside that grammar produces no command.
 - **L11 (review, verbatim):** "The single-quoted form suppressed `$` and backticks; the new `-C \"...$pkg...\"` expands it in bash/sh, so pnpm acts on the wrong directory or fails."
+- **S2c (parent, after `R4-PIN-SHELL-VERSION`).** The value is the third thing a command interpolates, and the
+  quote-free dotted path leaves it in the open: a version the lockfile records can be any string, and
+  `dependencies.x=$(id)` expands on bash and sh. The version takes a command only when it matches
+  `^[A-Za-z0-9._~:/@+-]+$`; outside that, the whole command falls back to the prose route, exactly as an
+  unsafe name or directory does. The old single-quoted spelling suppressed this expansion by accident of
+  quoting, which is why no rule ever needed a grammar; the new spellings have no such accident and need one.
