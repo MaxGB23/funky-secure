@@ -220,10 +220,22 @@ the pin alone is the declaration, and nothing about it is skipped.
 - **Severity:** `warn` in `baseline`, `error` in `strict` — the user's decision (Appendix A). A
   repository can also split it: `"exact-versions": { "dependencies": "error", "devDependencies": "warn" }`
   is **not** supported in v0.1; it is a v2 extension.
-- **Remediation:** one command per finding, with the version the lockfile records (S4), in one of two
-  spellings chosen by the name: `pnpm pkg set dependencies.is-odd=3.0.1 && pnpm install` — the
-  quote-free dotted path — for a name that is unscoped, carries no dot and does not start with a digit,
-  and `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install` for every other name, the
+- **Remediation:** one command per finding, with the version the lockfile records (S4), and **a
+  command only when every value in it is one a shell cannot rewrite** — the name, the importer
+  directory and the version, one grammar each:
+  - the name matches npm's own grammar, `^(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+$`;
+  - the importer directory matches `^[A-Za-z0-9._/-]+$`, and the root importer needs no prefix and no
+    grammar, because it names no directory for `-C` to carry;
+  - the version matches `^[A-Za-z0-9._~:/@+-*]+$`, where the `*` is what `workspace:*` and the
+    redacted `https://***@host` carry.
+  A value outside its grammar prints **no command**: the finding keeps its `manual` kind and names the
+  manifest edit instead. A quoted value is not a safe value — double quotes stop `cmd` splitting the
+  argument and do not stop `bash` or `sh` expanding `$(…)`, `${…}` or a backtick inside them, so a
+  name, a directory or a recorded version a manifest carries can execute when the line is pasted (0042
+  and its errata, #548). The names that pass take one of two spellings:
+  `pnpm pkg set dependencies.is-odd=3.0.1 && pnpm install` — the quote-free dotted path — for a name
+  that is unscoped, carries no dot and does not start with a digit, and
+  `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install` for every other name, the
   whole argument double-quoted with its inner quotes escaped. Both are read identically by `cmd`, `bash`
   and `sh`, and the two shells that lose one are named rather than hidden: `pwsh` 7 splits the escaped
   form into two arguments, which pnpm answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and a write of

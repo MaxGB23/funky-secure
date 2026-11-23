@@ -125,3 +125,33 @@ answer and the manifest recorded for each, and the two corruption cases (`lodash
 reproduced on the published names. The loss in `pwsh` 7 is `ERR_PNPM_PKG_SET_INVALID_ARG` with the
 manifest unchanged, and the loss in Windows PowerShell 5.1 is a parse failure on `&&` before any
 argument reaches pnpm.
+
+## Errata — 2026-11-23
+
+One consequence of the rule above is withdrawn. The rule itself stands — the matrix was executed, the
+predicate is measured on published names, and the two shell losses are stated with the error each one
+answers — and nothing above is rewritten.
+
+**The escaped spelling is not safe for every name, and the quoted directory is not a fallback.** The
+rule above chooses the bracketed, escaped form for every name the dotted path cannot carry, and the
+record left the `-C` quoting to a later measurement, naming `%NAME%` and a directory carrying `"` as
+its two holes. What that measurement did not cover is the one this errata is about: a pair of double
+quotes stops `cmd` splitting the argument and does **not** stop `bash` or `sh` expanding `$(…)`, `${…}`
+or a backtick inside it. So a dependency name, an importer directory or a version the lockfile records
+— each one a string a manifest or a lockfile carries — could execute when the printed line was pasted,
+and quoting a directory outside the provably-safe class put the expansion exactly where the fallback
+was. A native review found it (`R1-SHELL-INJECTION-PIN`, `R1-SHELL-INJECTION-DIR`, `R4-PIN-SHELL-VERSION`,
+with `R4-DIR-QUOTING` on the directory) and the code failed closed before this entry was written.
+
+**The rule that replaces it: a command is printed only when every value in it is one a shell cannot
+rewrite**, and anything outside a grammar prints no command at all. The name matches npm's own
+grammar, `^(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+$`; the importer directory matches `^[A-Za-z0-9._/-]+$`,
+and the root importer needs no prefix and no grammar because it names no directory; the version
+matches `^[A-Za-z0-9._~:/@+-*]+$`, where the `*` is what `workspace:*` and the redacted
+`https://***@host` carry. Outside one of them the finding keeps its `manual` kind and names the
+manifest edit instead of a line somebody can paste. The two spellings, their predicate and the two
+named losses are unchanged: what changed is the condition under which a command is printed at all.
+
+§8.2 R5 is the present contract and states the same rule; `I-97` of `docs/decisions.md` records the
+decision, and the page `docs/rules/exact-versions.md` states the refusal, the three grammars and the
+route a reader takes instead.
