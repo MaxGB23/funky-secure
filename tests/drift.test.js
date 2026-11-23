@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { COMMANDS, FLAGS, renderHelp } from '../src/cli.js';
@@ -250,30 +251,43 @@ function specRows(index) {
 }
 
 /**
- * The amendments table: section number to every record that replaced part of its contract. A section
- * may be amended more than once — record 0002 rewrote the human report and record 0003 added a line to
- * it — so the value is a list, and every named record is verified instead of only the last row. A
- * section with at least one amendment leaves the verbatim comparison, because the spec becomes the
- * authority for its new text.
+ * The amendments table, one row per amendment: the record, and every section the row names. A section
+ * cell may name one section or several, and a named section is an integer or a dotted sub-section —
+ * `| 10, 8, 11 |`, `| 11.7 |`, `| 11.2.1 |` — so the row is read as the claim it makes instead of
+ * being skipped by the shape of its cell. A section may be amended more than once — record 0002
+ * rewrote the human report and record 0003 added a line to it — so the table is a list of rows, not a
+ * row per section, and every record it names is verified instead of only the last one.
  * @param {string} index
- * @returns {Map<number, Array<{ number: string, path: string }>>}
+ * @returns {Array<{ number: string, path: string, sections: string[] }>}
  */
 function amendmentsIn(index) {
-  const amendments = new Map();
   const table = index.split('## Amendments')[1];
-  if (table === undefined) return amendments;
+  if (table === undefined) return [];
 
+  const amendments = [];
   for (const line of table.split('\n')) {
-    const row = line.match(/^\| (\d+) \| \[`([^`]+)`\]\(([^)]+)\) \|/);
+    const row = line.match(/^\| (\d+(?:\.\d+)*(?:,\s*\d+(?:\.\d+)*)*) \| \[`([^`]+)`\]\(([^)]+)\) \|/);
     if (row === null) continue;
 
-    const section = Number(row[1]);
-    const records = amendments.get(section) ?? [];
-    records.push({ number: row[2], path: row[3] });
-    amendments.set(section, records);
+    amendments.push({
+      number: row[2],
+      path: row[3],
+      sections: row[1].split(',').map((cell) => cell.trim()),
+    });
   }
 
   return amendments;
+}
+
+/**
+ * The pages a row amends. A named section belongs to the page that carries its integer part, because
+ * `11.7` is a section of `commands.md`, the file section `11` is — so a row naming two sub-sections of
+ * one page, or the same page twice, still amends that page once.
+ * @param {{ sections: string[] }} amendment
+ * @returns {Set<number>}
+ */
+function amendedPages(amendment) {
+  return new Set(amendment.sections.map((section) => Number(section.split('.')[0])));
 }
 
 function recordSections() {
@@ -306,18 +320,46 @@ test('docs/spec/README.md maps every section of the record to the file that carr
   }
 });
 
-test('every file docs/spec/README.md points at exists, and no section body was reworded', () => {
-  const index = readFileSync(join(ROOT, 'docs', 'spec', 'README.md'), 'utf8');
-  const record = readFileSync(RECORD, 'utf8');
-  const amended = amendmentsIn(index);
+/**
+ * The gate over one repository: every file `docs/spec/README.md` points at exists and is a verbatim
+ * slice of the frozen record, except a section a later record amended — which must name a record that
+ * exists, is not still a `draft`, and keeps its section heading so its number keeps resolving. `root`
+ * is a repository, so a failure case can be a fixture instead of an edit of the table under test.
+ * @param {string} root
+ */
+function verifySpec(root) {
+  const index = readFileSync(join(root, 'docs', 'spec', 'README.md'), 'utf8');
+  assert.ok(
+    existsSync(join(root, 'rfcs', '0001-funky-secure-v1', 'rfc.md')),
+    'rfcs/0001-funky-secure-v1/rfc.md is missing',
+  );
+  const record = readFileSync(join(root, 'rfcs', '0001-funky-secure-v1', 'rfc.md'), 'utf8');
   const rows = specRows(index);
+  const amendments = amendmentsIn(index);
 
   // Only the table's own targets are local files; the prose cites the record, which lives elsewhere.
   const targets = [...index.matchAll(/\[`([^`/]*\.md)`\]/g)].map((match) => match[1]);
   assert.ok(targets.length > 0, 'the spec index points at no file');
 
+  // Every record the table names exists under `docs/spec` and is not still a `draft`. A row is one
+  // claim about one record — a cell naming three sections does not name three records — so it is
+  // verified here once, by the sections it names, and not once per page those sections land on.
+  for (const amendment of amendments) {
+    const sections = amendment.sections.join(', ');
+    const recordPath = join(root, 'docs', 'spec', amendment.path);
+    assert.ok(
+      existsSync(recordPath),
+      `the amendments table names ${amendment.number} for ${sections}, and that record is not there`,
+    );
+    assert.match(
+      readFileSync(recordPath, 'utf8'),
+      /\| \*\*Status\*\* \| `(accepted|implemented|closed)`/,
+      `the amendments table names ${amendment.number} for ${sections}, which is still a draft`,
+    );
+  }
+
   for (const target of targets) {
-    const path = join(ROOT, 'docs', 'spec', target);
+    const path = join(root, 'docs', 'spec', target);
     assert.ok(existsSync(path), `the spec index points at a missing ${path}`);
 
     // Each file is a verbatim slice of the record: header, blank line, then the section itself.
@@ -326,30 +368,177 @@ test('every file docs/spec/README.md points at exists, and no section body was r
     assert.ok(body.startsWith('## '), `${target} carries no section of the record`);
 
     // A section a later record amended is the authority now, so it is no longer compared with the
-    // frozen record — but every record the table names must exist and must not still be a draft, and
-    // the file must keep the section heading, or its number stops resolving. A section may carry more
-    // than one amendment, and dropping every row but the last would verify only the newest record.
+    // frozen record — whether the row names it alone, in a list, or as a dotted sub-section — but the
+    // file must keep the section heading, or its number stops resolving. A section may carry more than
+    // one amendment, and dropping every row but the last would leave all but the newest unverified.
     const section = rows.get(target)?.section ?? null;
-    const amendments = section === null ? [] : (amended.get(section) ?? []);
-    if (amendments.length > 0) {
-      for (const amendment of amendments) {
-        const recordPath = join(ROOT, 'docs', 'spec', amendment.path);
-        assert.ok(
-          existsSync(recordPath),
-          `${target} is amended by ${amendment.number}, and that record is not there`,
-        );
-        assert.match(
-          readFileSync(recordPath, 'utf8'),
-          /\| \*\*Status\*\* \| `(accepted|implemented|closed)`/,
-          `${target} is amended by ${amendment.number}, which is still a draft`,
-        );
-      }
+    const amended = section !== null && amendments.some((row) => amendedPages(row).has(section));
+    if (amended) {
       assert.match(body, new RegExp(`^## ${section}\\. `), `${target} lost its section number`);
       continue;
     }
 
     assert.ok(record.includes(body), `${target} no longer matches the record verbatim`);
   }
+}
+
+test('every file docs/spec/README.md points at exists, and no section body was reworded', () => {
+  verifySpec(ROOT);
+});
+
+/// The gate is itself a test, so its own failure cases need an input the suite can break on purpose: a
+/// temporary repository in the shape `verifySpec` reads, written to the OS temp directory and removed
+/// with the test. Editing the real Amendments table to prove the gate would prove nothing.
+
+function scratch(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-drift-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function write(dir, path, text) {
+  mkdirSync(dirname(join(dir, path)), { recursive: true });
+  writeFileSync(join(dir, path), text);
+}
+
+/** A record of three sections, and the three pages that carry it: each page is a verbatim slice. */
+const SPEC_RECORD = `# The record
+
+## 8. Rule catalog
+
+the rules.
+
+## 10. Report contract
+
+the report.
+
+## 11. Command contracts
+
+the commands.
+`;
+
+const SPEC_PAGES = {
+  'rules.md': '# rules\n\n## 8. Rule catalog\n\nthe rules.\n',
+  'report.md': '# report\n\n## 10. Report contract\n\nthe report.\n',
+  'commands.md': '# commands\n\n## 11. Command contracts\n\nthe commands.\n',
+};
+
+/** The three rows of the spec map, so a fixture's amendment has a section to land on. */
+const CARRIED_BY = [
+  '| 8 | Rule catalog | [`rules.md`](rules.md) |',
+  '| 10 | Report contract | [`report.md`](report.md) |',
+  '| 11 | Command contracts | [`commands.md`](commands.md) |',
+];
+
+/** One record of `rfcs/` in the shape the gate reads, with the status its fixture needs. */
+function amendmentRecord(number, status) {
+  return `# ${number}\n\n| **Status** | \`${status}\` |\n`;
+}
+
+/**
+ * An index in the shape `docs/spec/README.md` has: the spec map, then the Amendments table.
+ * @param {string[]} amendments
+ * @returns {string}
+ */
+function specIndex(amendments) {
+  return [
+    '# Specification', '',
+    '| § | Topic | Carried by |', '|---|---|---|',
+    ...CARRIED_BY, '',
+    '## Amendments', '',
+    '| § | Record | What it replaced |', '|---|---|---|',
+    ...amendments, '',
+  ].join('\n');
+}
+
+/**
+ * A temporary repository the gate reads: the index, the frozen record, the pages it carries, and the
+ * records its amendments table names, each path relative to `rfcs/`.
+ * @param {import('node:test').TestContext} t
+ * @returns {string} the repository root
+ */
+function specRepository(t, { amendments, pages = SPEC_PAGES, records = {} }) {
+  const dir = scratch(t);
+  write(dir, 'docs/spec/README.md', specIndex(amendments));
+  write(dir, 'rfcs/0001-funky-secure-v1/rfc.md', SPEC_RECORD);
+  for (const [name, text] of Object.entries(pages)) write(dir, `docs/spec/${name}`, text);
+  for (const [path, text] of Object.entries(records)) write(dir, `rfcs/${path}`, text);
+  return dir;
+}
+
+test('an amendment naming a list of sections verifies the record it names', (t) => {
+  // The real table has rows named `| 10, 8, 11 |` and `| 8, 11 |`; a row of that shape was skipped by
+  // the parse, so the gate passed a repository whose record does not exist at all.
+  const dir = specRepository(t, {
+    amendments: [
+      '| 10, 8, 11 | [`0022`](../../rfcs/0022-the-output-tells-the-truth/rfc.md) | 10.3: the verdict |',
+    ],
+  });
+
+  assert.throws(
+    () => verifySpec(dir),
+    /the amendments table names 0022 for 10, 8, 11, and that record is not there/,
+  );
+});
+
+test('an amendment naming a sub-section verifies the record it names', (t) => {
+  // Six rows of the real table name `11.7` alone, and a dotted cell never matched the parse either.
+  const dir = specRepository(t, {
+    amendments: [
+      '| 11.7 | [`0028`](../../rfcs/0028-the-commit-names-the-pin/rfc.md) | 11.7: the pin commits |',
+    ],
+    records: { '0028-the-commit-names-the-pin/rfc.md': amendmentRecord('0028', 'draft') },
+  });
+
+  assert.throws(
+    () => verifySpec(dir),
+    /the amendments table names 0028 for 11\.7, which is still a draft/,
+  );
+});
+
+test('an amendment naming a record that is not there fails, and the message names the row', (t) => {
+  const dir = specRepository(t, {
+    amendments: ['| 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | 10: the report |'],
+  });
+
+  assert.throws(
+    () => verifySpec(dir),
+    /the amendments table names 0002 for 10, and that record is not there/,
+  );
+});
+
+test('an amendment naming a draft record fails, and the message names the row', (t) => {
+  const dir = specRepository(t, {
+    amendments: ['| 10 | [`0002`](../../rfcs/0002-human-output-v2/rfc.md) | 10: the report |'],
+    records: { '0002-human-output-v2/rfc.md': amendmentRecord('0002', 'draft') },
+  });
+
+  assert.throws(
+    () => verifySpec(dir),
+    /the amendments table names 0002 for 10, which is still a draft/,
+  );
+});
+
+test('a list and a sub-section both leave their named sections out of the verbatim comparison', (t) => {
+  // A page an amendment names is the authority for its own text, whatever shape its section cell
+  // has: neither a list nor a dotted number may leave the page compared with the frozen record.
+  const dir = specRepository(t, {
+    amendments: [
+      '| 10, 8, 11 | [`0022`](../../rfcs/0022-the-output-tells-the-truth/rfc.md) | 10.3: the verdict |',
+      '| 11.7 | [`0028`](../../rfcs/0028-the-commit-names-the-pin/rfc.md) | 11.7: the pin commits |',
+    ],
+    pages: {
+      'rules.md': '# rules\n\n## 8. Rule catalog\n\nrewritten by 0022.\n',
+      'report.md': '# report\n\n## 10. Report contract\n\nrewritten by 0022.\n',
+      'commands.md': '# commands\n\n## 11. Command contracts\n\nrewritten by 0028.\n',
+    },
+    records: {
+      '0022-the-output-tells-the-truth/rfc.md': amendmentRecord('0022', 'accepted'),
+      '0028-the-commit-names-the-pin/rfc.md': amendmentRecord('0028', 'accepted'),
+    },
+  });
+
+  assert.doesNotThrow(() => verifySpec(dir));
 });
 
 /// The golden gate (RFC 15.2). The fixtures, the deterministic collector and the renderer are the
