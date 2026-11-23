@@ -27,7 +27,10 @@
 
 Absolute paths never appear in a report body; they appear only in `--scope machine`'s binary/store
 evidence, because there the absolute path *is* the fact. The same holds for a write plan, which is a
-separate document (11.2).
+separate document (11.2). A relative `path` is relative to the repository root, and so is a relative
+`remediation.command`: the command is written for the repository root — the directory every command in
+a report body is meant to run in — because the rules build it from facts they read there. That is the
+fact the human rendering relies on: it states the directory rather than changing the command (10.3).
 
 `code` is optional and, when present, stable: one rule may produce findings for different reasons
 (`exact-versions` → `floating-range`, `lockfile-desync`) and a consumer must be able to tell them
@@ -290,6 +293,15 @@ plan (10.5, 11.2.1).
 
 The JSON document of 10.2 is the contract; the human text above is presentation. A minor release may
 change that presentation, as long as the report remains valid on its own.
+
+Where that text prints a command, the rendering says which directory the command runs in: when the
+reader does not stand at the repository root, a command it prints is prefixed with the directory it
+runs in — as `(cd "<the repository root>" && <command>)` — at both places it prints one, the finding's
+action line and the `next` block, so one command has one spelling in one report; at the repository
+root nothing is added; and a line that is not a command of a tool this tool prints commands for
+(`pnpm`, `git`, `corepack`) is printed unchanged. The directory is absolute because on `cmd` a grouped
+`cd` is not a subshell: the first line would leave the reader at the root, and a relative spelling in
+the second would resolve one level above it and never run.
 
 ### 10.4 Exit codes
 

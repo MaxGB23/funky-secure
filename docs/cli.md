@@ -76,7 +76,10 @@ names the root with `-C <the repository root, from here>`, so the add prints `pn
 first dependency>`. The flag is not decoration: a pnpm command acts on the nearest project manifest at
 or above the directory it runs in, so without it the add writes `apps/web/package.json` while the plan's
 own writes land in the root's. At the repository root nothing is added and no step is rebased, and the
-block printed there is byte-identical to the one above. The commands inside the report body keep their
+block printed there is byte-identical to the one above. A report answers the same question the same
+way: below the repository root its rendering prefixes each command it prints with the directory that
+command runs in, as `(cd "<the repository root>" && <command>)`, at both places it prints one, and at
+the root it adds nothing (10.3). The commands inside the report body keep their
 repo-relative spelling, because a report that changed with the directory `scan` ran in would not be the
 same report about the same repository (10.1).
 
