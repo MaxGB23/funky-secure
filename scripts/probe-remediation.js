@@ -307,30 +307,40 @@ export function probe({ root, run = runCommand }) {
   const pinDir = join(root, 'pin');
   writeVendor(pinDir);
   writeFileSync(join(pinDir, 'package.json'), FIXTURE_MANIFEST);
-  run(pinCommand(PROBE_PIN), pinDir);
-  problems.push(
-    ...judgeField({
-      manifest: readManifest(pinDir),
-      type: PROBE_PIN.type,
-      dependency: PROBE_PIN.dependency,
-      expected: PROBE_PIN.version,
-    }).problems,
-  );
+  // A value outside the grammar the rule interpolates produces no command at all, and `null` is not a
+  // command this probe can hand a shell: the fixture is skipped rather than run and judged against an
+  // effect nothing was asked to produce. Both fixtures below are inside the grammar by construction, and
+  // the test that asserts the four shapes says so by comparing each one against `pinCommand`.
+  const rootPin = pinCommand(PROBE_PIN);
+  if (rootPin !== null) {
+    run(rootPin, pinDir);
+    problems.push(
+      ...judgeField({
+        manifest: readManifest(pinDir),
+        type: PROBE_PIN.type,
+        dependency: PROBE_PIN.dependency,
+        expected: PROBE_PIN.version,
+      }).problems,
+    );
+  }
 
   const workspace = join(root, 'workspace');
   const importerDir = join(workspace, PROBE_SCOPED_PIN.dir);
   writeVendor(importerDir);
   writeFileSync(join(importerDir, 'package.json'), FIXTURE_MANIFEST);
   writeFileSync(join(workspace, 'package.json'), FIXTURE_MANIFEST);
-  run(pinCommand(PROBE_SCOPED_PIN), workspace);
-  problems.push(
-    ...judgeField({
-      manifest: readManifest(importerDir),
-      type: PROBE_SCOPED_PIN.type,
-      dependency: PROBE_SCOPED_PIN.dependency,
-      expected: PROBE_SCOPED_PIN.version,
-    }).problems,
-  );
+  const scopedPin = pinCommand(PROBE_SCOPED_PIN);
+  if (scopedPin !== null) {
+    run(scopedPin, workspace);
+    problems.push(
+      ...judgeField({
+        manifest: readManifest(importerDir),
+        type: PROBE_SCOPED_PIN.type,
+        dependency: PROBE_SCOPED_PIN.dependency,
+        expected: PROBE_SCOPED_PIN.version,
+      }).problems,
+    );
+  }
 
   return { ok: problems.length === 0, problems };
 }
@@ -365,8 +375,24 @@ function main() {
   }
 
   if (result.ok) {
+    // Built from the commands the rule actually prints, with an absent one skipped: a pin it refuses to
+    // print has no command to name, and a message that spelled `pinCommand(...)` again would read
+    // `null left …`.
+    const followed = [PROBE_PIN, PROBE_SCOPED_PIN]
+      .map((pin) => ({ pin, command: pinCommand(pin) }))
+      .filter((entry) => entry.command !== null);
+    const pins =
+      followed.length === 0
+        ? 'no pin command was printed, so none was followed'
+        : followed
+            .map(({ command, pin }) =>
+              pin.dir === undefined
+                ? `${command} left ${pin.type}["${pin.dependency}"]=${pin.version}`
+                : `${command} left the same in ${pin.dir}`,
+            )
+            .join(', and ');
     console.log(
-      `probe-remediation: ${lockfileCommand()} and its ${FOREIGN_PIN_FLAG} form each recorded ${PROBE_RESOLVE_PIN.dependency}, ${pinCommand(PROBE_PIN)} left ${PROBE_PIN.type}["${PROBE_PIN.dependency}"]=${PROBE_PIN.version}, and ${pinCommand(PROBE_SCOPED_PIN)} left the same in ${PROBE_SCOPED_PIN.dir}`,
+      `probe-remediation: ${lockfileCommand()} and its ${FOREIGN_PIN_FLAG} form each recorded ${PROBE_RESOLVE_PIN.dependency}, ${pins}`,
     );
     return;
   }

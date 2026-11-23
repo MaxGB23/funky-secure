@@ -66,3 +66,8 @@ The review stopped on its own mechanism (`L10`) and its refuter corroborated thr
   `^[A-Za-z0-9._~:/@+-]+$`; outside that, the whole command falls back to the prose route, exactly as an
   unsafe name or directory does. The old single-quoted spelling suppressed this expansion by accident of
   quoting, which is why no rule ever needed a grammar; the new spellings have no such accident and need one.
+- **S2c, ratified with `*`.** The class is `^[A-Za-z0-9._~:/@+-*]+$`. The record's literal class would refuse
+  `workspace:*` — the exact form §8.2 S4 makes this rule print — and the redacted `https://***@host` of a
+  tarball URL, turning two mandated commands into prose; a bare `*` is neither executed nor split by `cmd`,
+  `bash` or `sh`. The cost is named rather than discovered: a `git+ssh://…git#v1.0.0` record carries `#`,
+  which bash reads as a comment, so that version takes the prose route instead of a command.

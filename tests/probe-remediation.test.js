@@ -349,6 +349,17 @@ test('a lockfile that exists and records nothing is not the effect', (t) => {
 const SHELL_TOOLS = new Set(['pnpm', 'git', 'corepack']);
 const WRAPPED = /^\(cd "[^"]*" && (.*)\)$/s;
 
+/**
+ * The three grammars a printed command may interpolate, restated here rather than imported: a test that
+ * asked the rule for its own predicate could not see a wrong predicate. A dependency name is npm's own
+ * grammar, lowercase `[a-z0-9._~-]` with an optional `@scope/`; an importer directory is the class
+ * `cmd` and bash both pass through without expanding or splitting; a version is the record's S2c class
+ * with `*`, which `workspace:*` and the redacted `https://***@host` of a tarball need.
+ */
+const SAFE_NAME = /^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+$/;
+const SAFE_DIR = /^[A-Za-z0-9._\/-]+$/;
+const SAFE_VERSION = /^[A-Za-z0-9._~:/@+*-]+$/;
+
 /** The command inside the renderer's wrapper, or the command itself when it carries none. */
 function unwrapped(command) {
   return WRAPPED.exec(command.trim())?.[1] ?? command;
@@ -359,9 +370,53 @@ function firstToken(command) {
   return unwrapped(command).trimStart().split(/\s+/)[0];
 }
 
-test('every shell-tool command a golden prints is readable by cmd, bash and sh', () => {
-  const offenders = [];
+/**
+ * The importer directory a finding's path implies, or null when the path is not a manifest inside one.
+ * The pin's `-C` prefix is the only place a directory reaches a command, so this is the value the
+ * second clause judges.
+ * @param {unknown} path
+ * @returns {string | null}
+ */
+function importerDirectory(path) {
+  if (typeof path !== 'string' || !path.endsWith('/package.json')) return null;
+  return path.slice(0, -'/package.json'.length);
+}
+
+/**
+ * The version a pin command writes — the text after the `=` of its `pkg set` argument, with the closing
+ * quote of the bracketed form removed — or null when the command is not a pin. It is read out of the
+ * command because the version is the one interpolated value a finding's evidence does not carry: it
+ * comes from `pnpm-lock.yaml`, and the command is the only place the two meet.
+ * @param {string} command
+ * @returns {string | null}
+ */
+function pinVersion(command) {
+  const inner = unwrapped(command);
+  const at = inner.indexOf('pkg set ');
+  if (at === -1) return null;
+  const argument = inner.slice(at + 'pkg set '.length).split(' && ')[0];
+  const value = argument.slice(argument.lastIndexOf('=') + 1);
+  return value.endsWith('"') ? value.slice(0, -1) : value;
+}
+
+test('every shell-tool command a golden prints is safe on both shells, and printed only for a safe value', () => {
+  // Four parts, because "no `'`" was proved neither necessary nor sufficient (R2-002,
+  // R3-GOLDEN-SHELL-GUARD-WEAK). The escaped, double-quoted spelling keeps `cmd` from splitting the
+  // argument and does not keep bash from expanding `$(…)`, `${…}` or a backtick inside those double
+  // quotes, so a one-character check certifies nothing about a name, a directory or a version that a
+  // manifest or a lockfile can carry:
+  //   1. no command carries a single quote, `cmd` passes it to pnpm literally;
+  //   2. every value interpolated into a command matches its safe grammar — the name, the importer
+  //      directory and the version;
+  //   3. a name or directory outside that grammar takes no command at all — the rule prints the manifest
+  //      edit instead;
+  //   4. so does a version outside it (S2c, `R4-PIN-SHELL-VERSION`), because the quote-free dotted path
+  //      leaves the recorded resolution in the open and only its grammar keeps a shell from expanding it.
+  const quoted = [];
+  const unsafe = [];
   let checked = 0;
+  let pins = 0;
+  let versions = 0;
 
   for (const fixture of FIXTURES) {
     const report = JSON.parse(readFileSync(goldenPath(fixture.name), 'utf8'));
@@ -373,19 +428,82 @@ test('every shell-tool command a golden prints is readable by cmd, bash and sh',
       for (const spelling of [command, `(cd "/repo" && ${command})`]) {
         if (!SHELL_TOOLS.has(firstToken(spelling))) continue;
         checked += 1;
-        if (unwrapped(spelling).includes("'")) offenders.push(`${fixture.name}: ${spelling}`);
+        if (unwrapped(spelling).includes("'")) quoted.push(`${fixture.name}: ${spelling}`);
+      }
+
+      // Part two and the corpus of part three are the `pkg set` command: the name it writes and the
+      // directory its `-C` names are the only values a golden can interpolate, and both come from the
+      // finding — the name from its evidence, the directory from the manifest it names.
+      if (firstToken(command) !== 'pnpm' || !unwrapped(command).includes(' pkg set ')) continue;
+      pins += 1;
+      const dependency = finding.evidence?.dependency;
+      if (typeof dependency !== 'string' || !SAFE_NAME.test(dependency)) {
+        unsafe.push(`${fixture.name}: ${command} interpolates ${JSON.stringify(dependency)}, outside npm's name grammar`);
+      }
+      const dir = importerDirectory(finding.path);
+      if (dir !== null && !SAFE_DIR.test(dir)) {
+        unsafe.push(`${fixture.name}: ${command} interpolates ${JSON.stringify(dir)}, outside the provably safe directory class`);
+      }
+      // Part four: the version is interpolated by the same command and read out of it, because it is
+      // the one value a finding's evidence never carries — it comes from the lockfile.
+      const version = pinVersion(command);
+      if (version === null) {
+        unsafe.push(`${fixture.name}: ${command} carries a pin whose version could not be read`);
+      } else {
+        versions += 1;
+        if (!SAFE_VERSION.test(version)) {
+          unsafe.push(`${fixture.name}: ${command} interpolates ${JSON.stringify(version)}, outside the version grammar`);
+        }
       }
     }
   }
 
   assert.deepEqual(
-    offenders,
+    quoted,
     [],
     'a printed command carries a single quote, which cmd passes to pnpm literally, so the line fails for the reader Windows opens by default',
   );
-  // Non-vacuity: the fixtures print `pnpm` and `git` commands, so a walk that checked nothing is a
-  // broken walk and not a clean set.
+  assert.deepEqual(unsafe, [], 'a printed command interpolates a value outside its safe grammar');
+
+  // Part three over values no fixture carries: a name or directory outside the grammar takes no command
+  // at all, because a shell cannot be told to treat it as data and the rule will not print a line that
+  // runs what a manifest says.
+  for (const dependency of ['evil$(touch pwned)', 'tick`id`', 'quote"name', "quote'name", 'back\\slash', 'a b']) {
+    assert.equal(
+      pinCommand({ type: 'dependencies', dependency, version: '1.0.0' }),
+      null,
+      `${dependency}: a value outside npm's name grammar was interpolated into a command`,
+    );
+  }
+  for (const dir of ['packages/a$b', 'packages/a b', 'packages/a`b`', 'packages/a%NAME%', 'packages/a"b']) {
+    assert.equal(
+      pinCommand({ type: 'dependencies', dependency: 'left-pad', version: '1.0.0', dir }),
+      null,
+      `${dir}: a directory outside the safe class was interpolated into a command`,
+    );
+  }
+  // Part four over versions no fixture carries: a recorded resolution a shell would expand takes no
+  // command either, and the shapes the rule itself prints keep their command.
+  for (const version of ['$(id)', '1.2.3`id`', '1.2.3 4', 'a"b', 'a&b', 'a%NAME%', '1.0.0(react-dom@18.3.1)']) {
+    assert.equal(
+      pinCommand({ type: 'dependencies', dependency: 'left-pad', version }),
+      null,
+      `${version}: a version outside the grammar was interpolated into a command`,
+    );
+  }
+  for (const version of ['1.2.3', 'workspace:*', 'file:./vendor', 'npm:lodash@4.17.21', 'https://***@example.com/repo.tgz']) {
+    assert.equal(
+      pinCommand({ type: 'dependencies', dependency: 'left-pad', version }),
+      `pnpm pkg set dependencies.left-pad=${version} && pnpm install`,
+      `${version}: a value inside the grammar lost its command`,
+    );
+  }
+
+  // Non-vacuity: the fixtures print `pnpm` and `git` commands and at least one pin, so a walk that
+  // checked nothing is a broken walk and not a clean set.
   assert.ok(checked > 0, 'no golden command was checked, so this invariant proves nothing');
+  assert.ok(pins > 0, 'no golden pin was judged, so the second and third clauses proved nothing');
+  assert.ok(versions > 0, 'no golden pin version was read, so the fourth clause proved nothing');
   // The unwrap is what makes the wrapped spelling count at all: a first-token rule that did not look
   // through the wrapper would read `(cd` and never check the command inside it.
   assert.equal(firstToken(`(cd "/repo" && pnpm install)`), 'pnpm', 'the wrapper is not looked through');

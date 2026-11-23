@@ -317,6 +317,192 @@ test('the property path follows the name: the dotted path only where pnpm reads 
   assert.equal(pin('left-pad2').includes('['), false, 'a trailing digit is not a leading one');
 });
 
+test('a name outside the grammar takes no command at all, and the route is the manifest edit', () => {
+  // The escaped, double-quoted spelling stops `cmd` splitting the argument and it does NOT stop bash
+  // expanding `$(…)`, `${…}` or a backtick inside those double quotes — the single-quoted spelling it
+  // replaced did. A name is a string a manifest can carry, so the grammar npm itself enforces is the
+  // only one a command may interpolate: lowercase `[a-z0-9._~-]`, optionally `@scope/`.
+  const pin = (dependency) => pinCommand({ type: 'devDependencies', dependency, version: '1.3.0' });
+
+  for (const dependency of [
+    'evil$(touch pwned)',
+    'tick`id`',
+    'quote"name',
+    "quote'name",
+    'back\\slash',
+    'spaced name',
+    'UPPER',
+    '@scope/tool$(id)',
+  ]) {
+    assert.equal(
+      pin(dependency),
+      null,
+      `${dependency}: a command was printed for a name a shell would expand or split`,
+    );
+  }
+
+  // Inside the grammar both spellings survive: the legal scoped name keeps the bracketed path.
+  assert.equal(
+    pin('@scope/tool'),
+    `pnpm pkg set "devDependencies[\\"@scope/tool\\"]=1.3.0" && pnpm install`,
+    'a legal scoped name lost its command',
+  );
+});
+
+test('a version outside the grammar takes no command at all, and the route is the manifest edit', () => {
+  // S2c (`R4-PIN-SHELL-VERSION`): the version is the third thing a command interpolates, and the
+  // quote-free dotted path leaves it in the open — `pnpm pkg set dependencies.x=$(id)` expands on bash
+  // and sh. The old single-quoted spelling suppressed that by accident of quoting, which is why no rule
+  // ever needed a grammar; these spellings have no such accident, so the version needs one too. The
+  // grammar is the record's `^[A-Za-z0-9._~:/@+-]+$` with `*`, because `workspace:*` — the exact form S4
+  // and 368 make this rule print for an internal package — and the redacted `https://***@host` of a
+  // tarball are shapes the rule itself mandates, and neither shell executes or splits a `*`.
+  const pin = (version) => pinCommand({ type: 'devDependencies', dependency: 'left-pad', version });
+
+  for (const version of [
+    '$(id)',
+    '1.2.3`id`',
+    '1.2.3 4',
+    'a"b',
+    "a'b",
+    'a&b',
+    'a%NAME%',
+    '1.0.0(react-dom@18.3.1)',
+  ]) {
+    assert.equal(
+      pin(version),
+      null,
+      `${version}: a command was printed for a version a shell would expand or split`,
+    );
+  }
+
+  // The shapes that must keep a command, each one a value this rule prints today.
+  for (const version of [
+    '1.2.3',
+    'workspace:*',
+    'file:./vendor',
+    'link:../lib',
+    'npm:lodash@4.17.21',
+    'https://***@example.com/repo~beta+1.tgz',
+  ]) {
+    assert.equal(
+      pin(version),
+      `pnpm pkg set devDependencies.left-pad=${version} && pnpm install`,
+      `${version}: a value inside the grammar lost its command`,
+    );
+  }
+});
+
+test('a dependency name, importer directory or version the grammar refuses is reported with a prose route', () => {
+  // Fail closed: the finding is never dropped — it still names the range — and its route is the edit in
+  // the file the reader owns, the same shape a declared `frozenLockfile` already produces. The three
+  // values a command interpolates are the name, the importer directory and the version, so any one of
+  // them outside its grammar removes the whole command.
+  const hostileName = `{
+  "dependencies": {
+    "evil$(touch pwned)": "^1.3.0"
+  }
+}`;
+  const nameLockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      'evil$(touch pwned)':
+        specifier: ^1.3.0
+        version: 1.3.0
+`;
+  const [byName] = rule
+    .detect(
+      ctx({
+        importers: [importer('.', hostileName)],
+        lockfile: { path: '/repo/pnpm-lock.yaml', text: nameLockfile },
+      }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(byName?.remediation?.kind, 'manual', 'the finding lost its kind');
+  assert.equal(
+    byName.remediation.command.includes('pnpm'),
+    false,
+    'a command was printed for a name a shell would expand before pnpm ever sees it',
+  );
+  assert.match(byName.remediation.command, /package\.json/, 'the prose route names no file to edit');
+  assert.match(byName.remediation.command, /dependencies/, 'the prose route names no section');
+
+  // The directory, with a legal name: the `-C` prefix of a command is not printed for a directory a
+  // shell would expand, and the fallback is for the whole command, not only the prefix.
+  const hostileDir = 'packages/a$b';
+  const dirLockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .: {}
+
+  ${hostileDir}:
+    dependencies:
+      left-pad:
+        specifier: ^1.3.0
+        version: 1.3.0
+`;
+  const [byDir] = rule
+    .detect(
+      ctx({
+        importers: [importer(hostileDir, `{"dependencies":{"left-pad":"^1.3.0"}}`)],
+        lockfile: { path: '/repo/pnpm-lock.yaml', text: dirLockfile },
+      }),
+    )
+    .filter((entry) => entry.code === 'floating-range');
+
+  assert.equal(byDir?.remediation?.kind, 'manual', 'the finding lost its kind');
+  assert.equal(
+    byDir.remediation.command.includes('pnpm'),
+    false,
+    'a command was printed for a directory bash would expand, so pnpm never acts on the manifest the finding names',
+  );
+  assert.match(
+    byDir.remediation.command,
+    /packages\/a\$b\/package\.json/,
+    'the prose route names no manifest to edit',
+  );
+
+  // The version, with a legal name in the root importer: the recorded resolution is a string the
+  // lockfile can carry, so a reading of that file is what must not become the command.
+  for (const recorded of ['$(id)', '1.2.3`id`', '1.2.3 4']) {
+    const versionLockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      left-pad:
+        specifier: ^1.3.0
+        version: ${recorded}
+`;
+    const [byVersion] = rule
+      .detect(
+        ctx({
+          importers: [importer('.', `{"dependencies":{"left-pad":"^1.3.0"}}`)],
+          lockfile: { path: '/repo/pnpm-lock.yaml', text: versionLockfile },
+        }),
+      )
+      .filter((entry) => entry.code === 'floating-range');
+
+    assert.equal(byVersion?.remediation?.kind, 'manual', `${recorded}: the finding lost its kind`);
+    assert.equal(
+      byVersion.remediation.command.includes('pnpm'),
+      false,
+      `${recorded}: a command was printed for a version a shell would expand before pnpm ever sees it`,
+    );
+    assert.match(
+      byVersion.remediation.command,
+      /package\.json/,
+      `${recorded}: the prose route names no file to edit`,
+    );
+  }
+});
+
 test('without a measured resolution the remediation resolves first, never a guessed version', () => {
   const findings = rule.detect(ctx({ importers: [importer('.', ROOT_FLOATING)] }));
   const [floating] = findings.filter((finding) => finding.code === 'floating-range');
@@ -1213,31 +1399,33 @@ test('the remediation names the importer that owns the manifest', () => {
   );
 });
 
-test('a -C directory is double-quoted unless it is provably safe (0042)', () => {
+test('a -C directory takes a command only when it is provably safe (0042)', () => {
   // Measured on `cmd` and `bash`: bare `-C packages/a&b` splits the line and the install never runs, and
-  // bare `-C packages/a^b` silently resolves to `packages/ab` with exit 0, while `-C "packages/a&b"`,
-  // `"packages/a;b"` and `"packages/a^b"` all arrive exact. So the directory is quoted unless every
-  // character in it is one both shells pass through untouched. Two holes have no cross-shell escape and
-  // are stated in the spec instead of worked around here: `%NAME%` expands inside double quotes on
-  // `cmd`, and a directory containing `"` cannot be spelled at all.
+  // bare `-C packages/a^b` silently resolves to `packages/ab` with exit 0. Quoting fixes the split —
+  // `-C "packages/a&b"`, `"packages/a;b"` and `"packages/a^b"` all arrive exact — and it does not fix
+  // expansion: `%NAME%` still expands inside double quotes on `cmd`, and bash expands `$pkg`, `${pkg}`
+  // and a backtick inside them, so `-C "packages/$pkg"` acts on a directory the manifest never named
+  // (R1-SHELL-INJECTION-DIR, R4-DIR-QUOTING). A directory therefore takes a command only when every
+  // character is one both shells pass through untouched; anything else takes the prose route.
   const pin = (dir) => pinCommand({ type: 'dependencies', dependency: 'left-pad', version: '1.3.0', dir });
 
-  const cases = [
-    ['packages/api', `pnpm -C packages/api pkg set dependencies.left-pad=1.3.0 && pnpm -C packages/api install`],
-    [
-      'packages/a&b',
-      `pnpm -C "packages/a&b" pkg set dependencies.left-pad=1.3.0 && pnpm -C "packages/a&b" install`,
-    ],
-    [
-      'packages/a b',
-      `pnpm -C "packages/a b" pkg set dependencies.left-pad=1.3.0 && pnpm -C "packages/a b" install`,
-    ],
-  ];
+  assert.equal(
+    pin('packages/api'),
+    `pnpm -C packages/api pkg set dependencies.left-pad=1.3.0 && pnpm -C packages/api install`,
+    'a directory every shell passes through untouched lost its command',
+  );
 
-  for (const [dir, expected] of cases) {
-    const command = pin(dir);
-    assert.equal(command, expected, `${dir} did not take the spelling the prefix chooses`);
-    assert.equal(command.includes("'"), false, `${dir}: the command carries a single quote, which cmd passes through literally`);
+  for (const dir of [
+    'packages/a&b',
+    'packages/a;b',
+    'packages/a^b',
+    'packages/a b',
+    'packages/a$b',
+    'packages/a`b`',
+    'packages/a%NAME%',
+    'packages/a"b',
+  ]) {
+    assert.equal(pin(dir), null, `${dir}: a command was printed for a directory a shell would expand or split`);
   }
 });
 
