@@ -11,7 +11,7 @@ import { renderHuman } from '../../src/lib/render-human.js';
 import { createCollector } from '../../src/lib/probes.js';
 import { buildReport } from '../../src/lib/report.js';
 import { catalog as ruleCatalog } from '../../src/rules/index.js';
-import rule from '../../src/rules/exact-versions.js';
+import rule, { pinCommand } from '../../src/rules/exact-versions.js';
 
 /**
  * A plain context: package.json texts and a lockfile text are the only inputs, so no filesystem and
@@ -161,10 +161,13 @@ importers:
   assert.deepEqual(
     floats.map((finding) => finding.remediation),
     [
-      { kind: 'manual', command: `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install` },
+      // `left-pad` is unscoped, carries no dot and does not start with a digit, so it takes the
+      // quote-free dotted path; the scoped name takes the bracketed one, double-quoted with its inner
+      // quotes escaped, which is the spelling `cmd`, `bash` and `sh` all read (0042).
+      { kind: 'manual', command: `pnpm pkg set dependencies.left-pad=1.3.0 && pnpm install` },
       {
         kind: 'manual',
-        command: `pnpm pkg set 'devDependencies["@scope/tool"]=2.0.1' && pnpm install`,
+        command: `pnpm pkg set "devDependencies[\\"@scope/tool\\"]=2.0.1" && pnpm install`,
       },
     ],
   );
@@ -228,7 +231,7 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0
 `;
-  const expected = `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install`;
+  const expected = `pnpm pkg set dependencies.left-pad=1.3.0 && pnpm install`;
 
   for (const [label, workspaceYaml] of [
     ['kebab in pnpm-workspace.yaml', 'packages:\n  - .\nfrozen-lockfile: true\n'],
@@ -247,12 +250,11 @@ importers:
   }
 });
 
-test('the pnpm pkg path is bracketed, because a dot path cannot carry a scoped name', () => {
+test('a scoped name takes the bracketed path, because a dot path cannot carry an @', () => {
   // Measured on pnpm 12.3.4: `pnpm pkg set 'devDependencies.@types/node=20.19.43'` exits non-zero with
   // ERR_PNPM_PKG_INVALID_PROPERTY_PATH ("Unexpected token \"@\" in property path"), while
-  // `pnpm pkg set 'devDependencies["@types/node"]=20.19.43'` writes the exact version. Most of a modern
-  // dependency set is scoped, so the dot form was failing on the common case. The bracket form is used
-  // for unscoped names too: one form, one thing to remember.
+  // `pnpm pkg set "devDependencies[\"@types/node\"]=20.19.43"` writes the exact version. Most of a
+  // modern dependency set is scoped, so the dot form fails on the common case.
   const text = `{
   "devDependencies": {
     "@types/node": "^20.19.43"
@@ -276,13 +278,43 @@ importers:
 
   assert.equal(
     finding.remediation.command,
-    `pnpm pkg set 'devDependencies["@types/node"]=20.19.43' && pnpm install`,
+    `pnpm pkg set "devDependencies[\\"@types/node\\"]=20.19.43" && pnpm install`,
   );
   assert.equal(
     finding.remediation.command.includes('devDependencies.@'),
     false,
     'the dot form never reaches a scoped name',
   );
+});
+
+test('the property path follows the name: the dotted path only where pnpm reads it as one path (0042)', () => {
+  // Measured across `cmd`, `bash`, `sh`, `pwsh` 7 and Windows PowerShell 5.1, every cell executed. The
+  // dotted path is the one spelling `cmd` reads with no quoting at all, and each clause of the
+  // predicate is a measurement on a published name rather than a style preference: a scoped name is
+  // refused with ERR_PNPM_PKG_INVALID_PROPERTY_PATH, `lodash.merge` is read as three path segments and
+  // writes a nested `lodash` object beside the untouched entry while exiting 0, and `7zip-bin` is
+  // refused with `Numeric suffix "z" is not supported`. Every other name takes the bracketed path,
+  // the whole argument double-quoted with its inner quotes escaped.
+  const pin = (dependency) => pinCommand({ type: 'devDependencies', dependency, version: '1.3.0' });
+
+  const cases = [
+    ['left-pad', `pnpm pkg set devDependencies.left-pad=1.3.0 && pnpm install`],
+    ['left-pad2', `pnpm pkg set devDependencies.left-pad2=1.3.0 && pnpm install`],
+    ['@scope/tool', `pnpm pkg set "devDependencies[\\"@scope/tool\\"]=1.3.0" && pnpm install`],
+    ['lodash.merge', `pnpm pkg set "devDependencies[\\"lodash.merge\\"]=1.3.0" && pnpm install`],
+    ['7zip-bin', `pnpm pkg set "devDependencies[\\"7zip-bin\\"]=1.3.0" && pnpm install`],
+    ['0x', `pnpm pkg set "devDependencies[\\"0x\\"]=1.3.0" && pnpm install`],
+  ];
+
+  for (const [dependency, expected] of cases) {
+    const command = pin(dependency);
+    assert.equal(command, expected, `${dependency} did not take the spelling the predicate chooses`);
+    assert.equal(command.includes("'"), false, `${dependency}: the command carries a single quote, which cmd passes through literally`);
+  }
+
+  // The predicate is three clauses, and `left-pad2` above is the one case that says so: a digit that is
+  // not leading is not an array index.
+  assert.equal(pin('left-pad2').includes('['), false, 'a trailing digit is not a leading one');
 });
 
 test('without a measured resolution the remediation resolves first, never a guessed version', () => {
@@ -754,7 +786,7 @@ importers:
 
   assert.equal(
     finding.remediation.command,
-    `pnpm pkg set 'dependencies["private-tarball"]=https://***@example.com/repo.tgz' && pnpm install`,
+    `pnpm pkg set dependencies.private-tarball=https://***@example.com/repo.tgz && pnpm install`,
   );
   assert.ok(!JSON.stringify(finding).includes('ghp_secret'), 'no credential reaches the report');
 });
@@ -806,7 +838,7 @@ test('a lockfileVersion 6.0 root record supplies the version a pin writes', () =
   assert.equal(floats.length, 1);
   assert.equal(
     floats[0].remediation.command,
-    `pnpm pkg set 'dependencies["react"]=18.3.1' && pnpm install`,
+    `pnpm pkg set dependencies.react=18.3.1 && pnpm install`,
     'the version the 6.0 record carries is the version a pin writes',
   );
   assert.deepEqual(findings.filter((finding) => finding.status !== 'fail'), []);
@@ -1137,10 +1169,10 @@ test('a workspace range is pinned to workspace:*, and a registry range still nam
       // An internal package's resolved version is a path. Writing it replaces the protocol and takes
       // the package out of the workspace while the finding clears (#368); the exact form is the one
       // Detection names for an internal package.
-      `pnpm pkg set 'dependencies["bare"]=workspace:*' && pnpm install`,
-      `pnpm pkg set 'dependencies["waved"]=workspace:*' && pnpm install`,
-      `pnpm pkg set 'dependencies["versioned"]=workspace:*' && pnpm install`,
-      `pnpm pkg set 'dependencies["registry"]=1.3.0' && pnpm install`,
+      `pnpm pkg set dependencies.bare=workspace:* && pnpm install`,
+      `pnpm pkg set dependencies.waved=workspace:* && pnpm install`,
+      `pnpm pkg set dependencies.versioned=workspace:* && pnpm install`,
+      `pnpm pkg set dependencies.registry=1.3.0 && pnpm install`,
     ],
     'a workspace range keeps the protocol and a registry range keeps the version the lockfile records',
   );
@@ -1177,8 +1209,36 @@ test('the remediation names the importer that owns the manifest', () => {
 
   assert.equal(
     finding.remediation.command,
-    `pnpm -C packages/api pkg set 'dependencies["left-pad"]=1.3.0' && pnpm -C packages/api install`,
+    `pnpm -C packages/api pkg set dependencies.left-pad=1.3.0 && pnpm -C packages/api install`,
   );
+});
+
+test('a -C directory is double-quoted unless it is provably safe (0042)', () => {
+  // Measured on `cmd` and `bash`: bare `-C packages/a&b` splits the line and the install never runs, and
+  // bare `-C packages/a^b` silently resolves to `packages/ab` with exit 0, while `-C "packages/a&b"`,
+  // `"packages/a;b"` and `"packages/a^b"` all arrive exact. So the directory is quoted unless every
+  // character in it is one both shells pass through untouched. Two holes have no cross-shell escape and
+  // are stated in the spec instead of worked around here: `%NAME%` expands inside double quotes on
+  // `cmd`, and a directory containing `"` cannot be spelled at all.
+  const pin = (dir) => pinCommand({ type: 'dependencies', dependency: 'left-pad', version: '1.3.0', dir });
+
+  const cases = [
+    ['packages/api', `pnpm -C packages/api pkg set dependencies.left-pad=1.3.0 && pnpm -C packages/api install`],
+    [
+      'packages/a&b',
+      `pnpm -C "packages/a&b" pkg set dependencies.left-pad=1.3.0 && pnpm -C "packages/a&b" install`,
+    ],
+    [
+      'packages/a b',
+      `pnpm -C "packages/a b" pkg set dependencies.left-pad=1.3.0 && pnpm -C "packages/a b" install`,
+    ],
+  ];
+
+  for (const [dir, expected] of cases) {
+    const command = pin(dir);
+    assert.equal(command, expected, `${dir} did not take the spelling the prefix chooses`);
+    assert.equal(command.includes("'"), false, `${dir}: the command carries a single quote, which cmd passes through literally`);
+  }
 });
 
 test('a workspace importer with no recorded version keeps the workspace-wide resolve step', () => {
@@ -1227,7 +1287,7 @@ test('a root finding keeps the bare pnpm form', () => {
     )
     .filter((entry) => entry.code === 'floating-range');
 
-  assert.equal(finding.remediation.command, `pnpm pkg set 'dependencies["left-pad"]=1.3.0' && pnpm install`);
+  assert.equal(finding.remediation.command, `pnpm pkg set dependencies.left-pad=1.3.0 && pnpm install`);
 });
 
 /// S3's four sides and S4's three obligations, driven through the binary over fixtures built at
@@ -1330,9 +1390,14 @@ function workspace(t, { manifest, lockSpecifier, libVersion = '1.0.0' }) {
 
 /** The tokens a printed one-liner stands for: `a && b` is two commands, each without its `pnpm`. */
 function argvOf(command) {
+  // A printed command is shell text: a double-quoted argument may carry the escaped inner quotes the
+  // bracketed property path needs — `"dependencies[\"@scope/lib\"]=1"` — so the token is unquoted and
+  // unescaped before it reaches pnpm's argv, exactly as `cmd`, `bash` and `sh` hand it over (0042).
   return command.split(' && ').map((step) =>
-    (step.match(/'[^']*'|"[^"]*"|\S+/g) ?? [])
-      .map((token) => (token.startsWith("'") ? token.slice(1, -1) : token))
+    [...step.matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+)/g)]
+      .map(([, double, single, bare]) =>
+        double !== undefined ? double.replaceAll('\\"', '"') : single !== undefined ? single : bare,
+      )
       .slice(1),
   );
 }
@@ -1515,7 +1580,7 @@ test('obligation: applied to a workspace range the printed pin leaves the worksp
     // workspace member. Clearing the finding is not what this asserts.
     assert.equal(
       finding.remediation.command,
-      `pnpm -C packages/app pkg set 'dependencies["@fixture/lib"]=workspace:*' && pnpm -C packages/app install`,
+      `pnpm -C packages/app pkg set "dependencies[\\"@fixture/lib\\"]=workspace:*" && pnpm -C packages/app install`,
       `${shape.manifest}: the pin names a value that is not the internal package's exact form`,
     );
 

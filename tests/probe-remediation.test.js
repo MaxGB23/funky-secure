@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { FOREIGN_PIN_FLAG, LOCKFILE_ONLY_STEP, resolveLockfileStep } from '../src/lib/foreign-pin.js';
 import rule, { pinCommand } from '../src/rules/exact-versions.js';
+import { FIXTURES, goldenPath } from '../scripts/gen-golden.js';
 import {
   FOREIGN_PACKAGE_MANAGER,
   LOCKFILE,
@@ -158,7 +159,7 @@ test('the pin claim is the pkg set form the catalogue prints, at the root and in
   assert.equal(nestedFindings[0]?.remediation?.command, nested, 'the probe runs a command the catalogue never prints');
   assert.equal(
     nested,
-    `pnpm -C packages/api pkg set 'dependencies["left-pad"]=1.3.0' && pnpm -C packages/api install`,
+    `pnpm -C packages/api pkg set dependencies.left-pad=1.3.0 && pnpm -C packages/api install`,
     'the emitted text moved',
   );
 });
@@ -166,7 +167,7 @@ test('the pin claim is the pkg set form the catalogue prints, at the root and in
 test('the root pin keeps the bare form, with the property path bracketed for a scoped name', () => {
   assert.equal(
     pinCommand({ type: 'devDependencies', dependency: '@types/node', version: '20.19.43' }),
-    `pnpm pkg set 'devDependencies["@types/node"]=20.19.43' && pnpm install`,
+    `pnpm pkg set "devDependencies[\\"@types/node\\"]=20.19.43" && pnpm install`,
   );
 });
 
@@ -295,7 +296,7 @@ test('a command that ran and left nothing behind is a failure, never a pass', (t
 });
 
 /**
- * The manifest shape `pnpm pkg set 'dependencies["name"]=…'` writes, produced by hand so the judgement
+ * The manifest shape `pnpm pkg set "dependencies[\"name\"]=…"` writes, produced by hand so the judgement
  * is exercised without pnpm, an install or a network. The importer form writes into the directory its
  * `-C` names, which is the difference between measuring the form and guessing it.
  */
@@ -333,4 +334,59 @@ test('a lockfile that exists and records nothing is not the effect', (t) => {
     nothing.problems.some((problem) => problem.includes(LOCKFILE) && problem.includes('local-pin')),
     'the empty lockfile was not reported against the dependency it never recorded',
   );
+});
+
+/**
+ * The tools whose commands this product writes for a shell, and the wrapper the human renderer puts
+ * around them below the repository root.
+ *
+ * A command is judged by its first token, and only by it: a workflow line (`run: pnpm …`), an `uses:`
+ * hint and the `add "permissions:" …` prose are text for a file, never a command printed to be pasted,
+ * so they are excluded by that token rather than by a special case. The wrapper has to be looked
+ * through, because `(cd "/root" && pnpm …)` starts with `(cd` and a first-token rule that did not
+ * unwrap would classify every wrapped command as prose and check nothing (0042, S5).
+ */
+const SHELL_TOOLS = new Set(['pnpm', 'git', 'corepack']);
+const WRAPPED = /^\(cd "[^"]*" && (.*)\)$/s;
+
+/** The command inside the renderer's wrapper, or the command itself when it carries none. */
+function unwrapped(command) {
+  return WRAPPED.exec(command.trim())?.[1] ?? command;
+}
+
+/** @param {string} command @returns {string} */
+function firstToken(command) {
+  return unwrapped(command).trimStart().split(/\s+/)[0];
+}
+
+test('every shell-tool command a golden prints is readable by cmd, bash and sh', () => {
+  const offenders = [];
+  let checked = 0;
+
+  for (const fixture of FIXTURES) {
+    const report = JSON.parse(readFileSync(goldenPath(fixture.name), 'utf8'));
+    for (const finding of report.findings) {
+      const command = finding.remediation?.command;
+      if (typeof command !== 'string') continue;
+      // The bytes a reader sees at the root, and the same command below it: the wrapper is
+      // `src/lib/render-human.js`'s spelling, and the invariant has to hold through it.
+      for (const spelling of [command, `(cd "/repo" && ${command})`]) {
+        if (!SHELL_TOOLS.has(firstToken(spelling))) continue;
+        checked += 1;
+        if (unwrapped(spelling).includes("'")) offenders.push(`${fixture.name}: ${spelling}`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'a printed command carries a single quote, which cmd passes to pnpm literally, so the line fails for the reader Windows opens by default',
+  );
+  // Non-vacuity: the fixtures print `pnpm` and `git` commands, so a walk that checked nothing is a
+  // broken walk and not a clean set.
+  assert.ok(checked > 0, 'no golden command was checked, so this invariant proves nothing');
+  // The unwrap is what makes the wrapped spelling count at all: a first-token rule that did not look
+  // through the wrapper would read `(cd` and never check the command inside it.
+  assert.equal(firstToken(`(cd "/repo" && pnpm install)`), 'pnpm', 'the wrapper is not looked through');
 });
