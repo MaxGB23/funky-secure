@@ -224,14 +224,14 @@ test('a prefixed command that passes 96 columns is one pasteable line at both si
   const spelling = `(cd "${ROOT}" && ${command})`;
 
   // A field round found the old answer here: `wrap` split the group after `(cd`, so the printed block
-  // was a parse error on `cmd` (255) and an unclosed quote on `bash` (2). The line that exists to be
-  // pasted outranks the reading bound (10.3).
+  // was a parse error on both shells — the line it cut ended with `&&` and the next began with it
+  // (cmd 255, bash 2). The line that exists to be pasted outranks the reading bound (10.3).
   assert.ok(spelling.length + ACTION.length > 96, 'the prefix takes this spelling past the reading bound');
   assert.deepEqual(actionLines(text), [ACTION + spelling], 'the action line is the whole group, unbroken');
   assert.deepEqual(nextLines(report, { root: ROOT, cwd: DEEP }), [NEXT + spelling], 'and so is the next line');
   assert.equal(
     text.split('\n').some((line) => line.trimEnd().endsWith('&&')),
     false,
-    'no line ends with the operator, which is what made the block unpasteable',
+    'no line ends with the operator, so no shell sees a group cut there',
   );
 });

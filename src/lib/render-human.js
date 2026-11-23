@@ -668,7 +668,7 @@ function nextBlock({ summary, findings }, catalog, { off = [], root, cwd } = {})
     if (actionable.length > 0) {
       const command = spellAtRoot(findingToActOn(actionable, catalog).remediation.command, { root, cwd });
       // A command is never wrapped (10.3): the prefix can make it pass the 96-column bound, and a
-      // group split across lines is a parse error on `cmd` and an unclosed quote on `bash`.
+      // group split across lines is not a command on either shell.
       return [head + command];
     }
     // A run with five zero counters emitted no finding at all, so every sentence below would speak
