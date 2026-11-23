@@ -145,7 +145,9 @@ No floating specifier and no desync is a pass.
 
 ## Remediation
 
-Manual, one command per finding, and the command names a version the repository already records.
+Manual, one command per finding, and the command names a version the repository already records. A
+command is printed only when every value in it is one a shell cannot rewrite; a value outside its
+grammar prints no command at all, and the finding names the edit instead.
 
 **A floating range.** `pnpm add --save-exact <name>@<range>` is a measured no-op on pnpm 12.3.4: pnpm
 keeps the specifier the package already declares and exits 0, so the range survives and the finding
@@ -160,16 +162,31 @@ with the section of the entry (`dependencies`, `devDependencies`, `optionalDepen
 version `pnpm-lock.yaml` records in that importer's dependency block. `pnpm install` then refreshes
 the lockfile and `node_modules` from the new specifier.
 
+**A value outside its grammar prints no command at all.** Three values reach the line — the name, the
+importer directory and the version — and each one is a string a manifest, a workspace file or a
+lockfile carries, so each one is checked before anything is built. The name must match npm's own
+grammar, `^(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+$`; the importer directory must match
+`^[A-Za-z0-9._/-]+$`, and the root importer needs no prefix and no grammar because it names no
+directory; the version must match `^[A-Za-z0-9._~:/@+-*]+$`, where the `*` is what `workspace:*` and
+the redacted `https://***@host` carry. Outside any of them the finding keeps its `manual` kind and
+names the hand edit — the manifest, the section, the entry and the value — and prints no command,
+because a quoted value is not a safe value. Double quotes stop `cmd` splitting the argument and do not
+stop `bash` or `sh` expanding `$(…)`, `${…}` or a backtick inside them, so a name, a directory or a
+recorded version a manifest carries can execute when the line is pasted (0042 and its errata, #548).
+Quoting was never the boundary it looked like: the single-quoted spelling this rule printed before
+suppressed those expansions by accident, not by design.
+
 **The spelling follows the name, and the shells it serves are named.** `cmd`, `bash` and `sh` read
-both spellings identically. A name that is unscoped, carries no dot and does not start with a digit
-takes the quote-free dotted path — `pnpm pkg set dependencies.typescript=5.9.2 && pnpm install` — and
-every other name takes the bracketed form above, the whole argument in double quotes with its inner
-ones escaped. Two shells lose one form each, and neither loss is hidden: `pwsh` 7 splits the escaped
-argument into two, which pnpm answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and writes nothing, and
-Windows PowerShell 5.1 rejects `&&` before it reads any quoting. The dotted path is not a repair for
-either, and it is not a free choice of style: through a name that carries a dot it corrupts the
-manifest — `dependencies.lodash.merge=…` writes a nested `lodash` object beside the untouched entry and
-exits `0` — and a digit-leading name is refused with `Numeric suffix "z" is not supported`. Both are
+both spellings identically. Among the names that pass the grammar, one that is unscoped, carries no dot
+and does not start with a digit takes the quote-free dotted path —
+`pnpm pkg set dependencies.typescript=5.9.2 && pnpm install` — and every other name takes the
+bracketed form above, the whole argument in double quotes with its inner ones escaped. Two shells lose
+one form each, and neither loss is hidden: `pwsh` 7 splits the escaped argument into two, which pnpm
+answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and writes nothing, and Windows PowerShell 5.1 rejects
+`&&` before it reads any quoting. The dotted path is not a repair for either, and it is not a free
+choice of style: through a name that carries a dot it corrupts the manifest —
+`dependencies.lodash.merge=…` writes a nested `lodash` object beside the untouched entry and exits
+`0` — and a digit-leading name is refused with `Numeric suffix "z" is not supported`. Both are
 published names that a real `package.json` carries (0042).
 
 **Inside the workspace the pin is `workspace:*`, not the recorded version.** For an internal package
@@ -215,7 +232,8 @@ runs in, so a command printed for a finding at `cli/package.json` and run at the
 writes into the **root** `package.json` — measured on create-t3-app, where it is 80 of 96 findings.
 `<importer dir>` is the directory of the manifest the finding is about, relative to the repository
 root. The root importer keeps the bare form (`pnpm pkg set … && pnpm install`), because the root is
-the directory the reader is already in.
+the directory the reader is already in. A directory outside `^[A-Za-z0-9._/-]+$` gets no quoted `-C`
+as a fallback: the finding prints no command, because quoting is exactly where the expansion lived.
 
 That version is the only one this rule may print for a registry dependency: it is read from the
 repository, and the tool resolves nothing (RFC 4.9). When the lockfile records no version for such a
