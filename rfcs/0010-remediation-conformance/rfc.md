@@ -111,3 +111,15 @@ fixture reports the real working-tree state instead of a hard-coded clean one �
   pick.
 - **Keep `owner/repo` and document it.** The rule doc already documents the resolution; the message is
   what people run.
+
+## Errata — 2026-11-23
+
+**The printed route in the sweep table is quoted for one shell.** The `exact-versions` row records
+`pnpm pkg set '<section>["<name>"]=<version>'`, which is what the tool printed and what cleared the
+finding under `bash`. That is a measurement and it stays as it was measured: nothing above is
+rewritten. The spelling has since moved, because `cmd` passes the single quotes through literally and
+pnpm then receives an argument that begins with `'`. RFC [`0042`](../0042-the-command-speaks-both-shells/rfc.md)
+and §8.2 R5 print the bracketed path with the whole argument double-quoted and its inner quotes
+escaped — `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install` — and the quote-free
+dotted path for a name that is unscoped, carries no dot and does not start with a digit. The route
+still clears the finding; what changed is which shells read it.
