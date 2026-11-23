@@ -23,3 +23,18 @@ The report states where a command runs (#540) and never what reads it. One print
 - L2 (field round 2, verbatim): «El exit 1 de cmd es del comando, no sintaxis (no 255/2): cmd pasa las comillas simples literales a pnpm. El render de #540 queda fuera de eso.»
 - L3 (measured, `src/rules/exact-versions.js:225-241`): `pnpm add --save-exact <name>@<range>` is a no-op on pnpm 12.3.4; the dotted property path fails on scoped names; so `pnpm pkg set '<type>["<name>"]=<version>' && pnpm install` is the only command that pins the range, and its quoting is POSIX-only.
 - L4 (parent, this plan): the decision to state the dialect rather than change the command, because no spelling of the argument is read by both shells; and to cover both surfaces, because the same quoting reaches the plan.
+- **L5 — the premise is refuted by measurement (judge A, 2026-11-23).** `pnpm pkg set "dependencies[\"is-odd\"]=3.0.1"`
+  is read identically by `cmd`, `bash` and `sh` — argv `dependencies["is-odd"]=3.0.1` — and clears the
+  finding on pnpm 12.3.4 end to end, including inside the full `(cd "<root>" && …)` shape. The dotted
+  path `dependencies.is-odd=3.0.1` is quote-free for unscoped names. A judge also found the plan's own
+  second surface unreachable: no numbered step carries a single-quoted segment (`pnpmDirFlag` does not
+  quote), so T2 specified behaviour that can never print.
+- **L6 — corroborated, with more surface (judge B, 2026-11-23; reproduced here).** The same argv
+  convergence, measured independently. The single-quoted spelling delivers `'dependencies[is-odd]=3.0.1'`
+  on `cmd` — it keeps the quotes **and** eats the inner doubles — while bash reads it correctly, so the
+  divergence is confirmed. Also measured: `pwsh` 7 runs today's command correctly and Windows PowerShell
+  5.1 mangles it, so "POSIX-only" was wrong in both directions. The detector would have fired on
+  `frozenRoute`'s hand-edit prose (`exact-versions.js:269-275`), and the wrapper diverges on exotic roots
+  with no quote in sight.
+- **Withdrawn.** The plan prescribed explaining a defect that two measured spellings repair. Its successor
+  is `odd/tasks/the-command-speaks-both-shells.md`; nothing above is rewritten, and L5/L6 are the evidence.
