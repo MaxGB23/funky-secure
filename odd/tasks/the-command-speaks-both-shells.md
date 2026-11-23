@@ -1,37 +1,36 @@
 # The command speaks the shells it names
 
-Issue #548. Two blind judgements refuted the previous plan and measured a matrix: no spelling serves `cmd` and `pwsh` 7 at once. This record decides which shells the command serves, names the cost, and closes the hole that let the defect reach the field.
+Issue #548. Four blind judgements measured every cell of the shell matrix. The design is closed; this record is the checklist of what they measured, with the path and the line. No clause here is an opinion.
 
-## The matrix (measured twice, independently, plus the parent)
+## The matrix (measured: cmd, bash, sh, pwsh 7, WinPS 5.1)
 
 | spelling | cmd | bash | sh | pwsh 7 | WinPS 5.1 |
 |---|---|---|---|---|---|
-| `'dependencies["x"]=1'` (today) | fails | ok | ok | ok | fails at `&&` |
-| `"dependencies[\"x\"]=1"` | ok | ok | ok | splits (2 args) | fails at `&&` |
-| `dependencies.x=1` (no quotes) | ok | ok | ok | ok | fails at `&&` |
-
-`WinPS 5.1` fails on `&&` before any quoting, so it is out of scope for every spelling. The unquoted bracketed path is rejected by pnpm (`Unexpected identifier`), and `pnpm add --save-exact` writes `^3.0.1`, not `3.0.1` (measured on pnpm 12.3.4). So the fork is real and belongs to the product.
+| `'dependencies["x"]=1'` (today) | fails | ok | ok | ok via `pnpm.ps1`; fails via `pnpm.cmd` | `&&` rejected |
+| `"dependencies[\"x\"]=1"` | ok | ok | ok | **2 args** → `ERR_PNPM_PKG_SET_INVALID_ARG` | `&&` rejected |
+| `dependencies.x=1` | ok | ok | ok | ok | `&&` rejected |
 
 ## Specs
 
-- **S1 — the shell set is named with its cost.** The commands are written for `cmd`, `bash` and `sh`. `pwsh` 7 splits the escaped scoped form into two arguments, and `WinPS` 5.1 rejects `&&`; the spec says both, because a promise that hides a measured gap is the defect this issue is about.
-- **S2 — the spelling each name shape gets.** A name that is unscoped and carries no dot pins with the quote-free dotted path (`pnpm pkg set dependencies.is-odd=3.0.1 && pnpm install`), the only form that also survives `pwsh` 7. Any other name — scoped, or carrying a dot — pins with the bracketed path, double-quoted with its inner quotes escaped (`pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install`). The dotted form is not a shortcut for a dotted name: measured, `pnpm pkg set dependencies.lodash.merge=4.6.2` writes `{"lodash":{"merge":"4.6.2"}}` beside the untouched entry and exits 0 — silent corruption. Both forms reach pnpm as one argument on `cmd`, `bash` and `sh`.
-- **S3 — `-C` quotes when the directory needs it, and the limit is named.** Double quotes when the directory carries a space or a quote; today's bytes otherwise. A directory carrying `&`, `;`, `^` or `%` is beyond one line on `cmd` — `%VAR%` expands even inside double quotes, `&` splits the line — so the record says so instead of pretending the quoting covers it. `pnpmDirFlag` emits only `..`-chains (verified), so no plan step needs quoting.
-- **S4 — the document changes value, not shape.** The goldens regenerate; the diff is the command strings and the test literals, nothing else. No key moves and `schemaVersion` stays.
-- **S5 — the check can fail on the regression it is about.** `scripts/probe-remediation.js` runs the printed command under the shell of the platform leg (`sh` on Linux, `cmd` on Windows) instead of a fixed `sh`, which is why #548 escaped CI: every printed command was executed by the one shell where the defect never existed. The invariant — no command whose first token is `pnpm|git|corepack` carries `'` — is asserted over every golden and over `pinCommand`'s shapes; prose (`frozenRoute`, `uses:`, `add "permissions:"`) is excluded by the first-token rule, never by a special case.
+- **S1 — the shells are named with the loss.** Commands are written for `cmd`, `bash` and `sh`. `pwsh` 7 keeps working for every **unscoped** name through the dotted form and loses only scoped ones (2 args, a loud pnpm error, no write); `WinPS` 5.1 rejects `&&` before any quoting. The spec says exactly this.
+- **S2 — the predicate, in three clauses.** A name takes the quote-free dotted path iff it is unscoped **and** carries no dot **and** does not start with a digit. `dependencies.lodash.merge=…` writes `{"lodash":{"merge":…}}` beside the untouched entry (corrupting, exit 0); `dependencies.7zip-bin=…` is rejected (`Numeric suffix "z" is not supported`) — both measured, both real published names. Every other name takes the bracketed path, double-quoted with the inner quotes escaped: `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install`.
+- **S3 — `-C` quotes unless the directory is provably safe.** Quote with double quotes unless the directory matches `^[A-Za-z0-9._/-]+$`; quoting fixes `&`, `;`, `^`, `$`, parentheses and globs (measured: `-C "packages/a&b"`, `"a;b"`, `"a^b"` all arrive exact on cmd and bash, while bare `a&b` splits and bare `a^b` silently resolves to `packages/ab` with exit 0). Two holes get named, never hidden: `%NAME%` expands even inside double quotes on cmd, and a directory containing `"` has no cross-shell escape (`\"` collapses the cmd line so `&&` becomes a literal argument and the install never runs). For those two the record states the limitation instead of printing a command that lies.
+- **S4 — the document changes value, not shape.** The goldens regenerate; `tests/golden/dirty.json:128` becomes `pnpm pkg set dependencies.left-pad=1.3.0 && pnpm install`. No key moves, `schemaVersion` stays.
+- **S5 — the check can fail, and it can run.** The probe gains a Windows leg: `.github/workflows/ci.yml:90` is `runs-on: ubuntu-24.04` for `runtime-claims`, and `:138` is the only probe step, so today every printed command is executed by the one shell where the defect never existed. The runner must spawn through `execSync(command)` (ComSpec `/d /s /c`), never `execFileSync('cmd', ['/c', command])`, which mangles the correct command into `Input ends without closing quote (")` — measured. `tests/ci-coverage.test.js:193-201` pins the step inside `runtime-claims` and moves with it.
 
 ## Tasks
 
-- T1 (S1, S2, S3) — `pinCommand` (`src/rules/exact-versions.js:247-251`) and `pnpmAt` (`:222-227`). Route: worker.
-- T2 (S5) — the probe's shell, the invariant, and the shapes it must cover. Route: worker.
-- T3 (S4) — regenerate the goldens; prove the diff is the command strings plus the test literals named in F9. Route: worker.
-- T4 (S1) — the spec first, in its own pull request: `docs/spec/rules.md` §8.2 R2 (which prints the old bytes), §10.3's rendering rule, RFC 0042, its registry row, the amendment rows (`0007`, and the §10 row if the rendering sentence moves), `docs/cli.md`, `docs/rules/exact-versions.md`, `docs/guide.md`, the `limits` prose at `exact-versions.js:374`, the probe's two false sentences (`:216-227`, `:338`), and `I-96`. Route: parent.
+- T1 (S2, S3) — `pinCommand` (`src/rules/exact-versions.js:247-251`) and `pnpmAt` (`:222-227`), plus the falsified "one form and one thing to remember" rationale (`:228-241`).
+- T2 (S5) — the probe's spawn shape, its Windows leg in `ci.yml`, and the ci-coverage pin. An invariant over every golden command whose first token is `pnpm|git|corepack`, **including the wrapped form** (`(cd "<root>" && …)`, `src/lib/render-human.js:96`), which the first-token rule alone would miss.
+- T3 (S4) — the goldens, and the test literals: `tests/rules/exact-versions.test.js:164,167,231,279,757,809,1140-1143,1180,1230,1518` (+ comments `:180,251-253`), `tests/probe-remediation.test.js:161,169` (+ comment `:298`).
+- T4 (S1) — the spec first, in its own pull request: `docs/spec/rules.md` **R5** at `:223` and `:246-247`, `docs/spec/commands.md:511`, `docs/spec/README.md:73`, `docs/cli.md`, `docs/learn/commands/pin.md:34`, `docs/rules/exact-versions.md:155,171`, `docs/guide.md:213`, `rfcs/0010-remediation-conformance/rfc.md:93`, the `remediation:` prose at `exact-versions.js:374`, the probe's two dialect sentences (`:216-227`, `:338`), RFC 0042 with its registry row and the `0007` amendment row, `docs/decisions.md` I-96 — and **decision rows I-20 (`:64`), I-39 (`:83`), I-83 (`:128`)**, which print the old bytes; the later row supersedes them by name, never by silent edit.
+
+**Ordering trap, measured:** `tests/rules/exact-versions.test.js:1631-1632` asserts that `docs/rules/exact-versions.md` contains the old bytes. The docs-only pull request is red unless that assertion moves in the same commit, so it belongs to T4, not T3.
 
 ## Log
 
 - L1 (owner, verbatim): «decide tú y que respete lo mas posible nuestra filosofia, crea el issue y su pr, mergea las anteriores. Apoyate de jueces».
 - L2 (field round, verbatim): «cmd pasa las comillas simples literales a pnpm».
-- L3 (judge A on the superseded plan, verbatim): "the plan repairs `cmd` by breaking `pwsh` 7, which works today … while S1's three-shell scope and S5's no-`'` check make the regression invisible."
-- L4 (judge B on the superseded plan, verbatim): "`pnpmAt` quotes `-C` only on space/quote, so a legal directory `packages/a&b` prints bare and splits on every shell".
-- L5 (parent, measured): the dotted path is accepted for unscoped, dot-free names and **corrupts** the manifest for a name that carries a dot (`lodash.merge` → a nested `lodash` object beside the untouched entry, exit 0); the unquoted bracketed path is rejected (`Unexpected identifier`); `pnpm add --save-exact` writes `^3.0.1`. Each closes an escape from the fork, and the third narrows the quote-free form to the name shapes that can take it.
-- L6 (parent, decision): serve `cmd`, `bash`, `sh`; unscoped names take the quote-free path, scoped take the escaped form; `pwsh` 7 and `WinPS` 5.1 are named in the spec with the mechanism, because the cost is measured and hiding it is the defect being fixed.
+- L3-L6 (three judged plans, refuted): `odd/tasks/command-dialect.md` L5/L6 carry the first two; the third's verdicts are quoted below.
+- L7 (judge B, third round, verbatim): "a worker following the plan verbatim edits the wrong rule, works to an undefined test scope (F9), and implements a cmd-leg check that has no CI leg to run on."
+- L8 (judge A, third round, verbatim): "S2 ships a spelling that pnpm rejects for legal digit-leading names (`0x`, `7zip-bin`) on all four shell families, and neither the plan's predicate nor its new check can see it." Its other findings — the `&;^` correction, the `execSync` spawn shape, the R5/R2 error, the docs-test ordering trap — are folded into S3, S5 and T4 above.
