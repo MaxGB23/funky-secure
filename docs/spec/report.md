@@ -250,8 +250,8 @@ finding is the one state where that count has nothing to count, and the verdict 
 there instead (0038): the two decorations never share the line, because a skip is a finding and an
 unverified rule is a skip.
 
-No rendered line exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
-86. Messages and actions wrap, never truncate. The single exception is a machine path — the store and
+No rendered line but a command exceeds 96 columns, and the `not run` line above is bounded more tightly still, at
+86. Messages wrap, never truncate; a command does not wrap at all (10.3). The single exception is a machine path — the store and
 the executable of the `MACHINE` block, whose absolute form is the fact (10.1) — shortened in the middle
 with `…`, because its length is not ours to bound and a fixed cut point keeps the rendering
 deterministic. `--verbose` prints it whole and the JSON keeps it whole.
@@ -301,7 +301,14 @@ action line and the `next` block, so one command has one spelling in one report;
 root nothing is added; and a line that is not a command of a tool this tool prints commands for
 (`pnpm`, `git`, `corepack`) is printed unchanged. The directory is absolute because on `cmd` a grouped
 `cd` is not a subshell: the first line would leave the reader at the root, and a relative spelling in
-the second would resolve one level above it and never run.
+the second would resolve one level above it and never run. A command is never wrapped, however long
+it is. The 96-column ceiling exists so a reader can follow a line, and it yields to the one line whose
+purpose is to be pasted, because every way of splitting one loses it: a line that opens with `&&` is a
+parse error on `cmd` and on `bash` alike, on `cmd` a line that ends with it is fatal too, and a break
+inside the quoted directory is legal on `bash` — which then runs the fragments instead of the command.
+So the ceiling governs every other line and this one governs itself. The breakage predates the
+directory, since a deep path already exceeded the ceiling; stating the directory is what brought it
+to every command printed below the root.
 
 ### 10.4 Exit codes
 

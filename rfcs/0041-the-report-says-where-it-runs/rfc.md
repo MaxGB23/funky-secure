@@ -112,3 +112,16 @@ their own `-C`; the commands of a report are not rows, and this record says noth
 It does not claim a behaviour the code does not have yet. The record and the spec it names state the
 rule; the renderer that applies it lands in a later change, and until then a report prints every
 command exactly as it always has, at every directory.
+
+## Errata — 2026-11-23
+
+One consequence of the Decision above is withdrawn; the Decision itself stands, and nothing above is
+rewritten.
+
+**The bound does not hold for a command.** The third bullet says "The `next` block's 96-column bound
+holds when the prefix is present, because the prefix is part of the string the renderer wraps and the
+same arithmetic lays it out". Measurement says wrapping is what lost the command: a field round pasted
+the printed block and neither shell ran it — a line that opens with `&&` is a parse error on `cmd` and
+on `bash`, a line that ends with it is fatal on `cmd`, and a break inside the quoted directory leaves
+`bash` running the fragments. A command is therefore printed on one line however long it is, and the
+ceiling governs every other line (`docs/spec/report.md` §10.3, `I-95` of `docs/decisions.md`).
