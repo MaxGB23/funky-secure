@@ -9,6 +9,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { join } from 'node:path';
 
 import { buildReport } from '../src/lib/report.js';
 import { renderHuman } from '../src/lib/render-human.js';
@@ -17,6 +18,14 @@ import { catalog as ruleCatalog } from '../src/rules/index.js';
 const tool = { name: 'funky-secure', version: '0.1.0' };
 const policy = { preset: 'baseline', quarantineMinutes: 1440, failOn: 'error' };
 const NEXT = 'next     ';
+const ACTION = '     → ';
+/**
+ * An absolute root that need never exist: the rendering is arithmetic over strings (10.3), and a short
+ * spelling keeps a prefixed command on one line, which is what these tests assert.
+ */
+const ROOT = process.platform === 'win32' ? 'C:\\repo' : '/repo';
+const MEMBER = join(ROOT, 'packages', 'a');
+const DEEP = join(MEMBER, 'src', 'deep');
 
 function finding(overrides = {}) {
   return {
@@ -43,10 +52,26 @@ function reportWith(findings, catalog = ruleCatalog) {
   });
 }
 
-function nextLines(report) {
-  const lines = renderHuman(report).split('\n').filter((line) => line !== '');
+function nextLines(report, options) {
+  const lines = renderHuman(report, options).split('\n').filter((line) => line !== '');
   const start = lines.findIndex((line) => line.startsWith('next'));
   return start === -1 ? [] : lines.slice(start);
+}
+
+/** A report whose verdict passes and whose only finding names `command` (10.3). */
+function commandReport(command) {
+  return reportWith([
+    finding({
+      severity: 'warn',
+      path: 'pnpm-lock.yaml',
+      message: 'a message',
+      remediation: { kind: 'manual', command },
+    }),
+  ]);
+}
+
+function actionLines(text) {
+  return text.split('\n').filter((line) => line.startsWith(ACTION));
 }
 
 test('a passing run that lists an action ends by naming that action (#360)', () => {
@@ -133,5 +158,83 @@ test('a long command wraps on the gutter rather than breaking the 96-column boun
     rewritten.replace(/\s+/g, ''),
     command.replace(/\s+/g, ''),
     'wrapping loses no character of the command',
+  );
+});
+
+// --- The report says where its commands run (10.3, issue #540) -------------------------------
+
+test('from a member, each tool command states the absolute root at both print sites', () => {
+  for (const command of [
+    'pnpm install --lockfile-only',
+    'git rm --cached production.env',
+    'corepack use pnpm@10.0.0',
+  ]) {
+    const report = commandReport(command);
+    const text = renderHuman(report, { root: ROOT, cwd: MEMBER });
+    const spelling = `(cd "${ROOT}" && ${command})`;
+
+    assert.deepEqual(actionLines(text), [ACTION + spelling], `${command}: the action line states the root`);
+    assert.deepEqual(nextLines(report, { root: ROOT, cwd: MEMBER }), [NEXT + spelling], `${command}: the next block agrees`);
+    assert.equal(
+      text.split(spelling).length - 1,
+      2,
+      `${command}: one command, one spelling, printed at both sites`,
+    );
+  }
+});
+
+test('from two levels below, both print sites carry the same root spelling', () => {
+  const command = 'pnpm install --lockfile-only';
+  const report = commandReport(command);
+  const text = renderHuman(report, { root: ROOT, cwd: DEEP });
+  const spelling = `(cd "${ROOT}" && ${command})`;
+
+  assert.deepEqual(actionLines(text), [ACTION + spelling]);
+  assert.deepEqual(nextLines(report, { root: ROOT, cwd: DEEP }), [NEXT + spelling]);
+  assert.equal(text.split(spelling).length - 1, 2, 'one command, one spelling');
+});
+
+test('at the root the rendered bytes are today’s, and with no directory nothing is added', () => {
+  const report = commandReport('git rm --cached production.env');
+  const today = renderHuman(report);
+
+  assert.equal(renderHuman(report, { root: ROOT, cwd: ROOT }), today, 'the root prints today’s bytes');
+  assert.equal(renderHuman(report, { root: ROOT }), today, 'no directory prints today’s bytes');
+  assert.equal(renderHuman(report, { cwd: MEMBER }), today, 'no root prints today’s bytes');
+  assert.equal(today.includes('(cd'), false, 'the root never states a directory');
+});
+
+test('a command this tool does not print for the root is unchanged from a member', () => {
+  for (const command of [
+    'delete the ignore-scripts key from .npmrc',
+    'funky-secure migrate --from npm --apply',
+  ]) {
+    const report = commandReport(command);
+    const text = renderHuman(report, { root: ROOT, cwd: MEMBER });
+
+    assert.deepEqual(actionLines(text), [ACTION + command], `${command}: the action line is unchanged`);
+    assert.deepEqual(nextLines(report, { root: ROOT, cwd: MEMBER }), [NEXT + command]);
+    assert.equal(text.includes('(cd'), false, `${command}: no directory is added`);
+  }
+});
+
+test('a prefixed command wraps on the same rule, and no line exceeds 96 columns', () => {
+  const command = `git rm --cached ${'nested/'.repeat(12)}production.env`;
+  const report = commandReport(command);
+  const text = renderHuman(report, { root: ROOT, cwd: DEEP });
+  const spelling = `(cd "${ROOT}" && ${command})`;
+
+  assert.ok(text.includes('(cd "'), 'the prefix is present, so the bound is measured with it');
+  assert.ok(
+    text.split('\n').every((line) => line.length <= 96),
+    `a rendered line exceeded 96 columns:\n${text}`,
+  );
+  const next = nextLines(report, { root: ROOT, cwd: DEEP });
+  assert.ok(next.length > 1, 'the widened command wraps on the gutter');
+  const rewritten = next.map((line) => line.slice(NEXT.length)).join('');
+  assert.equal(
+    rewritten.replace(/\s+/g, ''),
+    spelling.replace(/\s+/g, ''),
+    'wrapping loses no character of the prefixed command',
   );
 });

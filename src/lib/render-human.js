@@ -17,6 +17,7 @@
  */
 
 import { severityRank, TARGET_ORDER } from './report.js';
+import { pathsAtCwd } from './paths.js';
 import { catalog as defaultCatalog } from '../rules/index.js';
 
 export const SYMBOL = { error: '✖', warn: '⚠', info: 'ℹ', skip: '–' };
@@ -63,6 +64,35 @@ const SEPARATOR = '─'.repeat(90);
 const HONESTY_WIDTH = 86;
 /** How much of a machine path survives shortening: enough to recognise it, not enough to dominate. */
 const PATH_ROOM = 44;
+/** The tools whose commands this tool writes for the repository root (10.3, issue #540). */
+const ROOT_TOOLS = new Set(['pnpm', 'git', 'corepack']);
+
+/**
+ * The command as a reader standing at `cwd` must paste it (10.3).
+ *
+ * A report's command is written for the repository root (10.1) and the reader may stand below it, so
+ * the rendering states the directory rather than rewriting the command. Nothing is classified beyond
+ * the first token: a command whose first token is not one this tool prints for the root is returned
+ * unchanged, which fails closed — an unknown command is never worse than it was. At the root, and
+ * with no root or no directory to compare, the bytes are today's.
+ *
+ * The directory is absolute and quoted. On `cmd` a grouped `cd` is not a subshell: the first prefixed
+ * line would leave the reader at the root, and a relative spelling in the second would resolve one
+ * level above it and never run. An absolute spelling is idempotent on both shells.
+ *
+ * @param {string} command the string `remediation.command` carries
+ * @param {{ root?: string, cwd?: string }} [facts] the repository root and the reader's directory
+ * @returns {string}
+ */
+function spellAtRoot(command, { root, cwd } = {}) {
+  if (typeof command !== 'string' || command === '') return command;
+  if (typeof root !== 'string' || root === '' || typeof cwd !== 'string' || cwd === '') return command;
+  const [distance] = pathsAtCwd(['.'], root, cwd);
+  if (distance === '.' || distance === '') return command;
+  const [tool] = command.trimStart().split(/\s+/);
+  if (!ROOT_TOOLS.has(tool)) return command;
+  return `(cd "${root}" && ${command})`;
+}
 
 function paint(text, tone, color) {
   if (!color || !ANSI[tone]) return text;
@@ -148,10 +178,11 @@ function labelOf(finding, labels) {
  * One finding in at most three shapes: heading, message, action (S1). The id appears only under
  * `--verbose`, on its own indented line, so it never competes with the sentence.
  * @param {object} finding
- * @param {{ color: boolean, verbose: boolean }} options
+ * @param {{ color: boolean, verbose: boolean, labels: Map<string, string>, root?: string, cwd?: string }} options
  * @returns {string[]}
  */
-function renderFinding(finding, { color, verbose, labels }) {
+function renderFinding(finding, options) {
+  const { color, verbose, labels } = options;
   const tone = toneOf(finding);
   const head = `${PREFIX}${paint(symbolOf(finding), tone, color)}  ${labelOf(finding, labels)}`;
   const location = pathLabel(finding);
@@ -164,7 +195,7 @@ function renderFinding(finding, { color, verbose, labels }) {
 
   const command = finding.remediation?.command;
   if (command) {
-    const pieces = wrap(command, WIDTH - ACTION.length);
+    const pieces = wrap(spellAtRoot(command, options), WIDTH - ACTION.length);
     lines.push(ACTION + pieces[0]);
     for (const piece of pieces.slice(1)) lines.push(' '.repeat(ACTION.length) + piece);
   }
@@ -609,11 +640,11 @@ function ruleToRead(failing, catalog) {
  * sentence about what it ran, because it ran nothing (#531).
  * @param {{ summary: { verdict: string, error: number, warn: number, info: number, pass: number, skip: number }, findings: Array<object> }} report
  * @param {Array<{ id: string }>} catalog
- * @param {{ off?: string[] }} [policy] the rules the effective policy turned off; pass it and a
+ * @param {{ off?: string[], root?: string, cwd?: string }} [policy] the rules the effective policy turned off; pass it and a
  *   passing run speaks only for the rules that ran, leave it out and the bytes are what they were
  * @returns {string[]}
  */
-function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
+function nextBlock({ summary, findings }, catalog, { off = [], root, cwd } = {}) {
   const { head, indent } = gutter('next');
   const failing = findings.filter(
     (finding) => finding.status !== 'pass' && finding.status !== 'skip',
@@ -633,7 +664,7 @@ function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
     // is chosen exactly as `init`'s rule is, so the same state prints the same bytes.
     const actionable = failing.filter((finding) => finding.remediation?.command);
     if (actionable.length > 0) {
-      const command = findingToActOn(actionable, catalog).remediation.command;
+      const command = spellAtRoot(findingToActOn(actionable, catalog).remediation.command, { root, cwd });
       // A command may be a path long enough to pass the 96-column bound (10.3), so it wraps on the
       // gutter like every other action instead of running past the edge of the report.
       return wrap(command, WIDTH - head.length).map((line, index) =>
@@ -659,19 +690,21 @@ function nextBlock({ summary, findings }, catalog, { off = [] } = {}) {
 
 /**
  * @param {object} report the object built by `buildReport`
- * @param {{ color?: boolean, verbose?: boolean, active?: string[] }} [options] `active` is the
+ * @param {{ color?: boolean, verbose?: boolean, active?: string[], root?: string, cwd?: string }} [options] `active` is the
  *   policy's active rule list; pass it and a reduced policy states what it did not run, leave it out
- *   and the rendering is exactly what it was before the honesty line existed
+ *   and the rendering is exactly what it was before the honesty line existed. `root` and `cwd` are the
+ *   repository root and the reader's directory: pass them and a command printed below the root states
+ *   where it runs (10.3); omit them and the bytes are what they were
  * @returns {string}
  */
-export function renderHuman(report, { color = false, verbose = false, off, overridden = [], preset } = {}) {
+export function renderHuman(report, { color = false, verbose = false, off, overridden = [], preset, root, cwd } = {}) {
   const targets = report.targets ?? [];
   const findings = report.findings ?? [];
   // A passing finding is never printed as a finding: the header counted it, and a repository that is
   // fine cannot be allowed to look like a repository that is not (10.1).
   const visible = findings.filter((finding) => finding.status !== 'pass');
   const passing = findings.filter((finding) => finding.status === 'pass');
-  const options = { color, verbose, labels: new Map(defaultCatalog.map((rule) => [rule.id, rule.label ?? rule.id])) };
+  const options = { color, verbose, labels: new Map(defaultCatalog.map((rule) => [rule.id, rule.label ?? rule.id])), root, cwd };
 
   const verdict = report.summary.verdict === 'fail' ? 'FAIL' : 'PASS';
   const lines = [
@@ -707,7 +740,7 @@ export function renderHuman(report, { color = false, verbose = false, off, overr
   // nor `--verbose` because its finding has a target and no path, so no block was ever built for it.
   lines.push(...unverifiedLines(report, defaultCatalog, options, renderedSkips));
 
-  lines.push(...nextBlock(report, defaultCatalog, { off: off ?? [] }));
+  lines.push(...nextBlock(report, defaultCatalog, { off: off ?? [], root, cwd }));
 
   return `${lines.join('\n')}\n`;
 }

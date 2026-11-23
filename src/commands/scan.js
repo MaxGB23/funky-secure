@@ -26,7 +26,7 @@ export async function run({
   catalog = defaultCatalog,
   collector,
 }) {
-  const { report, policy } = await collectScan({
+  const { report, ctx, policy } = await collectScan({
     cwd,
     env,
     scope,
@@ -44,7 +44,18 @@ export async function run({
   const text =
     format === 'json'
       ? renderJson(report, withTimestamp ? { timestamp: new Date().toISOString() } : {})
-      : renderHuman(report, { color, verbose, off: offByPolicy(policy), overridden: policy.overridden, preset: policy.preset });
+      : renderHuman(report, {
+          color,
+          verbose,
+          off: offByPolicy(policy),
+          overridden: policy.overridden,
+          preset: policy.preset,
+          // The report is repository-relative by contract (10.1); only the human rendering states the
+          // directory its commands run in, so it needs the root the context resolved and the reader's
+          // own directory (#540).
+          root: ctx.root,
+          cwd,
+        });
 
   stdout.write(text);
   return report.summary.verdict === 'fail' ? 1 : 0;

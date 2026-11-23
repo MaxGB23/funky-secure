@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -353,6 +353,48 @@ test('a warn-only run that lists an action ends by naming that action (#360)', a
     false,
     'the report never contradicts the action it printed above',
   );
+});
+
+test('a scan from a member states the root on both lines that print a command (10.3)', async (t) => {
+  // The renderer is pure and knows no repository, so only the command's own `cwd` and the root the
+  // context carries can make the report say where its commands run (issue #540).
+  const dir = scratch(t);
+  const member = join(dir, 'packages', 'a');
+  mkdirSync(member, { recursive: true });
+  writeFileSync(join(dir, 'package-lock.json'), '{}\n');
+  const streams = io(member, { root: dir });
+  const code = await run(['scan', '--scope', 'repo', '--only', 'foreign-lockfile'], streams);
+
+  assert.equal(code, 0, 'a warn at the default threshold exits 0');
+  const prefix = `(cd "${dir}" &&`;
+  assert.ok(
+    streams.stdout.text.includes(`     → ${prefix}`),
+    `the finding's action line states the root:\n${streams.stdout.text}`,
+  );
+  assert.ok(
+    streams.stdout.text.split('\n').some((line) => line.startsWith(`next     ${prefix}`)),
+    `the next block states the root:\n${streams.stdout.text}`,
+  );
+  assert.equal(
+    streams.stdout.text.split(prefix).length - 1,
+    2,
+    'one spelling per print site, and no other command carries one',
+  );
+});
+
+test('explain prints the same bytes from a member as from the root (S4)', async (t) => {
+  // `explain` renders through its own functions and reads no repository fact, so the rendering rule
+  // cannot reach its lines: the module boundary protects it, not a special case.
+  const dir = scratch(t);
+  const member = join(dir, 'packages', 'a');
+  mkdirSync(member, { recursive: true });
+  const atRoot = io(dir, { root: dir });
+  const below = io(member, { root: dir });
+
+  assert.equal(await run(['explain', '--list'], atRoot), 0);
+  assert.equal(await run(['explain', '--list'], below), 0);
+  assert.equal(below.stdout.text, atRoot.stdout.text, 'explain does not state a directory');
+  assert.equal(below.stdout.text.includes('(cd'), false);
 });
 
 test('explain with no argument prints the catalogue, the same bytes --list prints', async (t) => {
