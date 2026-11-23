@@ -35,3 +35,19 @@ Issue #548. Four blind judgements measured every cell of the shell matrix. The d
 - L7 (judge B, third round, verbatim): "a worker following the plan verbatim edits the wrong rule, works to an undefined test scope (F9), and implements a cmd-leg check that has no CI leg to run on."
 - L8 (judge A, third round, verbatim): "S2 ships a spelling that pnpm rejects for legal digit-leading names (`0x`, `7zip-bin`) on all four shell families, and neither the plan's predicate nor its new check can see it." Its other findings — the `&;^` correction, the `execSync` spawn shape, the R5/R2 error, the docs-test ordering trap — are folded into S3, S5 and T4 above.
 - L9 (owner, verbatim): «Recuerda jueces solo cuando sea necesario». Read as: the design of this record is judged and closed, so the code that applies it is verified by the suite and by the probe on the Windows leg, not by another blind round. A pair stays for a plan whose design is still open, or for a claim about a third party that cannot be run here.
+- L10 — the native review stopped itself, and it found an injection this record introduced (2026-11-23).
+  Lineage `review-dfb9b75f4dfc1b19`, risk high, four lenses, 319 original lines, correction budget 160.
+  State `escalated`; transition `stop`, reason `native_stop_required`, **no continuation offered**;
+  escalation cause `unknown_causality`, findings `R2-001` and `R3-UNQUOTED-PIN`; the provider refuter
+  corroborated `R1-SHELL-INJECTION-PIN` (`src/rules/exact-versions.js:228`, `:289-290`),
+  `R1-SHELL-INJECTION-DIR` (`:252`) and `R4-PIN-SHELL-VERSION` (`:290-292`). The substance: the old
+  single-quoted spelling suppressed `$` and backticks, and the new double-quoted one expands them, so a
+  dependency name or importer directory written in a manifest can execute when the printed line is
+  pasted. Non-blocking: `R2-002` and `R3-GOLDEN-SHELL-GUARD-WEAK` (the golden invariant asserts "no `'`"
+  and calls it "readable by cmd, bash and sh"), `R2-003` (the comment names `%` and `"` but not `$` or a
+  backtick), `R4-DIR-QUOTING` (the quoted `-C` fallback expands `$pkg`).
+  The branch `fix/548-command-speaks` is **not pushed** and its commit `252dc57` is **not delivered**.
+  Per `AGENTS.md` the lineage is the owner's open work: not retried, not reset, not recovered, not
+  abandoned. The code needs a fail-closed redesign — a command printed only when the name and the
+  directory are provably safe, and the prose route otherwise — which is a new candidate and a new
+  lineage, never a continuation of this one.
