@@ -348,6 +348,15 @@ export function probe({ root, run = runCommand, pins = [PROBE_PIN, PROBE_SCOPED_
     if (!requireCommand(problems, { pin, command })) continue;
 
     const base = join(root, `pin-${index + 1}`);
+    // An absolute directory is refused before anything is prepared: the directory grammar admits a leading
+    // slash, so `join` would fold it under the scratch root while the printed command still carried
+    // `-C /…` and acted outside it (R1-001, R4-001).
+    if (typeof pin.dir === 'string' && pin.dir !== '' && isAbsolute(pin.dir)) {
+      problems.push(
+        `the pin fixture for ${pin.dir} names an absolute directory, so nothing was prepared for it: a command carrying it would act outside the directory this probe owns`,
+      );
+      continue;
+    }
     const target = pin.dir === undefined || pin.dir === '' ? base : join(base, pin.dir);
     // The directory grammar admits `..`, so a fixture can name a parent — and a probe that writes there
     // writes outside the tree it audits. Such a fixture is reported rather than prepared.

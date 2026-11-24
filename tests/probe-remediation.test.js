@@ -356,6 +356,32 @@ test('a fixture whose directory escapes the scratch root is refused, never prepa
   assert.equal(existsSync(join(root, '..', escaped)), false, 'the probe wrote outside the directory it owns');
 });
 
+test('a fixture with an absolute directory is refused, never prepared (R1-001)', (t) => {
+  // The directory grammar admits a leading slash, so the rule prints a command for an absolute directory.
+  // `join` folds it under the scratch root and the containment check then passes, while the command still
+  // carries `-C /…` and acts outside the tree the probe owns: the fixture is refused before any write.
+  const ABSOLUTE = Object.freeze({
+    type: 'dependencies',
+    dependency: 'left-pad',
+    version: '1.3.0',
+    dir: `/escaped-${process.pid}-${Date.now()}`,
+  });
+  assert.notEqual(pinCommand(ABSOLUTE), null, 'the rule no longer prints a command for an absolute directory');
+  assert.ok(pinCommand(ABSOLUTE).includes(`-C ${ABSOLUTE.dir}`), 'the command no longer carries the directory');
+
+  const root = scratch(t);
+  const seen = [];
+  const result = probe({ root, run: (command) => seen.push(command), pins: [ABSOLUTE] });
+
+  assert.equal(result.ok, false, 'a fixture that would act outside the scratch root answered ok');
+  assert.ok(
+    result.problems.some((problem) => problem.includes('names an absolute directory')),
+    'the absolute directory was not reported',
+  );
+  assert.equal(seen.length, 2, 'a pin that would act outside the tree was handed to a shell anyway');
+  assert.equal(existsSync(`/escaped-${process.pid}`), false, 'the probe wrote outside the directory it owns');
+});
+
 test('a command that ran and left nothing behind is a failure, never a pass', (t) => {
   const root = scratch(t);
   const nothing = probe({ root, run: () => {} });
@@ -432,7 +458,11 @@ const WRAPPED = /^\(cd "[^"]*" && (.*)\)$/s;
  * `cmd` and bash both pass through without expanding or splitting; a version is the record's S2c class
  * with `*`, which `workspace:*` and the redacted `https://***@host` of a tarball need.
  */
-const SAFE_NAME = /^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+$/;
+// npm's grammar for a name, the one the rule prints a command for: uppercase is inside it, because npm
+// refuses new uppercase names but publishes plenty of old ones and no shell reads a letter's case. This
+// invariant exists to catch a command the catalogue should not print, so it must not be narrower than the
+// rule or it reports a valid legacy name as unsafe (`R2-002`, `R3-003`).
+const SAFE_NAME = /^(?:@[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~-]+$/;
 const SAFE_DIR = /^[A-Za-z0-9._\/-]+$/;
 const SAFE_VERSION = /^[A-Za-z0-9._~:/@+*-]+$/;
 
