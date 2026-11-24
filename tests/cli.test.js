@@ -168,6 +168,36 @@ test('bad usage exits 2 with the action first, the reason labelled, and nothing 
   }
 });
 
+test('scan refuses every input that would supply a repository root', async (t) => {
+  const dir = scratch(t);
+
+  for (const flag of ['--root', '--cwd', '--dir', '--project-root']) {
+    const streams = io(dir);
+    const code = await run(['scan', flag, dir], streams);
+
+    assert.equal(code, 2, `expected exit 2 for ${flag}`);
+    assert.equal(streams.stdout.text, '', `expected no stdout for ${flag}`);
+    assert.equal(
+      streams.stderr.text,
+      'funky-secure: run funky-secure --help to see the accepted commands and flags\n' +
+        `reason: unknown flag "${flag}"\n`,
+      `${flag} must be refused as an unknown flag, not read as a root`,
+    );
+  }
+
+  const streams = io(dir);
+  const code = await run(['scan', dir], streams);
+
+  assert.equal(code, 2, 'expected exit 2 for a positional argument');
+  assert.equal(streams.stdout.text, '', 'expected no stdout for a positional argument');
+  assert.equal(
+    streams.stderr.text,
+    `funky-secure: drop "${dir}"\n` +
+      `reason: unexpected argument "${dir}" (scan takes no positional arguments)\n`,
+    'a positional must be refused, not read as a root',
+  );
+});
+
 test('a rejected flag value leads with the accepted values', async (t) => {
   const dir = scratch(t);
   const streams = io(dir);

@@ -37,11 +37,18 @@
  * (`src/lib/foreign-pin.js`), which is the step a user migrating off npm follows.
  *
  * Every write happens inside the `mkdtemp` directory, which is removed before the process exits.
+ *
+ * A third thing keeps it honest, and it is the one R4-002 named on #552: a fixture the rule will not
+ * spell is a failure, not a skip. `pinCommand` returns no command for a value outside its grammars, so a
+ * rule change that refuses one of the fixtures below would have left this leg green with no pin executed
+ * — the green that measures nothing this script was written to refuse. Such a fixture is a problem that
+ * names it, because the probe exists to execute the printed spelling: a fixture it cannot print is a
+ * measurement gap, and a gap is never a pass.
  */
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { FOREIGN_PIN_FLAG, resolveLockfileStep } from '../src/lib/foreign-pin.js';
@@ -270,15 +277,41 @@ function writeVendor(dir) {
 }
 
 /**
+ * Whether a pin fixture produced a command, reporting the gap when it did not.
+ *
+ * The fixture was written so a printed pin could be followed and judged, so a fixture the rule refuses to
+ * spell measured nothing: `ok` is not the answer for it, and neither is silence. The problem names the
+ * fixture, the value it carries and why it is a problem, because a reader who learns only that "a pin was
+ * refused" has to guess which one the rule stopped printing (S4, R4-002).
+ *
+ * @param {Array<string>} problems
+ * @param {{ pin: object, command: string | null }} input
+ * @returns {boolean} whether there is a command to run
+ */
+function requireCommand(problems, { pin, command }) {
+  if (command !== null) return true;
+  const where = pin.dir === undefined || pin.dir === '' ? 'the root importer' : pin.dir;
+  problems.push(
+    `the pin fixture for ${where} printed no command for ${pin.type}["${pin.dependency}"]=${pin.version}, so nothing was run for it: this probe exists to execute the printed spelling, and a fixture the rule cannot print is a measurement gap, not a pass`,
+  );
+  return false;
+}
+
+/**
  * Follow both commands and judge what they left behind.
  *
  * The runner is a parameter, for the same reason `probe-permissions.js` takes its `fetchImpl`: the suite
  * asserts the judgement and the two commands without pnpm, an install or a network.
  *
- * @param {{ root: string, run?: (command: string, cwd: string) => void }} input
+ * The fixtures are a parameter for a reason the runner cannot cover: both shipped ones are inside the
+ * grammar the rule interpolates, so the refusal a rule change would produce — the branch below that
+ * reports a gap instead of skipping it — is unreachable from them. A test drives it with a fixture the
+ * rule must refuse, which is why the list is an argument and not a constant read here.
+ *
+ * @param {{ root: string, run?: (command: string, cwd: string) => void, pins?: Array<object> }} input
  * @returns {{ ok: boolean, problems: Array<string> }}
  */
-export function probe({ root, run = runCommand }) {
+export function probe({ root, run = runCommand, pins = [PROBE_PIN, PROBE_SCOPED_PIN] }) {
   const problems = [];
 
   // Two resolve shapes, because the catalogue prints two: the bare step for a repository that declares no
@@ -304,40 +337,40 @@ export function probe({ root, run = runCommand }) {
     );
   }
 
-  const pinDir = join(root, 'pin');
-  writeVendor(pinDir);
-  writeFileSync(join(pinDir, 'package.json'), FIXTURE_MANIFEST);
-  // A value outside the grammar the rule interpolates produces no command at all, and `null` is not a
-  // command this probe can hand a shell: the fixture is skipped rather than run and judged against an
-  // effect nothing was asked to produce. Both fixtures below are inside the grammar by construction, and
-  // the test that asserts the four shapes says so by comparing each one against `pinCommand`.
-  const rootPin = pinCommand(PROBE_PIN);
-  if (rootPin !== null) {
-    run(rootPin, pinDir);
-    problems.push(
-      ...judgeField({
-        manifest: readManifest(pinDir),
-        type: PROBE_PIN.type,
-        dependency: PROBE_PIN.dependency,
-        expected: PROBE_PIN.version,
-      }).problems,
-    );
-  }
+  // Both pin shapes, one directory each and in the order the catalogue prints them. The root form is run
+  // in its manifest's own directory; the importer form carries the `-C <dir>` prefix and must leave its
+  // effect in *that* directory, which is why the two are not interchangeable. The fixture list is the
+  // argument above, so a value the rule refuses can be driven from the suite.
+  for (const [index, pin] of pins.entries()) {
+    // The rule answers before this loop writes anything: a fixture it refuses has no directory to prepare,
+    // and preparing one would be a write the refusal never asked for (R3-003).
+    const command = pinCommand(pin);
+    if (!requireCommand(problems, { pin, command })) continue;
 
-  const workspace = join(root, 'workspace');
-  const importerDir = join(workspace, PROBE_SCOPED_PIN.dir);
-  writeVendor(importerDir);
-  writeFileSync(join(importerDir, 'package.json'), FIXTURE_MANIFEST);
-  writeFileSync(join(workspace, 'package.json'), FIXTURE_MANIFEST);
-  const scopedPin = pinCommand(PROBE_SCOPED_PIN);
-  if (scopedPin !== null) {
-    run(scopedPin, workspace);
+    const base = join(root, `pin-${index + 1}`);
+    const target = pin.dir === undefined || pin.dir === '' ? base : join(base, pin.dir);
+    // The directory grammar admits `..`, so a fixture can name a parent — and a probe that writes there
+    // writes outside the tree it audits. Such a fixture is reported rather than prepared.
+    const between = relative(base, target);
+    if (between.startsWith('..') || isAbsolute(between)) {
+      problems.push(
+        `the pin fixture for ${pin.dir} resolves outside its own scratch directory, so nothing was prepared for it: this probe never writes outside the directory it owns`,
+      );
+      continue;
+    }
+
+    writeVendor(target);
+    writeFileSync(join(target, 'package.json'), FIXTURE_MANIFEST);
+    // The directory above the importer is a repository too, so `pnpm -C <dir>` has a workspace to stand in.
+    if (target !== base) writeFileSync(join(base, 'package.json'), FIXTURE_MANIFEST);
+
+    run(command, base);
     problems.push(
       ...judgeField({
-        manifest: readManifest(importerDir),
-        type: PROBE_SCOPED_PIN.type,
-        dependency: PROBE_SCOPED_PIN.dependency,
-        expected: PROBE_SCOPED_PIN.version,
+        manifest: readManifest(target),
+        type: pin.type,
+        dependency: pin.dependency,
+        expected: pin.version,
       }).problems,
     );
   }
@@ -375,22 +408,16 @@ function main() {
   }
 
   if (result.ok) {
-    // Built from the commands the rule actually prints, with an absent one skipped: a pin it refuses to
-    // print has no command to name, and a message that spelled `pinCommand(...)` again would read
-    // `null left …`.
-    const followed = [PROBE_PIN, PROBE_SCOPED_PIN]
+    // Built from the commands the rule actually prints. Neither can be absent here: `probe()` reports a
+    // fixture the rule refuses to print as a problem, so an `ok` result is one where both pins ran (S4).
+    const pins = [PROBE_PIN, PROBE_SCOPED_PIN]
       .map((pin) => ({ pin, command: pinCommand(pin) }))
-      .filter((entry) => entry.command !== null);
-    const pins =
-      followed.length === 0
-        ? 'no pin command was printed, so none was followed'
-        : followed
-            .map(({ command, pin }) =>
-              pin.dir === undefined
-                ? `${command} left ${pin.type}["${pin.dependency}"]=${pin.version}`
-                : `${command} left the same in ${pin.dir}`,
-            )
-            .join(', and ');
+      .map(({ command, pin }) =>
+        pin.dir === undefined
+          ? `${command} left ${pin.type}["${pin.dependency}"]=${pin.version}`
+          : `${command} left the same in ${pin.dir}`,
+      )
+      .join(', and ');
     console.log(
       `probe-remediation: ${lockfileCommand()} and its ${FOREIGN_PIN_FLAG} form each recorded ${PROBE_RESOLVE_PIN.dependency}, ${pins}`,
     );
