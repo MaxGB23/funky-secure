@@ -79,7 +79,12 @@ own writes land in the root's. At the repository root nothing is added and no st
 block printed there is byte-identical to the one above. A report answers the same question the same
 way: below the repository root its rendering prefixes each command it prints with the directory that
 command runs in, as `(cd "<the repository root>" && <command>)`, at both places it prints one, and at
-the root it adds nothing (10.3). The commands inside the report body keep their
+the root it adds nothing (10.3). The prefix assumes a shell that can reach the repository's volume,
+and the tool renders it only for a reader standing below the repository root — both the root and that
+directory come from one invocation, and no flag, positional or config key carries a root — so a
+repository root and a reader's directory on two volumes is not a position a supported invocation
+produces; an alias that resolves one directory on another letter is a limit the contract states rather
+than measures. The commands inside the report body keep their
 repo-relative spelling, because a report that changed with the directory `scan` ran in would not be the
 same report about the same repository (10.1).
 

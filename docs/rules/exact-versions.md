@@ -176,15 +176,19 @@ recorded version a manifest carries can execute when the line is pasted (0042 an
 Quoting was never the boundary it looked like: the single-quoted spelling this rule printed before
 suppressed those expansions by accident, not by design.
 
-**The spelling follows the name, and the shells it serves are named.** `cmd`, `bash` and `sh` read
-both spellings identically. Among the names that pass the grammar, one that is unscoped, carries no dot
-and does not start with a digit takes the quote-free dotted path —
+**The spelling follows the name and the version, and the shells it serves are named.** `cmd`, `bash`
+and `sh` read both spellings identically. Among the names that pass the grammar, one that is unscoped,
+carries no dot and does not start with a digit takes the quote-free dotted path —
 `pnpm pkg set dependencies.typescript=5.9.2 && pnpm install` — and every other name takes the
-bracketed form above, the whole argument in double quotes with its inner ones escaped. Two shells lose
-one form each, and neither loss is hidden: `pwsh` 7 splits the escaped argument into two, which pnpm
-answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and writes nothing, and Windows PowerShell 5.1 rejects
-`&&` before it reads any quoting. The dotted path is not a repair for either, and it is not a free
-choice of style: through a name that carries a dot it corrupts the manifest —
+bracketed form above, the whole argument in double quotes with its inner ones escaped. A version
+carrying a `*` takes the bracketed form whatever the name is, because that path is unquoted and `bash`
+and `sh` glob the whole word there, while a `*` inside those double quotes is literal: `workspace:*` —
+the exact form this rule pins an internal package to — and the redacted `https://***@host` of a tarball
+URL are printed bracketed even for a name the dotted path could carry (0042 and its errata, I-98).
+Two shells lose one form each, and neither loss is hidden: `pwsh` 7 splits the escaped argument into
+two, which pnpm answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and writes nothing, and Windows PowerShell
+5.1 rejects `&&` before it reads any quoting. The dotted path is not a repair for either, and it is not
+a free choice of style: through a name that carries a dot it corrupts the manifest —
 `dependencies.lodash.merge=…` writes a nested `lodash` object beside the untouched entry and exits
 `0` — and a digit-leading name is refused with `Numeric suffix "z" is not supported`. Both are
 published names that a real `package.json` carries (0042).

@@ -234,19 +234,23 @@ the pin alone is the declaration, and nothing about it is skipped.
   name, a directory or a recorded version a manifest carries can execute when the line is pasted (0042
   and its errata, #548). The names that pass take one of two spellings:
   `pnpm pkg set dependencies.is-odd=3.0.1 && pnpm install` — the quote-free dotted path — for a name
-  that is unscoped, carries no dot and does not start with a digit, and
-  `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install` for every other name, the
-  whole argument double-quoted with its inner quotes escaped. Both are read identically by `cmd`, `bash`
-  and `sh`, and the two shells that lose one are named rather than hidden: `pwsh` 7 splits the escaped
-  form into two arguments, which pnpm answers with `ERR_PNPM_PKG_SET_INVALID_ARG` and a write of
-  nothing, and Windows PowerShell 5.1 rejects `&&` before it reads any quoting (0042). **Except for an
-  internal package, whose resolved version is a path.** For a `workspace:` range the pin is
-  `workspace:*`, the exact form Detection already names, and never the `link:../lib` the lockfile
-  records as that range's resolved version: replacing the protocol with a path takes the package out
-  of the workspace while clearing the finding, which is the remediation destroying something the
-  author wrote. Measured on pnpm 12.3.4: with `workspace:*` the lockfile records
-  `specifier: workspace:*` and the package keeps its symlink into the workspace. **Except where the
-  repository declares that it freezes its own lockfile** —
+  that is unscoped, carries no dot and does not start with a digit, and whose version carries no `*`,
+  and `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5" && pnpm install` for every other name, the
+  whole argument double-quoted with its inner quotes escaped. A version carrying a `*` takes the
+  bracketed spelling whatever the name is, because the dotted path is unquoted and `bash` and `sh`
+  glob the whole word there — a file named `dependencies.left-pad=workspace:1.2.3` would replace
+  `dependencies.left-pad=workspace:*` and pin a version nobody chose — while the `*` is literal inside
+  the bracketed form's double quotes, which is why the version grammar keeps it (0042 and its errata,
+  I-98). Both are read identically by `cmd`, `bash` and `sh`, and the two shells that lose one are
+  named rather than hidden: `pwsh` 7 splits the escaped form into two arguments, which pnpm answers
+  with `ERR_PNPM_PKG_SET_INVALID_ARG` and a write of nothing, and Windows PowerShell 5.1 rejects `&&`
+  before it reads any quoting (0042). **Except for an internal package, whose resolved version is a
+  path.** For a `workspace:` range the pin is `workspace:*`, the exact form Detection already names,
+  and never the `link:../lib` the lockfile records as that range's resolved version: replacing the
+  protocol with a path takes the package out of the workspace while clearing the finding, which is the
+  remediation destroying something the author wrote. Measured on pnpm 12.3.4: with `workspace:*` the
+  lockfile records `specifier: workspace:*` and the package keeps its symlink into the workspace.
+  **Except where the repository declares that it freezes its own lockfile** —
   `frozenLockfile: true` in `pnpm-workspace.yaml`, which is where pnpm 12 keeps project configuration —
   **where the finding is `manual`**: it names the manifest edit and says the lockfile has to move, and
   prints no command, because no command clears the finding there. `pnpm pkg set` still succeeds; it is

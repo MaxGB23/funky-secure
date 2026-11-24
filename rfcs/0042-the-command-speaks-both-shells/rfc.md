@@ -155,3 +155,17 @@ named losses are unchanged: what changed is the condition under which a command 
 §8.2 R5 is the present contract and states the same rule; `I-97` of `docs/decisions.md` records the
 decision, and the page `docs/rules/exact-versions.md` states the refusal, the three grammars and the
 route a reader takes instead.
+
+**The spelling is chosen by the name and by the version, and the rule above names the first alone.** A
+version carrying a `*` takes the bracketed, escaped spelling even when the name would take the dotted
+one: `pnpm pkg set "dependencies[\"left-pad\"]=workspace:*" && pnpm install`, never
+`pnpm pkg set dependencies.left-pad=workspace:* && pnpm install`. The dotted path is the one spelling
+printed with no quotes at all, so `bash` and `sh` glob the whole word: a file named
+`dependencies.left-pad=workspace:1.2.3` in the directory the line runs in replaces
+`dependencies.left-pad=workspace:*` and pins a version nobody chose. Inside the bracketed form the `*`
+sits in double quotes, where every shell reads it literally — which is why the version grammar keeps
+it, and why a version such as `workspace:*` still reaches a command. The predicate is therefore three
+clauses on the name — unscoped, carries no dot, does not start with a digit — plus one on the version,
+decided in `takesDottedPath` and pinned by the test whose name carries `R1-SHELL-GLOB-VERSION`. Nothing
+else moves: both spellings, both named losses and every other byte of the rule stand as decided; §8.2
+R5, `I-98` of `docs/decisions.md` and `docs/rules/exact-versions.md` state it for the present contract.
