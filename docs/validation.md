@@ -383,6 +383,25 @@ defect was not cosmetic. A line that named the wrong set in a report whose verdi
 reader trusts when there is nothing else to read, and the round's own path — npm out, pnpm in, every step exiting
 `0` — is where it mattered.
 
+## The round at `6acd669`
+
+A maintainer's round on a local clone of `pnpm` (`pnpm11/bins/resolver` as the member), nothing fetched and
+nothing from the repository executed. Five checks, one verdict each.
+
+| Check | What it measured | Verdict |
+|---|---|---|
+| The human report from a member | 38 commands printed; every one on a single line, none ending in `&&`, each carrying `(cd "M:/pruebas/gaps/repos/pnpm" && …)` exactly once; the longest 270 columns; exit 1 | PASS |
+| The refusal route | a manifest carrying `evil$(id)` prints `edit package.json by hand: set the dependencies entry <the value this finding names> to "1.3.0"` — no `pnpm` in the line, and the value is not repeated. The literal appears once, in the diagnostic `evil$(id)@^1.3.0 is a floating range`, which is evidence and not a line to paste | PASS |
+| A star in the recorded version | a lockfile recording `workspace:*` beside a floating range prints `pnpm pkg set "dependencies[\"left-pad\"]=workspace:*" && pnpm install` | PASS |
+| The JSON contract | from the member and from the root, `--format json --with-timestamp` differs only in `generatedAt` and carries no `(cd `, with the eight keys plus that stamp | PASS |
+| `explain --list` | the same hash from both directories, exit 0 twice | PASS |
+| The probe | `node scripts/probe-remediation.js` from the member exits 0 and names the two resolve steps and the two pin shapes | PASS |
+
+What the round did **not** reach: that repository's `next` block printed no prefixed command — its steps
+are `funky-secure` and not a tool the prefix serves — so the two-print-site comparison had nothing to
+compare there; and `{"left-pad":"workspace:*"}` in the manifest is exact by contract and produces no
+finding, so the star form was measured through the lockfile as well.
+
 ## How this page stays true
 
 The table is checked in CI through `tests/docs-contract.test.js`, which asserts the facts a document can

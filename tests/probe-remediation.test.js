@@ -379,7 +379,14 @@ test('a fixture with an absolute directory is refused, never prepared (R1-001)',
     'the absolute directory was not reported',
   );
   assert.equal(seen.length, 2, 'a pin that would act outside the tree was handed to a shell anyway');
-  assert.equal(existsSync(`/escaped-${process.pid}`), false, 'the probe wrote outside the directory it owns');
+  // The refusal must come before any write, and `join` folds the leading slash under the scratch root — so
+  // the path to assert absent is the one a preparation would have created, not the absolute one (R3-001).
+  assert.equal(
+    existsSync(join(root, 'pin-1', ABSOLUTE.dir)),
+    false,
+    'the refused fixture prepared a directory before refusing it',
+  );
+  assert.equal(existsSync(ABSOLUTE.dir), false, 'the probe wrote outside the directory it owns');
 });
 
 test('a command that ran and left nothing behind is a failure, never a pass', (t) => {
