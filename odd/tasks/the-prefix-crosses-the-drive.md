@@ -130,5 +130,19 @@ this record depends on it.
 | Checkpoint | State | Evidence |
 | --- | --- | --- |
 | `J1` — the plan, before any source write | **done, twice refuted** | v1 `83677b4` by `jd-judge-a` and `jd-judge-b` (both NO SHIP, L2); v2 `3b80e05` by `jd-judge-b` (one CRITICAL, L3). v3 is written from both verdicts and is not re-judged: two rounds are the limit. |
-| `J2` — the commit that touches `docs/` | pending | the docs PR (T4) and the code PR (T1-T3) each quote a number and touch `docs/`, so both carry a round. |
+| `J2` — the commit that touches `docs/` | **stop** | the docs PR (T4) and the code PR (T1-T3) each quote a number and touch `docs/`, so both carry a round. |
 | `J3` — every `T*` landed | pending | after T1-T4 |
+- **L6 — the code unit, and the lineage that stopped on it.** `b4d23a4` (probe guard, three grammars, `''`
+  in both routes, the CLI input surface) plus `3a7a0db` (the correction). T1-T3 landed; the suite reads
+  1016 tests, 1015 pass, 0 fail, 1 pre-existing skip. Lineage `review-be60ea5646d0c7df` (tier high, 315
+  original lines, correction budget 158) reached `correction_required` with two CRITICAL findings that are
+  **false, and refuted by the suite**: `R3-001` claims the "four command shapes" test still expects
+  `pin`/`workspace` cwd values — it never asserted a directory, only the four command strings — and
+  `R3-002` claims existing assertions pin the old refusal sentence — the only `expand or split` left in
+  that file is a comment explaining why the old wording was wrong. Both are `evidence_class: inferential`
+  and nothing in the suite is red. The correction was made for what *was* real — `R3-003`: the probe wrote
+  a fixture before the rule validated it, and the directory grammar admits `..`, so a fixture could write
+  outside the scratch root; `3a7a0db` validates first, refuses an escaping destination, and pins both with
+  a test observed RED with the guard disabled. The provider's targeted validator rejected the correction,
+  the lineage escalated to `stop` / `native_stop_required` with **no continuation offered**, and it is the
+  owner's open work like `review-dfb9b75f4dfc1b19`. No second lineage was started over this candidate.
