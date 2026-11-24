@@ -299,16 +299,23 @@ reader does not stand at the repository root, a command it prints is prefixed wi
 runs in — as `(cd "<the repository root>" && <command>)` — at both places it prints one, the finding's
 action line and the `next` block, so one command has one spelling in one report; at the repository
 root nothing is added; and a line that is not a command of a tool this tool prints commands for
-(`pnpm`, `git`, `corepack`) is printed unchanged. The directory is absolute because on `cmd` a grouped
-`cd` is not a subshell: the first line would leave the reader at the root, and a relative spelling in
-the second would resolve one level above it and never run. A command is never wrapped, however long
-it is. The 96-column ceiling exists so a reader can follow a line, and it yields to the one line whose
-purpose is to be pasted, because every way of splitting one loses it: a line that opens with `&&` is a
-parse error on `cmd` and on `bash` alike, on `cmd` a line that ends with it is fatal too, and a break
-inside the quoted directory is legal on `bash` — which then runs the fragments instead of the command.
-So the ceiling governs every other line and this one governs itself. The breakage predates the
-directory, since a deep path already exceeded the ceiling; stating the directory is what brought it
-to every command printed below the root.
+(`pnpm`, `git`, `corepack`) is printed unchanged. The prefix assumes a shell that can reach the
+repository's volume, because it is a `cd` into an absolute directory and not a change of volume. The
+tool renders it only for a reader who stands below the repository root, and both the root and the
+reader's directory come from one invocation — the root is that directory itself, or the git top level
+that directory answers — so the root and the reader's directory are on one volume whenever the invocation is not an
+alias: no flag, no positional and no config key carries a root. An alias that
+resolves one directory on another letter — a `subst`, a junction, a disconnected UNC mapping — is a
+limit this contract states rather than measures, and nothing here claims it safe. The directory is
+absolute because on `cmd` a grouped `cd` is not a subshell: the first line would leave the reader at
+the root, and a relative spelling in the second would resolve one level above it and never run. A
+command is never wrapped, however long it is. The 96-column ceiling exists so a reader can follow a
+line, and it yields to the one line whose purpose is to be pasted, because every way of splitting one
+loses it: a line that opens with `&&` is a parse error on `cmd` and on `bash` alike, on `cmd` a line
+that ends with it is fatal too, and a break inside the quoted directory is legal on `bash` — which
+then runs the fragments instead of the command. So the ceiling governs every other line and this one
+governs itself. The breakage predates the directory, since a deep path already exceeded the ceiling;
+stating the directory is what brought it to every command printed below the root.
 
 ### 10.4 Exit codes
 
