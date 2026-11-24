@@ -303,8 +303,8 @@ root nothing is added; and a line that is not a command of a tool this tool prin
 repository's volume, because it is a `cd` into an absolute directory and not a change of volume. The
 tool renders it only for a reader who stands below the repository root, and both the root and the
 reader's directory come from one invocation — the root is that directory itself, or the git top level
-that directory answers — so a repository root and a reader's directory on two volumes is not a position
-a supported invocation produces: no flag, no positional and no config key carries a root. An alias that
+that directory answers — so the root and the reader's directory are on one volume whenever the invocation is not an
+alias: no flag, no positional and no config key carries a root. An alias that
 resolves one directory on another letter — a `subst`, a junction, a disconnected UNC mapping — is a
 limit this contract states rather than measures, and nothing here claims it safe. The directory is
 absolute because on `cmd` a grouped `cd` is not a subshell: the first line would leave the reader at

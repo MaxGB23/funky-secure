@@ -226,7 +226,7 @@ the pin alone is the declaration, and nothing about it is skipped.
   - the name matches npm's own grammar, `^(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+$`;
   - the importer directory matches `^[A-Za-z0-9._/-]+$`, and the root importer needs no prefix and no
     grammar, because it names no directory for `-C` to carry;
-  - the version matches `^[A-Za-z0-9._~:/@+-*]+$`, where the `*` is what `workspace:*` and the
+  - the version matches `^[A-Za-z0-9._~:/@+*-]+$`, where the `*` is what `workspace:*` and the
     redacted `https://***@host` carry.
   A value outside its grammar prints **no command**: the finding keeps its `manual` kind and names the
   manifest edit instead. A quoted value is not a safe value — double quotes stop `cmd` splitting the

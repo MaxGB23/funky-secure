@@ -167,7 +167,7 @@ importer directory and the version — and each one is a string a manifest, a wo
 lockfile carries, so each one is checked before anything is built. The name must match npm's own
 grammar, `^(?:@[a-z0-9._~-]+/)?[a-z0-9._~-]+$`; the importer directory must match
 `^[A-Za-z0-9._/-]+$`, and the root importer needs no prefix and no grammar because it names no
-directory; the version must match `^[A-Za-z0-9._~:/@+-*]+$`, where the `*` is what `workspace:*` and
+directory; the version must match `^[A-Za-z0-9._~:/@+*-]+$`, where the `*` is what `workspace:*` and
 the redacted `https://***@host` carry. Outside any of them the finding keeps its `manual` kind and
 names the hand edit — the manifest, the section, the entry and the value — and prints no command,
 because a quoted value is not a safe value. Double quotes stop `cmd` splitting the argument and do not

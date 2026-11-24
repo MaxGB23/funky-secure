@@ -169,3 +169,7 @@ clauses on the name — unscoped, carries no dot, does not start with a digit �
 decided in `takesDottedPath` and pinned by the test whose name carries `R1-SHELL-GLOB-VERSION`. Nothing
 else moves: both spellings, both named losses and every other byte of the rule stand as decided; §8.2
 R5, `I-98` of `docs/decisions.md` and `docs/rules/exact-versions.md` state it for the present contract.
+
+The class as typed above puts the hyphen between `+` and `*`, where it reads as a range and does not compile; the
+implemented class is `^[A-Za-z0-9._~:/@+*-]+$`, which accepts a literal `-`, and this errata corrects the text by
+appending rather than rewriting it.
