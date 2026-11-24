@@ -48,7 +48,7 @@
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { FOREIGN_PIN_FLAG, resolveLockfileStep } from '../src/lib/foreign-pin.js';
@@ -342,15 +342,28 @@ export function probe({ root, run = runCommand, pins = [PROBE_PIN, PROBE_SCOPED_
   // effect in *that* directory, which is why the two are not interchangeable. The fixture list is the
   // argument above, so a value the rule refuses can be driven from the suite.
   for (const [index, pin] of pins.entries()) {
+    // The rule answers before this loop writes anything: a fixture it refuses has no directory to prepare,
+    // and preparing one would be a write the refusal never asked for (R3-003).
+    const command = pinCommand(pin);
+    if (!requireCommand(problems, { pin, command })) continue;
+
     const base = join(root, `pin-${index + 1}`);
     const target = pin.dir === undefined || pin.dir === '' ? base : join(base, pin.dir);
+    // The directory grammar admits `..`, so a fixture can name a parent — and a probe that writes there
+    // writes outside the tree it audits. Such a fixture is reported rather than prepared.
+    const between = relative(base, target);
+    if (between.startsWith('..') || isAbsolute(between)) {
+      problems.push(
+        `the pin fixture for ${pin.dir} resolves outside its own scratch directory, so nothing was prepared for it: this probe never writes outside the directory it owns`,
+      );
+      continue;
+    }
+
     writeVendor(target);
     writeFileSync(join(target, 'package.json'), FIXTURE_MANIFEST);
     // The directory above the importer is a repository too, so `pnpm -C <dir>` has a workspace to stand in.
     if (target !== base) writeFileSync(join(base, 'package.json'), FIXTURE_MANIFEST);
 
-    const command = pinCommand(pin);
-    if (!requireCommand(problems, { pin, command })) continue;
     run(command, base);
     problems.push(
       ...judgeField({
