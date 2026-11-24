@@ -71,3 +71,17 @@ The review stopped on its own mechanism (`L10`) and its refuter corroborated thr
   tarball URL, turning two mandated commands into prose; a bare `*` is neither executed nor split by `cmd`,
   `bash` or `sh`. The cost is named rather than discovered: a `git+ssh://…git#v1.0.0` record carries `#`,
   which bash reads as a comment, so that version takes the prose route instead of a command.
+- L12 — the native review approved the candidate, and its correction is what shipped (2026-11-23). Lineage
+  `review-b45f6e4e3eaff1df`: four lenses, 813 original lines, budget 200. It found two CRITICAL defects the
+  argv matrix could not: `R1-SHELL-GLOB-VERSION` (the `*` this record ratified globs on the unquoted dotted
+  path) and `R3-UPPERCASE-REGRESSION` (`JSONStream` lost its command). One bounded correction (80 diff
+  lines planned, 119 changed): `takesDottedPath` gained `!version.includes('*')` so a star takes the
+  bracketed form, and `SAFE_DEPENDENCY` admits uppercase. The targeted validator confirmed both, the
+  authority burned, and the branch opened [#552](https://github.com/MaxGB23/funky-secure/pull/552) with
+  seven checks green — among them `runtime-claims-windows`, the leg this record exists to add.
+  Advisory, not fixed: `R2-001`/`R3-STAR-GLOB`/`R4-001` (the dotted path still interpolates a value that a
+  star made impossible, but the predicate now routes every star away from it), `R2-002` (the refusal text
+  gives one reason for grammar refusals), `R4-002` (a probe whose fixtures both return null exits 0),
+  `R4-003` (the Windows leg exercises only the dotted form), `R4-004` (`unsafeRoute` names `/package.json`
+  when `dir` is the empty string). And a docs gap: §8.2 R5 still says the spelling is chosen by the name;
+  it is chosen by the name and the version.
