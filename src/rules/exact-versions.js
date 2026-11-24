@@ -88,6 +88,14 @@ const SAFE_DEPENDENCY = /^(?:@[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~-]+$/;
 const SAFE_VERSION = /^[A-Za-z0-9._~:/@+*-]+$/;
 
 /**
+ * The class a value is shown in when a route repeats it: the one the printed commands interpolate, and
+ * nothing wider. A refused value is refused *because* it carries a character a shell would act on, and the
+ * prose route that names it is a line a reader may paste — so the route names the entry and never repeats
+ * the bytes it would not execute (`R1-001`).
+ */
+const SHOWABLE = /^[A-Za-z0-9._~:/@+*-]+$/;
+
+/**
  * A specifier is echoed in messages and evidence, and the version the lockfile records is echoed in
  * the remediation, and a URL specifier can carry credentials in its userinfo
  * (`https://user:token@host/repo.tgz`). Every user but a bare `git` is replaced, so a scan never
@@ -385,11 +393,17 @@ export function pinCommand({ type, dependency, version, dir }) {
  * @returns {string}
  */
 function unsafeRoute({ type, dependency, version, dir }) {
-  const manifest = dir === undefined || dir === '' || dir === '.' ? 'package.json' : `${dir}/package.json`;
-  // Both values are rendered as JSON strings: the route exists because one of them carries a character a
-  // shell would act on, or a spelling npm's or this rule's grammar refuses, and a raw `$(…)` or a
-  // newline in the prose is still text a reader has to read.
-  return `edit ${manifest} by hand: set the ${type} entry ${JSON.stringify(dependency)} to ${JSON.stringify(String(version))} — this rule prints no command for a name outside npm's grammar, or for a directory or version carrying a character a shell would not pass through untouched, and nothing is escaped, quoted or filtered into shape`;
+  const manifest =
+    dir === undefined || dir === '' || dir === '.'
+      ? 'package.json'
+      : SHOWABLE.test(dir)
+        ? `${dir}/package.json`
+        : 'the package.json of the importer directory this finding names';
+  // Both values are rendered only when they are inert. The route exists because one of them carries a
+  // character a shell would act on, and a bare `$(…)` in a line a reader pastes is that character doing
+  // its work: the entry's place is named by the type and the manifest, so the bytes can stay unnamed.
+  const shown = (value) => (SHOWABLE.test(value) ? JSON.stringify(value) : '<the value this finding names>');
+  return `edit ${manifest} by hand: set the ${type} entry ${shown(dependency)} to ${shown(String(version))} — this rule prints no command for a name outside npm's grammar, or for a directory or version carrying a character a shell would not pass through untouched, and nothing is escaped, quoted or filtered into shape`;
 }
 
 /**
@@ -432,8 +446,19 @@ function frozenRoute({ type, dependency, version, specifier, dir }) {
         ? version
         : '<the version pnpm-lock.yaml records>';
   // The empty directory is the root importer here too, for the reason `unsafeRoute` names (`R4-004`).
-  const manifest = dir === undefined || dir === '' || dir === '.' ? 'package.json' : `${dir}/package.json`;
-  return `edit ${manifest} by hand: set '${type}["${dependency}"]=${target}' and move pnpm-lock.yaml in the same change — this repository declares frozenLockfile: true in pnpm-workspace.yaml, so the install refuses to move the lockfile itself (ERR_PNPM_OUTDATED_LOCKFILE)`;
+  const manifest =
+    dir === undefined || dir === '' || dir === '.'
+      ? 'package.json'
+      : SHOWABLE.test(dir)
+        ? `${dir}/package.json`
+        : 'the package.json of the importer directory this finding names';
+  // The single quotes below stop a shell expanding the values, and they do not survive a value carrying
+  // one: a non-inert value is named, never repeated, exactly as in `unsafeRoute` (`R1-001`).
+  const entry =
+    SHOWABLE.test(dependency) && SHOWABLE.test(target)
+      ? `'${type}["${dependency}"]=${target}'`
+      : `the ${type} entry this finding names`;
+  return `edit ${manifest} by hand: set ${entry} and move pnpm-lock.yaml in the same change — this repository declares frozenLockfile: true in pnpm-workspace.yaml, so the install refuses to move the lockfile itself (ERR_PNPM_OUTDATED_LOCKFILE)`;
 }
 
 /**

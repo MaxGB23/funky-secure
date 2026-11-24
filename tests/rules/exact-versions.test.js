@@ -457,6 +457,18 @@ importers:
   );
   assert.match(byName.remediation.command, /package\.json/, 'the prose route names no file to edit');
   assert.match(byName.remediation.command, /dependencies/, 'the prose route names no section');
+  // The route is a line a reader may paste, so it names the entry and never repeats the bytes it refused
+  // to interpolate into a command (`R1-001`).
+  assert.equal(
+    byName.remediation.command.includes('evil$(touch pwned)'),
+    false,
+    'the prose route repeated a name a shell would expand',
+  );
+  assert.match(
+    byName.remediation.command,
+    /<the value this finding names>/,
+    'the prose route neither named the value nor said it was withheld',
+  );
 
   // The directory, with a legal name: the `-C` prefix of a command is not printed for a directory a
   // shell would expand, and the fallback is for the whole command, not only the prefix.
@@ -490,8 +502,13 @@ importers:
   );
   assert.match(
     byDir.remediation.command,
-    /packages\/a\$b\/package\.json/,
-    'the prose route names no manifest to edit',
+    /the package\.json of the importer directory this finding names/,
+    'the prose route neither named the manifest nor said which directory it meant',
+  );
+  assert.equal(
+    byDir.remediation.command.includes('a$b'),
+    false,
+    'the prose route repeated a directory a shell would expand',
   );
 
   // The version, with a legal name in the root importer: the recorded resolution is a string the
