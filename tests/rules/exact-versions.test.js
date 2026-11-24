@@ -331,7 +331,6 @@ test('a name outside the grammar takes no command at all, and the route is the m
     "quote'name",
     'back\\slash',
     'spaced name',
-    'UPPER',
     '@scope/tool$(id)',
   ]) {
     assert.equal(
@@ -341,11 +340,37 @@ test('a name outside the grammar takes no command at all, and the route is the m
     );
   }
 
-  // Inside the grammar both spellings survive: the legal scoped name keeps the bracketed path.
+  // Inside the grammar both spellings survive: the legal scoped name keeps the bracketed path, and an
+  // uppercase name is legal — `R3-UPPERCASE-REGRESSION`: npm refuses new uppercase names but publishes
+  // plenty of old ones, and no shell reads an uppercase letter.
   assert.equal(
     pin('@scope/tool'),
     `pnpm pkg set "devDependencies[\\"@scope/tool\\"]=1.3.0" && pnpm install`,
     'a legal scoped name lost its command',
+  );
+  assert.equal(
+    pin('JSONStream'),
+    `pnpm pkg set devDependencies.JSONStream=1.3.0 && pnpm install`,
+    'a legacy uppercase name lost the dotted command it prints',
+  );
+});
+
+test('a version carrying a star never takes the quote-free dotted path (R1-SHELL-GLOB-VERSION)', () => {
+  // The dotted path is unquoted, so bash and sh glob the whole word: a repository file named
+  // `dependencies.left-pad=workspace:1.2.3` would replace `dependencies.left-pad=workspace:*` and pin a
+  // version nobody chose. Inside the bracketed form's quotes a `*` is literal on every shell, so a version
+  // carrying one takes that spelling — the predicate gains a clause, the grammar keeps `*`.
+  const pin = (version) => pinCommand({ type: 'dependencies', dependency: 'left-pad', version });
+
+  assert.equal(
+    pin('workspace:*'),
+    `pnpm pkg set "dependencies[\\"left-pad\\"]=workspace:*" && pnpm install`,
+    'an unscoped name with a star took the unquoted path, where bash and sh glob it',
+  );
+  assert.equal(
+    pin('https://***@example.com/repo.tgz'),
+    `pnpm pkg set "dependencies[\\"left-pad\\"]=https://***@example.com/repo.tgz" && pnpm install`,
+    'a redacted tarball URL took the unquoted path, where bash and sh glob it',
   );
 });
 
@@ -356,7 +381,8 @@ test('a version outside the grammar takes no command at all, and the route is th
   // ever needed a grammar; these spellings have no such accident, so the version needs one too. The
   // grammar is the record's `^[A-Za-z0-9._~:/@+-]+$` with `*`, because `workspace:*` — the exact form S4
   // and 368 make this rule print for an internal package — and the redacted `https://***@host` of a
-  // tarball are shapes the rule itself mandates, and neither shell executes or splits a `*`.
+  // tarball are shapes the rule itself mandates; a `*` is literal only inside the bracketed form's double
+  // quotes, so those two take that spelling rather than the unquoted dotted path.
   const pin = (version) => pinCommand({ type: 'devDependencies', dependency: 'left-pad', version });
 
   for (const version of [
@@ -376,19 +402,20 @@ test('a version outside the grammar takes no command at all, and the route is th
     );
   }
 
-  // The shapes that must keep a command, each one a value this rule prints today.
-  for (const version of [
-    '1.2.3',
-    'workspace:*',
-    'file:./vendor',
-    'link:../lib',
-    'npm:lodash@4.17.21',
-    'https://***@example.com/repo~beta+1.tgz',
-  ]) {
+  // The shapes that must keep a command. A version carrying no star stays on the quote-free dotted path;
+  // one that carries a star takes the bracketed, double-quoted form (`R1-SHELL-GLOB-VERSION`).
+  for (const version of ['1.2.3', 'file:./vendor', 'link:../lib', 'npm:lodash@4.17.21']) {
     assert.equal(
       pin(version),
       `pnpm pkg set devDependencies.left-pad=${version} && pnpm install`,
       `${version}: a value inside the grammar lost its command`,
+    );
+  }
+  for (const version of ['workspace:*', 'https://***@example.com/repo~beta+1.tgz']) {
+    assert.equal(
+      pin(version),
+      `pnpm pkg set "devDependencies[\\"left-pad\\"]=${version}" && pnpm install`,
+      `${version}: a star was left unquoted, where bash and sh glob it`,
     );
   }
 });
@@ -972,7 +999,7 @@ importers:
 
   assert.equal(
     finding.remediation.command,
-    `pnpm pkg set dependencies.private-tarball=https://***@example.com/repo.tgz && pnpm install`,
+    `pnpm pkg set "dependencies[\\"private-tarball\\"]=https://***@example.com/repo.tgz" && pnpm install`,
   );
   assert.ok(!JSON.stringify(finding).includes('ghp_secret'), 'no credential reaches the report');
 });
@@ -1354,10 +1381,11 @@ test('a workspace range is pinned to workspace:*, and a registry range still nam
     [
       // An internal package's resolved version is a path. Writing it replaces the protocol and takes
       // the package out of the workspace while the finding clears (#368); the exact form is the one
-      // Detection names for an internal package.
-      `pnpm pkg set dependencies.bare=workspace:* && pnpm install`,
-      `pnpm pkg set dependencies.waved=workspace:* && pnpm install`,
-      `pnpm pkg set dependencies.versioned=workspace:* && pnpm install`,
+      // Detection names for an internal package. The star sits inside the bracketed form's double
+      // quotes, where every shell reads it literally (`R1-SHELL-GLOB-VERSION`).
+      `pnpm pkg set "dependencies[\\"bare\\"]=workspace:*" && pnpm install`,
+      `pnpm pkg set "dependencies[\\"waved\\"]=workspace:*" && pnpm install`,
+      `pnpm pkg set "dependencies[\\"versioned\\"]=workspace:*" && pnpm install`,
       `pnpm pkg set dependencies.registry=1.3.0 && pnpm install`,
     ],
     'a workspace range keeps the protocol and a registry range keeps the version the lockfile records',

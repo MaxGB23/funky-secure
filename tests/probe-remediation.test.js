@@ -483,7 +483,8 @@ test('every shell-tool command a golden prints is safe on both shells, and print
     );
   }
   // Part four over versions no fixture carries: a recorded resolution a shell would expand takes no
-  // command either, and the shapes the rule itself prints keep their command.
+  // command either; a version carrying a star takes the bracketed form, where every shell reads it
+  // literally (`R1-SHELL-GLOB-VERSION`); and a version carrying none keeps the dotted path.
   for (const version of ['$(id)', '1.2.3`id`', '1.2.3 4', 'a"b', 'a&b', 'a%NAME%', '1.0.0(react-dom@18.3.1)']) {
     assert.equal(
       pinCommand({ type: 'dependencies', dependency: 'left-pad', version }),
@@ -491,11 +492,18 @@ test('every shell-tool command a golden prints is safe on both shells, and print
       `${version}: a version outside the grammar was interpolated into a command`,
     );
   }
-  for (const version of ['1.2.3', 'workspace:*', 'file:./vendor', 'npm:lodash@4.17.21', 'https://***@example.com/repo.tgz']) {
+  for (const version of ['1.2.3', 'file:./vendor', 'npm:lodash@4.17.21']) {
     assert.equal(
       pinCommand({ type: 'dependencies', dependency: 'left-pad', version }),
       `pnpm pkg set dependencies.left-pad=${version} && pnpm install`,
       `${version}: a value inside the grammar lost its command`,
+    );
+  }
+  for (const version of ['workspace:*', 'https://***@example.com/repo.tgz']) {
+    assert.equal(
+      pinCommand({ type: 'dependencies', dependency: 'left-pad', version }),
+      `pnpm pkg set "dependencies[\\"left-pad\\"]=${version}" && pnpm install`,
+      `${version}: a star was left unquoted, where bash and sh glob it`,
     );
   }
 

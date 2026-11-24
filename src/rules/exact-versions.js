@@ -56,15 +56,18 @@ const CATALOG_SPECIFIER = /^catalog:(.*)$/;
 const PROVABLY_SAFE_DIRECTORY = /^[A-Za-z0-9._/-]+$/;
 
 /**
- * npm's grammar for a dependency name, and the only shape a printed command may interpolate: lowercase
- * `[a-z0-9._~-]`, optionally behind one `@scope/`. This is where the pin fails closed
+ * npm's grammar for a dependency name, and the only shape a printed command may interpolate:
+ * `[A-Za-z0-9._~-]`, optionally behind one `@scope/`. This is where the pin fails closed
  * (`R1-SHELL-INJECTION-PIN`). The escaped, double-quoted spelling stops `cmd` splitting the argument and
  * it does NOT stop `bash`, `sh` or `zsh` expanding `$(…)`, `${…}` or a backtick inside those double
  * quotes — the single-quoted spelling it replaced did, and a manifest can carry any string a JSON key
  * can. A name outside this grammar is not escaped, quoted or filtered into shape: it takes no command
  * at all, and the finding names the edit instead.
+ *
+ * Uppercase is inside it (`R3-UPPERCASE-REGRESSION`): npm refuses new uppercase names but publishes
+ * plenty of old ones — `JSONStream` is one — and no shell reads a letter's case, in either spelling.
  */
-const SAFE_DEPENDENCY = /^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+$/;
+const SAFE_DEPENDENCY = /^(?:@[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~-]+$/;
 
 /**
  * The grammar for the version a printed command carries, and the third value it interpolates (S2c,
@@ -74,11 +77,13 @@ const SAFE_DEPENDENCY = /^(?:@[a-z0-9._~-]+\/)?[a-z0-9._~-]+$/;
  * no grammar was needed; these spellings have no such accident.
  *
  * The class is the record's `[A-Za-z0-9._~:/@+-]` plus `*`, and the addition is not a concession: the two
- * shapes this rule itself prints need it and no shell executes or splits a bare `*`. An internal package
- * is pinned to `workspace:*` — the exact form S4 and 368 make this rule print — and a tarball URL reaches
- * the command redacted as `https://***@host`, which the class would otherwise refuse, dropping a command
- * the rule is required to keep. An escape, a quote or a filter is still never used: outside the class the
- * caller prints no command at all.
+ * shapes this rule itself prints need it and no shell executes or splits a `*` **inside the bracketed
+ * form**, whose double quotes every shell reads literally. It is never safe on the quote-free dotted path,
+ * so a version carrying one takes the bracketed spelling instead — `takesDottedPath` is where that is
+ * decided (`R1-SHELL-GLOB-VERSION`). An internal package is pinned to `workspace:*` — the exact form S4
+ * and 368 make this rule print — and a tarball URL reaches the command redacted as `https://***@host`,
+ * which the class would otherwise refuse, dropping a command the rule is required to keep. An escape, a
+ * quote or a filter is still never used: outside the class the caller prints no command at all.
  */
 const SAFE_VERSION = /^[A-Za-z0-9._~:/@+*-]+$/;
 
@@ -251,11 +256,21 @@ function catalogReference(specifier) {
  * segments and corrupts the manifest while exiting `0`, and a digit-leading name is refused because the
  * segment after a dot is parsed as an array index.
  *
+ * A fourth clause is the version (`R1-SHELL-GLOB-VERSION`): the dotted path is unquoted, so `bash` and
+ * `sh` glob the whole word, and a file named `dependencies.left-pad=workspace:1.2.3` would replace
+ * `dependencies.left-pad=workspace:*`. A version carrying a star takes the bracketed form instead.
+ *
  * @param {string} dependency
+ * @param {string} version
  * @returns {boolean}
  */
-function takesDottedPath(dependency) {
-  return !dependency.includes('@') && !dependency.includes('.') && !/^[0-9]/.test(dependency);
+function takesDottedPath(dependency, version) {
+  return (
+    !dependency.includes('@') &&
+    !dependency.includes('.') &&
+    !/^[0-9]/.test(dependency) &&
+    !version.includes('*')
+  );
 }
 
 /**
@@ -314,8 +329,10 @@ function provablySafeDirectory(dir) {
  * measured across `cmd`, `bash`, `sh`, `pwsh` 7 and Windows PowerShell 5.1, every cell executed). A name
  * that is unscoped, carries no dot and does not start with a digit takes the quote-free dotted path —
  * `pnpm pkg set dependencies.left-pad=1.3.0` — which is the one spelling `cmd` reads with no quoting at
- * all. Every other name takes the bracketed path, the whole argument double-quoted with its inner
- * quotes escaped: `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5"`. Both are read identically by
+ * all; a version carrying a `*` takes the bracketed one instead, because the dotted path is unquoted and
+ * `bash` and `sh` glob it (`R1-SHELL-GLOB-VERSION`). Every other name takes the bracketed path, the whole
+ * argument double-quoted with its inner quotes escaped: `pnpm pkg set "dependencies[\"@types/node\"]=20.11.5"`.
+ * Both are read identically by
  * `cmd`, `bash` and `sh` for a name inside the grammar; the two shells that lose one are named in
  * `limits` rather than worked around here.
  *
@@ -340,7 +357,7 @@ export function pinCommand({ type, dependency, version, dir }) {
   if (typeof version !== 'string' || !SAFE_VERSION.test(version)) return null;
   if (!provablySafeDirectory(dir)) return null;
   const at = pnpmAt(dir);
-  const path = takesDottedPath(dependency)
+  const path = takesDottedPath(dependency, version)
     ? `${type}.${dependency}=${version}`
     : `"${type}[\\"${dependency}\\"]=${version}"`;
   return `pnpm ${at}pkg set ${path} && pnpm ${at}install`;
@@ -493,7 +510,7 @@ export default {
     'Walk dependencies, devDependencies, optionalDependencies and peerDependencies of every importer. A specifier is floating when it starts with ^ ~ > < *, equals latest, contains an x/X version token, is a partial version, or is a git/tarball/URL specifier; exact means a literal version, npm:<pkg>@<version> or workspace:*. A catalog: or catalog:<name> specifier reads its range from the catalogue map pnpm-lock.yaml records: it is floating only when that entry holds a range, and the finding names pnpm-workspace.yaml, the file that holds it. Each floating specifier is one finding with its file:line. Every specifier is then compared with the lockfile record of the same dependency kind; a disagreement is one lockfile-desync finding, a record of another kind is not compared, and a specifier an override rewrote is never reported. An unsupported lockfile shape yields a skip that names pnpm-lock.yaml, never a guessed comparison, and an importer whose package.json cannot be interpreted is its own skip naming that file and what is wrong with it. A pnpm-workspace.yaml entry refused for resolving outside the repository root is a skip naming the file and the entry, so an importer never disappears without a word.',
   evidence:
     '{ specifier, dependency, type } for a floating range (plus catalog for a catalogue range; resolved is null when the lockfile has no record), { specifier, resolved } for a desync.',
-  remediation: `Manual: one command per finding, in one of two spellings chosen by the name, both read identically by cmd, bash and sh. A name that is unscoped, carries no dot and does not start with a digit takes the quote-free dotted path — pnpm -C <importer dir> pkg set <section>.<name>=<version> && pnpm -C <importer dir> install; every other name takes the bracketed one, the whole argument double-quoted with its inner quotes escaped — pnpm -C <importer dir> pkg set "<section>[\\"<name>\\"]=<version>" && pnpm -C <importer dir> install — because cmd passes single quotes to pnpm literally, a dot path cannot carry a scoped name, it corrupts a name that carries a dot, and it is refused for a name that starts with a digit (0042). A dependency name outside npm's grammar — a $, a backtick, a quote, a backslash or a space — an importer directory whose characters are not all passed through untouched by cmd and bash, and a version pnpm-lock.yaml records that carries any character outside A-Za-z0-9._~:/@+- (plus the * of the workspace:* pin this rule prints) print no command at all: the route is the edit in the manifest instead, because escaping quotes stops cmd splitting the argument and does not stop bash expanding $(…), \${…} or a backtick inside them, and a manifest or a lockfile can carry any string (0042). Both pin the version pnpm-lock.yaml records in the manifest that declares it (the root importer keeps the bare form), because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. A workspace: range is pinned to workspace:* instead, because the version the lockfile records for an internal package is a link: path and writing it takes the package out of the workspace. In a repository whose pnpm-workspace.yaml declares frozenLockfile: true the route is a hand edit instead — the manifest set and the lockfile moved in one change — because pnpm install and pnpm install --lockfile-only both refuse there with ERR_PNPM_OUTDATED_LOCKFILE, and the flag that would record it is the override R10 reports (373). A catalogue range is edited in pnpm-workspace.yaml, because the package.json line that refers to the catalogue cannot be made exact. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.`,
+  remediation: `Manual: one command per finding, in one of two spellings chosen by the name and the version, both read identically by cmd, bash and sh. A name that is unscoped, carries no dot and does not start with a digit takes the quote-free dotted path — pnpm -C <importer dir> pkg set <section>.<name>=<version> && pnpm -C <importer dir> install — unless the version carries a *, which bash and sh would glob on that unquoted path; every other name, and every version carrying a star, takes the bracketed one, the whole argument double-quoted with its inner quotes escaped — pnpm -C <importer dir> pkg set "<section>[\\"<name>\\"]=<version>" && pnpm -C <importer dir> install — because cmd passes single quotes to pnpm literally, a dot path cannot carry a scoped name, it corrupts a name that carries a dot, and it is refused for a name that starts with a digit (0042). A dependency name outside npm's grammar — a $, a backtick, a quote, a backslash or a space — an importer directory whose characters are not all passed through untouched by cmd and bash, and a version pnpm-lock.yaml records that carries any character outside A-Za-z0-9._~:/@+- (plus the * of the workspace:* pin this rule prints) print no command at all: the route is the edit in the manifest instead, because escaping quotes stops cmd splitting the argument and does not stop bash expanding $(…), \${…} or a backtick inside them, and a manifest or a lockfile can carry any string (0042). Both pin the version pnpm-lock.yaml records in the manifest that declares it (the root importer keeps the bare form), because pnpm add --save-exact <name>@<range> is a measured no-op on pnpm 12.3.4 and keeps the range. A workspace: range is pinned to workspace:* instead, because the version the lockfile records for an internal package is a link: path and writing it takes the package out of the workspace. In a repository whose pnpm-workspace.yaml declares frozenLockfile: true the route is a hand edit instead — the manifest set and the lockfile moved in one change — because pnpm install and pnpm install --lockfile-only both refuse there with ERR_PNPM_OUTDATED_LOCKFILE, and the flag that would record it is the override R10 reports (373). A catalogue range is edited in pnpm-workspace.yaml, because the package.json line that refers to the catalogue cannot be made exact. With no recorded version the remediation resolves first: pnpm install --lockfile-only && funky-secure scan --only exact-versions. A desync is refreshed with pnpm install --lockfile-only. No auto fix, because rewriting a range without re-resolving is how a lockfile desync is created.`,
   limits:
     'The rule resolves nothing: the command names the current specifier and pnpm writes the exact version. A specifier shape this rule does not recognize is not reported. An unsupported lockfile shape (lockfileVersion other than 6.0 or 9.0, patchedDependencies, a catalogue entry that is not a {specifier, version} map) skips the comparison rather than guessing it. peerDependencies are compared only when the lockfile records that kind: an importer block records no peer dependency, so a peer specifier is not compared against another section record. The pin is written for cmd, bash and sh, and the two shells that lose a form are named rather than hidden: pwsh 7 splits the escaped bracketed argument into two, which pnpm answers with ERR_PNPM_PKG_SET_INVALID_ARG and a write of nothing, and Windows PowerShell 5.1 rejects && before it reads any quoting, so no spelling of this command runs there (0042). A -C directory is printed only when every character in it is one both shells pass through untouched, because double quotes stop cmd splitting a directory like packages/a b and do not stop %NAME% on cmd or a backtick and $pkg on bash and sh, so a directory outside that class takes the prose route with the manifest to edit, exactly as a dependency name outside npm\'s grammar and a recorded version outside its own class do, and none of them is a route a reader is left to guess (0042).',
   docs: DOC,
