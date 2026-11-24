@@ -336,7 +336,7 @@ test('a name outside the grammar takes no command at all, and the route is the m
     assert.equal(
       pin(dependency),
       null,
-      `${dependency}: a command was printed for a name a shell would expand or split`,
+      `${dependency}: a command was printed for a name outside npm's grammar`,
     );
   }
 
@@ -398,7 +398,7 @@ test('a version outside the grammar takes no command at all, and the route is th
     assert.equal(
       pin(version),
       null,
-      `${version}: a command was printed for a version a shell would expand or split`,
+      `${version}: a command was printed for a version outside the class this rule prints, so a shell acts on it`,
     );
   }
 
@@ -528,6 +528,88 @@ importers:
       `${recorded}: the prose route names no file to edit`,
     );
   }
+});
+
+test('the prose route names the three grammars, and nothing is escaped into shape (R2-002)', () => {
+  // One reason for every refusal is a reason that is wrong for some of them: `a,b` is a single word to
+  // every shell, so nothing would expand or split it — and pnpm refuses it, because npm's grammar for a
+  // name is narrower than the key a JSON manifest can carry. `pinCommand` refuses three values, each
+  // against its own grammar, so the sentence names all three and states the choice the route makes: no
+  // escaping, quoting or filtering is attempted, the value is refused (R2-002, #553).
+  const route = (dependency) => {
+    const lockfile = [
+      "lockfileVersion: '9.0'",
+      '',
+      'importers:',
+      '',
+      '  .:',
+      '    dependencies:',
+      `      '${dependency}':`,
+      '        specifier: ^1.3.0',
+      '        version: 1.3.0',
+      '',
+    ].join('\n');
+    const [finding] = rule
+      .detect(
+        ctx({
+          importers: [importer('.', JSON.stringify({ dependencies: { [dependency]: '^1.3.0' } }))],
+          lockfile: { path: '/repo/pnpm-lock.yaml', text: lockfile },
+        }),
+      )
+      .filter((entry) => entry.code === 'floating-range');
+
+    assert.equal(finding?.remediation?.kind, 'manual', `${dependency}: the finding lost its prose route`);
+    return finding.remediation.command;
+  };
+
+  const expanded = route('evil$(id)');
+  const illegal = route('a,b');
+  const clause = (text) => text.slice(text.indexOf('— '));
+
+  // One sentence for both, because the route is one shape: a route that explained the shell alone would
+  // send the `a,b` reader looking for an expansion that never happens.
+  assert.equal(clause(illegal), clause(expanded), 'two refused values produced two different explanations');
+  assert.match(illegal, /name outside npm's grammar/, "the dependency name's grammar is not named");
+  assert.match(illegal, /directory or version/, "the importer directory's and the version's grammars are not named");
+  assert.match(expanded, /a shell/, 'the reason all three grammars exist — a shell that acts on the value — is not named');
+  assert.match(
+    illegal,
+    /nothing is escaped, quoted or filtered/,
+    'the route does not say the value is refused instead of escaped, quoted or filtered into shape',
+  );
+});
+
+test("the empty importer directory is the root, so both prose routes name package.json (R4-004)", () => {
+  // No CLI invocation reaches this: the root importer is pushed as `'.'` (src/lib/targets.js:362) and
+  // workspace entries are cleaned to `'.'` or a relative path. The derivation is pinned anyway, because
+  // both routes share it and a directory read as relative would print `edit /package.json`, a file
+  // nobody has (#553, R4-004).
+  const only = (findings) => findings.find((entry) => entry.code === 'floating-range');
+
+  // The prose route: the name is refused, so the whole command is, and the manifest it names is the one
+  // at the root — spelled from a `workspace:` range, so no lockfile record is needed to reach it.
+  const refused = only(
+    rule.detect(ctx({ importers: [importer('', '{"dependencies":{"evil$(id)":"workspace:^"}}')] })),
+  );
+  assert.equal(refused?.remediation?.kind, 'manual', 'the refused value lost its prose route');
+  assert.match(refused.remediation.command, /^edit package\.json by hand/, "the empty directory printed a manifest under the filesystem root");
+  assert.equal(
+    refused.remediation.command.includes('/package.json'),
+    false,
+    'the empty directory was read as a relative path',
+  );
+
+  // The frozen route repeats the same derivation, so it is pinned by the same test.
+  const frozen = only(
+    rule.detect(
+      ctx({
+        importers: [importer('', '{"dependencies":{"left-pad":"^1.3.0"}}')],
+        workspaceYaml: 'frozenLockfile: true\n',
+      }),
+    ),
+  );
+  assert.equal(frozen?.remediation?.kind, 'manual', 'the frozen route lost its kind');
+  assert.match(frozen.remediation.command, /^edit package\.json by hand/, 'the frozen route read the empty directory as a relative path');
 });
 
 test('without a measured resolution the remediation resolves first, never a guessed version', () => {
@@ -1453,7 +1535,11 @@ test('a -C directory takes a command only when it is provably safe (0042)', () =
     'packages/a%NAME%',
     'packages/a"b',
   ]) {
-    assert.equal(pin(dir), null, `${dir}: a command was printed for a directory a shell would expand or split`);
+    assert.equal(
+      pin(dir),
+      null,
+      `${dir}: a command was printed for a directory a shell would not pass through untouched`,
+    );
   }
 });
 

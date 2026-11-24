@@ -280,6 +280,53 @@ test('the probe runs the four command shapes the catalogue prints, each in a dir
   assert.equal(PROBE_PIN.version, 'file:./vendor', 'the pin needs no registry, so the measurement needs no network');
 });
 
+test('a pin fixture the rule refuses to print is a problem, never a skip (S4, R4-002)', (t) => {
+  // The guard is only worth having if it can fail, so this test runs the refusal rather than describing
+  // it: a mistyped guard (`=== undefined`, say — the rule answers `null`, never `undefined`) keeps both
+  // shipped fixtures green, and only a fixture the rule actually refuses reaches that branch.
+  assert.notEqual(pinCommand(PROBE_PIN), null, 'the root pin fixture prints no command, so the probe measures nothing');
+  assert.notEqual(
+    pinCommand(PROBE_SCOPED_PIN),
+    null,
+    'the importer pin fixture prints no command, so the probe measures nothing',
+  );
+
+  // A fixture outside npm's grammar: a second measurement of the branch, because the probe's own
+  // fixtures are inside every grammar by construction and can only ever take the other path.
+  const REFUSED = Object.freeze({ type: 'dependencies', dependency: 'evil$(id)', version: '1.3.0' });
+  assert.equal(pinCommand(REFUSED), null, 'the refusal fixture is one the rule prints a command for');
+
+  const root = scratch(t);
+  const seen = [];
+  const refused = probe({
+    root,
+    run: (command) => seen.push(command),
+    pins: [PROBE_PIN, PROBE_SCOPED_PIN, REFUSED],
+  });
+
+  assert.equal(refused.ok, false, 'a probe that executed no pin for one fixture answered ok');
+  assert.equal(
+    seen.length,
+    4,
+    'a refused pin was handed to a shell anyway: the two resolve steps and the two printed pins are all that ran',
+  );
+
+  const refusals = refused.problems.filter((problem) => /printed no command/.test(problem));
+  assert.equal(refusals.length, 1, 'a fixture that printed no command was skipped in silence');
+
+  // The problem names the fixture and the value it carries: a reader who learns only that "a pin was
+  // refused" has to guess which one the rule stopped spelling.
+  assert.ok(refusals[0].includes(REFUSED.dependency), 'the refusal does not name the fixture that printed nothing');
+  assert.ok(refusals[0].includes(REFUSED.version), 'the refusal does not name the value the fixture carries');
+
+  // The refusal does not swallow the measurement that did run: the two resolve steps are still judged,
+  // and the absent lockfile is still reported. A counter that stops at the first problem is not honest.
+  assert.ok(
+    refused.problems.some((problem) => problem.includes(LOCKFILE)),
+    'a refused pin stopped the resolve judgement from reporting what it looked for',
+  );
+});
+
 test('a command that ran and left nothing behind is a failure, never a pass', (t) => {
   const root = scratch(t);
   const nothing = probe({ root, run: () => {} });

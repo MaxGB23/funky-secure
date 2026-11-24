@@ -29,6 +29,18 @@ test('rejects an unknown top-level key by name', () => {
   );
 });
 
+test('rejects a config file that carries a root key', (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, CONFIG_FILENAME), JSON.stringify({ root: dir }));
+
+  assert.throws(
+    () => loadConfig({ cwd: dir, root: dir, catalog }),
+    (error) =>
+      error instanceof ConfigError && error.message === `${CONFIG_FILENAME}: unknown key "root"`,
+    'the accepted keys are a closed list, so the file cannot supply a root',
+  );
+});
+
 test('rejects an unknown rule id, an unknown severity and a malformed quarantine', () => {
   const cases = [
     [{ rules: { nope: 'warn' } }, 'nope'],
