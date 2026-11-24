@@ -1,83 +1,88 @@
 # The prefix crosses the drive
 
-A printed command is prefixed with `(cd "<root>" && <command>)` when the reader is not at the root. On
-`cmd` that `cd` does not change drive: it exits 0, leaves the prompt where it was, and the command runs
-in the wrong directory in silence (#549). The approved review of #552 left two route defects open as
-advice as well (#553). This record fixes the prefix and those defects together, because both are about
-the same thing: what a printed line is allowed to assume.
+The human report prefixes each printed command with `(cd "<root>" && <command>)` when the reader stands
+below the repository root. Issue #549 measured that in `cmd` such a `cd` does not change drive: exit 0,
+prompt unchanged, and the command runs in the wrong directory in silence. This record answers what the
+code may do about it, and closes the two route/probe findings the approved review of #552 left open
+(#553). It was refuted twice as a redesign; it now states what was measured instead.
 
 ## Specs
 
-**S1. The defect is the measured one, and nothing narrower.**
+**S1. The measured defect is real, and the tool cannot reach it.**
 From a prompt on `C:`, `cmd` reads `cd "M:\funky-secure-v2"` as a success, keeps `%CD%` on `C:`, and the
-command after it runs in the wrong directory with exit 0. `cd /d` fixes `cmd` and is not a directory to
-`bash` (`cd: /d: No such file or directory`); `pushd` does not exist in `dash`. No `cd` spelling
-measured so far works in `cmd`, `bash` and `sh`; a spelling that works in two of the three is not a fix,
-it moves the defect.
+command after it runs in the wrong directory with exit 0 (measured, twice, independently). But `root` is
+`git rev-parse --show-toplevel` run from the invocation directory (`src/lib/git.js:24-27`) or `cwd`
+itself (`src/lib/targets.js:324-326`), the flag list is closed and carries no `--root`/`--cwd`/`--dir`
+(`src/cli.js:57-88`), commands take no positional (`src/cli.js:234-239`), and no config key or
+environment variable carries a root. So the only distance this tool renders is **`cwd` below `root`**, and
+an ancestor is on the same volume by construction: no supported invocation puts a printed `cd` on another
+drive.
 
-**S2. A printed command works where it is pasted, measured cell by cell.**
-The three shells the record names (`cmd`, `bash`, `sh`), from a directory on the same drive and on
-another drive, against the root shapes this repository sees (a plain path, a path with spaces, an
-accented path, a path carrying a shell metacharacter). Each cell is executed and its directory and exit
-code recorded. A cell that was not executed is not a cell this record claims.
+**S2. The limit is pinned, not assumed.**
+A test asserts that the rendered root is `cwd` or an ancestor of it, so a future flag, config key or
+positional that lets a root be supplied breaks the suite instead of silently reaching S1's position. The
+reachable residual is named in the record rather than worked around: an alias of the same directory
+(`subst`, junction, UNC) that `sameDirectory` cannot fold, and a UNC root pasted into `cmd`, which
+refuses loudly and stops the `&&` chain.
 
-**S3. The shell is not asked to do what the tool can do.**
-Where a tool accepts its own directory — `pnpm -C <dir>`, `git -C <dir>` — the printed command carries
-that flag inside its own segment and no `cd` at all. A printed line is often two commands joined by `&&`
-(`pnpm pkg set … && pnpm install`), so each segment carries the directory itself; a line whose segments
-are not all commands of a tool with a directory flag is not printed (S5).
+**S3. A refused spelling is better than a wrong directory, but only for a position that exists.**
+The redesign is rejected on measurement, not on taste: `pnpm -C "<root>" -C packages/api pkg set …` is
+`error: the argument '--dir <DIR>' cannot be used multiple times`, rc 2, because the pin already carries
+the importer directory; the line `pnpm install --lockfile-only && funky-secure scan …` has a second
+segment with no directory flag at all; `corepack` has none either; and a renderer that hands back nothing
+prints `→ null` and `next null`, because neither print site guards the return
+(`src/lib/render-human.js:202`, `:669`). A mechanism that composes with none of those is not a mechanism.
 
-**S4. The root is a value with a grammar, like every other value in the line.**
-The root is interpolated into a printed command, so it is measured the way names, versions and importer
-directories already are (I-97): a root outside the set that is inert in all three shells prints no
-command. Spaces and accents are inside it — the field round pasted them and they work; `"`, `$`, a
-backtick, `%` and `!` are outside it.
+**S4. The probe fails when it measures nothing (R4-002, #553).**
+`pinCommand` returning `null` for a fixture is currently skipped (`scripts/probe-remediation.js:315`,
+`:333`), so a rule change that refuses the fixtures leaves the Windows leg green with no pin executed.
+The probe reports a problem instead of skipping, and a test pins that both fixtures still produce a
+command — the guard is only worth having if it can fail.
 
-**S5. No qualifying spelling means no command, and the route says so.**
-A finding whose line cannot be printed takes the prose route already used for a refused name or version,
-naming the manifest edit and the directory it applies to. `corepack` has no directory flag measured yet;
-if T1 finds none, a `corepack` finding away from the root takes that route rather than a spelling that
-would act on the wrong manifest.
+**S5. The refusal names the reason it refused (R2-002, #553).**
+The prose route gives one shell-expansion reason for every refusal, but `pinCommand` also refuses values
+outside npm's grammar, so a shell-safe but illegal name is told the wrong thing. The sentence names both
+causes.
 
-**S6. The prose route names the importer's own manifest (R4-004, #553).**
-The root importer is `package.json`. `unsafeRoute` treats only `undefined` and `'.'` as the root while
-`pnpmAt` and `provablySafeDirectory` already treat `''` as the root too, so a root finding currently
-reads `edit /package.json by hand`.
+**S6. Four append-only records say the pin's spelling is chosen by the name.**
+The code chooses by the name **and** the version (`!version.includes('*')`,
+`src/rules/exact-versions.js:270-273`), and these still say otherwise: `rfcs/0042` line 54, the
+amendment row in `docs/spec/README.md:122`, `docs/decisions.md:141` (I-96) and
+`docs/rules/exact-versions.md:179`. Each is corrected the way this repository corrects a record: a dated
+`## Errata` on the RFC (its body frozen), an `I-98` row that supersedes I-96's clause by number, and the
+two present-tense pages edited in place.
 
-**S7. A green probe proves it ran (R4-002, R4-003, #553).**
-The probe exits 0 only after executing at least one pin command of each spelling it claims, and the
-Windows leg executes both the quote-free dotted and the escaped bracketed spelling under `cmd`. A probe
-that skips both pins currently reports `ok: true`.
+**S7. `R4-004` is recorded, not fixed.**
+`unsafeRoute` would print `edit /package.json` for `dir === ''`, and `frozenRoute`
+(`src/rules/exact-versions.js:421`) repeats the same derivation. No caller can pass `''`: the root
+importer is pushed as `'.'` (`src/lib/targets.js:362`) and workspace entries are cleaned to `'.'` or a
+relative path. There is no public surface to test, so the finding is recorded here and the issue says so;
+a change with no observable behaviour and no test is not a change this record makes. `R4-003` is
+refuted outright: the scoped pin prints the bracketed spelling, so the Windows leg already executes both.
 
-**S8. The evidence lands in the docs, with the cells.**
-`docs/spec/report.md` §10.3, the amendment table, `docs/cli.md`, `docs/validation.md` and the §8.2 R5
-sentence (the pin's spelling is chosen by the name **and** the version) carry what T1 measured. Docs
-follow the code, never the reverse.
+**S8. The evidence lands where the reader looks for it.**
+`docs/validation.md` names the `runtime-claims-windows` job and the shells each leg executes;
+`docs/cli.md` and §10.3 gain the limit sentence S2 pins; the four records of S6 are corrected.
 
 ## Tasks
 
-**T1 — the measurement matrix, no code.** Every distinct command line the report can print (enumerated
-from the rule remediations and the goldens), the candidate spellings for each (`cd "<root>"`,
-`cd /d "<root>"`, `pushd`, per-segment `-C <root>`), across `cmd`, `bash`, `sh`, `pwsh` 7 and Windows
-PowerShell 5.1, from the same drive and from another drive, against the four root shapes of S2. Record,
-per cell: the directory the command actually ran in, the exit code, and whether the command's own effect
-was observed. No recommendation in the table; the numbers decide.
+**T1 — the reachability test.** A test that renders a report from below the root and asserts the rendered
+root is `cwd` or an ancestor; a second assertion that the CLI rejects `--root`, `--cwd` and a positional.
+RED first: the flag assertions fail today only if the flags were accepted, so the test states the closed
+list positively and is observed to fail against a stubbed acceptance.
 
-**T2 — the spec PR.** §10.3 rewritten clause by clause from T1's facts, the amendment row, the RFC 0041
-errata (its body stays frozen), a decision row that supersedes nothing silently, and the R5 sentence.
+**T2 — the probe guard.** `probe()` reports a problem when a fixture yields no command; a test asserts
+both fixtures produce one, so the guard cannot go vacuous.
 
-**T3 — the code PR.** `spellAtRoot` prints the per-segment form for the tools that have one, applies the
-root grammar, and hands back nothing when no spelling qualifies; the two print sites keep their single
-spelling per report; the tests move with it and keep the never-wrap rule; the probe invariant gains the
-root as a fourth value it checks.
+**T3 — the refusal sentence.** Both causes named; the existing message assertions move with it.
 
-**T4 — the advisory batch (#553).** `unsafeRoute` names `package.json` for `''`, the probe cannot exit 0
-without a pin per spelling, and the Windows leg executes both spellings.
+**T4 — the docs PR.** §10.3's limit sentence, the amendment row, the 0041 errata, the 0042 errata, the
+`I-98` row, `docs/rules/exact-versions.md`, `docs/validation.md`'s Windows leg. Append-only: no RFC body
+is rewritten.
 
-**T5 — the docs PR.** `docs/validation.md` names the Windows leg and carries the measured cells as
-evidence of real-repository behaviour; `docs/cli.md` follows §10.3.
-
-**T6 — the release.** Staged candidate, CI, the maintainer's 2FA — the owner's step, after T1–T5.
+**T5 — reconcile the log below with the measurement worker's matrix when it lands.** The cells it
+measured (`cd`, `cd /d`, `pushd`, `-C`, per shell and per root shape) are the evidence behind S1 and S3;
+they are quoted here only once they arrive.
 
 ## Log
 
@@ -86,7 +91,20 @@ evidence of real-repository behaviour; `docs/cli.md` follows §10.3.
   workers, etc. Vuelve con el veredicto de jueces e implementa de una vez, sin detenerte, sólo puedes
   parar cuando haya una decisión muy crítica. Si tú la puedes responder en base a la filosofía del
   proyecto, no hace falta detenerse. Tú tienes el mando, la filosofía manda siempre».
-- **L2** — facts carried from the explorer's map (`src/lib/render-human.js:89-97`, `:70`, `:94`, `:202`,
-  `:669`; `src/rules/exact-versions.js:375-380`; `scripts/probe-remediation.js:315`, `:333`, `:345`;
-  `.github/workflows/ci.yml:140-162`): the prefix wraps the whole line, the predicate reads the first
-  token only, the route's `''` gap is real, and the probe's two pins are both guarded by `!== null`.
+- **L2** — v1 (commit `83677b4`, sha256 `943b79c5…`) proposed a per-segment `-C` prefix. Both blind judges
+  returned **NO SHIP**: judge B found that it drops the importer directory and writes the root manifest,
+  that the quoting was unspecified and the grammar enumerated refusals instead of allowing values, and
+  that it silently deletes the two-segment `pnpm install --lockfile-only && funky-secure scan …` line;
+  judge A measured `error: the argument '--dir <DIR>' cannot be used multiple times` (rc 2) for the
+  composed flag, and added that `spellAtRoot` returning nothing prints `→ null` and `next null`.
+- **L3** — reachability, traced twice independently (judge A's code read and an explorer's): no flag,
+  positional, config key or environment variable supplies a root; `root` is `cwd` or an ancestor. The
+  position #549 measures therefore cannot be produced by this tool, which is why the redesign was
+  withdrawn rather than corrected.
+- **L4** — judge A's corrections to v1's evidence, kept because they are measurements: `cd /d` works in
+  `cmd` (rc 0, correct drive); `bash -c 'cd /d "M:/…"'` → `cd: too many arguments`, rc 1; `dash -c 'cd /d
+  "M:/…"'` → **rc 0, lands in `/d`** (the third shell fails silently too, which v1 got wrong); `sh -c
+  'pushd /tmp'` → rc 127 here; an accented root needs `chcp 65001` in a batch file, and `pnpm` inside a
+  `.bat` needs `call`.
+- **L5** — judge A's audit of the records: four append-only pages still say the spelling follows the name
+  alone (S6). v1 named only the §8.2 R5 sentence.
