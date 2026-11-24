@@ -208,3 +208,33 @@ test('every runtime claim is a step a deleted line fails', () => {
     'the remediation probe would measure whatever pnpm the image carries, or none at all',
   );
 });
+
+test('the remediation probe also runs where cmd is the shell, not only where sh is', () => {
+  // Every printed command is quoted for `cmd`, `bash` and `sh` (0042). On the Ubuntu job above the
+  // probe executes them with the one shell family that always read the old spelling, so a green there
+  // said nothing about the reader whose paste failed: the field round that started this reported exactly
+  // that failure from `cmd`. The Windows leg is the job that can fail for it.
+  const job = jobBlock('runtime-claims-windows');
+
+  assert.match(
+    job,
+    /^ {4}runs-on: windows-2025$/m,
+    'the leg that measures `cmd` does not run on the platform whose shell failed',
+  );
+  assert.match(
+    job,
+    /^ +run: node scripts\/probe-remediation\.js$/m,
+    'the Windows leg runs no probe, so the printed commands are still only executed by `sh`',
+  );
+  assert.match(
+    job,
+    /uses: pnpm\/action-setup@[0-9a-f]{40} # v\d/,
+    'the Windows leg would measure whatever pnpm the image carries, or none at all',
+  );
+  assert.match(
+    job,
+    /^ {10}version: 12\.3\.4$/m,
+    'the Windows leg does not ask for the pnpm version this repository pins',
+  );
+  assert.match(job, /^ {4}timeout-minutes: \d+$/m, 'the job has no ceiling, so a hung probe holds it open');
+});

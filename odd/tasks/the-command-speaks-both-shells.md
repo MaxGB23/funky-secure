@@ -34,3 +34,54 @@ Issue #548. Four blind judgements measured every cell of the shell matrix. The d
 - L3-L6 (three judged plans, refuted): `odd/tasks/command-dialect.md` L5/L6 carry the first two; the third's verdicts are quoted below.
 - L7 (judge B, third round, verbatim): "a worker following the plan verbatim edits the wrong rule, works to an undefined test scope (F9), and implements a cmd-leg check that has no CI leg to run on."
 - L8 (judge A, third round, verbatim): "S2 ships a spelling that pnpm rejects for legal digit-leading names (`0x`, `7zip-bin`) on all four shell families, and neither the plan's predicate nor its new check can see it." Its other findings — the `&;^` correction, the `execSync` spawn shape, the R5/R2 error, the docs-test ordering trap — are folded into S3, S5 and T4 above.
+- L9 (owner, verbatim): «Recuerda jueces solo cuando sea necesario». Read as: the design of this record is judged and closed, so the code that applies it is verified by the suite and by the probe on the Windows leg, not by another blind round. A pair stays for a plan whose design is still open, or for a claim about a third party that cannot be run here.
+- L10 — the native review stopped itself, and it found an injection this record introduced (2026-11-23).
+  Lineage `review-dfb9b75f4dfc1b19`, risk high, four lenses, 319 original lines, correction budget 160.
+  State `escalated`; transition `stop`, reason `native_stop_required`, **no continuation offered**;
+  escalation cause `unknown_causality`, findings `R2-001` and `R3-UNQUOTED-PIN`; the provider refuter
+  corroborated `R1-SHELL-INJECTION-PIN` (`src/rules/exact-versions.js:228`, `:289-290`),
+  `R1-SHELL-INJECTION-DIR` (`:252`) and `R4-PIN-SHELL-VERSION` (`:290-292`). The substance: the old
+  single-quoted spelling suppressed `$` and backticks, and the new double-quoted one expands them, so a
+  dependency name or importer directory written in a manifest can execute when the printed line is
+  pasted. Non-blocking: `R2-002` and `R3-GOLDEN-SHELL-GUARD-WEAK` (the golden invariant asserts "no `'`"
+  and calls it "readable by cmd, bash and sh"), `R2-003` (the comment names `%` and `"` but not `$` or a
+  backtick), `R4-DIR-QUOTING` (the quoted `-C` fallback expands `$pkg`).
+  The branch `fix/548-command-speaks` is **not pushed** and its commit `252dc57` is **not delivered**.
+  Per `AGENTS.md` the lineage is the owner's open work: not retried, not reset, not recovered, not
+  abandoned. The code needs a fail-closed redesign — a command printed only when the name and the
+  directory are provably safe, and the prose route otherwise — which is a new candidate and a new
+  lineage, never a continuation of this one.
+
+## Amendment — what the first review round changed (2026-11-23)
+
+The review stopped on its own mechanism (`L10`) and its refuter corroborated three findings. Two clauses change, and neither is style: double quotes stop `cmd` splitting, and they do **not** stop bash's `$(…)` and backtick expansion, so an escaped value is only safe when it cannot carry one.
+
+- **S2, amended.** The name takes one of the two spellings only when it matches npm's own grammar. Outside it — `$`, a backtick, a quote, a backslash, a space — the rule prints **no command at all** and falls back to its prose route. This is what `R1-SHELL-INJECTION-PIN` found: the single-quoted form suppressed expansion, the escaped form does not, and a manifest can carry any string. Failing closed is the only spelling that is safe on both shells.
+- **S3, amended.** The same for the directory: `-C` is printed only when the directory matches `^[A-Za-z0-9._/-]+$`; outside it the rule prints no command rather than a quoted one that bash would expand (`R1-SHELL-INJECTION-DIR`, `R4-DIR-QUOTING`, and the comment omission `R2-003`).
+- **S5, amended.** The invariant asserts three things, because "no `'`" was proved neither necessary nor sufficient (`R2-002`, `R3-GOLDEN-SHELL-GUARD-WEAK`): no command carries `'`; every value interpolated into a command matches its safe grammar; and a name or directory outside that grammar produces no command.
+- **L11 (review, verbatim):** "The single-quoted form suppressed `$` and backticks; the new `-C \"...$pkg...\"` expands it in bash/sh, so pnpm acts on the wrong directory or fails."
+- **S2c (parent, after `R4-PIN-SHELL-VERSION`).** The value is the third thing a command interpolates, and the
+  quote-free dotted path leaves it in the open: a version the lockfile records can be any string, and
+  `dependencies.x=$(id)` expands on bash and sh. The version takes a command only when it matches
+  `^[A-Za-z0-9._~:/@+-]+$`; outside that, the whole command falls back to the prose route, exactly as an
+  unsafe name or directory does. The old single-quoted spelling suppressed this expansion by accident of
+  quoting, which is why no rule ever needed a grammar; the new spellings have no such accident and need one.
+- **S2c, ratified with `*`.** The class is `^[A-Za-z0-9._~:/@+-*]+$`. The record's literal class would refuse
+  `workspace:*` — the exact form §8.2 S4 makes this rule print — and the redacted `https://***@host` of a
+  tarball URL, turning two mandated commands into prose; a bare `*` is neither executed nor split by `cmd`,
+  `bash` or `sh`. The cost is named rather than discovered: a `git+ssh://…git#v1.0.0` record carries `#`,
+  which bash reads as a comment, so that version takes the prose route instead of a command.
+- L12 — the native review approved the candidate, and its correction is what shipped (2026-11-23). Lineage
+  `review-b45f6e4e3eaff1df`: four lenses, 813 original lines, budget 200. It found two CRITICAL defects the
+  argv matrix could not: `R1-SHELL-GLOB-VERSION` (the `*` this record ratified globs on the unquoted dotted
+  path) and `R3-UPPERCASE-REGRESSION` (`JSONStream` lost its command). One bounded correction (80 diff
+  lines planned, 119 changed): `takesDottedPath` gained `!version.includes('*')` so a star takes the
+  bracketed form, and `SAFE_DEPENDENCY` admits uppercase. The targeted validator confirmed both, the
+  authority burned, and the branch opened [#552](https://github.com/MaxGB23/funky-secure/pull/552) with
+  seven checks green — among them `runtime-claims-windows`, the leg this record exists to add.
+  Advisory, not fixed: `R2-001`/`R3-STAR-GLOB`/`R4-001` (the dotted path still interpolates a value that a
+  star made impossible, but the predicate now routes every star away from it), `R2-002` (the refusal text
+  gives one reason for grammar refusals), `R4-002` (a probe whose fixtures both return null exits 0),
+  `R4-003` (the Windows leg exercises only the dotted form), `R4-004` (`unsafeRoute` names `/package.json`
+  when `dir` is the empty string). And a docs gap: §8.2 R5 still says the spelling is chosen by the name;
+  it is chosen by the name and the version.

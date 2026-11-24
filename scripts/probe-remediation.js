@@ -25,8 +25,8 @@
  * emits today, and explicitly not to a resolution being correct: the resolved version is pnpm's business,
  * and this probe cannot see whether `1.3.0` is the right pin for anything. The pin's *value* is therefore
  * a local link, `file:./vendor`, which is exact, needs no registry and cannot make this measurement a
- * report on npm's uptime. The form — the bracketed property path, the `-C <dir>` prefix, the trailing
- * install — is the rule's own, unchanged.
+ * report on npm's uptime. The form — the property path the name selects, the `-C <dir>` prefix, the
+ * trailing install — is the rule's own, unchanged.
  *
  * The resolve step is judged by the row it writes, not by the file it names. A fixture that declared no
  * dependency produced a `pnpm-lock.yaml` whose root importer recorded nothing (`.: {}`), and a judgement
@@ -38,7 +38,7 @@
  *
  * Every write happens inside the `mkdtemp` directory, which is removed before the process exits.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -214,14 +214,19 @@ export function judgeField({ manifest, type, dependency, expected }) {
 }
 
 /**
- * The shell the catalogue's text is written for.
+ * The shell the catalogue's text is written for: `cmd`, `bash` and `sh`, the three the pin is quoted
+ * for (spec §8.2 R5, 0042). The text is shell text, so the probe hands it to a real shell in each
+ * dialect instead of parsing it into an argv here: an argv this script built would measure its own
+ * quoting, never the line a reader is told to paste.
  *
- * The printed command carries single quotes — `pnpm pkg set 'dependencies["left-pad"]=1.3.0'` — because
- * a shell strips them before pnpm reads the property path. Measured on pnpm 12.3.4 under `cmd.exe`, which
- * keeps them: pnpm answers ERR_PNPM_PKG_INVALID_PROPERTY_PATH, "Input ends without closing quote". The
- * text is therefore shell text, and the probe hands it to a shell instead of imitating one's quoting.
- * `sh` is what the runner that executes this probe carries; a machine without it is told so below,
- * because the alternative would be this script re-deriving an argv the catalogue never printed.
+ * On Windows the text goes through `execSync(command)`, which spawns ComSpec as `/d /s /c`. It must NOT
+ * go through `execFileSync('cmd', ['/c', command])`: measured, node re-quotes the argument it hands the
+ * child and `/c` strips that quoting, so a command that works when pasted fails here with
+ * `ERR_PNPM_PKG_INVALID_PROPERTY_PATH: Input ends without closing quote (")`. Do not "simplify" the
+ * platform branch back to the argv form; it makes the Windows leg red on a command that works by hand.
+ *
+ * `sh` is what the POSIX runner that executes this probe carries; a machine without it is told so
+ * below, because the alternative is this script re-deriving an argv the catalogue never printed.
  */
 const SHELL = 'sh';
 
@@ -231,7 +236,13 @@ const SHELL = 'sh';
  * @param {string} cwd
  */
 function runCommand(command, cwd) {
-  execFileSync(SHELL, ['-c', command], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const options = { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
+  // ComSpec on Windows — the shell the defect this leg exists for belongs to — and `sh` everywhere else.
+  if (process.platform === 'win32') {
+    execSync(command, options);
+    return;
+  }
+  execFileSync(SHELL, ['-c', command], options);
 }
 
 /**
@@ -296,30 +307,40 @@ export function probe({ root, run = runCommand }) {
   const pinDir = join(root, 'pin');
   writeVendor(pinDir);
   writeFileSync(join(pinDir, 'package.json'), FIXTURE_MANIFEST);
-  run(pinCommand(PROBE_PIN), pinDir);
-  problems.push(
-    ...judgeField({
-      manifest: readManifest(pinDir),
-      type: PROBE_PIN.type,
-      dependency: PROBE_PIN.dependency,
-      expected: PROBE_PIN.version,
-    }).problems,
-  );
+  // A value outside the grammar the rule interpolates produces no command at all, and `null` is not a
+  // command this probe can hand a shell: the fixture is skipped rather than run and judged against an
+  // effect nothing was asked to produce. Both fixtures below are inside the grammar by construction, and
+  // the test that asserts the four shapes says so by comparing each one against `pinCommand`.
+  const rootPin = pinCommand(PROBE_PIN);
+  if (rootPin !== null) {
+    run(rootPin, pinDir);
+    problems.push(
+      ...judgeField({
+        manifest: readManifest(pinDir),
+        type: PROBE_PIN.type,
+        dependency: PROBE_PIN.dependency,
+        expected: PROBE_PIN.version,
+      }).problems,
+    );
+  }
 
   const workspace = join(root, 'workspace');
   const importerDir = join(workspace, PROBE_SCOPED_PIN.dir);
   writeVendor(importerDir);
   writeFileSync(join(importerDir, 'package.json'), FIXTURE_MANIFEST);
   writeFileSync(join(workspace, 'package.json'), FIXTURE_MANIFEST);
-  run(pinCommand(PROBE_SCOPED_PIN), workspace);
-  problems.push(
-    ...judgeField({
-      manifest: readManifest(importerDir),
-      type: PROBE_SCOPED_PIN.type,
-      dependency: PROBE_SCOPED_PIN.dependency,
-      expected: PROBE_SCOPED_PIN.version,
-    }).problems,
-  );
+  const scopedPin = pinCommand(PROBE_SCOPED_PIN);
+  if (scopedPin !== null) {
+    run(scopedPin, workspace);
+    problems.push(
+      ...judgeField({
+        manifest: readManifest(importerDir),
+        type: PROBE_SCOPED_PIN.type,
+        dependency: PROBE_SCOPED_PIN.dependency,
+        expected: PROBE_SCOPED_PIN.version,
+      }).problems,
+    );
+  }
 
   return { ok: problems.length === 0, problems };
 }
@@ -335,7 +356,7 @@ export function probe({ root, run = runCommand }) {
  */
 function describe(error) {
   if (error?.code === 'ENOENT' && String(error.message).includes(`spawnSync ${SHELL}`)) {
-    return `${SHELL} is not available, and the catalogue's commands are text for a POSIX shell: the single quotes are the shell's`;
+    return `${SHELL} is not available, and the catalogue's commands are text for cmd, bash or sh: this machine carries no shell that reads them`;
   }
   return `a command did not complete: ${error.message}`;
 }
@@ -354,8 +375,24 @@ function main() {
   }
 
   if (result.ok) {
+    // Built from the commands the rule actually prints, with an absent one skipped: a pin it refuses to
+    // print has no command to name, and a message that spelled `pinCommand(...)` again would read
+    // `null left …`.
+    const followed = [PROBE_PIN, PROBE_SCOPED_PIN]
+      .map((pin) => ({ pin, command: pinCommand(pin) }))
+      .filter((entry) => entry.command !== null);
+    const pins =
+      followed.length === 0
+        ? 'no pin command was printed, so none was followed'
+        : followed
+            .map(({ command, pin }) =>
+              pin.dir === undefined
+                ? `${command} left ${pin.type}["${pin.dependency}"]=${pin.version}`
+                : `${command} left the same in ${pin.dir}`,
+            )
+            .join(', and ');
     console.log(
-      `probe-remediation: ${lockfileCommand()} and its ${FOREIGN_PIN_FLAG} form each recorded ${PROBE_RESOLVE_PIN.dependency}, ${pinCommand(PROBE_PIN)} left ${PROBE_PIN.type}["${PROBE_PIN.dependency}"]=${PROBE_PIN.version}, and ${pinCommand(PROBE_SCOPED_PIN)} left the same in ${PROBE_SCOPED_PIN.dir}`,
+      `probe-remediation: ${lockfileCommand()} and its ${FOREIGN_PIN_FLAG} form each recorded ${PROBE_RESOLVE_PIN.dependency}, ${pins}`,
     );
     return;
   }
