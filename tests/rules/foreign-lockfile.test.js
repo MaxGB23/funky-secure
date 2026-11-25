@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -190,7 +190,9 @@ test('the message names the state in one register and never escalates with it', 
 
 /** A repository on disk with `pnpm-lock.yaml` by default and the foreign lockfiles the test names. */
 function repository(t, { pnpmLockfile = true, foreign = [] } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-foreign-'));
+  // Canonical like `checkout()` below: this file keeps one convention for a temporary root, so a
+  // future caller that reaches a real-git probe cannot inherit the second spelling.
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-foreign-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(
     join(dir, 'package.json'),
@@ -425,7 +427,10 @@ const NPM_LOCK = '{ "name": "field-loop", "version": "1.0.0", "lockfileVersion":
  * @returns {string} the repository directory
  */
 function checkout(t, { pnpmLockfile = true, foreign = ['package-lock.json'] } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-field-'));
+  // Canonical, for the reason `tests/pin.test.js` states. The darwin spellings are the leg's to confirm;
+  // the arithmetic is not: `migrate` subtracts `cwd` from a root git resolved, so a mismatched pair
+  // turns "is this file dirty" into a pathspec git refuses.
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-field-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   writeFileSync(

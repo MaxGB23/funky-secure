@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,7 +8,11 @@ import { run } from '../src/cli.js';
 import { collectPins, applyPins } from '../src/lib/pins.js';
 
 function scratch(t) {
-  const dir = mkdtempSync(join(tmpdir(), 'funky-secure-pin-'));
+  // Canonical, because a temporary root can come back with a second spelling: on macOS `/var` and
+  // `/private/var` name the same directory, and the `test-macos` leg is what confirms the two spellings
+  // it actually sees. With two spellings the plan subtracts them (`src/lib/plan.js:302`) and a dirty
+  // manifest stops matching.
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-pin-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
