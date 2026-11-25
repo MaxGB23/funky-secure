@@ -170,10 +170,11 @@ This tool is part of the supply chain it audits, so it carries nothing it does n
 Node `>= 22`, ESM, no install step for the tool itself. pnpm is recommended and npm or yarn are
 migrated, never required.
 
-Linux and Windows are the supported platforms: the suite runs on both in CI. macOS is **not** a
-supported target — it is never executed, and the owner decided it stays that way, so nothing here
-claims it works there. On macOS you are on your own, and a bug report about it is read as a report
-from an unsupported platform rather than as a regression.
+Linux and Windows are the supported platforms: the suite runs on both in CI, at the declared floor
+and at the Active LTS. macOS is **not** a supported target, and a third platform now runs the same
+suite on `macos-26` (macOS 26, Apple silicon) so a darwin failure is seen before a user reports one;
+that leg gates a delivery, and it changes no support claim. On macOS you are on your own, and a bug
+report about it is read as a report from an unsupported platform rather than as a regression.
 
 ## ✅ What is verified, and what is not
 
@@ -205,8 +206,10 @@ keeps the ledger: every claim below, and every one that is missing, with what wo
   static reading is the runtime of a *third-party* workflow: those rules are checked against the eleven
   real workflows recorded in [`docs/validation.md`](docs/validation.md), and whether a corrected workflow
   of theirs turns green is their maintainers' to see.
-- **macOS is a decided non-goal, not a gap.** It is never executed anywhere, and the section above
-  says so instead of hedging.
+- **macOS is a decided non-goal, not a gap.** The suite runs on `macos-26` (Apple silicon) on a third
+  platform and a red run blocks a delivery, so a darwin failure is seen before a user reports one; it
+  proves nothing about a darwin machine this project does not run, and the section above says what is
+  not claimed.
 
 ## 📚 Documentation
 

@@ -152,9 +152,10 @@ node scripts/gen-golden.js                    # regenerate the golden reports, d
 node bin/funky-secure.js explain --list        # the catalog, in report order
 ```
 
-CI runs the suite, the drift gate and the self-scan on every pull request, on Ubuntu and on Windows,
-and at the declared `engines.node` floor as well as at the Active LTS. A red check is a real failure, not a
-flake; if a check is flaky, fix the check.
+CI runs the suite on three platforms — `ubuntu-24.04`, `windows-2025` and `macos-26` — at the declared
+`engines.node` floor and at the Active LTS on the two supported ones, and at the Active LTS alone on
+macOS, which is not a supported platform. The drift gate and the self-scan run only on Ubuntu and
+Windows. A red check is a real failure, not a flake; if a check is flaky, fix the check.
 
 ## Commits and language
 

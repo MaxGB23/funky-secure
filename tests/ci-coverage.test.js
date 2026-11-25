@@ -11,7 +11,7 @@ const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 /** The Active LTS at the time this policy was written; bumped deliberately, like an action pin. */
 const ACTIVE_LTS = '24';
 
-/** The two platforms the product branches on. */
+/** The two platforms the product branches on. `test-macos` adds a darwin∧arm64 leg that branches nothing. */
 const PLATFORMS = ['ubuntu-24.04', 'windows-2025'];
 
 /** The binary extensions marked in `.gitattributes`. */
