@@ -581,7 +581,13 @@ test('the prose route names the three grammars, and nothing is escaped into shap
 
   const expanded = route('evil$(id)');
   const illegal = route('a,b');
-  const clause = (text) => text.slice(text.indexOf('— '));
+  // The separator is asserted, not assumed: `indexOf` answering -1 makes `slice(-1)` return the last
+  // character, and the equality below would compare two periods and pass while measuring nothing.
+  const clause = (text) => {
+    const at = text.indexOf('— ');
+    assert.notEqual(at, -1, 'the route stopped separating its shared clause with an em dash');
+    return text.slice(at);
+  };
 
   // One sentence for both, because the route is one shape: a route that explained the shell alone would
   // send the `a,b` reader looking for an expansion that never happens.
