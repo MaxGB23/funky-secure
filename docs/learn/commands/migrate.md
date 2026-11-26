@@ -40,8 +40,10 @@ against the repository rather than trusted, and a `--from npm` in a folder that 
   `→ funky-secure migrate --from npm --apply`, and the report's `next` block said the same.
 - When `start` prints it: step 8 of that plan was `funky-secure migrate --apply  on a feature branch: it refuses to
   remove a lockfile on main`. The refusal is announced before you can walk into it.
-- When the versions the other manager resolved must survive. Step 3 is `pnpm import`, which keeps them, and it is
-  the one step the tool will not run for you.
+- When the versions the other manager resolved are the thing you came for. Step 3 is `pnpm import`, and it is
+  the one step the tool will not run for you - it reads `package-lock.json` and writes `pnpm-lock.yaml`, and
+  which versions that file records is pnpm's to decide, so the plan's own line asks you to compare the two
+  before step 4 deletes the foreign one.
 - On a feature branch, with the tree committed. Step 4 is a deletion; the branch is what makes it reviewable, and
   the default-branch refusal is the tool agreeing with you.
 
@@ -54,8 +56,9 @@ against the repository rather than trusted, and a `--from npm` in a folder that 
   about your repository is graded here; the check is `scan --only foreign-lockfile`, whose finding is what named
   this command in the first place.
 - **Step 3 is a line another command already prints.** `start`'s step 3 was `pnpm import`, in those words, in the
-  same repository; `migrate`'s step 3 adds the comment about what a re-run replaces. So the plan that sent you here
-  had already handed you the import.
+  same repository; `migrate`'s step 3 adds the comment about what a re-run replaces, and the sentence under it
+  naming the comparison the removal makes you owe the foreign file. So the plan that sent you here had already
+  handed you the import.
 - **Everything except the deletion is printed, not performed.** The CI follow-up is
   `.github/workflows/ci.yml:8  - run: npm ci` under a heading that says `suggestions only`, and a second run prints
   it again. If the line you wanted changed is that one, `migrate --apply` will not change it.
@@ -86,7 +89,7 @@ funky-secure migrate  ·  from npm  ·  plan only (nothing has been written)
 
 3. human step (this tool never runs it)
    pnpm import   # reads package-lock.json, writes pnpm-lock.yaml; a re-run replaces what it recorded
-   pnpm-lock.yaml is present; whether it was imported from package-lock.json or resolved from the manifest, only the import carries its versions
+   pnpm-lock.yaml is present; even after the import, the versions it records are pnpm's to decide, so compare them with package-lock.json before step 4 removes it
 
 4. removal (only after pnpm-lock.yaml exists)
    pnpm-lock.yaml      present
@@ -112,7 +115,7 @@ funky-secure migrate  ·  from npm  ·  apply
 
 3. human step (this tool never runs it)
    pnpm import   # reads package-lock.json, writes pnpm-lock.yaml; a re-run replaces what it recorded
-   pnpm-lock.yaml is present; whether it was imported from package-lock.json or resolved from the manifest, only the import carries its versions
+   pnpm-lock.yaml is present; even after the import, the versions it records are pnpm's to decide, so compare them with package-lock.json before step 4 removes it
 
 4. removal (only after pnpm-lock.yaml exists)
    pnpm-lock.yaml      present
@@ -142,7 +145,9 @@ says which one you are up against instead of claiming to have read a default bra
 
 ## What you do next
 
-Run the step the plan named and the tool did not: `pnpm import`, then commit `pnpm-lock.yaml`. Then `--apply` on a
+Run the step the plan named and the tool did not: `pnpm import`, then compare what it recorded in `pnpm-lock.yaml`
+with `package-lock.json` - the plan's own sentence asks for that comparison, because the versions the import
+writes are pnpm's answer and not the foreign pins - and commit `pnpm-lock.yaml`. Then `--apply` on a
 feature branch, which deletes the foreign lockfile and nothing else - after the removal above,
 `scan --only foreign-lockfile` in that folder printed `summary  0 errors · 0 warnings · 0 info · 1 passing · 0
 skipped` and `next     nothing to do: everything at or above the policy passes`, exit `0`. Then read step 5 by hand:

@@ -181,16 +181,17 @@ Plan steps, printed in order:
    listed by key name so the user moves them to `pnpm-workspace.yaml` or the pnpm global config
    deliberately.
 3. **Human step, never executed by the tool (4.9):** the step that writes `pnpm-lock.yaml`.
-   - A foreign lockfile exists: `pnpm import` reads `yarn.lock` or `package-lock.json` and records the
-     versions they pinned, which `pnpm install` discards by resolving from the manifest (0021). The path
-     prints the same command, so a reader who has followed it has already run this step; the tool cannot
-     tell from the file whether they did, and this line does not claim the step is still owed. If
-     `pnpm-lock.yaml` is already present, one line follows the command: it names that fact, names the
-     criterion this command does not evaluate — whether the lockfile was imported from the foreign one
-     or resolved from the manifest — and claims no status, because only an import carries those pins and
-     this plan does not compare the two files. Re-running it is not a no-op: it rewrites `pnpm-lock.yaml`
-     from those pins, so a version the manifest resolved since the last import is replaced by the one
-     the foreign lockfile records (measured; `docs/validation.md`).
+   - A foreign lockfile exists: `pnpm import` reads `yarn.lock` or `package-lock.json` and writes
+     `pnpm-lock.yaml`; which versions it records is pnpm's to decide, measured on pnpm 12.3.4, where a
+     foreign pin of `4.17.20` came back as `4.18.1` — neither the pin nor the manifest's floor (0021,
+     and the errata of 2026-11-26 in that record). The path prints the same command, so a reader who has
+     followed it has already run this step; the tool cannot tell from the file whether they did, and
+     this line does not claim the step is still owed. If `pnpm-lock.yaml` is already present, one line
+     follows the command: it names that fact, names the criterion this command does not evaluate — the
+     versions the file records — and claims no status, because this plan compares no lockfile versions,
+     and the printed line names the comparison the reader must make before step 4 removes the foreign
+     file. Re-running it is not a no-op: it rewrites `pnpm-lock.yaml`, so what the file records after a
+     second import is again pnpm's answer and not the foreign pin (measured; `docs/validation.md`).
    - No foreign lockfile exists: `pnpm install` resolves and writes it.
 4. **Removal:** the foreign lockfile(s), only after `pnpm-lock.yaml` exists.
 5. **CI follow-up:** the workflow and composite-action lines that need rewriting, quoted by
