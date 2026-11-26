@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | `draft` — a `packages:` entry that is a negation is reported instead of dropped in silence. Issue #298. |
 | **Revision** | 1 |
-| **Present contract** | [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.1 R1, the sentence on refused `packages:` entries, as amended here. |
+| **Present contract** | [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R1, the sentence on refused `packages:` entries, as amended here. |
 | **Supersedes** | nothing. It closes a silence no record ever argued for. |
 
 ## What is true today
