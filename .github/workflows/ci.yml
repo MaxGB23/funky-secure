@@ -55,6 +55,10 @@ jobs:
     # nobody here has. Exact label, never `-latest`. Blocking on purpose: the delivery gate reads a
     # job's conclusion (`scripts/wait-for-ci.js`), so a leg that could fail without blocking would be
     # an experiment wearing a gate's clothes.
+    # The id stays `test-macos`: the record and the gate read the id, never the rendered check name.
+    # Spelled out because a job outside the matrix is displayed by its id alone, so this leg would
+    # otherwise sit in the pull request's list next to `test (ubuntu-24.04, 22)` as a bare `test-macos`.
+    name: test-macos (macos-26 arm64, node 24)
     runs-on: macos-26
     timeout-minutes: 15
     steps:
