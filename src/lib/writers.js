@@ -22,6 +22,7 @@ import { upsertBlock, blockValues } from './managed-block.js';
 import { validateWriteTarget } from './paths.js';
 import { planItem } from './plan.js';
 import { QUARANTINE_DEFAULT_MINUTES, QUARANTINE_STRICT_MINUTES } from './policy.js';
+import { manifestProblem } from './targets.js';
 
 export const WORKSPACE_RELATIVE = 'pnpm-workspace.yaml';
 export const GITIGNORE_RELATIVE = '.gitignore';
@@ -663,9 +664,34 @@ function withheldPin(pinItem, { version, guard }) {
  * @returns {Array<object>} plan items
  */
 export function planPackageManagerWrites(ctx, { version = null, pinFailing = false } = {}) {
-  const packageJsonText = ctx?.repo?.files?.packageJson?.text ?? null;
-  const packageJson = ctx?.repo?.files?.packageJson?.json ?? null;
+  const packageJsonFile = ctx?.repo?.files?.packageJson ?? null;
+  const packageJsonText = packageJsonFile?.text ?? null;
+  const packageJson = packageJsonFile?.json ?? null;
   const items = [];
+
+  // A manifest that exists and does not parse is named by the plan instead of disappearing from it
+  // (#594). Both items used to be dropped: `declaredPinVersion(null)` establishes no version, the
+  // guard follows only an established one, and the plan said nothing about `package.json` at all — so
+  // `init --apply` wrote the sibling files, exited `0` and never named the manifest it could not read,
+  // which is silence where a `conflict` belongs. The two writers already answer this file with the
+  // same refusal ("is not valid JSON; it is not rewritten"), so they plan it: both items are conflicts
+  // with no bytes, nothing is written to the manifest, and the plan carries the reason. Each writer
+  // reads the bytes before it reads the version, so this answers the file even in a run that answered
+  // no version at all, and never as the `no pnpm version answered` conflict of a readable manifest.
+  if (manifestProblem(packageJsonFile)?.code === 'invalid-json') {
+    return [
+      planTarget(ctx, {
+        relative: PACKAGE_JSON_RELATIVE,
+        operation: 'set packageManager',
+        result: writePackageManagerPin({ packageJsonText, version }),
+      }),
+      planTarget(ctx, {
+        relative: PACKAGE_JSON_RELATIVE,
+        operation: 'set devEngines.packageManager',
+        result: writeDevEnginesPackageManager({ packageJsonText, version }),
+      }),
+    ];
+  }
 
   let guardInput = packageJsonText;
   let established = null;

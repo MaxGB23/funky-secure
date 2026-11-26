@@ -658,6 +658,51 @@ test('a dirty target file exits 3 naming the file unless --allow-dirty', async (
   assert.match(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), /minimumReleaseAgeStrict: true/);
 });
 
+// The field round's fixture appended a line to a committed manifest, which is two facts at once: the
+// tree is dirty and the document no longer parses. The dirty half is refused (the case above); this is
+// the other half, and it was silent — the manifest's items vanished from the plan, `--apply` wrote the
+// sibling files, exited `0` and never named `package.json` (#594). A clean tree is used deliberately:
+// `git status` has no part in this shape, and a test that dirtied the file would pass for the wrong
+// reason. The items stay, as `conflict`, so the plan says the file is not rewritten and why.
+test('a manifest that does not parse is named as a conflict instead of vanishing from the plan', async (t) => {
+  const dir = scratch(t, 'below-policy');
+  const tracked = ['package.json', 'pnpm-lock.yaml'];
+  const manifestPath = join(dir, 'package.json');
+  const unparseable = `${readFileSync(manifestPath, 'utf8')}/* touched */\n`;
+  writeFileSync(manifestPath, unparseable);
+
+  const preview = runner(dir, { tracked });
+  assert.equal(await preview.run(['init', '--format', 'json']), 0);
+
+  const document = JSON.parse(preview.stdout.text);
+  assert.deepEqual(
+    document.plan.map((item) => [item.target, item.state]),
+    [
+      ['package.json', 'conflict'],
+      ['package.json', 'conflict'],
+      ['pnpm-workspace.yaml', 'would-write'],
+      ['.gitignore', 'would-write'],
+    ],
+    'the manifest is planned as a conflict, and the sibling writes are unchanged',
+  );
+  for (const item of document.plan.filter((entry) => entry.target === 'package.json')) {
+    assert.equal(item.reason, 'package.json is not valid JSON; it is not rewritten');
+    assert.equal(item.digest, null, 'a conflict carries no bytes');
+    assert.equal(item.content, undefined, 'the plan document never prints the content');
+  }
+  assert.deepEqual(document.refused, [], 'a conflict is not a refusal: nothing was written and nothing refused');
+  assert.equal(readFileSync(manifestPath, 'utf8'), unparseable, 'the plan writes nothing');
+
+  const applied = runner(dir, { tracked });
+  assert.equal(await applied.run(['init', '--apply']), 0, 'the sibling writes still happen, and keep 0 (I-58)');
+  assert.match(applied.stdout.text, /conflicts\n {2}\S*package\.json/);
+  assert.match(applied.stdout.text, /package\.json is not valid JSON; it is not rewritten/);
+  assert.equal(writeCount(applied.stdout.text), 2, 'only the two sibling files are written');
+  assert.equal(applied.stderr.text, '', 'no refusal is thrown: the plan says why, and writes what it can');
+  assert.equal(readFileSync(manifestPath, 'utf8'), unparseable, 'the manifest is never rewritten');
+  assert.match(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8'), /minimumReleaseAgeStrict: true/);
+});
+
 test('planFor composes W1, W2, W3 and W3b from the context and a report, and adds W4 under strict', async (t) => {
   const dir = scratch(t, 'below-policy');
   const collector = collectorFor({ root: dir, tracked: ['package.json', 'pnpm-lock.yaml'] });
