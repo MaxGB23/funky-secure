@@ -327,8 +327,17 @@ export async function run({
   if (from !== 'auto') {
     const expected = LOCKFILE_FOR[from];
     if (expected !== undefined && !foreign.some((name) => expected.test(name))) {
+      // The absence and the expectation are two clauses, never one sentence denying itself: the older
+      // "it holds no foreign lockfile, not package-lock.json" was read as a contradiction (F3), because
+      // "not package-lock.json" attaches to a noun the reader had just been told does not exist. So the
+      // message states what is held — nothing at all, or the foreign lockfiles that are there — and then
+      // what `--from` asked for.
+      const held =
+        foreign.length === 0
+          ? 'there is no foreign lockfile here'
+          : `the foreign lockfile here is ${foreign.join(' and ')}`;
       throw unanswered(
-        `--from ${from} names a manager this repository does not hold: it holds ${foreign.length === 0 ? 'no foreign lockfile' : foreign.join(', ')}, not ${expected.source}`,
+        `--from ${from} names a manager this repository does not hold: ${held}, and --from ${from} needs ${expected.source}`,
         `run migrate --apply without --from, so the detected manager decides`,
       );
     }
@@ -376,12 +385,15 @@ export async function run({
       ? `   ${IMPORT_STEP}${flag}   # reads ${foreign[0]}, writes pnpm-lock.yaml; a re-run replaces what it recorded`
       : `   pnpm install${flag}   # resolves and downloads; writes pnpm-lock.yaml`,
   );
-  // A lockfile that is already there is not evidence the step was performed: `pnpm install` writes one
-  // by resolving from the manifest and discards the versions the foreign file recorded (0021), so the
-  // plan says what it read and what it cannot decide, and claims no status (S9).
+  // A lockfile that is already there is not evidence the step was performed, and running the import is
+  // not evidence either: `pnpm import` (pnpm 12.3.4) recorded 4.18.1 for a manifest ranging `^4.17.21`
+  // whose foreign lockfile pinned 4.17.20 — a version lodash never published, synthesised from the range
+  // (D3, reproduced twice, offline, byte-identical). So the versions a `pnpm-lock.yaml` records are
+  // pnpm's to decide, this plan compares no lockfile versions at all, and the one thing the reader owes
+  // the foreign lockfile before step 4 deletes it is that comparison. The line claims no status (S9).
   if (foreign.length > 0 && hasPnpmLock) {
     lines.push(
-      `   pnpm-lock.yaml is present; whether it was imported from ${foreign[0]} or resolved from the manifest, only the import carries its versions`,
+      `   pnpm-lock.yaml is present; even after the import, the versions it records are pnpm's to decide, so compare them with ${foreign[0]} before step 4 removes it`,
     );
   }
   // A command that carries a flag says why it does, so the reader knows the declaration is a decision
