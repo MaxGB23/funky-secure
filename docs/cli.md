@@ -502,6 +502,8 @@ happens.
 It refuses — exit `3`, naming the file or the reason, and writing nothing:
 
 - a target with uncommitted changes, unless `--allow-dirty` is passed.
+- a plan that performs no write and carries at least one conflict: it understood the repository and refused every
+  item it was asked to write, and exit `0` would report a success that did not happen (0037).
 
 Two situations it cannot answer, which exit `2` and also write nothing: a working tree
 `git status --porcelain -z` cannot report, so the dirty check above cannot be made; and a plan item
@@ -513,8 +515,10 @@ printed in the plan, left untouched, and is not a write. That covers a conflicti
 `devEngines.packageManager` naming another manager or another version, a `minimumReleaseAge` or
 `minimumReleaseAgeStrict` declared outside the managed block, an unparseable or
 differently-configured `funky-secure.config.json`, and a config file discovered somewhere other than
-the repository root. A `conflict` alone does not make the command fail; it makes the plan a refusal
-you can read. A second `--apply` over the same state performs zero writes.
+the repository root. A `conflict` inside a plan that writes something does not change the exit code: the command
+wrote what it was asked to write, and the conflict is printed in the plan (I-58). A plan that writes nothing and
+carries at least one conflict is the refusal above — exit `3`, ending with a `reason:` line — because exit `0`
+would report a success that did not happen (0037). A second `--apply` over the same state performs zero writes.
 
 W3 and W3b are two items over one file on purpose. The plan is the only place a human sees what will
 be written before it is, so a writer that reports one path and changes two keys would hide half of

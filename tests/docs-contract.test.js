@@ -258,6 +258,40 @@ test('the exit-3 list of docs/cli.md names no case the code answers with exit 2'
   }
 });
 
+/// The refusal list is the page a script's author reads to decide what a failure means. The contract
+/// makes one case a refusal that the list never named: a plan that writes nothing and carries a conflict
+/// exits `3` (0037, I-80), because exit `0` would report a success that did not happen. The page said the
+/// opposite in prose and listed only the dirty target, so a reader concluded the case exits `0`.
+
+test('the refusal list names the conflict-only plan the contract makes exit 3', () => {
+  const lines = read('docs', 'cli.md').split('\n');
+  const start = lines.findIndex((line) => line.startsWith('It refuses — exit `3`'));
+  assert.notEqual(start, -1, 'docs/cli.md carries no "It refuses — exit `3`" list');
+
+  const bullets = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('- ')) bullets.push(line);
+    else if (bullets.length > 0) break;
+  }
+
+  // A bullet that merely says "conflict" is not this case: what makes it exit `3` is that the plan writes
+  // nothing, so the qualifier is half the claim and it is asserted here rather than left to the prose.
+  assert.ok(
+    bullets.some(
+      (bullet) => /conflict/i.test(bullet) && /no write|writes nothing/i.test(bullet),
+    ),
+    'docs/cli.md names no refusal for a plan that writes nothing and carries a conflict, and the contract makes it exit 3',
+  );
+
+  // The page is only right while the contract says it, so the rule is read from the spec rather than
+  // restated here: a spec change that loosened it would otherwise leave the page confidently wrong.
+  assert.match(
+    read('docs', 'spec', 'commands.md'),
+    /performs no write and carries at least one conflict exits `3`/,
+    'docs/spec/commands.md no longer makes the conflict-only plan a refusal, so the page cannot cite it',
+  );
+});
+
 /// The version strings (RFC 17.5). An install line with the wrong version is the first thing a new
 /// user copies, and `docs/spec/report.md` was still showing a report from 0.4.0.
 
