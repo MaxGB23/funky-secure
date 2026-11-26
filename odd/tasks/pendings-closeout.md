@@ -81,3 +81,12 @@ Each task ends with its own issue and its own pull request through `node scripts
   The same unit asserts the absence of `continue-on-error` (blocking is a conclusion, and
   `scripts/wait-for-ci.js:23`,`:68` read conclusions) and anchors the two floor needles, so a
   commented-out guard no longer satisfies them.
+
+- **L8** — two claims of this record were wrong, and they are corrected here rather than in the rows. **S4(c)**
+  cites `docs/decisions.md:286` (I-99), and #572 deleted 142 lines from that page: I-99 is at
+  `docs/decisions.md:144` today. The two copies were byte-identical apart from the first one's truncated I-98,
+  so the numbering that still resolves is the first copy's — I-58 `:103`, I-80 `:125`, I-94 `:139`, I-96
+  `:141` — and a citation written against the second copy's numbering (I-99 at old `:286`) shifts by those 142
+  lines. **S4(d)** called the drifted citations "both records, so no rewrite": that is wrong for RFC 0037,
+  which is a `draft`, and `rfcs/README.md:94-95` allows a draft's body to be rewritten until it is accepted —
+  so its citation is corrected in place, and only the Log and Specs rows of the backlog take the append route.

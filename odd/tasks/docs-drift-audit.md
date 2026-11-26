@@ -96,3 +96,11 @@ and it covers flags only — not commands per flag, not exit codes, not captures
 
 Frozen RFC bodies (0001–0023), `odd/tasks/**`, the exact golden captures for the machine block, and the
 correctness of `pnpm import` itself (never executed anywhere in this round).
+
+## Errata
+
+- **2026-11-26 — one citation in this audit points one row off.** `:47` cites `docs/decisions.md:29` as D-9;
+  `:29` carries D-7 and D-9 sits at `:31`. The finding it supports is unaffected — both rows are product
+  decisions of the same appendix — and the citation is corrected here rather than overwritten, following the
+  only precedent in this directory: the dated `## Errata` of `odd/tasks/next-release-backlog.md` (the
+  2026-11-17 entry).

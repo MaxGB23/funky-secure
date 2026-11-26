@@ -303,6 +303,9 @@ the fourth produced one owner decision and no code.
   `not run 6 of 13 rules; off by policy: …`, and `next nothing to do among the rules that ran` — ten of
   thirteen rules measured nothing, and every line was true. §10.2 now says the counters count findings and
   are not coverage; T15 splits into T15a (this spec) and T15b (the invisible passing rule).
+- **L18** — a citation corrected by appending, per this record's rule: **L5** above names
+  `src/lib/plan.js:291-293` for the zero-write `return 0`, and the line moved. It is `src/lib/plan.js:302-304`
+  today (in `applyPlan`: `if (writes.length === 0)`, then `return 0`). The row keeps its number.
 
 ## Tasks opened by a claim audit
 
@@ -395,6 +398,11 @@ What survives from that pair is `T17` alone, and it is `odd/tasks/open-task-ledg
 > **Corrected the same day, in this entry's own voice.** The `T16` bullet above says *"nineteen minutes"*; the
 > measured interval is `19:17:21 -> 19:26:33`, which is **nine minutes and twelve seconds**. The word is left as
 > written because this record is append-only, and the number is corrected here rather than overwritten.
+
+**2026-11-26 — the Specs row cites a line that moved.** The row at `:127` names
+`src/lib/plan.js:291-293` for the zero-write `return 0`; it is `src/lib/plan.js:302-304` today, and the Log
+entry `L18` carries the same correction for `:232`. The row keeps its text, per this record's rule, and the
+location is corrected here rather than in the row.
 
 ## After `0.14.0`: a fixture with workflows, owned by the owner's agent
 
