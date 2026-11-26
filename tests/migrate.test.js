@@ -516,10 +516,12 @@ test('a yarn repository names pnpm import in step 3 and yarn.lock in step 4', as
   assert.deepEqual(readdirSync(dir).sort(), ['package.json', 'pnpm-lock.yaml']);
 });
 
-test('step 3 reports the lockfile it found instead of claiming the step is done', async (t) => {
-  // A `pnpm-lock.yaml` can be there because `pnpm install` resolved it from the manifest, which discards
-  // the versions the foreign lockfile recorded (0021). The plan says what it read and what it cannot
-  // decide; it never says the step is satisfied, because only the import carries those pins.
+test('step 3 says the versions a present lockfile records are pnpm’s to decide, not the foreign pins', async (t) => {
+  // Field finding D3: `pnpm import` (pnpm 12.3.4) does not carry the foreign lockfile's versions. A
+  // fixture whose manifest ranges `lodash ^4.17.21` against a lockfile pinning `4.17.20` got a
+  // `pnpm-lock.yaml` recording `4.18.1` — a version lodash never published, synthesised from the range.
+  // The line a reader relies on before step 4 deletes the foreign file therefore says who decides those
+  // versions and what must be compared, and never claims the pins survive the import.
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
     'yarn.lock': '# yarn lockfile v1\n',
@@ -529,9 +531,16 @@ test('step 3 reports the lockfile it found instead of claiming the step is done'
   const result = await migrate(t, ['migrate'], dir, { defaultRef: 'origin/main' });
 
   assert.match(result.stdout, /3\. human step[\s\S]*pnpm import/);
-  assert.match(
+  assert.ok(
+    result.stdout.includes(
+      "   pnpm-lock.yaml is present; even after the import, the versions it records are pnpm's to decide, so compare them with yarn.lock before step 4 removes it",
+    ),
+    'the line names the comparison the reader must make before the foreign file is removed',
+  );
+  assert.doesNotMatch(
     result.stdout,
-    /pnpm-lock\.yaml is present; whether it was imported from yarn\.lock or resolved from the manifest/,
+    /only the import carries its versions/,
+    'the import does not carry the foreign pins (D3: measured on pnpm 12.3.4)',
   );
   assert.doesNotMatch(
     result.stdout,
@@ -738,6 +747,38 @@ test('--from a manager the repository does not hold is refused, not relabelled (
     'a usage error is not a refusal: exit 3 is the code the tool reserves for "understood and refused"',
   );
   assert.match(refused.stderr, /yarn.lock/, 'the refusal names what the repository actually holds');
+  const lines = refused.stderr.split('\n');
+  assert.equal(
+    lines[0],
+    'funky-secure: --from npm names a manager this repository does not hold: the foreign lockfile here is yarn.lock, and --from npm needs package-lock.json',
+    'the line names the foreign lockfile that is held, so no reader takes it for a contradiction',
+  );
+  assert.match(lines[1], /^reason: /);
+  assert.doesNotMatch(refused.stderr, /holds no foreign lockfile, not/);
+});
+
+// Field report F3 left a repository holding `pnpm-lock.yaml` alone; the refusal it met read "it holds no
+// foreign lockfile, not package-lock.json", which a reader parses as a contradiction. The message names
+// the absence and the expectation separately, so the two facts cannot be read as one sentence disagreeing
+// with itself (D3's unit, the readability half).
+test('--from over a repository with no foreign lockfile says there is none, and what the flag needs', async (t) => {
+  const dir = repository(t, {
+    'package.json': PACKAGE_JSON,
+    'pnpm-lock.yaml': 'lockfileVersion: 9\n',
+  });
+
+  const refused = await migrate(t, ['migrate', '--from', 'npm'], dir, { defaultRef: 'origin/main' });
+
+  assert.equal(refused.code, 2, 'the exit code is unchanged: 2 is a flag value the tool could not answer');
+  const lines = refused.stderr.split('\n');
+  assert.equal(
+    lines[0],
+    'funky-secure: --from npm names a manager this repository does not hold: there is no foreign lockfile here, and --from npm needs package-lock.json',
+    'the absence and the expectation are two clauses, not one sentence denying itself',
+  );
+  assert.equal(lines[1], 'reason: run migrate --apply without --from, so the detected manager decides');
+  assert.doesNotMatch(refused.stderr, /holds no foreign lockfile, not/);
+  assert.equal(refused.stdout, '', 'a usage error prints no plan');
 });
 
 // PRESERVE: a plan-only run never runs the apply-only probes.
