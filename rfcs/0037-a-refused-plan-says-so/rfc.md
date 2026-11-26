@@ -19,7 +19,7 @@ justifies it: exit `3` promises nothing was written, and something was.
 A plan where **every** item is a conflict writes nothing, refuses everything, and still exits `0`.
 `src/commands/init.js:83` skips the zero-write fast path only when a conflict is present
 (`if (apply && writes.length === 0 && !conflicts)`), so such a plan reaches `applyPlan`, prints
-`nothing to apply` and returns `0` (`src/lib/plan.js:284-287`).
+`nothing to apply` and returns `0` (`src/lib/plan.js:302-304`).
 
 ## Why that is a defect
 
