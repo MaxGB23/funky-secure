@@ -47,10 +47,10 @@ else.
 
 | ID | Spec | Work | Route | Commit |
 | --- | --- | --- | --- | --- |
-| T1 | S5 | Dedupe `docs/decisions.md` and guard the registry with a test | inline, test first | |
-| T2 | S2 | Correct `docs/cli.md`'s exit-3 list and guard the direction it loses | inline, test first | |
-| T3 | S3 | The migrate subdirectory case asserts the probe's `cwd` | inline, RED by reverting the argument | |
-| T4 | S4 | CI floor rationale, the false claim, a test for the macOS job, the I-99 file cell | inline | |
+| T1 | S5 | Dedupe `docs/decisions.md` and guard the registry with a test | inline, test first | `7f138e4` |
+| T2 | S2 | Correct `docs/cli.md`'s exit-3 list and guard the direction it loses | inline, test first | `1637a78` |
+| T3 | S3 | The migrate subdirectory case asserts the probe's `cwd` | inline, RED by reverting the argument | `b61bc2b` |
+| T4 | S4 | CI floor rationale, the false claim, a test for the macOS job, the I-99 file cell | inline | `592121e` |
 
 Each task ends with its own issue and its own pull request through `node scripts/open-pr.js`.
 
@@ -62,3 +62,14 @@ Each task ends with its own issue and its own pull request through `node scripts
 - **L3** — measured before writing: S4(d)'s premise is stale; nothing cites `src/lib/plan.js:302`.
 - **L4** — earlier in the session, on the owner's instruction, the two orphan gentle-ai candidate views
   were removed and the macOS check was renamed and merged (#569, #570).
+- **L5** — delivered, in order: T1 `7f138e4` (**#571**, PR **#572**), T2 `1637a78` (**#573**, PR **#574**),
+  T3 `b61bc2b` (**#575**, PR **#576**), T4 `592121e` (**#577**, PR **#578**). `assess` put the first three
+  under budget (no review due). T4 came back `nativeRisk: high` for `ci.yml`, and
+  `review-2e8dbdd9709458d5` (tier high, `risk`+`readability`) approved it and was burned;
+  `review-4e28f88409d6d955` did the same for #570 earlier.
+- **L6** — T4's review left three non-blocking findings, relayed here as the work they are: **R2-001** the
+  floor comment's arithmetic (`1000` is 28 below 1028, and 29 lost cases trip it — and behind that, a
+  decision the number never answered: 28 cases of slack against a comment promising "a plan's worth of
+  removals"); **R2-002** the new test claims a blocking leg it never asserts (no `continue-on-error`
+  check, no proof the gate reads the job); **R2-003** two floor assertions are unanchored substrings. All
+  three are deferred to **#579**, on the review's own instruction not to reopen the approved candidate.
