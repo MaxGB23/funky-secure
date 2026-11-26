@@ -43,9 +43,11 @@ test('the suite runs on the two platforms the code branches on, by exact image l
     assert.ok(CI.includes(label), `CI never runs on ${label}, so its code path is not gated`);
   }
 
+  // Anchored to a job key's own indentation, for the same reason as the `continue-on-error` case below: an
+  // unanchored copy is satisfied by a comment that mentions the label it warns against.
   assert.doesNotMatch(
     CI,
-    /runs-on:\s*\S*-latest/,
+    /^ {4}runs-on: \S*-latest$/m,
     'a floating runner label lets the vendor migrate the image under us',
   );
 });
@@ -107,7 +109,7 @@ test('the policy reads the labels the pull request has now, not the ones the eve
   // birth has no such guard, so the job has to resolve the labels itself.
   assert.doesNotMatch(
     CI,
-    /PR_LABELS:\s*\$\{\{\s*join\(github\.event\.pull_request\.labels/,
+    /^ {10,12}PR_LABELS: \$\{\{ join\(github\.event\.pull_request\.labels/m,
     'PR_LABELS still comes from the event payload, which can be empty on a labelled pull request',
   );
 
@@ -278,9 +280,12 @@ test('the macOS leg is the shape the record claims: arm64, blocking, and three g
   // that turns a failing job into a passing conclusion is `continue-on-error`, so the assertion is its
   // absence in this block -- not a second copy of the gate's logic, which would agree with the gate by
   // construction and prove nothing about the workflow.
+  // A prose mention is not a setting. The pattern is anchored to a key's own indentation, so a comment
+  // explaining why the key is absent satisfies this case instead of failing it, while a real key — at job
+  // level or inside a step — still trips it.
   assert.doesNotMatch(
     job,
-    /continue-on-error/,
+    /^ {4,10}continue-on-error:/m,
     'a `continue-on-error` turns the leg into a warning, so the conclusion the delivery gate reads is a pass',
   );
 });
