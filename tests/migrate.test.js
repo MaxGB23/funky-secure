@@ -79,8 +79,10 @@ function fakeCollector({
         return { ok: false, error };
       }
     },
-    async git(args) {
-      calls.push(args);
+    async git(args, options = {}) {
+      // Both halves of the question are recorded: a pathspec is read relative to the directory git
+      // runs in, so which root a probe named is as much of its answer as the names it asked about.
+      calls.push({ args, cwd: options.cwd });
       const [head, second] = args;
       if (head === 'rev-parse' && second === '--show-toplevel') {
         return root === null
@@ -172,8 +174,8 @@ test('apply on a clean feature branch removes exactly the foreign lockfile', asy
   assert.equal(lockfile, 'lockfileVersion: 9\n');
 
   // The dirty check is one `git status` call, limited to the paths about to be removed.
-  const status = result.collector.calls.find((args) => args[0] === 'status');
-  assert.deepEqual(status, ['status', '--porcelain', '-z', '--', 'package-lock.json']);
+  const status = result.collector.calls.find((call) => call.args[0] === 'status');
+  assert.deepEqual(status.args, ['status', '--porcelain', '-z', '--', 'package-lock.json']);
 });
 
 test('apply refuses without pnpm-lock.yaml and keeps the only lockfile', async (t) => {
@@ -315,7 +317,7 @@ test('apply refuses a dirty lockfile path, and --allow-dirty proceeds', async (t
 
   assert.equal(allowed.code, 0);
   assert.deepEqual(readdirSync(allowedDir).sort(), ['package.json', 'pnpm-lock.yaml']);
-  assert.equal(allowed.collector.calls.some((args) => args[0] === 'status'), false);
+  assert.equal(allowed.collector.calls.some((call) => call.args[0] === 'status'), false);
 });
 
 // The dirty check asks git in the repository's own coordinate system: the pathspec is the declared
@@ -346,8 +348,9 @@ test('apply refuses a dirty lockfile when run from a subdirectory', async (t) =>
     reason,
     'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
   );
-  const status = collector.calls.find((args) => args[0] === 'status');
-  assert.deepEqual(status, ['status', '--porcelain', '-z', '--', 'package-lock.json']);
+  const status = collector.calls.find((call) => call.args[0] === 'status');
+  assert.deepEqual(status.args, ['status', '--porcelain', '-z', '--', 'package-lock.json']);
+  assert.equal(status.cwd, dir, 'the dirty check runs from the repository root the pathspec is relative to');
   assert.ok(readdirSync(dir).includes('package-lock.json'));
 });
 
@@ -391,9 +394,9 @@ test('apply refuses a dirty lockfile reached through an alias of the repository 
     reason,
     'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
   );
-  const status = collector.calls.find((args) => args[0] === 'status');
+  const status = collector.calls.find((call) => call.args[0] === 'status');
   assert.deepEqual(
-    status,
+    status.args,
     ['status', '--porcelain', '-z', '--', 'package-lock.json'],
     'the pathspec is the name the catalog declared, not a spelling of the alias',
   );
@@ -599,7 +602,7 @@ test('apply with nothing foreign to remove writes nothing and says so', async (t
 
   assert.equal(result.code, 0);
   assert.ok(result.stdout.includes('nothing to remove'));
-  assert.equal(result.collector.calls.some((args) => args[0] === 'status'), false);
+  assert.equal(result.collector.calls.some((call) => call.args[0] === 'status'), false);
   assert.deepEqual(readdirSync(dir).sort(), ['package.json', 'pnpm-lock.yaml']);
 });
 
@@ -749,8 +752,8 @@ test('a plan-only run does not ask git for the status or the default branch', as
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /from npm {2}· {2}plan only/);
-  assert.equal(result.collector.calls.some((args) => args[0] === 'status'), false);
-  assert.equal(result.collector.calls.some((args) => args[0] === 'symbolic-ref'), false);
+  assert.equal(result.collector.calls.some((call) => call.args[0] === 'status'), false);
+  assert.equal(result.collector.calls.some((call) => call.args[0] === 'symbolic-ref'), false);
 });
 
 test('step 4 refuses before it deletes anything, so no lockfile is ever half-removed', async (t) => {
