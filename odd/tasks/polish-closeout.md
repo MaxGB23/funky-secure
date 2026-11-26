@@ -1,16 +1,15 @@
 # Polish closeout
 
 The three carried defects that survived the 2026-11-26 batch, plus a fourth the J1 round found inside the same
-subject, closed one work unit at a time, with the plan judged blind before the first source write. Everything
-shipping in this repository that is not the portfolio data file; the portfolio is out of scope on the owner's
-own word.
+subject, closed one work unit at a time. Everything shipping in this repository that is not the portfolio data
+file; the portfolio is out of scope on the owner's own word.
 
 ## Specs
 
 **S1 — Scope.** The owner's words: *"deja todo pulido, si surge una nueva problematica que requiera issue y pr,
 hazlo, dime cuando todo esté al 100. Solo no implementes nada de portfolio aun. Apoyate de jueces para plan, odd
-y sus J[n], afirmaciones, etc, empecemos"*. Judgments (`J1`–`J3`) are part of the work, not decoration: the plan
-is judged before code, each claim-bearing change before it merges, and the batch audited when it closes.
+y sus J[n], afirmaciones, etc, empecemos"*. Judgments (`J1`–`J3`) are part of the work: the plan is judged before
+code, each claim-bearing change before it merges, and the batch audited when it closes.
 
 **S2 — R2-002, the unanchored negative assertion.** `tests/ci-coverage.test.js:283` asserts
 `doesNotMatch(job, /continue-on-error/)`. Any mention of the key — a comment explaining why it is absent —
@@ -21,20 +20,23 @@ prose mention, and it still fails when the key is really set.
 **S3 — the conflict-only plan is missing from the page that lists refusals.** The contract says
 `docs/spec/commands.md:110-118`: *"A plan that performs no write and carries at least one conflict exits `3`"*,
 and that a conflict inside a plan that writes something *"does not change the code"*. In `docs/cli.md`, the
-refusal list at `:502-509` names only the dirty target, and `:516-517` denies the conflict-only half:
-*"A `conflict` alone does not make the command fail; it makes the plan a refusal you can read"*. The same page
-**affirms** the I-58 half at `:511-515` — a conflict *"is printed in the plan, left untouched, and is not a
-write"* — so the page contradicts one half, never both. Requirement: the page names the conflict-only case as
-exit `3`, leaves the I-58 half as it stands, and a test fails if it drifts.
+refusal list is `:502-504` — one line and one bullet, the dirty target — and `:516-517` denies the
+conflict-only half: *"A `conflict` alone does not make the command fail; it makes the plan a refusal you can
+read"*. The same page **affirms** the I-58 half at `:511-515` (a conflict *"is printed in the plan, left
+untouched, and is not a write"*), so the page contradicts one half, never both; `:506-509` is the exit-`2`
+paragraph and is not part of the refusal list. Requirement: the page names the conflict-only case as exit `3`,
+leaves the I-58 half as it stands, and a test fails if it drifts.
 
-**S4 — two records cite a line that moved.** `src/lib/plan.js` returns `0` for a zero-write plan at
-`:302-304`. The records cite `src/lib/plan.js:291-293` (`odd/tasks/next-release-backlog.md:127` and `:232`) and
-`src/lib/plan.js:284-287` (`rfcs/0037-a-refused-plan-says-so/rfc.md:22`). The two are corrected by different
-rules, and the difference is the record's own state: RFC 0037 is still `draft` (`rfcs/README.md:46`, its status
-line `:5`), and `rfcs/README.md:94-95` says *"that is the last moment its body may be rewritten"* when it becomes
-`accepted` — so a draft's citation is corrected in place. The ODD Log in `odd/tasks/` is evidence and is only
-ever appended to, so its citation is corrected by an appended line. Requirement: each record names the current
-location without rewriting anything the record's state forbids rewriting.
+**S4 — three citations name a line that moved, under three different rules.** `src/lib/plan.js` returns `0` for a
+zero-write plan at `:302-304`. Each site is corrected by the rule its own location imposes:
+1. `rfcs/0037-a-refused-plan-says-so/rfc.md:22` cites `:284-287`. The RFC is a `draft` (`rfcs/README.md:46`, its
+   status line `:5`) and `rfcs/README.md:94-95` makes acceptance the last moment its body may be rewritten — so a
+   draft's citation is corrected in place.
+2. `odd/tasks/next-release-backlog.md:232` cites `:291-293` inside that document's `## Log` (`:213`), which
+   `AGENTS.md` makes evidence and append-only — so the correction is an appended line.
+3. `odd/tasks/next-release-backlog.md:127` cites `:291-293` inside `## Specs` (`:7`), not the Log, so appending a
+   Log line would leave it standing. The document's own precedent (`:357-362`, `## Errata`) is the route: a dated
+   Errata entry names the corrected line and keeps the row it corrects.
 
 **S5 — Delivery.** One issue and one pull request per unit, through `node scripts/open-pr.js`, one commit per
 unit. Every unit is `Risk: none`: documentation and tests, no product behaviour, no contract.
@@ -50,10 +52,10 @@ agreement — so this unit changes no status and the issue names that decision a
 
 | ID | Spec | Work | Route | Commit | Judge |
 | --- | --- | --- | --- | --- | --- |
-| J1 | — | Plan judged blind by two judges before the first source write | `jd-judge-a` + `jd-judge-b`, round 1 | `d845aa3` | done, 7 rows |
-| T1 | S2 | Anchor the `continue-on-error` assertion; prove it still fails on the key with a scratch copy of the two files (the case reads the real workflow, so the RED is a temporary edit there, reverted) | inline, test first | — | J2 |
+| J1 | — | Plan judged blind by two judges, two rounds | `jd-judge-a` + `jd-judge-b` | `d845aa3`, `04eb72a` | done, 14 rows |
+| T1 | S2 | Anchor the `continue-on-error` assertion; prove it fails on the key using a scratch tree that mirrors the layout the test reads at module load — `tests/ci-coverage.test.js` plus `.github/workflows/ci.yml`, `.github/workflows/release.yml` and `package.json` (`tests/ci-coverage.test.js:6-9`) — with the key injected there and nothing of the real workflow touched | inline, test first | — | J2 |
 | T2 | S3 | The conflict-only plan in `docs/cli.md`, with the guard that keeps it | inline, test first | — | J2 |
-| T3 | S4 | The draft RFC's citation corrected in place, the ODD Log's appended | inline, docs only | — | J2 |
+| T3 | S4 | The three citations, each by its own rule: draft in place, Log appended, Errata for the Specs row | inline, docs only | — | J2 |
 | T4 | S6 | The registry row names where the contract lives; no status change | inline, docs only | — | J2 |
 | J2 | — | Each unit's claim set judged before its pull request | `jd-judge-a`, `SINGLE` per work unit | — | pending |
 | J3 | — | Closing audit over the batch's records and claims | `jd-judge-a`, `SINGLE` | — | pending |
@@ -64,29 +66,33 @@ agreement — so this unit changes no status and the issue names that decision a
   dime cuando todo esté al 100. Solo no implementes nada de portfolio aun. Apoyate de jueces para plan, odd y sus
   J[n], afirmaciones, etc, empecemos"*
 - **L2** — premises verified by the parent before they became tasks (protocol rule 3): the zero-write return is
-  `src/lib/plan.js:302-304` (`sed -n '296,310p'`, read today); both record citations name other lines; the spec
-  sentence at `commands.md:110-118` says exit `3` and the I-58 half; `docs/cli.md` denies the conflict-only half
-  at `:516-517` while affirming I-58 at `:511-515`. The citation drift a previous advisory blamed on
+  `src/lib/plan.js:302-304` (`sed -n '296,310p'`); both record citations name other lines; the spec sentence at
+  `commands.md:110-118` says exit `3` and the I-58 half; `docs/cli.md` denies the conflict-only half at
+  `:516-517` while affirming I-58 at `:511-515`. The citation drift a previous advisory blamed on
   `src/lib/plan.js:302` was a misreading of the direction: the records are the ones citing, and their numbers are
   the stale ones.
-- **L3 — J1 adjudication** (round 1, frozen `d845aa3` / blob `56ce7421`; judges `jd-judge-a`
-  `opencode-go/deepseek-v4.1-flash` and `jd-judge-b` `opencode-go/muse-spark-1.3-contributor`; 9 questions,
-  7 rows returned, both judges returned). The verdicts are the parent's, written after verifying each row
-  against the tree:
-  - **JD-B-001 and JD-A-001 — confirmed** (deterministic): S3's `docs/cli.md:508-511` was the exit-`2`
-    paragraph's tail; the refusal list is `:502-509` and the denying sentence `:516-517`. Both judges found it
-    independently, which is the strongest signal this protocol has. S3 corrected.
-  - **JD-A-002 — confirmed** (inferential): "the opposite of both halves in one sentence" overstated it; the
-    page affirms the I-58 half at `:511-515`. S3 corrected to "contradicts one half, never both", and T2 no
-    longer claims to restore an I-58 statement the page never lost.
-  - **JD-A-003 — confirmed** (deterministic): `rfcs/README.md:46` still says `draft` and "pending: becomes
-    §11.2 when the change merges" although the rule is in `docs/spec/commands.md:113` and I-80. The sweep in
-    L2 missed it. Becomes **S6/T4** — a defect's second instance, not new work.
-  - **JD-A-004 — confirmed** (inferential): RFC 0037 is a `draft`, and `rfcs/README.md:94-95` allows a draft's
-    body to be rewritten until it is `accepted`; S4 named the settled-RFC rule for it. S4 corrected, and the
-    noun now follows the record's state (in place for the draft, append for the Log).
-  - **JD-A-005 — accepted** (deterministic): T1's acceptance named no fixture while the case reads the real
-    workflow. T1 now names the scratch copy and the reverted temporary edit.
-  - **JD-A-006 — the row stands against the question set, not the artifact** (inferential): Q7 asked about
-    GitHub's rendering and `git merge-tree`, which this plan never asserts. The only third-party premise it
-    carries is the `scripts/open-pr.js` route, and `AGENTS.md` states it. Lesson recorded, no work.
+- **L3 — J1 round 1.** Freeze `d845aa3` (`git rev-parse d845aa3:odd/tasks/polish-closeout.md` →
+  `56ce7421`, 56 lines; `sha256sum` of the working file → `d8dcc338`). Judges: `jd-judge-a`
+  `opencode-go/deepseek-v4.1-flash`, `jd-judge-b` `opencode-go/muse-spark-1.3-contributor`. Nine questions,
+  seven rows returned. The marker and both verdicts live in `.tmp/judge/` (untracked: `.tmp` is ignored), which is
+  where the counts above are read from. Adjudication, after the parent read each row against the tree:
+  **JD-B-001 and JD-A-001** `confirmed` (deterministic) — S3's `:508-511` was the exit-`2` paragraph's tail, and
+  both judges found it independently; **JD-A-002** `confirmed` — "the opposite of both halves" overstated it;
+  **JD-A-003** `confirmed` — `rfcs/README.md:46` still says the contract is pending, which became **S6/T4**;
+  **JD-A-004** `confirmed` — RFC 0037 is a draft, so S4 named the wrong rule; **JD-A-005** `confirmed` — T1's
+  acceptance named no fixture; **JD-A-006** `confirmed` against the question set, not the artifact — Q7 asked
+  about premises the plan never asserts, so the parent records a question-set defect and opens no work.
+- **L4 — J1 round 2, and the cap.** Freeze `04eb72a` (blob `c661519c`, 92 lines; `sha256sum` →
+  `e28cb457`). Same two judges, five questions. Judge B returned no rows; judge A returned seven, all read
+  against the tree by the parent: **JD-A-001** (round 2) `confirmed` — `tests/ci-coverage.test.js:6-9` reads
+  three files at module load, so "a scratch copy of the two files" could not run; T1 now names the four-file
+  mirrored tree; **JD-A-002** (round 2) `confirmed` — the backlog's `:127` sits under `## Specs`, not `## Log`, so
+  S4's two-rule split did not classify it; S4 now carries three rules and cites the document's own
+  `## Errata` precedent; **JD-A-003** (round 2) `confirmed` — S3's `:502-509` overshot into the exit-`2`
+  paragraph; the list is `:502-504`; **JD-A-004** (round 2) `confirmed` — a digest without its recipe;
+  **JD-A-005** (round 2) `confirmed` — "the only third-party premise" was an un-run sweep, and S2 rests on
+  `assert.doesNotMatch` behaviour; **JD-A-006** (round 2) `confirmed` — the round-1 record is untracked, so its
+  count is a reading of `.tmp/judge/` and not a repository fact; **JD-A-007** (round 2) `confirmed` — L3 used
+  "accepted" and "the row stands" beside `confirmed`; the vocabulary is now the protocol's four. **The cap is
+  reached: two judged rounds on this artifact, and no third pass was run.** Every row above was corrected in this
+  text, and the corrections are not re-judged — the record states that plainly rather than implying a clean round.
