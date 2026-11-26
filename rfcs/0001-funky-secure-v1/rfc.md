@@ -2207,3 +2207,13 @@ as a whole, and it never fails a run at the default threshold. The spec moved in
 The contract lives in [`docs/spec/rules.md`](../../docs/spec/rules.md) §8.2 R9 and R11. The decisions
 are I-88, and I-6, I-14 and I-82 are superseded where they said otherwise; the work is tracked in
 [`odd/tasks/bot-rule-ownership.md`](../../odd/tasks/bot-rule-ownership.md).
+
+### 2026-11-25 — 15.4: a third platform runs the suite, and it is not a supported one
+
+Rule 2 names the exact labels of the matrix this record described, and it is not falsified here. A
+third leg, `test-macos`, runs the same suite on `macos-26` (arm64) at the Active LTS and blocks a
+delivery. It **extends** the policy rather than correcting it: the product still branches on `win32`
+against POSIX, rule 1's two platforms are still the two supported ones, and no support claim moves.
+The leg gates because the delivery gate reads a job's conclusion, and its cost on a public repository
+is not settled here. Recorded as I-99; the present-tense pages are `README.md`, `CONTRIBUTING.md` and
+[`docs/validation.md`](../../docs/validation.md).
