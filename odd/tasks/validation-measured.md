@@ -163,3 +163,17 @@ later. Nothing here re-opens a settled RFC; behaviour changes start in `docs/spe
   own D1 (invalid-JSON fixture). Two of the seven rejections were contradicted by the record itself rather than by a
   re-run, which is the lesson: **a report and a reproducer both describe behaviour; only the contract says whether
   the behaviour is wrong.**
+- **L12 — the campaign's units, their merge commits, and the release's precondition.** Three units shipped,
+  each with its issue: **#596** (`50059b6`) the `migrate` promise and wording, **#597** (`bdf0b72`) the plan
+  naming an unreadable manifest, **#598** (`aa45c99`) the record and the page. Issues #593-#595 closed by their
+  bodies; #591 and #592 closed as retracted, with the retraction in the issue rather than in the record's memory.
+  `main` reached `bdf0b72` with CI green on every leg including macOS, and the suite at **1033 tests, 1032
+  pass, 0 fail, 1 skip**.
+- **L13 — the bump, and a count the ritual had wrong.** `0.15.1` across the tree: 8 occurrences in 6 documents
+  and the 6 golden reports, regenerated with `node scripts/gen-golden.js` and diffed to one `tool.version` line
+  each. The suite named the copies a blind grep would have missed (`README.md`, the skill's frontmatter) and the
+  ones a blind replace would have damaged (`odd/tasks/**` history and `.tmp/judge/**`), which is the argument for
+  letting the suite drive it. `node scripts/release-guard.js --tag v0.15.1` exits `0` and agrees with the packed
+  set. The release skill said the version lives in **fifteen** occurrences; the tree carries **fourteen**, and no
+  test names a fifteenth. The skill is corrected in this unit, because a ritual that asks a maintainer to find a
+  copy that does not exist teaches them to distrust the count that does.
