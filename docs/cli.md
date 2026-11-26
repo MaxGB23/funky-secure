@@ -501,9 +501,12 @@ happens.
 
 It refuses — exit `3`, naming the file or the reason, and writing nothing:
 
-- a target with uncommitted changes, unless `--allow-dirty` is passed;
-- a working tree `git status --porcelain -z` cannot report, because the check above cannot be made;
-- a plan item whose content changed between planning and writing, or that carries no content.
+- a target with uncommitted changes, unless `--allow-dirty` is passed.
+
+Two situations it cannot answer, which exit `2` and also write nothing: a working tree
+`git status --porcelain -z` cannot report, so the dirty check above cannot be made; and a plan item
+whose content changed between planning and writing, or that carries no content — the plan is stale
+or incomplete, and writing it is not an answer to it.
 
 It never overwrites a value it did not write. A value that exists and differs is a `conflict`: it is
 printed in the plan, left untouched, and is not a write. That covers a conflicting `packageManager`, a
