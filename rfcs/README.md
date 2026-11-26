@@ -41,9 +41,9 @@ document that changes without a new record.
 | [0032](0032-stage-only-release/rfc.md) | Stage-only publication and the packed set | `accepted` | — | — | [`docs/spec/layout.md`](../docs/spec/layout.md) §14.1, [`docs/delivery.md`](../docs/delivery.md) §17.2, §17.3 |
 | [0033](0033-start-points-at-pnpm/rfc.md) | The path says where pnpm comes from | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
 | [0034](0034-the-resolve-comes-before-the-pin/rfc.md) | The resolve comes before the pin | `implemented` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
-| [0035](0035-the-third-privileged-trigger/rfc.md) | The third privileged trigger | `draft` | — | — | `pending`: becomes [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R13 and §8.4 when the rule merges |
-| [0036](0036-the-negation-is-named/rfc.md) | The negation is named | `draft` | — | — | `pending`: becomes [`docs/spec/rules.md`](../docs/spec/rules.md) §8.1 R1 when the change merges |
-| [0037](0037-a-refused-plan-says-so/rfc.md) | A refused plan says so | `draft` | — | — | `pending`: becomes [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2 when the change merges |
+| [0035](0035-the-third-privileged-trigger/rfc.md) | The third privileged trigger | `draft` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R13 and §8.4 carry it (I-79); the RFC's own body is still a draft |
+| [0036](0036-the-negation-is-named/rfc.md) | The negation is named | `draft` | — | — | [`docs/spec/rules.md`](../docs/spec/rules.md) §8.1 R1 carries it, citing `(0036)`; the RFC's own body is still a draft |
+| [0037](0037-a-refused-plan-says-so/rfc.md) | A refused plan says so | `draft` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.2 carries it (I-80); the RFC's own body is still a draft |
 | [0038](0038-nothing-ran-says-so/rfc.md) | Nothing ran says so | `accepted` | — | — | [`docs/spec/report.md`](../docs/spec/report.md) §10.3 |
 | [0039](0039-the-bot-config-is-read-where-the-tool-reads-it/rfc.md) | The bot config is read where the tool reads it | `accepted` | — | — | [`docs/spec/scope.md`](../docs/spec/scope.md) §7.1, [`docs/spec/rules.md`](../docs/spec/rules.md) §8.2 R9 |
 | [0040](0040-the-rule-the-plan-states/rfc.md) | The rule the plan states | `accepted` | — | — | [`docs/spec/commands.md`](../docs/spec/commands.md) §11.7 |
