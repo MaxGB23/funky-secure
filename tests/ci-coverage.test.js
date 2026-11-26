@@ -260,14 +260,27 @@ test('the macOS leg is the shape the record claims: arm64, blocking, and three g
     /^ {10}if grep -q 'pnpm did not answer' suite\.log; then$/m,
     'the leg no longer catches a pnpm-gated case that skipped while pnpm answered',
   );
+  // Both needles are anchored to the line's own indentation, like the guards above: an unanchored copy
+  // is satisfied by the commented-out shell of a guard, which reads like a leg that measures and is not.
   assert.match(
     job,
-    /const m=\/\^ℹ tests/,
+    /^ {10}node -e 'const m=\/\^ℹ tests \(\\d\+\)\$\/m\.exec\(/m,
     'the `tests` floor does not read the suite total, so a leg that ran nothing would pass',
   );
   assert.match(
     job,
-    /Number\(m\[1\]\)<1000/,
+    /^ {10}node -e '[^\n]*Number\(m\[1\]\)<1000/m,
     'the `tests` guard lost its floor, so only the presence of a total is asserted',
+  );
+
+  // Blocking is a conclusion, not a word: `scripts/wait-for-ci.js:23` accepts only `success`, `skipped`
+  // and `neutral`, and `:68` filters out every job whose conclusion is outside that set. The one key
+  // that turns a failing job into a passing conclusion is `continue-on-error`, so the assertion is its
+  // absence in this block -- not a second copy of the gate's logic, which would agree with the gate by
+  // construction and prove nothing about the workflow.
+  assert.doesNotMatch(
+    job,
+    /continue-on-error/,
+    'a `continue-on-error` turns the leg into a warning, so the conclusion the delivery gate reads is a pass',
   );
 });

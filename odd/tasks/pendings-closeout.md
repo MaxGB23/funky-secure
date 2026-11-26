@@ -73,3 +73,11 @@ Each task ends with its own issue and its own pull request through `node scripts
   removals"); **R2-002** the new test claims a blocking leg it never asserts (no `continue-on-error`
   check, no proof the gate reads the job); **R2-003** two floor assertions are unanchored substrings. All
   three are deferred to **#579**, on the review's own instruction not to reopen the approved candidate.
+- **L7** — #579 closes in its own unit, with the owner's decision recorded: **the floor stays at `1000`**.
+  The comment now states the measurement instead of promising slack: `1000` against the 1030 cases `main`
+  reports after the four merges, so it trips after 31 lost cases, deliberately tight because the leg is a
+  tripwire for a suite that silently stopped running its cases. The earlier 1028/29 pair was true of each
+  unit's own base (`063e0fb` + one case) and false of `main`: three of the four units added a case each.
+  The same unit asserts the absence of `continue-on-error` (blocking is a conclusion, and
+  `scripts/wait-for-ci.js:23`,`:68` read conclusions) and anchors the two floor needles, so a
+  commented-out guard no longer satisfies them.

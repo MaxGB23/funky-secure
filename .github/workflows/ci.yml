@@ -86,9 +86,10 @@ jobs:
       # The floor catches a leg that ran nothing; the skip text catches the twelve pnpm-gated cases,
       # which still count in `tests` and would otherwise be invisible. `skipped 0` is not the guard:
       # `tests/plan-spelling.test.js` skips on every non-Windows host by design.
-      # The number is a floor and not a pinned total, so a plan's worth of removals does not fail the
-      # leg. It is `1000`, a hundred below the 1028 cases this change measures: a leg that ran nothing,
-      # or lost more than a hundred cases, cannot pass.
+      # The number is a floor and not a pinned total, so ordinary growth in the suite needs no edit here.
+      # It is `1000` against the 1030 cases the suite reports, so it trips after 31 lost cases: that is
+      # deliberately tight, because this leg is a tripwire for a suite that silently stopped running its
+      # cases, not a budget for shrinking it.
       - name: The leg ran the suite it claims
         run: |
           grep -qx 'ℹ fail 0' suite.log
