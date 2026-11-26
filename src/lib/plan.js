@@ -12,7 +12,7 @@ import { dirname, relative } from 'node:path';
 
 import { ConfigError, RefusalError } from './errors.js';
 import { resolveLockfileStep } from './foreign-pin.js';
-import { statusPorcelain } from './git.js';
+import { statusPorcelain, repoRoot } from './git.js';
 import { pathsAtCwd } from './paths.js';
 import { FOREIGN_LOCKFILES } from './targets.js';
 
@@ -27,7 +27,7 @@ export function digestOf(content) {
 }
 
 /**
- * @param {{ target: string, operation: string, path: string, content?: string | null, state?: string, reason?: string }} item
+ * @param {{ target: string, operation: string, path: string, relative?: string | null, content?: string | null, state?: string, reason?: string }} item
  */
 export function planItem({ target, operation, path, relative = null, content = null, state = 'would-write', reason = '' }) {
   return {
@@ -82,28 +82,6 @@ export function renderPlanJson({ tool, command, policy, plan, refused = [], time
 }
 
 /**
- * The paths a plan writes, relative to the repository root and in plan order, one entry per file
- * (RFC 11.2.2). A plan item that is already at policy or refused writes nothing, so it is not staged
- * either, and two items over one file — W3 and W3b, or W1a and W1c if they were ever split — name the
- * file once: `git add` takes a path, not a plan item.
- *
- * `init`'s next steps and `start`'s commit line both read this, so the two commands cannot spell the
- * same plan differently.
- * @param {Array<object>} plan
- * @param {string | null} root
- * @returns {string[]}
- */
-/**
- * The repository-relative names the plan declares, one per written file.
- *
- * These are the names the catalog wrote down, not a value computed by subtracting a root from a path.
- * A Windows volume can spell one directory two ways, and a subtraction between two spellings answers
- * `../../../..` instead of a name - which is what printed paths nobody can paste (issue 210).
- *
- * @param {Array<object>} plan
- * @returns {string[]}
- */
-/**
  * The `git status` entries that name one of these repository-relative paths.
  *
  * Both sides are already in the repository's own coordinate system, so this is a set intersection and
@@ -123,6 +101,16 @@ export function dirtyPaths(entries, paths) {
   });
 }
 
+/**
+ * The repository-relative names the plan declares, one per written file.
+ *
+ * These are the names the catalog wrote down, not a value computed by subtracting a root from a path.
+ * A Windows volume can spell one directory two ways, and a subtraction between two spellings answers
+ * `../../../..` instead of a name - which is what printed paths nobody can paste (issue 210).
+ *
+ * @param {Array<object>} plan
+ * @returns {string[]}
+ */
 export function declaredPaths(plan) {
   const paths = [];
   for (const item of plan) {
@@ -134,6 +122,18 @@ export function declaredPaths(plan) {
   return paths;
 }
 
+/**
+ * The paths a plan writes, relative to the repository root and in plan order, one entry per file
+ * (RFC 11.2.2). A plan item that is already at policy or refused writes nothing, so it is not staged
+ * either, and two items over one file — W3 and W3b, or W1a and W1c if they were ever split — name the
+ * file once: `git add` takes a path, not a plan item.
+ *
+ * `init`'s next steps and `start`'s commit line both read this, so the two commands cannot spell the
+ * same plan differently.
+ * @param {Array<object>} plan
+ * @param {string | null} root
+ * @returns {string[]}
+ */
 export function writtenPaths(plan, root) {
   const paths = [];
   for (const item of plan) {
@@ -288,28 +288,51 @@ function refusal(action, message) {
  * A dirty target is refused unless `--allow-dirty`: a security tool does not mix its edits with a
  * stranger's. Every write is printed before it happens, with its digest, in the same run.
  *
- * @param {{ plan: Array<object>, allowDirty?: boolean, cwd: string, collector: object, stdout: object }} options
+ * The dirty check is a set intersection between the names the plan declares and the entries `git status`
+ * answers with, both root-relative, and the probe runs from the root git reports (issue 567, I-71).
+ * Subtracting the cwd from an already-canonical absolute path was arithmetic between two spellings of
+ * one directory: through a junction on win32 or a symlink on POSIX the answer was `../repo/package.json`,
+ * which matches no root-relative entry, so a dirty target was written over instead of refused.
+ *
+ * @param {{ plan: Array<object>, allowDirty?: boolean, collector: object, stdout: object }} options
  * @returns {Promise<number>} exit code
  */
-export async function applyPlan({ plan, allowDirty = false, cwd, collector, stdout }) {
+export async function applyPlan({ plan, allowDirty = false, collector, stdout }) {
   const writes = plan.filter((item) => item.state === 'would-write');
   if (writes.length === 0) {
     stdout.write('nothing to apply\n');
     return 0;
   }
 
+  // The guard asks git about the name the catalog declared, so an item that declares none is a broken
+  // item rather than an item nothing writes: it used to be left out of the probe and written anyway
+  // (issue 567 review). The check runs before the first write, so a plan that cannot be checked leaves
+  // the tree exactly as it found it. An item that is not written is not asked about.
+  for (const item of writes) {
+    if (typeof item.relative !== 'string' || item.relative === '') {
+      throw new ConfigError(`plan item for ${item.path} carries no repository-relative name`);
+    }
+  }
+
   if (!allowDirty) {
-    const paths = writes.map((item) => relative(cwd, item.path));
-    const dirty = await statusPorcelain(collector, paths);
+    // The repository's own coordinate system, twice: `declaredPaths` names the files the catalog wrote
+    // down, `repoRoot` is the spelling git reports the worktree by - and it runs from the invocation
+    // directory, which is where the question `which root is this?` has to be asked. The root is not
+    // optional: the names are relative to it and a pathspec is read relative to the directory git runs
+    // in, so a root the tool could not name would be probed from the invocation directory, answer
+    // nothing, and call a dirty tree clean. A missing fact is refused, never rewritten as a pass.
+    const paths = declaredPaths(plan);
+    const root = await repoRoot(collector);
+    const dirty = root === null ? null : await statusPorcelain(collector, paths, root);
     if (dirty === null) {
       throw refusal(
         'pass --allow-dirty, or fix git so git status answers, then re-run',
         'cannot check the working tree: git status failed',
       );
     }
-    const touched = dirty.filter((entry) => paths.includes(entry.slice(3)));
+    const touched = [...new Set(dirtyPaths(dirty, paths).map((entry) => entry.slice(3)))];
     if (touched.length > 0) {
-      const named = touched.map((entry) => entry.slice(3)).join(', ');
+      const named = touched.join(', ');
       throw refusal(
         `commit ${named} or pass --allow-dirty, then re-run`,
         `refusing to write over uncommitted changes: ${named}`,

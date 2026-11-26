@@ -1,20 +1,54 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { run } from '../src/cli.js';
 import { collectPins, applyPins } from '../src/lib/pins.js';
 
+const BIN = fileURLToPath(new URL('../bin/funky-secure.js', import.meta.url));
+// The identity the suite's other commits use: this machine carries a global hook that refuses any
+// other author, and a test that fails on the developer's git config is a test nobody keeps running.
+const IDENTITY = [
+  '-c',
+  'user.email=82458865+MaxGB23@users.noreply.github.com',
+  '-c',
+  'user.name=MaxGB23',
+];
+
 function scratch(t) {
   // Canonical, because a temporary root can come back with a second spelling: on macOS `/var` and
   // `/private/var` name the same directory, and the `test-macos` leg is what confirms the two spellings
-  // it actually sees. With two spellings the plan subtracts them (`src/lib/plan.js:302`) and a dirty
-  // manifest stops matching.
+  // it actually sees. The dirty check no longer subtracts one spelling from the other (issue 567, below,
+  // where the second spelling is built on purpose), but a fixture that starts canonical keeps every
+  // other test in this file answering the same question it always did.
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'funky-secure-pin-')));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/**
+ * A committed repository and the second spelling of its own directory: `junction` is a junction on
+ * win32 and a directory symlink on POSIX, which is the alias a real checkout is reached through.
+ * @returns {{ root: string, alias: string }}
+ */
+function aliasedRepository(t, files) {
+  const base = mkdtempSync(join(tmpdir(), 'funky-secure-pin-alias-'));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const root = join(base, 'repo');
+  mkdirSync(root);
+  for (const [name, text] of Object.entries(files)) {
+    const target = join(root, name);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, text);
+  }
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
+  execFileSync('git', ['add', '-A'], { cwd: root });
+  execFileSync('git', [...IDENTITY, 'commit', '-qm', 'fixture'], { cwd: root });
+  return { root, alias: join(base, 'alias') };
 }
 
 const MANIFEST = (dependencies = { left: '^1.3.0' }) =>
@@ -287,6 +321,68 @@ test('an uncommitted manifest is refused with exit 3 and the action that lifts i
   assert.equal(code, 3, 'a refusal is its own code');
   assert.match(stderr, /^funky-secure: commit package\.json or pass --allow-dirty/m);
   assert.equal(readFileSync(join(dir, 'package.json'), 'utf8'), MANIFEST(), 'nothing was written');
+});
+
+test('a dirty manifest is refused through an alias of the repository (issue 567)', async (t) => {
+  // The defect: the write path spelled the paths it handed `git status` by subtracting `cwd` from an
+  // already-canonical absolute path. Through an alias the two spellings differ, the subtraction answers
+  // `../repo/package.json`, the intersection with the root-relative entries finds nothing, and the write
+  // goes ahead over the bytes it promised to refuse.
+  //
+  // The alias spelling is the `cwd` of `run`, never a child process's working directory: a POSIX `getcwd`
+  // resolves the symlink, so a spawned child sees the physical root and the pre-fix code passes on the
+  // platform that hit the defect. Here the product receives the spelling itself, on every platform,
+  // which is the value the arithmetic was wrong about.
+  const { root, alias } = aliasedRepository(t, {
+    'package.json': MANIFEST(),
+    'pnpm-lock.yaml': LOCK,
+  });
+  try {
+    symlinkSync(root, alias, 'junction');
+  } catch (error) {
+    return t.skip(`this ${process.platform} host refused the directory alias: ${error.code ?? error.message}`);
+  }
+
+  // The premise: the two spellings name one directory, and git answers in the root's coordinates.
+  writeFileSync(join(root, 'package.json'), `${MANIFEST()}\n`);
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: alias, encoding: 'utf8' }), ' M package.json\n');
+
+  const stdout = capture();
+  const stderr = capture();
+  const code = await run(['pin', '--apply'], {
+    cwd: alias,
+    env: {},
+    stdout,
+    stderr,
+    collector: fakeCollector({ root, dirty: ['package.json'] }),
+  });
+
+  assert.equal(code, 3, `a dirty target is a refusal, never a question: ${stdout.text}${stderr.text}`);
+  assert.match(stderr.text, /^funky-secure: commit package\.json or pass --allow-dirty, then re-run$/m);
+  assert.match(stderr.text, /^reason: refusing to write over uncommitted changes: package\.json$/m);
+  assert.equal(readFileSync(join(root, 'package.json'), 'utf8'), `${MANIFEST()}\n`, 'nothing was written');
+});
+
+test('a dirty manifest is refused from a subdirectory of the repository (issue 567)', async (t) => {
+  // The same defect without an alias: from below the root the old subtraction spelled the manifest
+  // `../../package.json`, git answered with the root-relative entry the plan declares, and the two never
+  // met - so `pin --apply` wrote over the uncommitted changes it had promised to refuse.
+  const { root } = aliasedRepository(t, {
+    'package.json': MANIFEST(),
+    'pnpm-lock.yaml': LOCK,
+    'packages/app/index.js': '',
+  });
+  writeFileSync(join(root, 'package.json'), `${MANIFEST()}\n`);
+  const cwd = join(root, 'packages', 'app');
+
+  // The premise: git names the dirty manifest under the root, whatever directory it is asked from.
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' }), ' M package.json\n');
+
+  const result = spawnSync(process.execPath, [BIN, 'pin', '--apply'], { cwd, encoding: 'utf8' });
+
+  assert.equal(result.status, 3, `a dirty target is a refusal, never a write: ${result.stdout}${result.stderr}`);
+  assert.match(result.stderr, /^funky-secure: commit package\.json or pass --allow-dirty, then re-run$/m);
+  assert.equal(readFileSync(join(root, 'package.json'), 'utf8'), `${MANIFEST()}\n`, 'nothing was written');
 });
 
 test('--format json prints the plan document and no prose', async (t) => {

@@ -1,16 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { run } from '../src/cli.js';
+// The identity the suite's other commits use: this machine carries a global hook that refuses any
+// other author, and a test that fails on the developer's git config is a test nobody keeps running.
+const IDENTITY = [
+  '-c',
+  'user.email=82458865+MaxGB23@users.noreply.github.com',
+  '-c',
+  'user.name=MaxGB23',
+];
 
 function scratch(t) {
   const dir = mkdtempSync(join(tmpdir(), 'funky-secure-migrate-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/**
+ * A committed repository and the second spelling of its own directory: `junction` is a junction on
+ * win32 and a directory symlink on POSIX, which is the alias a real checkout is reached through.
+ * @returns {{ root: string, alias: string }}
+ */
+function aliasedRepository(t, files) {
+  const base = mkdtempSync(join(tmpdir(), 'funky-secure-migrate-alias-'));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const root = join(base, 'repo');
+  mkdirSync(root);
+  for (const [path, text] of Object.entries(files)) {
+    const target = join(root, path);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, text);
+  }
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: root });
+  execFileSync('git', ['add', '-A'], { cwd: root });
+  execFileSync('git', [...IDENTITY, 'commit', '-qm', 'fixture'], { cwd: root });
+  return { root, alias: join(base, 'alias') };
 }
 
 /** A real repository on disk: `files` is a map of repository-relative path to text. */
@@ -64,7 +94,13 @@ function fakeCollector({
       if (head === 'check-ignore') return answer({ code: 1 });
       if (head === 'status') {
         if (statusCode !== 0) return answer({ code: statusCode });
-        return answer({ stdout: dirty.map((entry) => `${entry}\0`).join('') });
+        // A pathspec is what decides which entries git reports, so the fake honours it: a `status`
+        // asked about a name that is not the repository-relative one answers nothing, which is what a
+        // clean tree looks like (issue 567, the alias below).
+        const separator = args.indexOf('--');
+        const pathspec = separator === -1 ? null : args.slice(separator + 1);
+        const entries = pathspec === null ? dirty : dirty.filter((entry) => pathspec.includes(entry.slice(3)));
+        return answer({ stdout: entries.map((entry) => `${entry}\0`).join('') });
       }
       if (head === 'symbolic-ref') {
         return defaultRef === null ? answer({ code: 1 }) : answer({ stdout: `${defaultRef}\n` });
@@ -282,8 +318,9 @@ test('apply refuses a dirty lockfile path, and --allow-dirty proceeds', async (t
   assert.equal(allowed.collector.calls.some((args) => args[0] === 'status'), false);
 });
 
-// The dirty check asks git about pathspecs relative to `cwd`, which is not the root when the command
-// runs from a subdirectory; the refusal names whatever paths git reports.
+// The dirty check asks git in the repository's own coordinate system: the pathspec is the declared
+// name and the probe runs from the root git reports, whatever directory the command was asked from
+// (issue 567).
 test('apply refuses a dirty lockfile when run from a subdirectory', async (t) => {
   const dir = repository(t, {
     'package.json': PACKAGE_JSON,
@@ -310,14 +347,57 @@ test('apply refuses a dirty lockfile when run from a subdirectory', async (t) =>
     'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
   );
   const status = collector.calls.find((args) => args[0] === 'status');
-  assert.deepEqual(status, [
-    'status',
-    '--porcelain',
-    '-z',
-    '--',
-    join('..', '..', 'package-lock.json'),
-  ]);
+  assert.deepEqual(status, ['status', '--porcelain', '-z', '--', 'package-lock.json']);
   assert.ok(readdirSync(dir).includes('package-lock.json'));
+});
+
+test('apply refuses a dirty lockfile reached through an alias of the repository (issue 567)', async (t) => {
+  // The defect: the paths handed to `git status` were spelled by subtracting `cwd` from an
+  // already-canonical absolute path, so through an alias the pathspec was `../repo/package-lock.json`
+  // and the root-relative entry never matched it - a dirty lockfile read as a clean tree, and the
+  // removal went ahead.
+  //
+  // The alias spelling is the `cwd` of `run`, never a child process's working directory: a POSIX
+  // `getcwd` resolves the symlink, so a spawned child sees the physical root and the pre-fix code is
+  // unasked the question the defect is about. Here the product receives the spelling itself, on every
+  // platform, which is the value the arithmetic was wrong about.
+  const { root, alias } = aliasedRepository(t, {
+    'package.json': PACKAGE_JSON,
+    'package-lock.json': '{"lockfileVersion": 3}',
+    'pnpm-lock.yaml': 'lockfileVersion: 9\n',
+  });
+  try {
+    symlinkSync(root, alias, 'junction');
+  } catch (error) {
+    return t.skip(`this ${process.platform} host refused the directory alias: ${error.code ?? error.message}`);
+  }
+
+  // The premise: the two spellings name one directory, and git answers in the root's coordinates.
+  writeFileSync(join(root, 'package-lock.json'), '{"lockfileVersion": 2}');
+  assert.equal(
+    execFileSync('git', ['status', '--porcelain'], { cwd: alias, encoding: 'utf8' }),
+    ' M package-lock.json\n',
+  );
+
+  const stdout = capture();
+  const stderr = capture();
+  const collector = fakeCollector({ root, defaultRef: 'origin/main', dirty: [' M package-lock.json'] });
+  const result = await run(['migrate', '--apply'], { cwd: alias, env: {}, stdout, stderr, collector });
+
+  assert.equal(result, 3, `a dirty lockfile is a refusal, never a question: ${stdout.text}${stderr.text}`);
+  const { action, reason } = refusal(stderr.text);
+  assert.equal(action, 'commit package-lock.json or pass --allow-dirty, then re-run');
+  assert.equal(
+    reason,
+    'refusing to remove package-lock.json: uncommitted changes for package-lock.json (git status --porcelain -z)',
+  );
+  const status = collector.calls.find((args) => args[0] === 'status');
+  assert.deepEqual(
+    status,
+    ['status', '--porcelain', '-z', '--', 'package-lock.json'],
+    'the pathspec is the name the catalog declared, not a spelling of the alias',
+  );
+  assert.ok(readdirSync(root).includes('package-lock.json'), 'the lockfile is still there');
 });
 
 test('apply refuses when git cannot report the working tree status', async (t) => {
