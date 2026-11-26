@@ -349,3 +349,29 @@ test('every path in the AGENTS.md path map exists', () => {
     );
   }
 });
+
+/// The decision registry (`docs/decisions.md`). I-22 says the log is "the present", edited freely —
+/// and nothing compared the log with itself, so the page arrived on `main` twice: 197 rows for 99
+/// decisions, the first copy's I-98 cut mid-sentence with the page heading pasted into its row, and
+/// only the second copy carrying I-99. A reader cites the number, so a number with two rows is two
+/// answers to one question.
+
+test('the decision registry states each decision once, in a row that is whole', () => {
+  const text = read('docs', 'decisions.md');
+  const rows = text.split('\n').filter((line) => /^\|\s*[DI]-\d+/.test(line));
+  assert.ok(rows.length > 0, 'docs/decisions.md carries no I- or D- row');
+
+  const seen = new Set();
+  for (const row of rows) {
+    const id = row.split('|')[1].trim();
+    assert.match(id, /^[DI]-\d+$/, `a registry row carries no decision number: ${row.slice(0, 64)}`);
+    // A whole table row closes its last cell. A row cut mid-sentence runs into whatever followed it
+    // — which is how I-98 lost the rest of its sentence and its entire file cell.
+    assert.ok(
+      row.trimEnd().endsWith('|'),
+      `the registry row ${id} is cut: it never closes its last cell`,
+    );
+    assert.ok(!seen.has(id), `the registry states ${id} twice`);
+    seen.add(id);
+  }
+});
