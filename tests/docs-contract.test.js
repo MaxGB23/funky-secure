@@ -217,6 +217,47 @@ test('no document says a refusal is exit 2', () => {
   }
 });
 
+test('the exit-3 list of docs/cli.md names no case the code answers with exit 2', () => {
+  // The list and the paragraph beside it describe one command, and the two codes are not
+  // interchangeable: `3` is a situation the tool understood and refused, `2` is a question it could
+  // not answer. Two guards read as refusals in prose and are a `ConfigError` in the code — a working
+  // tree git cannot report (so the dirty check cannot be made), and a plan item that is stale or
+  // empty. A page that files them under `3` sends a script down the refusal branch for a crash.
+  const lines = read('docs', 'cli.md').split('\n');
+  const start = lines.findIndex((line) => line.startsWith('It refuses — exit `3`'));
+  assert.notEqual(start, -1, 'docs/cli.md carries no "It refuses — exit `3`" list');
+
+  const bullets = [];
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('- ')) bullets.push(line);
+    else if (bullets.length > 0) break;
+  }
+  assert.ok(bullets.length > 0, 'the exit-3 refusal of docs/cli.md lists no case');
+
+  const cases = [
+    [/carries no content|content changed/i, 'a stale or empty plan item'],
+    [/cannot report|could not report/i, 'a working tree git cannot report'],
+  ];
+
+  for (const [phrase, what] of cases) {
+    const listed = bullets.find((bullet) => phrase.test(bullet));
+    assert.ok(
+      !listed,
+      `docs/cli.md lists ${what} as an exit-3 refusal, and the code answers it with exit 2: ${listed}`,
+    );
+  }
+
+  // Moving a case is not deleting it: both are still named on the page, as the exit-2 situations they
+  // are. A bullet removed and forgotten would pass the checks above and lose the knowledge.
+  for (const [phrase, what] of cases) {
+    assert.match(
+      lines.join('\n'),
+      phrase,
+      `docs/cli.md dropped ${what} instead of naming it as an exit-2 situation`,
+    );
+  }
+});
+
 /// The version strings (RFC 17.5). An install line with the wrong version is the first thing a new
 /// user copies, and `docs/spec/report.md` was still showing a report from 0.4.0.
 
