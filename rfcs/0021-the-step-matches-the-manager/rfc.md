@@ -85,3 +85,26 @@ behaviour was a command that lost data and a flag that lied.
   describing a repository that does not exist.
 - **Print the `git ls-remote` output into the YAML.** The tool does not resolve versions, and a URL
   baked into a remediation would encode a host it does not know.
+
+## Errata — 2026-11-26
+
+**The import writes the lockfile; which versions it records is not the foreign pin.** The measurement
+above — `pnpm import` completing in 39 ms and writing `pnpm-lock.yaml` with the recorded `7.0.0` — says
+the file appeared, and this record read it as the pin surviving. It does not survive. The decision
+stands and the body above stays as written; the promise about what the step carries is withdrawn.
+
+- **What the record said.** That `pnpm import` "records the versions they pinned", and that a re-run
+  replaces "a version the manifest resolved since the last import … by the one the foreign lockfile
+  records" — the sentence that made a printed step safe to follow twice.
+- **What was measured.** On pnpm 12.3.4, a manifest ranging `lodash ^4.17.21` beside a v3
+  `package-lock.json` pinning **`4.17.20`**, with no pnpm lockfile: `pnpm import` answers `Done in 6ms`
+  and records **`4.18.1`** — neither the pin nor the manifest's floor. The same foreign file beside a
+  `pnpm-lock.yaml` already recording `4.17.21` answers `4.18.1` again, so a re-run does rewrite, and
+  what it writes is the foreign pin in neither shape. `4.18.1` is a version lodash never published,
+  which makes the value synthesised from the range rather than fetched; the store carries no
+  `metadata/` directory, and `--offline` answers in the same 6 ms.
+- **What replaced it.** `docs/spec/commands.md` §11.3 no longer says the import carries the pins. It
+  says the import reads the foreign lockfile and writes `pnpm-lock.yaml`, that the versions it records
+  are pnpm's to decide — the measurement above, on pnpm 12.3.4 — and that the printed line names the
+  comparison the reader must make before step 4 removes the foreign file. Re-running it is still not a
+  no-op; only what it records changed. `docs/validation.md` carries the same correction.

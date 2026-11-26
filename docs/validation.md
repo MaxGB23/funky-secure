@@ -21,13 +21,15 @@ The pack we would publish installs and runs | `node scripts/pack-smoke.js` — p
 
 | Claim | How | Where |
 |---|---|---|
-`scan` leaves the working tree byte-identical | `git status --porcelain` before and after, plus a hash manifest | `tests/read-only.test.js`, and five real clones |
+`scan` leaves the working tree byte-identical | `git status --porcelain` before and after, plus a hash manifest | `tests/read-only.test.js`, and ten real clones |
 The same holds for `--scope all`, `--scope machine`, `--scope repo` and `start` | same test, one case per command | `tests/read-only.test.js` |
 `init`, `pin` and `migrate` write only through `validateWriteTarget`, only to the paths their plan printed | unit tests over the writers plus the plan digest | `tests/writers.test.js`, `tests/init.test.js`, `tests/pin.test.js` |
 
-Five real repositories were cloned and scanned with nothing from them executed: `yarnpkg/berry` (3 825
-files), `t3-oss/create-t3-app` (544), `vercel/nextjs-subscription-payments`, `primefaces/primevue`
-(4 837), `shadcn-ui/ui` (6 411). Every one ended with an empty `git status` and identical file hashes.
+Ten real repositories under `M:/pruebas/real` were cloned and scanned with nothing from them executed, a hash
+manifest and `git status --porcelain` taken before and after each run: `yarnpkg/berry` (3 825 files),
+`t3-oss/create-t3-app` (544), `vercel/nextjs-subscription-payments`, `primefaces/primevue` (4 837) and
+`shadcn-ui/ui` (6 411), the five this page has always named, among all ten. Every one of the ten ended with an
+empty `git status` and identical file hashes, which is the claim.
 
 ## Determinism and scale
 
@@ -49,7 +51,7 @@ Output is stable byte for byte where it matters | golden reports regenerated onl
 `sensitive-ignored` | True positives on `primevue` and `shadcn-ui/ui` (`git check-ignore --no-index` confirms the paths are not ignored), and a tracked tokenless `.npmrc` correctly exempt |
 `env-not-tracked` | `.env.local.example` in `vercel/…` is a template and not a finding; a tracked `.env` still is |
 `actions-pinned-sha` | 56 unpinned actions in `berry` (36 files), 64 in `shadcn-ui/ui` — all of them in its eleven workflow files, because that repository carries no `.github/actions/` directory at all — and 24 in `t3`, of which 2 are inside `.github/actions/setup/action.yml`, the composite action four of its seven workflows call as `./.github/actions/setup` (`ci`, `e2e`, `prerelease`, `release`). Measured with `scan --scope repo --only actions-pinned-sha --format json` in each clone; in `t3` the other 22 span its seven workflows |
-`no-bot-auto-merge` | 2 findings in `berry`; passes on `shadcn-ui/ui`, whose kodiak requires a label |
+`no-bot-auto-merge` | `berry` passes with no finding at all at `8f638c0`, because it carries no bot configuration to read; `shadcn-ui/ui` passes and emits one `bot-config-present` finding at severity `info` naming `.github/dependabot.yml`, beside the `.kodiak.toml` that requires a label — an observation a person merges after reading, with a `manual` remediation, not a defect |
 `ci-no-safety-overrides` | Detects `--no-frozen-lockfile` in `ts-safeql/safeql` `.github/workflows/ci.yml:49` (`ci-frozen-lockfile-disabled`, with the command in `evidence`); passes on `shadcn-ui/ui` and `t3` (`--frozen-lockfile` and nothing worse) |
 `pull-request-target` | Detects a genuine pwn request in `cloud-bulldozer/benchmark-operator` `.github/workflows/e2e.yml:33` — the step checks out `github.event.pull_request.head.sha` and later steps consume real secrets (`pull-request-target-checkout`); passes on `t3` and `shadcn-ui/ui`, whose three `pull_request_target` workflows — two in `t3`, one in `shadcn-ui/ui` — never check out the head |
 `workflow-permissions` | 32 findings in `berry` — the rule that produced no signal at all before the indentless-sequence fix — and 4 in `shadcn-ui/ui`, each naming the jobs that inherit the default |
@@ -85,14 +87,14 @@ gains the other side leaves this table — is the reason it can be.
 | `foreign-lockfile` passes on a repository with `pnpm-lock.yaml` and no foreign lockfile | eight of the ten repositories at `M:/pruebas/real`, e.g. `shadcn-ui-ui` and `t3-create-t3-app`: `scan --scope repo --format json` emits no finding for the rule and counts it in `summary.pass`. `catalogs-primefaces-primevue` and `yarnpkg-berry` fail it, which is the side this page already had |
 | `actions-pinned-sha` passes on a repository whose every action is pinned to a full SHA | `M:/funky-secure-v2` — eleven `uses:`, all 40 hex, zero tag refs — and `catalogs-primefaces-primevue` and `vercel-subscriptions` among the ten. Measured with `scan --only actions-pinned-sha,foreign-lockfile --format json`, which answers `summary.pass` for both |
 | `workflow-permissions` passes on a repository whose workflows all declare permissions | `repro-steps-indent` among the ten: no finding for the rule, while the `skip`s it does emit belong to other rules. Six of the ten fail it, so both sides are now measured |
-| `pnpm import` reads a foreign `package-lock` v3 offline, in 39 ms, keeping the recorded version | measured in a scratch directory |
-| `pnpm import` over an existing `pnpm-lock.yaml` replaces what it records with the foreign pins | scratch directory, offline: a lockfile recording `lodash@4.17.21` beside a `package-lock.json` pinning `4.17.20` ends at `4.17.20`, exit 0. It neither refuses the existing lockfile nor merges the two. The first import was measured long before this one; the second is what makes a printed step safe to follow twice |
+| `pnpm import` reads a foreign `package-lock` v3 offline and writes `pnpm-lock.yaml` | measured in a scratch directory on pnpm 12.3.4. What it records is pnpm's answer, not the foreign pin: a manifest ranging `lodash ^4.17.21` beside a `package-lock.json` pinning `4.17.20` ends at **`4.18.1`**, exit 0, in 6 ms — neither the pin nor the manifest's floor, and a version lodash never published, which makes the value synthesised from the range rather than fetched |
+| `pnpm import` over an existing `pnpm-lock.yaml` records `4.18.1` again, not the foreign pin | scratch directory, offline: a lockfile recording `lodash@4.17.21` beside a `package-lock.json` pinning `4.17.20` ends at `4.18.1`, exit 0. It neither refuses the existing lockfile nor merges the two, so a re-run does rewrite — what it writes is pnpm's answer in both shapes. The store carries no `metadata/` directory and `--offline` answers in the same 6 ms |
 | `minimumReleaseAge` defaults to 0 on pnpm 10.16 and to 1440 from pnpm 11 | measured against both |
 | `minimumReleaseAgeStrict` defaults to true only when an age is explicit | pnpm issue #14409, and measured |
 | `pnpm --version` rewrites a lockfile when the repository declares `packageManager` | isolated four ways before the probe was moved out of the repository |
 | `pnpm --version` answers the declared version **inside** the project | measured on `shadcn-ui/ui` (10.33.4 inside, 12.3.4 on the PATH) |
 | `init --apply` is idempotent on a real workspace | `t3`: block appended after `onlyBuiltDependencies`, `packages:` untouched, `yaml@2.9.0` parses it, second run `nothing to apply`, bytes identical |
-| `pnpm import` reads a **berry** `yarn.lock` offline and keeps the pin | pnpm 12.3.4, a `__metadata: version: 8` lockfile, `lodash` `4.17.21`: 23 ms, and the new `pnpm-lock.yaml` records `lodash@4.17.21` |
+| `pnpm import` reads a **berry** `yarn.lock` offline and writes `pnpm-lock.yaml` | pnpm 12.3.4, a `__metadata: version: 8` lockfile: 35 ms when the pin and the range disagree. The shape that decides it — a lockfile pinning `lodash` `4.17.20` under a manifest ranging `^4.17.21` — records `4.18.1`, the same answer the `package-lock` rows get, so the yarn shape does not keep the pin either. A lockfile whose pin `4.17.21` already satisfies the range records `4.17.21`, which is what this row reported before the shapes were told apart: agreement between pin and range is not the pin surviving |
 | `permissions: contents: read` really produces a 403 | the `runtime-claims` job on `ubuntu-24.04`: the probe attempts a write that cannot succeed even with `contents: write`, is answered 403 with the integration denial, and reads the path back absent — on a `push` to `main` and on a pull request from a branch of this repository. A pull request from a fork is not measured, because the platform imposes a read-only token there; the job prints why. That a third-party workflow the rules call correct really runs green, and that its bytes stay out of a write scope, are still read statically |
 | The packed artifact installs into a directory that holds nothing else, and answers | `npm pack` at the commit under test, on `ubuntu-24.04`, installed into a directory that holds nothing but the tarball, then asked for its version and a report (`scripts/pack-smoke.js`). The runner checks this repository out first, so the empty thing is the install directory and not the machine. A registry install through a mirror, and the staged tarball's own identity, stay outside this claim |
 | The remediation commands change a repository the way their text says | the four shapes the catalogue printed when this row was first written — the resolve step, that step with `--pm-on-fail=ignore` for a repository declaring a foreign `packageManager`, the root pin, and the importer pin carrying `-C <dir>` — run in throwaway directories on the two CI legs that execute them: the `runtime-claims` job on `ubuntu-24.04`, where each printed line is run by `sh`, and the `runtime-claims-windows` job on `windows-2025`, where the same probe runs the same lines through `cmd`; judged by the importer record the resolve step writes (the dependency, with a version beside it, read through the same lockfile reader the rules use) and by the field the pin sets; a fixture with nothing declared writes a lockfile whose root importer is `{}`, which is why the file appearing is not the claim. The shapes the defect batch added are measured the same way, in fixtures under the OS temp directory here: `pnpm import && funky-secure migrate --from npm --apply` — the sequence `foreign-lockfile` prints while `pnpm-lock.yaml` is absent (#359) — on a committed feature branch exits 0, removes `package-lock.json`, keeps the imported version and leaves the rescan `pass`, while a coexisting lockfile prints the migrate alone; a `workspace:` range is pinned to `workspace:*` and pnpm 12.3.4 records `specifier: workspace:*` beside `version: link:../lib`, so the symlink the path would have replaced survives (#368); a repository declaring `frozenLockfile: true` clears with the printed hand edit when the lockfile moves in the same change, and both `pnpm install` forms answer exit 1 `ERR_PNPM_OUTDATED_LOCKFILE` without it (#373). Effect only: which version the record names is pnpm's business, and a consumer's monorepo is not exercised |
@@ -198,12 +200,18 @@ answers 121, 75, 281 and 129 — and `e923280` answers that too, so the note's 7
 clones on disk and the batch moved neither. The rows above name the rule whose count they quote, and this note
 stays because the error is the one a reader is most likely to repeat.
 
+Re-derived at `219608c` for this page, two totals moved and the rest did not: `yarnpkg/berry` answers 119 and
+`shadcn-ui/ui` 282, both with `scan --scope repo --format json`. Upstream moved and the product did not — `berry` at
+`8f638c0` carries no bot configuration at all, so the two findings it used to emit are gone, and `shadcn-ui/ui` at
+`96da9cc` carries `.kodiak.toml` beside `.github/dependabot.yml`, whose one `bot-config-present` finding is `info`.
+The table states today's numbers; the note above keeps the old ones as the history it is.
+
 | clone | total findings (rows in `--format json`) | distinct rules that skipped |
 |---|---|---|
-| `yarnpkg/berry` | 121 | 3 |
+| `yarnpkg/berry` | 119 | 3 |
 | `vercel/nextjs-subscription-payments` | 33, of which 26 are `exact-versions` — the specifiers `pin` can pin | 6 |
 | `primefaces/primevue` | 75 | 5 |
-| `shadcn-ui/ui` | 281 | 3 |
+| `shadcn-ui/ui` | 282 | 3 |
 | `t3-oss/create-t3-app` | 129 | 2 |
 
 The command behind both columns is `scan --scope repo --format json` in each clone.
