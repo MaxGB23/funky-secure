@@ -50,8 +50,8 @@ jobs:
         run: node bin/funky-secure.js scan --scope repo --fail-on warn
 
   test-macos:
-    # A third platform, and the only leg the product does not branch on: `macos-26` is the arm64 image
-    # (`macos-26-intel` is Intel), so this runs the POSIX path Ubuntu already exercises on a processor
+    # A third platform, and the only leg on darwin/arm64: the product branches on `win32` against POSIX,
+    # so `macos-26` (arm64; `macos-26-intel` is Intel) runs the POSIX path Ubuntu exercises on a processor
     # nobody here has. Exact label, never `-latest`. Blocking on purpose: the delivery gate reads a
     # job's conclusion (`scripts/wait-for-ci.js`), so a leg that could fail without blocking would be
     # an experiment wearing a gate's clothes.
@@ -86,6 +86,9 @@ jobs:
       # The floor catches a leg that ran nothing; the skip text catches the twelve pnpm-gated cases,
       # which still count in `tests` and would otherwise be invisible. `skipped 0` is not the guard:
       # `tests/plan-spelling.test.js` skips on every non-Windows host by design.
+      # The number is a floor and not a pinned total, so a plan's worth of removals does not fail the
+      # leg. It is `1000`, a hundred below the 1028 cases this change measures: a leg that ran nothing,
+      # or lost more than a hundred cases, cannot pass.
       - name: The leg ran the suite it claims
         run: |
           grep -qx 'ℹ fail 0' suite.log

@@ -238,3 +238,36 @@ test('the remediation probe also runs where cmd is the shell, not only where sh 
   );
   assert.match(job, /^ {4}timeout-minutes: \d+$/m, 'the job has no ceiling, so a hung probe holds it open');
 });
+
+test('the macOS leg is the shape the record claims: arm64, blocking, and three guards', () => {
+  // A structural guard whose subject is the workflow, so it passes on arrival: its RED is the workflow
+  // losing a guard, not a change to this file. I-99 claims the leg asserts the suite's own fail count,
+  // that skip text and a floor on `tests`, and until this test nothing read `test-macos` at all, so each
+  // of the three was one deleted line away from describing a leg that measured less.
+  const job = jobBlock('test-macos');
+
+  assert.match(job, /^ {4}runs-on: macos-26$/m, 'the leg does not run on the arm64 image the record names');
+  assert.match(job, /^ {4}timeout-minutes: 15$/m, 'the job has no ceiling, so a hung suite holds it open');
+  assert.match(job, /^ {10}node-version: 24$/m, 'the leg does not run the Active LTS');
+
+  assert.match(
+    job,
+    /^ {10}grep -qx 'ℹ fail 0' suite\.log$/m,
+    "the leg does not assert the suite's own fail count",
+  );
+  assert.match(
+    job,
+    /^ {10}if grep -q 'pnpm did not answer' suite\.log; then$/m,
+    'the leg no longer catches a pnpm-gated case that skipped while pnpm answered',
+  );
+  assert.match(
+    job,
+    /const m=\/\^ℹ tests/,
+    'the `tests` floor does not read the suite total, so a leg that ran nothing would pass',
+  );
+  assert.match(
+    job,
+    /Number\(m\[1\]\)<1000/,
+    'the `tests` guard lost its floor, so only the presence of a total is asserted',
+  );
+});
