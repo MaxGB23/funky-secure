@@ -7,7 +7,7 @@
  */
 
 import { lstat, rm } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 
 import { ConfigError, RefusalError } from '../lib/errors.js';
 import {
@@ -18,6 +18,7 @@ import {
   IMPORT_STEP,
 } from '../lib/foreign-pin.js';
 import { defaultBranch, statusPorcelain } from '../lib/git.js';
+import { dirtyPaths } from '../lib/plan.js';
 import { validateWriteTarget } from '../lib/paths.js';
 import { collectScan } from '../lib/scan.js';
 import { FOREIGN_LOCKFILES } from '../lib/targets.js';
@@ -143,7 +144,6 @@ function workflowSuggestions(workflows) {
  *
  * @param {object} options
  * @param {string} options.root resolved worktree root
- * @param {string} options.cwd
  * @param {string[]} options.foreign foreign lockfiles present at the root
  * @param {boolean} options.hasPnpmLock
  * @param {string | null} options.branch the current branch, as `repoFacts` resolved it
@@ -155,7 +155,6 @@ function workflowSuggestions(workflows) {
  */
 async function applyRemoval({
   root,
-  cwd,
   foreign,
   hasPnpmLock,
   branch,
@@ -181,15 +180,19 @@ async function applyRemoval({
   }
 
   if (!allowDirty) {
-    const paths = foreign.map((name) => relative(cwd, join(root, name)));
-    const dirty = await statusPorcelain(collector, paths);
+    // The names `ctx.repo.present` reported, which are repository-relative already, and a probe run from
+    // the root those names are relative to: one coordinate system, so the answer is a set intersection
+    // and no path arithmetic (issue 567, I-71). Subtracting the cwd from a canonical absolute path asked
+    // git about `../repo/package-lock.json` through a junction or a symlink, which matches no
+    // root-relative entry and turned a dirty lockfile into a git that could not answer.
+    const dirty = await statusPorcelain(collector, foreign, root);
     if (dirty === null) {
       throw unanswered(
         'pass --allow-dirty, or fix git so git status answers, then re-run',
         `refusing to remove ${names}: git could not report the working tree status (git status --porcelain -z failed)`,
       );
     }
-    const touched = [...new Set(dirty.map((entry) => entry.slice(3)))];
+    const touched = [...new Set(dirtyPaths(dirty, foreign).map((entry) => entry.slice(3)))];
     if (touched.length > 0) {
       throw refusal(
         `commit ${touched.join(', ')} or pass --allow-dirty, then re-run`,
@@ -412,7 +415,6 @@ export async function run({
 
   return applyRemoval({
     root: ctx.repo.root,
-    cwd,
     foreign,
     hasPnpmLock,
     branch: ctx.repo.branch ?? null,
