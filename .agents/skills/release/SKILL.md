@@ -33,7 +33,7 @@ name that does not exist.
 - A clean tree on `main`, and a gate that was green for the commit the tag will point at.
 - `package.json` `version` equals the tag without its `v`; a mismatch exits `2` and stages nothing. The
   suite names every other place the version lives: bump the manifest, then let it fail until each copy
-  agrees. In this repository that is fifteen occurrences across six documents plus the six golden
+  agrees. In this repository that is fourteen occurrences across six documents plus the six golden
   reports, which is more than a maintainer finds by grepping from memory.
 - `npm --version` is 11.15.0 or higher: `npm stage` does not exist before it.
 - The account has 2FA enabled for writes.
